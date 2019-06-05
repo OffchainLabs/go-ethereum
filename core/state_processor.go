@@ -17,13 +17,17 @@
 package core
 
 import (
+	"runtime/debug"
+
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -61,22 +65,94 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs  []*types.Log
 		gp       = new(GasPool).AddGas(block.GasLimit())
 	)
+
+	if deepmind.Enabled {
+		deepmind.EnterBlock()
+		deepmind.Print("BEGIN_BLOCK", deepmind.Uint64(block.NumberU64()))
+	}
+
 	// Mutate the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
+
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
+
+		if deepmind.Enabled {
+			v, r, s := tx.RawSignatureValues()
+
+			// We start assuming the "null" value (i.e. a dot character), and update if `to` is set
+			toAsString := "."
+			if tx.To() != nil {
+				toAsString = deepmind.Addr(*tx.To())
+			}
+
+			deepmind.EnterTransaction()
+			deepmind.Print("BEGIN_APPLY_TRX",
+				deepmind.Hash(tx.Hash()),
+				toAsString,
+				deepmind.Hex(tx.Value().Bytes()),
+				deepmind.Hex(v.Bytes()),
+				deepmind.Hex(r.Bytes()),
+				deepmind.Hex(s.Bytes()),
+				deepmind.Uint64(tx.Gas()),
+				deepmind.Hex(tx.GasPrice().Bytes()),
+				deepmind.Uint64(tx.Nonce()),
+				deepmind.Hex(tx.Data()),
+			)
+		}
+
 		receipt, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
 		if err != nil {
+			if deepmind.Enabled {
+				deepmind.Print("FAILED_APPLY_TRX", err.Error())
+				deepmind.EndTransaction()
+				deepmind.EndBlock()
+			}
+
 			return nil, nil, 0, err
 		}
+
+		if deepmind.Enabled {
+			type Log = map[string]interface{}
+
+			logs := make([]Log, len(receipt.Logs))
+			for i, log := range receipt.Logs {
+				logs[i] = Log{
+					"address": log.Address,
+					"topics":  log.Topics,
+					"data":    hexutil.Bytes(log.Data),
+				}
+			}
+
+			deepmind.EndTransaction()
+			deepmind.Print("END_APPLY_TRX", deepmind.Uint64(gasUsed), deepmind.Hex(receipt.PostState), deepmind.Uint64(receipt.CumulativeGasUsed), deepmind.Hex(receipt.Bloom[:]), deepmind.JSON(logs))
+		}
+
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
+
+	if deepmind.Enabled || deepmind.BlockProgressEnabled {
+		deepmind.Print("FINALIZE_BLOCK", deepmind.Uint64(block.NumberU64()))
+	}
+
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())
+
+	if deepmind.Enabled {
+		deepmind.EndBlock()
+		deepmind.Print("END_BLOCK",
+			deepmind.Uint64(block.NumberU64()),
+			deepmind.Uint64(uint64(block.Size())),
+			deepmind.JSON(map[string]interface{}{
+				"header": block.Header(),
+				"uncles": block.Body().Uncles,
+			}),
+		)
+	}
 
 	return receipts, allLogs, *usedGas, nil
 }
@@ -90,6 +166,16 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	if err != nil {
 		return nil, err
 	}
+
+	if deepmind.Enabled {
+		if !deepmind.IsInTransaction() {
+			debug.PrintStack()
+			panic("the ApplyTransaction should have been call within a transaction, something is deeply wrong")
+		}
+
+		deepmind.Print("TRX_FROM", deepmind.Addr(msg.From()))
+	}
+
 	// Create a new context to be used in the EVM environment
 	context := NewEVMContext(msg, header, bc, author)
 	// Create a new environment which holds all relevant information

@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -145,6 +146,10 @@ func (s *stateObject) markSuicided() {
 }
 
 func (s *stateObject) touch() {
+	// if deepmind.Enabled {
+	// 	deepmind.Print("TOUCH_CHANGE", deepmind.Addr(s.address))
+	// }
+
 	s.db.journal.append(touchChange{
 		account: &s.address,
 	})
@@ -229,6 +234,11 @@ func (s *stateObject) SetState(db Database, key, value common.Hash) {
 	if prev == value {
 		return
 	}
+
+	if deepmind.Enabled {
+		deepmind.Print("STORAGE_CHANGE", deepmind.CallIndex(), deepmind.Addr(self.address), deepmind.Hash(key), deepmind.Hash(prev), deepmind.Hash(value))
+	}
+
 	// New value is different, update and journal the change
 	s.db.journal.append(storageChange{
 		account:  &s.address,
@@ -329,6 +339,11 @@ func (s *stateObject) CommitTrie(db Database) error {
 	if err == nil {
 		s.data.Root = root
 	}
+
+	// if deepmind.Enabled {
+	// 	deepmind.Print("COMMIT_TRIE", deepmind.Addr(s.address), deepmind.Hash(root))
+	// }
+
 	return err
 }
 
@@ -357,6 +372,15 @@ func (s *stateObject) SubBalance(amount *big.Int) {
 }
 
 func (s *stateObject) SetBalance(amount *big.Int) {
+	if deepmind.Enabled {
+		// THOUGHTS: There is a choice between storage vs CPU here as we store the old balance and new the balance.
+		//           Usually, balances are quite big. Storing instead the old balance and the delta would probably
+		//           reduce a lot the storage space at the expense of CPU time to compute the delta and recomputed
+		//           the new balance in place where it's required. This would need to be computed (the space
+		//           savings) to see if it make sense to apply it or not.
+		deepmind.Print("BALANCE_CHANGE", deepmind.CallIndex(), deepmind.Addr(s.address), deepmind.BigInt(s.data.Balance), deepmind.BigInt(amount))
+	}
+	
 	s.db.journal.append(balanceChange{
 		account: &s.address,
 		prev:    new(big.Int).Set(s.data.Balance),
@@ -413,6 +437,11 @@ func (s *stateObject) Code(db Database) []byte {
 
 func (s *stateObject) SetCode(codeHash common.Hash, code []byte) {
 	prevcode := s.Code(s.db.db)
+
+	// if deepmind.Enabled {
+	// 	deepmind.Print("CODE_CHANGE", deepmind.Addr(s.address), deepmind.Hex(s.CodeHash()), deepmind.Hex(prevcode), deepmind.Hash(codeHash), deepmind.Hex(code))
+	// }
+
 	s.db.journal.append(codeChange{
 		account:  &s.address,
 		prevhash: s.CodeHash(),
@@ -428,6 +457,10 @@ func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 }
 
 func (s *stateObject) SetNonce(nonce uint64) {
+	if deepmind.Enabled {
+		deepmind.Print("NONCE_CHANGE", deepmind.CallIndex(), deepmind.Addr(s.address), deepmind.Uint64(s.data.Nonce), deepmind.Uint64(nonce))
+	}
+
 	s.db.journal.append(nonceChange{
 		account: &s.address,
 		prev:    s.data.Nonce,

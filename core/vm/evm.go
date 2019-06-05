@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -42,6 +43,7 @@ type (
 
 // run runs the given contract and takes care of running precompiles with a fallback to the byte code interpreter.
 func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, error) {
+	//ioutil.WriteFile("/tmp/ici", []byte("passed"), 0664)
 	if contract.CodeAddr != nil {
 		precompiles := PrecompiledContractsHomestead
 		if evm.chainRules.IsByzantium {
@@ -218,11 +220,21 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 				evm.vmConfig.Tracer.CaptureStart(caller.Address(), addr, false, input, gas, value)
 				evm.vmConfig.Tracer.CaptureEnd(ret, 0, 0, nil)
 			}
+
+			// DMLOG: do we want to instrument this call which does nothing?
 			return nil, gas, nil
 		}
+
+		// if deepmind.Enabled {
+		// 	deepmind.Print("CREATE_ACCOUNT", deepmind.CallIndex(), deepmind.Addr(addr))
+		// }
+
 		evm.StateDB.CreateAccount(addr)
 	}
 	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
+
+	// DMLOG: here we have a new CONTRACT created.
+
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
 	contract := NewContract(caller, to, value, gas)
@@ -239,17 +251,35 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			evm.vmConfig.Tracer.CaptureEnd(ret, gas-contract.Gas, time.Since(start), err)
 		}()
 	}
+
+	if deepmind.Enabled {
+		deepmind.PrintEnterCall("CALL", contract.Caller(), addr, value, gas, input)
+	}
+
 	ret, err = run(evm, contract, input, false)
 
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil {
+		if deepmind.Enabled {
+			deepmind.PrintCallFailed(contract.Gas, err.Error())
+		}
+
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != errExecutionReverted {
 			contract.UseGas(contract.Gas)
+		} else {
+			if deepmind.Enabled {
+				deepmind.PrintCallReverted()
+			}
 		}
 	}
+
+	if deepmind.Enabled {
+		deepmind.PrintEndCall(contract.Gas, ret)
+	}
+
 	return ret, contract.Gas, err
 }
 
@@ -278,18 +308,49 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		snapshot = evm.StateDB.Snapshot()
 		to       = AccountRef(caller.Address())
 	)
+
+	// Call() does a  `evm.Transfer(stateDB, caller.Address(), to.Address(), value)` here..
+	// There's none here for these reasons:
+	// The CALLCODE opcode - as far as I know - is a way to execute a different contract's code against the local contract's state. It's kind of meant to allow calling a library function. The execution environment however is not the called contract, since we just pull the code and execute in the local context, we don't "enter" fully into the remote contract. As such, the state that CALLCODE can access is that of the originating contract, not of the target contract. - Péter Szilágyi <peter@ethereum.org>
+	// To clarify: callcode has transfer of ether - so it's quirky in the sense that we need to validate that the caller cannot send more than it has. The quirk is that the ether is sent to itself, so thus we need to validate the value, but there's no need to actually perform the transfer. - Martin Swende <martin.swende@ethereum.org>
+
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
 	contract := NewContract(caller, to, value, gas)
 	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
 
+	// DM:TODO: Deep-mind instrument here, and DelegateCall, and Call...
+	// so we can have a tree of the different calls, and the logs for each
+	// at each level.
+	// and also an agglomerated view...
+	// see if there's a lot of tree-nesting.. if so, it's useful to resurface
+	// such trees.  Let's GO DEEP like we did on EOS :)
+
+	if deepmind.Enabled {
+		deepmind.PrintEnterCall("CALLCODE", contract.Caller(), addr, value, gas, input)
+	}
+
 	ret, err = run(evm, contract, input, false)
 	if err != nil {
+
+		if deepmind.Enabled {
+			deepmind.PrintCallFailed(contract.Gas, err.Error())
+		}
+
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != errExecutionReverted {
 			contract.UseGas(contract.Gas)
+		} else {
+			if deepmind.Enabled {
+				deepmind.PrintCallReverted()
+			}
 		}
 	}
+
+	if deepmind.Enabled {
+		deepmind.PrintEndCall(contract.Gas, ret)
+	}
+
 	return ret, contract.Gas, err
 }
 
@@ -316,13 +377,31 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	contract := NewContract(caller, to, nil, gas).AsDelegate()
 	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
 
+	if deepmind.Enabled {
+		// DMLOG: We use `contract.Caller()` as it is fixed with `AsDelegate()`.
+		deepmind.PrintEnterCall("DELEGATE", contract.Caller(), addr, contract.value, gas, input)
+	}
+
 	ret, err = run(evm, contract, input, false)
 	if err != nil {
+		if deepmind.Enabled {
+			deepmind.PrintCallFailed(contract.Gas, err.Error())
+		}
+
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != errExecutionReverted {
 			contract.UseGas(contract.Gas)
+		} else {
+			if deepmind.Enabled {
+				deepmind.PrintCallReverted()
+			}
 		}
 	}
+
+	if deepmind.Enabled {
+		deepmind.PrintEndCall(contract.Gas, ret)
+	}
+
 	return ret, contract.Gas, err
 }
 
@@ -354,16 +433,33 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// future scenarios
 	evm.StateDB.AddBalance(addr, bigZero)
 
+	if deepmind.Enabled {
+		deepmind.PrintEnterCall("STATIC", contract.Caller(), addr, deepmind.EmptyValue, gas, input)
+	}
+
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in Homestead this also counts for code storage gas errors.
 	ret, err = run(evm, contract, input, true)
 	if err != nil {
+		if deepmind.Enabled {
+			deepmind.PrintCallFailed(contract.Gas, err.Error())
+		}
+
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != errExecutionReverted {
 			contract.UseGas(contract.Gas)
+		} else {
+			if deepmind.Enabled {
+				deepmind.PrintCallReverted()
+			}
 		}
 	}
+
+	if deepmind.Enabled {
+		deepmind.PrintEndCall(contract.Gas, ret)
+	}
+
 	return ret, contract.Gas, err
 }
 
@@ -403,6 +499,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.chainRules.IsEIP158 {
 		evm.StateDB.SetNonce(address, 1)
 	}
+
 	evm.Transfer(evm.StateDB, caller.Address(), address, value)
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
@@ -419,6 +516,10 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 	start := time.Now()
 
+	if deepmind.Enabled {
+		deepmind.PrintEnterCall("CREATE", contract.Caller(), address, contract.value, gas, nil)
+	}
+
 	ret, err := run(evm, contract, nil, false)
 
 	// check whether the max code size has been exceeded
@@ -429,10 +530,19 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// by the error checking condition below.
 	if err == nil && !maxCodeSizeExceeded {
 		createDataGas := uint64(len(ret)) * params.CreateDataGas
+
 		if contract.UseGas(createDataGas) {
 			evm.StateDB.SetCode(address, ret)
 		} else {
 			err = ErrCodeStoreOutOfGas
+		}
+	}
+
+	if deepmind.Enabled {
+		if err != nil {
+			deepmind.PrintCallFailed(contract.Gas, err.Error())
+		} else if maxCodeSizeExceeded {
+			deepmind.PrintCallFailed(contract.Gas, errMaxCodeSizeExceeded.Error())
 		}
 	}
 
@@ -443,6 +553,10 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != errExecutionReverted {
 			contract.UseGas(contract.Gas)
+		} else {
+			if deepmind.Enabled {
+				deepmind.PrintCallReverted()
+			}
 		}
 	}
 	// Assign err if contract code size exceeds the max while the err is still empty.
@@ -452,8 +566,12 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.vmConfig.Debug && evm.depth == 0 {
 		evm.vmConfig.Tracer.CaptureEnd(ret, gas-contract.Gas, time.Since(start), err)
 	}
-	return ret, address, contract.Gas, err
 
+	if deepmind.Enabled {
+		deepmind.PrintEndCall(contract.Gas, nil)
+	}
+
+	return ret, address, contract.Gas, err
 }
 
 // Create creates a new contract using code as deployment code.

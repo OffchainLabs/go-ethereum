@@ -860,6 +860,8 @@ func (db *DB) tCompaction() {
 			}
 			x = nil
 		}
-		db.tableAutoCompaction()
+		if !CompactionDisabled {
+			db.tableAutoCompaction()
+		}
 	}
 }

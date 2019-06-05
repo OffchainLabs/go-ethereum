@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -42,7 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -1615,6 +1616,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 
 		if !bc.cacheConfig.TrieCleanNoPrefetch {
 			if followup, err := it.peek(); followup != nil && err == nil {
+				if deepmind.Enabled {
+					panic("this code path should never be enabled while deep mind is active, something is wrong as it should be disabled")
+				}
+
 				go func(start time.Time) {
 					throwaway, _ := state.New(parent.Root, bc.stateCache)
 					bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)
@@ -1677,6 +1682,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits)
 		blockInsertTimer.UpdateSince(start)
 
+		// DM: TODO: verify the `status`, what it means... are we sometimes aware we're
+		// applying a forked block? Are we simply going to revert it after?
+
 		switch status {
 		case CanonStatTy:
 			log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
@@ -1686,6 +1694,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 
 			coalescedLogs = append(coalescedLogs, logs...)
 			events = append(events, ChainEvent{block, block.Hash(), logs})
+
+			// if deepmind.Enabled {
+			// 	deepmind.Print("EVENT_CHAIN_EVENT")
+			// }
+
 			lastCanon = block
 
 			// Only count canonical blocks for GC processing time
@@ -1697,6 +1710,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
 				"root", block.Root())
 			events = append(events, ChainSideEvent{block})
+
+			// if deepmind.Enabled {
+			// 	deepmind.Print("EVENT_CHAIN_SIDE_EVENT")
+			// }
 
 		default:
 			// This in theory is impossible, but lets be nice to our future selves and leave
@@ -1731,6 +1748,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	// Append a single chain head event if we've progressed the chain
 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
 		events = append(events, ChainHeadEvent{lastCanon})
+
+		// if deepmind.Enabled {
+		// 	deepmind.Print("EVENT_CHAIN_HEAD_EVENT")
+		// }
 	}
 	return it.index, events, coalescedLogs, err
 }

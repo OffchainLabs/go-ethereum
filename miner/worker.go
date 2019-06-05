@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -405,9 +406,25 @@ func (w *worker) mainLoop() {
 	for {
 		select {
 		case req := <-w.newWorkCh:
+			if deepmind.Enabled {
+				// This receives and processes all transactions received on the P2P network.
+				// By **not** processing this now received transaction, it prevents doing a
+				// speculative execution of the transaction and thus, breaking deep mind that
+				// expects linear execution of all logs.
+				continue
+			}
+
 			w.commitNewWork(req.interrupt, req.noempty, req.timestamp)
 
 		case ev := <-w.chainSideCh:
+			if deepmind.Enabled {
+				// This receives and processes all transactions received on the P2P network.
+				// By **not** processing this now received transaction, it prevents doing a
+				// speculative execution of the transaction and thus, breaking deep mind that
+				// expects linear execution of all logs.
+				continue
+			}
+
 			// Short circuit for duplicate side blocks
 			if _, exist := w.localUncles[ev.Block.Hash()]; exist {
 				continue
@@ -447,6 +464,14 @@ func (w *worker) mainLoop() {
 			}
 
 		case ev := <-w.txsCh:
+			if deepmind.Enabled {
+				// This receives and processes all transactions received on the P2P network.
+				// By **not** processing this now received transaction, it prevents doing a
+				// speculative execution of the transaction and thus, breaking deep mind that
+				// expects linear execution of all logs.
+				continue
+			}
+
 			// Apply transactions to the pending state if we're not mining.
 			//
 			// Note all transactions received may not be continuous with transactions

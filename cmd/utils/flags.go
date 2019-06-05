@@ -32,6 +32,8 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/ethereum/go-ethereum/deepmind"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -1720,6 +1722,12 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
 		cache.TrieDirtyLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
 	}
+
+	if deepmind.Enabled {
+		log.Info("Ensuring no prefetch is set to true for proper deep mind functionning")
+		cache.TrieCleanNoPrefetch = true
+	}
+
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
 	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil)
 	if err != nil {

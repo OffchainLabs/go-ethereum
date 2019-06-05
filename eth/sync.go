@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -180,6 +181,14 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		// Fast sync was explicitly requested, and explicitly granted
 		mode = downloader.FastSync
 	}
+
+	if deepmind.Enabled {
+		// We want to override the feature up here that bases its fast sync decision on
+		// CurrentFastBlock.
+		// Our goal is to process everything at the slow speed, to extract all computations.
+		mode = downloader.FullSync
+	}
+
 	if mode == downloader.FastSync {
 		// Make sure the peer's total difficulty we are synchronizing is higher.
 		if pm.blockchain.GetTdByHash(pm.blockchain.CurrentFastBlock().Hash()).Cmp(pTd) >= 0 {

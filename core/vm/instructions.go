@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/crypto/sha3"
 )
@@ -396,8 +397,15 @@ func opSha3(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 
 	evm := interpreter.evm
 	if evm.vmConfig.EnablePreimageRecording {
+		// DM: this is always run when deep-mind is enabled
 		evm.StateDB.AddPreimage(interpreter.hasherBuf, data)
 	}
+
+	// preimage hash
+	if deepmind.Enabled {
+		deepmind.Print("EVM_KECCAK", deepmind.CallIndex(), deepmind.Hash(interpreter.hasherBuf), deepmind.Hex(data))
+	}
+
 	stack.push(interpreter.intPool.get().SetBytes(interpreter.hasherBuf[:]))
 
 	interpreter.intPool.put(offset, size)
@@ -636,7 +644,11 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory
 func opSstore(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	loc := common.BigToHash(stack.pop())
 	val := stack.pop()
-	interpreter.evm.StateDB.SetState(contract.Address(), loc, common.BigToHash(val))
+
+	addr := contract.Address()
+	newVal := common.BigToHash(val)
+
+	interpreter.evm.StateDB.SetState(addr, loc, newVal)
 
 	interpreter.intPool.put(val)
 	return nil, nil
@@ -881,6 +893,11 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memo
 	interpreter.evm.StateDB.AddBalance(common.BigToAddress(stack.pop()), balance)
 
 	interpreter.evm.StateDB.Suicide(contract.Address())
+
+	if deepmind.Enabled {
+		deepmind.Print("EVM_SUICIDE", deepmind.CallIndex())
+	}
+
 	return nil, nil
 }
 

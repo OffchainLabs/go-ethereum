@@ -141,6 +141,12 @@
 			"revisionTime": "2017-07-10T16:04:46Z"
 		},
 		{
+			"checksumSHA1": "06pu4WTqbWBAHCJhCLZaI1droeM=",
+			"path": "github.com/golang-collections/collections/stack",
+			"revision": "604e922904d35e97f98a774db7881f049cd8d970",
+			"revisionTime": "2013-07-29T18:54:59Z"
+		},
+		{
 			"checksumSHA1": "CGj8VcI/CpzxaNqlqpEVM7qElD4=",
 			"path": "github.com/golang/protobuf/proto",
 			"revision": "b285ee9cfc6c881bb20c0d8dc73370ea9b9ec90f",
@@ -543,6 +549,12 @@
 			"path": "github.com/wsddn/go-ecdh",
 			"revision": "48726bab92085232373de4ec5c51ce7b441c63a0",
 			"revisionTime": "2016-12-11T03:23:59Z"
+		},
+		{
+			"checksumSHA1": "byl77NJm2QiR5tfeBzAf2QpeQUc=",
+			"path": "go.uber.org/atomic",
+			"revision": "8dc6146f7569370a472715e178d8ae31172ee6da",
+			"revisionTime": "2018-10-18T21:50:23Z"
 		},
 		{
 			"checksumSHA1": "TT1rac6kpQp2vz24m5yDGUNQ/QQ=",

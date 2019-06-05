@@ -400,6 +400,9 @@ func (v *version) computeCompaction() {
 }
 
 func (v *version) needCompaction() bool {
+	if CompactionDisabled {
+		return false
+	}
 	return v.cScore >= 1 || atomic.LoadPointer(&v.cSeek) != nil
 }
 

@@ -236,6 +236,11 @@ func init() {
 	app.Flags = append(app.Flags, metricsFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
+		log.Info("NOTE enabling --syncmode=full")
+		if err := ctx.GlobalSet("syncmode", "full"); err != nil {
+			log.Error("wuuut", err)
+		}
+
 		logdir := ""
 		if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
 			logdir = (&node.Config{DataDir: utils.MakeDataDir(ctx)}).ResolvePath("logs")

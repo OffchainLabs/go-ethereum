@@ -66,7 +66,7 @@ retry:
 func (db *DB) flush(n int) (mdb *memDB, mdbFree int, err error) {
 	delayed := false
 	slowdownTrigger := db.s.o.GetWriteL0SlowdownTrigger()
-	pauseTrigger := db.s.o.GetWriteL0PauseTrigger()
+	//pauseTrigger := db.s.o.GetWriteL0PauseTrigger()
 	flush := func() (retry bool) {
 		mdb = db.getEffectiveMem()
 		if mdb == nil {
@@ -82,21 +82,21 @@ func (db *DB) flush(n int) (mdb *memDB, mdbFree int, err error) {
 		tLen := db.s.tLen(0)
 		mdbFree = mdb.Free()
 		switch {
-		case tLen >= slowdownTrigger && !delayed:
+		case tLen >= slowdownTrigger: //&& !delayed:
 			delayed = true
 			time.Sleep(time.Millisecond)
 		case mdbFree >= n:
 			return false
-		case tLen >= pauseTrigger:
-			delayed = true
-			// Set the write paused flag explicitly.
-			atomic.StoreInt32(&db.inWritePaused, 1)
-			err = db.compTriggerWait(db.tcompCmdC)
-			// Unset the write paused flag.
-			atomic.StoreInt32(&db.inWritePaused, 0)
-			if err != nil {
-				return false
-			}
+			//		case tLen >= pauseTrigger:
+			//			delayed = true
+			//			// Set the write paused flag explicitly.
+			//			atomic.StoreInt32(&db.inWritePaused, 1)
+			//			err = db.compTriggerWait(db.tcompCmdC)
+			//			// Unset the write paused flag.
+			//			atomic.StoreInt32(&db.inWritePaused, 0)
+			//			if err != nil {
+			//				return false
+			//			}
 		default:
 			// Allow memdb to grow if it has no entry.
 			if mdb.Len() == 0 {

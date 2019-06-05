@@ -22,11 +22,13 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -162,6 +164,16 @@ func (self *StateDB) AddLog(log *types.Log) {
 	log.BlockHash = self.bhash
 	log.TxIndex = uint(self.txIndex)
 	log.Index = self.logSize
+
+	if deepmind.Enabled {
+		strtopics := make([]string, len(log.Topics))
+		for idx, topic := range log.Topics {
+			strtopics[idx] = deepmind.Hash(topic)
+		}
+
+		deepmind.Print("ADD_LOG", deepmind.CallIndex(), deepmind.Addr(log.Address), strings.Join(strtopics, ","), deepmind.Hex(log.Data))
+	}
+
 	self.logs[self.thash] = append(self.logs[self.thash], log)
 	self.logSize++
 }
@@ -195,6 +207,10 @@ func (self *StateDB) Preimages() map[common.Hash][]byte {
 
 // AddRefund adds gas to the refund counter
 func (self *StateDB) AddRefund(gas uint64) {
+	// if deepmind.Enabled {
+	// 	deepmind.Print("ADD_REFUND", deepmind.Uint64(self.refund), deepmind.Uint64(gas), deepmind.Uint64(self.refund+gas))
+	// }
+
 	self.journal.append(refundChange{prev: self.refund})
 	self.refund += gas
 }
@@ -206,6 +222,11 @@ func (self *StateDB) SubRefund(gas uint64) {
 	if gas > self.refund {
 		panic("Refund counter below zero")
 	}
+
+	// if deepmind.Enabled {
+	// 	deepmind.Print("SUB_REFUND", deepmind.Uint64(self.refund), deepmind.Uint64(gas), deepmind.Uint64(self.refund-gas))
+	// }
+
 	self.refund -= gas
 }
 
@@ -413,6 +434,11 @@ func (self *StateDB) Suicide(addr common.Address) bool {
 		prev:        stateObject.suicided,
 		prevbalance: new(big.Int).Set(stateObject.Balance()),
 	})
+
+	if deepmind.Enabled {
+		deepmind.Print("SUICIDE_CHANGE", deepmind.Addr(addr), deepmind.Bool(stateObject.suicided), deepmind.BigInt(stateObject.Balance()))
+	}
+
 	stateObject.markSuicided()
 	stateObject.data.Balance = new(big.Int)
 
@@ -511,8 +537,17 @@ func (self *StateDB) createObject(addr common.Address) (newobj, prev *stateObjec
 	newobj = newObject(self, addr, Account{})
 	newobj.setNonce(0) // sets the object to dirty
 	if prev == nil {
+		// if deepmind.Enabled {
+		// 	deepmind.Print("CREATE_OBJECT_CHANGE", deepmind.Addr(addr))
+		// }
+
 		self.journal.append(createObjectChange{account: &addr})
 	} else {
+		// if deepmind.Enabled {
+		// 	// DMLOG: We could export the whole previous state in here..
+		// 	deepmind.Print("RESET_OBJECT_CHANGE", deepmind.Addr(addr))
+		// }
+
 		self.journal.append(resetObjectChange{prev: prev})
 	}
 	self.setStateObject(newobj)
@@ -530,6 +565,10 @@ func (self *StateDB) createObject(addr common.Address) (newobj, prev *stateObjec
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
 func (self *StateDB) CreateAccount(addr common.Address) {
+	if deepmind.Enabled {
+		deepmind.Print("CREATE_ACCOUNT", deepmind.CallIndex(), deepmind.Addr(addr))
+	}
+
 	newObj, prev := self.createObject(addr)
 	if prev != nil {
 		newObj.setBalance(prev.data.Balance)

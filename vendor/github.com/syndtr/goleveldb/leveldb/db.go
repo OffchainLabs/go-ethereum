@@ -27,6 +27,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
+var CompactionDisabled bool
+
 // DB is a LevelDB database.
 type DB struct {
 	// Need 64-bit alignment.
@@ -151,9 +153,11 @@ func openDB(s *session) (*DB, error) {
 	if readOnly {
 		db.SetReadOnly()
 	} else {
-		db.closeW.Add(2)
-		go db.tCompaction()
-		go db.mCompaction()
+		//if !CompactionDisabled {
+			db.closeW.Add(2)
+			go db.tCompaction()
+			go db.mCompaction()
+		//}
 		// go db.jWriter()
 	}
 

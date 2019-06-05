@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -156,6 +157,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 	// Don't bother with the execution if there's no code.
 	if len(contract.Code) == 0 {
+		if deepmind.Enabled {
+			deepmind.Print("ACCOUNT_WITHOUT_CODE", deepmind.CallIndex())
+		}
+
 		return nil, nil
 	}
 
@@ -283,6 +288,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		case err != nil:
 			return nil, err
 		case operation.reverts:
+			// DMLOG: we could print that the execution was REVERTed here,
+			// to inform those who want to know where it failed.
+			// Perhaps we need an ID of execution.. which contract this arrived on.
 			return res, errExecutionReverted
 		case operation.halts:
 			return res, nil
