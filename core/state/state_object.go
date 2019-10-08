@@ -236,7 +236,7 @@ func (s *stateObject) SetState(db Database, key, value common.Hash) {
 	}
 
 	if deepmind.Enabled {
-		deepmind.Print("STORAGE_CHANGE", deepmind.CallIndex(), deepmind.Addr(self.address), deepmind.Hash(key), deepmind.Hash(prev), deepmind.Hash(value))
+		deepmind.Print("STORAGE_CHANGE", deepmind.CallIndex(), deepmind.Addr(s.address), deepmind.Hash(key), deepmind.Hash(prev), deepmind.Hash(value))
 	}
 
 	// New value is different, update and journal the change
@@ -380,7 +380,7 @@ func (s *stateObject) SetBalance(amount *big.Int) {
 		//           savings) to see if it make sense to apply it or not.
 		deepmind.Print("BALANCE_CHANGE", deepmind.CallIndex(), deepmind.Addr(s.address), deepmind.BigInt(s.data.Balance), deepmind.BigInt(amount))
 	}
-	
+
 	s.db.journal.append(balanceChange{
 		account: &s.address,
 		prev:    new(big.Int).Set(s.data.Balance),

@@ -128,7 +128,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			}
 
 			deepmind.EndTransaction()
-			deepmind.Print("END_APPLY_TRX", deepmind.Uint64(gasUsed), deepmind.Hex(receipt.PostState), deepmind.Uint64(receipt.CumulativeGasUsed), deepmind.Hex(receipt.Bloom[:]), deepmind.JSON(logs))
+			deepmind.Print("END_APPLY_TRX", deepmind.Uint64(*usedGas), deepmind.Hex(receipt.PostState), deepmind.Uint64(receipt.CumulativeGasUsed), deepmind.Hex(receipt.Bloom[:]), deepmind.JSON(logs))
 		}
 
 		receipts = append(receipts, receipt)
