@@ -207,6 +207,10 @@ func (self *StateDB) Preimages() map[common.Hash][]byte {
 
 // AddRefund adds gas to the refund counter
 func (self *StateDB) AddRefund(gas uint64) {
+	// DEEP-MIND: This is called when some bytes are freed from
+	// storage for example, and a few other OPCODES.. the day we want
+	// that granularity of introspection, we know where to find it:
+
 	// if deepmind.Enabled {
 	// 	deepmind.Print("ADD_REFUND", deepmind.Uint64(self.refund), deepmind.Uint64(gas), deepmind.Uint64(self.refund+gas))
 	// }
@@ -436,7 +440,12 @@ func (self *StateDB) Suicide(addr common.Address) bool {
 	})
 
 	if deepmind.Enabled {
-		deepmind.Print("SUICIDE_CHANGE", deepmind.Addr(addr), deepmind.Bool(stateObject.suicided), deepmind.BigInt(stateObject.Balance()))
+		// This infers a balance change, a reduction from this account. In the `opSuicide` op code,
+		// the corresponding AddBalance is emitted.
+		deepmind.Print("SUICIDE_CHANGE", deepmind.CallIndex(), deepmind.Addr(addr), deepmind.Bool(stateObject.suicided), deepmind.BigInt(stateObject.Balance()))
+		// TODO: In our data model, add `suicided: true` (index
+		// accordingly in `search`), and add a BalanceChange reducing
+		// this value to zero.
 	}
 
 	stateObject.markSuicided()
@@ -537,19 +546,23 @@ func (self *StateDB) createObject(addr common.Address) (newobj, prev *stateObjec
 	newobj = newObject(self, addr, Account{})
 	newobj.setNonce(0) // sets the object to dirty
 	if prev == nil {
-		// if deepmind.Enabled {
-		// 	deepmind.Print("CREATE_OBJECT_CHANGE", deepmind.Addr(addr))
-		// }
-
 		self.journal.append(createObjectChange{account: &addr})
 	} else {
-		// if deepmind.Enabled {
-		// 	// DMLOG: We could export the whole previous state in here..
-		// 	deepmind.Print("RESET_OBJECT_CHANGE", deepmind.Addr(addr))
-		// }
-
 		self.journal.append(resetObjectChange{prev: prev})
 	}
+
+	if deepmind.Enabled {
+		// TODO: the CallIndex should be attached to the NEXT EVM call.
+		// add as `pendingCreateAccount`, prochain EVM_CALL start whatever ,il les pluck et les
+		// clear.
+		deepmind.Print("CREATED_ACCOUNT", deepmind.Addr(addr))
+		// TODO: in our data, we simply flag `account_created: true`,
+		// and index in `search` accordingly.
+		// created:true address:0x123123123213213
+		// { creatorCall {
+		// } }
+	}
+
 	self.setStateObject(newobj)
 	return newobj, prev
 }
@@ -565,10 +578,6 @@ func (self *StateDB) createObject(addr common.Address) (newobj, prev *stateObjec
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
 func (self *StateDB) CreateAccount(addr common.Address) {
-	if deepmind.Enabled {
-		deepmind.Print("CREATE_ACCOUNT", deepmind.CallIndex(), deepmind.Addr(addr))
-	}
-
 	newObj, prev := self.createObject(addr)
 	if prev != nil {
 		newObj.setBalance(prev.data.Balance)

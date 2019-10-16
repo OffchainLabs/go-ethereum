@@ -225,10 +225,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			return nil, gas, nil
 		}
 
-		// if deepmind.Enabled {
-		// 	deepmind.Print("CREATE_ACCOUNT", deepmind.CallIndex(), deepmind.Addr(addr))
-		// }
-
 		evm.StateDB.CreateAccount(addr)
 	}
 	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)

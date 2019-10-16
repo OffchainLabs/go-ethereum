@@ -894,10 +894,6 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memo
 
 	interpreter.evm.StateDB.Suicide(contract.Address())
 
-	if deepmind.Enabled {
-		deepmind.Print("EVM_SUICIDE", deepmind.CallIndex())
-	}
-
 	return nil, nil
 }
 

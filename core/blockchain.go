@@ -1695,10 +1695,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			coalescedLogs = append(coalescedLogs, logs...)
 			events = append(events, ChainEvent{block, block.Hash(), logs})
 
-			// if deepmind.Enabled {
-			// 	deepmind.Print("EVENT_CHAIN_EVENT")
-			// }
-
 			lastCanon = block
 
 			// Only count canonical blocks for GC processing time
@@ -1710,10 +1706,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
 				"root", block.Root())
 			events = append(events, ChainSideEvent{block})
-
-			// if deepmind.Enabled {
-			// 	deepmind.Print("EVENT_CHAIN_SIDE_EVENT")
-			// }
 
 		default:
 			// This in theory is impossible, but lets be nice to our future selves and leave
@@ -1748,10 +1740,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	// Append a single chain head event if we've progressed the chain
 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
 		events = append(events, ChainHeadEvent{lastCanon})
-
-		// if deepmind.Enabled {
-		// 	deepmind.Print("EVENT_CHAIN_HEAD_EVENT")
-		// }
 	}
 	return it.index, events, coalescedLogs, err
 }

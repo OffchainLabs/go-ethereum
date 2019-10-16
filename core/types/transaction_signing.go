@@ -248,11 +248,6 @@ func recoverPlain(tx *Transaction, sighash common.Hash, R, S, Vb *big.Int, homes
 	var addr common.Address
 	copy(addr[:], crypto.Keccak256(pub[1:])[12:])
 
-	// DMLOG: This is done in parallel, so between restarts, I'm not sure we will see these printed (say they are stored in the mem pool, and the ECRECOVER was vetted already). This would mean issues between `mindreader-eth` restarts.
-	// if deepmind.Enabled {
-	// 	deepmind.Print("ECRECOVER", deepmind.Hash(tx.Hash()), deepmind.Addr(addr), deepmind.Hex(pub))
-	// }
-
 	return addr, nil
 }
 

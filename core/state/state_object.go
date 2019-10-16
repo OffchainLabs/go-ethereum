@@ -146,10 +146,6 @@ func (s *stateObject) markSuicided() {
 }
 
 func (s *stateObject) touch() {
-	// if deepmind.Enabled {
-	// 	deepmind.Print("TOUCH_CHANGE", deepmind.Addr(s.address))
-	// }
-
 	s.db.journal.append(touchChange{
 		account: &s.address,
 	})
@@ -340,10 +336,6 @@ func (s *stateObject) CommitTrie(db Database) error {
 		s.data.Root = root
 	}
 
-	// if deepmind.Enabled {
-	// 	deepmind.Print("COMMIT_TRIE", deepmind.Addr(s.address), deepmind.Hash(root))
-	// }
-
 	return err
 }
 
@@ -438,9 +430,13 @@ func (s *stateObject) Code(db Database) []byte {
 func (s *stateObject) SetCode(codeHash common.Hash, code []byte) {
 	prevcode := s.Code(s.db.db)
 
-	// if deepmind.Enabled {
-	// 	deepmind.Print("CODE_CHANGE", deepmind.Addr(s.address), deepmind.Hex(s.CodeHash()), deepmind.Hex(prevcode), deepmind.Hash(codeHash), deepmind.Hex(code))
-	// }
+	if deepmind.Enabled {
+		deepmind.Print("CODE_CHANGE", deepmind.CallIndex(), deepmind.Addr(s.address), deepmind.Hex(s.CodeHash()), deepmind.Hex(prevcode), deepmind.Hash(codeHash), deepmind.Hex(code))
+		// TODO: in our data model, `setCode` could contains all these values, set on the EVM Call
+		// ethq could bubble it up with a logo when any of its child EVM calls have a setCode..
+		// search could index `setsCode:true`, or `created:eoa` or `created:contract`, based on
+		// such values.
+	}
 
 	s.db.journal.append(codeChange{
 		account:  &s.address,
