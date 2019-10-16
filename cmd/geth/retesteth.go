@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -224,9 +225,9 @@ func (e *NoRewardEngine) accumulateRewards(config *params.ChainConfig, state *st
 	// Simply touch miner and uncle coinbase accounts
 	reward := big.NewInt(0)
 	for _, uncle := range uncles {
-		state.AddBalance(uncle.Coinbase, reward)
+		state.AddBalance(uncle.Coinbase, reward, deepmind.BalanceChangeReason("reward_mine_uncle"))
 	}
-	state.AddBalance(header.Coinbase, reward)
+	state.AddBalance(header.Coinbase, reward, deepmind.BalanceChangeReason("reward_mine_block"))
 }
 
 func (e *NoRewardEngine) Finalize(chain consensus.ChainReader, header *types.Header, statedb *state.StateDB, txs []*types.Transaction,

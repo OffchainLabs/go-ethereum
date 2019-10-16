@@ -427,7 +427,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
 	// but is the correct thing to do and matters on other networks, in tests, and potential
 	// future scenarios
-	evm.StateDB.AddBalance(addr, bigZero)
+	evm.StateDB.AddBalance(addr, bigZero, deepmind.BalanceChangeReason("touch_account"))
 
 	if deepmind.Enabled {
 		deepmind.PrintEnterCall("STATIC", contract.Caller(), addr, deepmind.EmptyValue, gas, input)

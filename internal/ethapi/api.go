@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -787,7 +788,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		}
 		// Override account balance.
 		if account.Balance != nil {
-			state.SetBalance(addr, (*big.Int)(*account.Balance))
+			state.SetBalance(addr, (*big.Int)(*account.Balance), deepmind.BalanceChangeReason("call_balance_override"))
 		}
 		if account.State != nil && account.StateDiff != nil {
 			return nil, 0, false, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())

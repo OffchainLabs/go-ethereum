@@ -341,7 +341,7 @@ func (s *stateObject) CommitTrie(db Database) error {
 
 // AddBalance removes amount from c's balance.
 // It is used to add funds to the destination account of a transfer.
-func (s *stateObject) AddBalance(amount *big.Int) {
+func (s *stateObject) AddBalance(amount *big.Int, reason deepmind.BalanceChangeReason) {
 	// EIP158: We must check emptiness for the objects such that the account
 	// clearing (0,0,0 objects) can take effect.
 	if amount.Sign() == 0 {
@@ -351,26 +351,26 @@ func (s *stateObject) AddBalance(amount *big.Int) {
 
 		return
 	}
-	s.SetBalance(new(big.Int).Add(s.Balance(), amount))
+	s.SetBalance(new(big.Int).Add(s.Balance(), amount), reason)
 }
 
 // SubBalance removes amount from c's balance.
 // It is used to remove funds from the origin account of a transfer.
-func (s *stateObject) SubBalance(amount *big.Int) {
+func (s *stateObject) SubBalance(amount *big.Int, reason deepmind.BalanceChangeReason) {
 	if amount.Sign() == 0 {
 		return
 	}
-	s.SetBalance(new(big.Int).Sub(s.Balance(), amount))
+	s.SetBalance(new(big.Int).Sub(s.Balance(), amount), reason)
 }
 
-func (s *stateObject) SetBalance(amount *big.Int) {
+func (s *stateObject) SetBalance(amount *big.Int, reason deepmind.BalanceChangeReason) {
 	if deepmind.Enabled {
 		// THOUGHTS: There is a choice between storage vs CPU here as we store the old balance and new the balance.
 		//           Usually, balances are quite big. Storing instead the old balance and the delta would probably
 		//           reduce a lot the storage space at the expense of CPU time to compute the delta and recomputed
 		//           the new balance in place where it's required. This would need to be computed (the space
 		//           savings) to see if it make sense to apply it or not.
-		deepmind.Print("BALANCE_CHANGE", deepmind.CallIndex(), deepmind.Addr(s.address), deepmind.BigInt(s.data.Balance), deepmind.BigInt(amount))
+		deepmind.Print("BALANCE_CHANGE", deepmind.CallIndex(), deepmind.Addr(s.address), deepmind.BigInt(s.data.Balance), deepmind.BigInt(amount), string(reason))
 	}
 
 	s.db.journal.append(balanceChange{

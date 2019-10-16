@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -79,7 +80,7 @@ func ApplyDAOHardFork(statedb *state.StateDB) {
 
 	// Move every DAO account and extra-balance account funds into the refund contract
 	for _, addr := range params.DAODrainList() {
-		statedb.AddBalance(params.DAORefundContract, statedb.GetBalance(addr))
-		statedb.SetBalance(addr, new(big.Int))
+		statedb.AddBalance(params.DAORefundContract, statedb.GetBalance(addr), deepmind.BalanceChangeReason("dao_refund_contract"))
+		statedb.SetBalance(addr, new(big.Int), deepmind.BalanceChangeReason("dao_adjust_balance"))
 	}
 }

@@ -21,14 +21,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/deepmind"
 )
 
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
 	CreateAccount(common.Address)
 
-	SubBalance(common.Address, *big.Int)
-	AddBalance(common.Address, *big.Int)
+	SubBalance(common.Address, *big.Int, deepmind.BalanceChangeReason)
+	AddBalance(common.Address, *big.Int, deepmind.BalanceChangeReason)
 	GetBalance(common.Address) *big.Int
 
 	GetNonce(common.Address) uint64
