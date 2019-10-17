@@ -194,7 +194,6 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	homestead := st.evm.ChainConfig().IsHomestead(st.evm.BlockNumber)
 	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.BlockNumber)
 	contractCreation := msg.To() == nil
-
 	// Pay intrinsic gas
 	gas, err := IntrinsicGas(st.data, contractCreation, homestead, istanbul)
 	if err != nil {

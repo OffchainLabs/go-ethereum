@@ -83,8 +83,12 @@ func Print(input ...string) {
 	fmt.Println("DMLOG FAILED RETRIES")
 }
 
-func PrintEnterCall(callType string, caller common.Address, callee common.Address, value *big.Int, gasLimit uint64, input []byte) {
-	Print("EVM_RUN_CALL", callType, CallEnter(), Addr(caller), Addr(callee), Hex(value.Bytes()), Uint64(gasLimit), Hex(input))
+func PrintEnterCall(callType string) {
+	Print("EVM_RUN_CALL", callType, CallEnter())
+}
+
+func PrintCallParams(callType string, caller common.Address, callee common.Address, value *big.Int, gasLimit uint64, input []byte) {
+	Print("EVM_PARAM", callType, CallIndex(), Addr(caller), Addr(callee), Hex(value.Bytes()), Uint64(gasLimit), Hex(input))
 }
 
 func PrintTrxPool(callType string, tx *types.Transaction, err error) {

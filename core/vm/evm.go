@@ -201,7 +201,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, ErrInsufficientBalance
 	}
-
 	var (
 		to       = AccountRef(addr)
 		snapshot = evm.StateDB.Snapshot()
@@ -225,8 +224,17 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			return nil, gas, nil
 		}
 
+		if deepmind.Enabled {
+			deepmind.PrintEnterCall("CALL")
+		}
 		evm.StateDB.CreateAccount(addr)
+
+	} else {
+		if deepmind.Enabled {
+			deepmind.PrintEnterCall("CALL")
+		}
 	}
+
 	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
 
 	// DMLOG: here we have a new CONTRACT created.
@@ -247,9 +255,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			evm.vmConfig.Tracer.CaptureEnd(ret, gas-contract.Gas, time.Since(start), err)
 		}()
 	}
-
 	if deepmind.Enabled {
-		deepmind.PrintEnterCall("CALL", contract.Caller(), addr, value, gas, input)
+		deepmind.PrintCallParams("CALL", contract.Caller(), addr, value, gas, input)
 	}
 
 	ret, err = run(evm, contract, input, false)
@@ -290,7 +297,6 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
-
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -298,6 +304,10 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	// Fail if we're trying to transfer more than the available balance
 	if !evm.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, ErrInsufficientBalance
+	}
+
+	if deepmind.Enabled {
+		deepmind.PrintEnterCall("CALLCODE")
 	}
 
 	var (
@@ -323,7 +333,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	// such trees.  Let's GO DEEP like we did on EOS :)
 
 	if deepmind.Enabled {
-		deepmind.PrintEnterCall("CALLCODE", contract.Caller(), addr, value, gas, input)
+		deepmind.PrintCallParams("CALLCODE", contract.Caller(), addr, value, gas, input)
 	}
 
 	ret, err = run(evm, contract, input, false)
@@ -364,6 +374,10 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		return nil, gas, ErrDepth
 	}
 
+	if deepmind.Enabled {
+		deepmind.PrintEnterCall("DELEGATE")
+	}
+
 	var (
 		snapshot = evm.StateDB.Snapshot()
 		to       = AccountRef(caller.Address())
@@ -375,7 +389,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 
 	if deepmind.Enabled {
 		// DMLOG: We use `contract.Caller()` as it is fixed with `AsDelegate()`.
-		deepmind.PrintEnterCall("DELEGATE", contract.Caller(), addr, contract.value, gas, input)
+		deepmind.PrintCallParams("DELEGATE", contract.Caller(), addr, contract.value, gas, input)
 	}
 
 	ret, err = run(evm, contract, input, false)
@@ -414,6 +428,10 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		return nil, gas, ErrDepth
 	}
 
+	if deepmind.Enabled {
+		deepmind.PrintEnterCall("STATIC")
+	}
+
 	var (
 		to       = AccountRef(addr)
 		snapshot = evm.StateDB.Snapshot()
@@ -430,7 +448,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	evm.StateDB.AddBalance(addr, bigZero, deepmind.BalanceChangeReason("touch_account"))
 
 	if deepmind.Enabled {
-		deepmind.PrintEnterCall("STATIC", contract.Caller(), addr, deepmind.EmptyValue, gas, input)
+		deepmind.PrintCallParams("STATIC", contract.Caller(), addr, deepmind.EmptyValue, gas, input)
 	}
 
 	// When an error was returned by the EVM or when setting the creation code
@@ -481,8 +499,13 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if !evm.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
+
 	nonce := evm.StateDB.GetNonce(caller.Address())
 	evm.StateDB.SetNonce(caller.Address(), nonce+1)
+
+	if deepmind.Enabled {
+		deepmind.PrintEnterCall("CREATE")
+	}
 
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(address)
@@ -513,7 +536,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	start := time.Now()
 
 	if deepmind.Enabled {
-		deepmind.PrintEnterCall("CREATE", contract.Caller(), address, contract.value, gas, nil)
+		deepmind.PrintCallParams("CREATE", contract.Caller(), address, contract.value, gas, nil)
 	}
 
 	ret, err := run(evm, contract, nil, false)
