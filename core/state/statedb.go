@@ -446,6 +446,7 @@ func (self *StateDB) Suicide(addr common.Address) bool {
 		// TODO: In our data model, add `suicided: true` (index
 		// accordingly in `search`), and add a BalanceChange reducing
 		// this value to zero.
+		deepmind.Print("BALANCE_CHANGE", deepmind.CallIndex(), deepmind.Addr(addr), deepmind.BigInt(stateObject.Balance()), "0", "suicide_withdraw")
 	}
 
 	stateObject.markSuicided()
