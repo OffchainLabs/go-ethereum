@@ -556,11 +556,11 @@ func (self *StateDB) createObject(addr common.Address) (newobj, prev *stateObjec
 		// TODO: the CallIndex should be attached to the NEXT EVM call.
 		// add as `pendingCreateAccount`, prochain EVM_CALL start whatever ,il les pluck et les
 		// clear.
-		deepmind.Print("CREATED_ACCOUNT", deepmind.Addr(addr))
+		deepmind.Print("CREATED_ACCOUNT", deepmind.CallIndex(), deepmind.Addr(addr))
 		// TODO: in our data, we simply flag `account_created: true`,
 		// and index in `search` accordingly.
 		// created:true address:0x123123123213213
-		// { creatorCall {
+		// { creatorCall
 		// } }
 	}
 
