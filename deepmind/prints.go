@@ -92,7 +92,6 @@ func PrintCallParams(callType string, caller common.Address, callee common.Addre
 }
 
 func PrintTrxPool(callType string, tx *types.Transaction, err error) {
-
 	var signer types.Signer = types.FrontierSigner{}
 	if tx.Protected() {
 		signer = types.NewEIP155Signer(tx.ChainId())

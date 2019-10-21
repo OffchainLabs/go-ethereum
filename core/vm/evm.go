@@ -205,6 +205,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		to       = AccountRef(addr)
 		snapshot = evm.StateDB.Snapshot()
 	)
+
 	if !evm.StateDB.Exist(addr) {
 		precompiles := PrecompiledContractsHomestead
 		if evm.chainRules.IsByzantium {
@@ -503,15 +504,16 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	nonce := evm.StateDB.GetNonce(caller.Address())
 	evm.StateDB.SetNonce(caller.Address(), nonce+1)
 
-	if deepmind.Enabled {
-		deepmind.PrintEnterCall("CREATE")
-	}
-
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}
+
+	if deepmind.Enabled {
+		deepmind.PrintEnterCall("CREATE")
+	}
+
 	// Create a new account on the state
 	snapshot := evm.StateDB.Snapshot()
 	evm.StateDB.CreateAccount(address)
@@ -526,7 +528,23 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contract := NewContract(caller, AccountRef(address), value, gas)
 	contract.SetCodeOptionalHash(&address, codeAndHash)
 
+	if deepmind.Enabled {
+		deepmind.PrintCallParams("CREATE", contract.Caller(), address, contract.value, gas, nil)
+	}
+
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
+		if deepmind.Enabled {
+			// What to do with this related to our data model? This seems to results
+			// in the **non-execution** of the contract code when the depth is > 0 and
+			// no recursion option is set. We need to close the call, otherwise it will
+			// fucked up everything.
+			//
+			// Our data model for now will be an empty create call, however, here would mean
+			// no code execution (i.e. the constructor would have **not** being called). Would
+			// we want to show data at some point? Is it even possible on non-custom chain?
+			deepmind.PrintEndCall(contract.Gas, nil)
+		}
+
 		return nil, address, gas, nil
 	}
 
@@ -534,10 +552,6 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		evm.vmConfig.Tracer.CaptureStart(caller.Address(), address, true, codeAndHash.code, gas, value)
 	}
 	start := time.Now()
-
-	if deepmind.Enabled {
-		deepmind.PrintCallParams("CREATE", contract.Caller(), address, contract.value, gas, nil)
-	}
 
 	ret, err := run(evm, contract, nil, false)
 
