@@ -153,10 +153,6 @@ func Bool(in bool) string {
 }
 
 func Hash(in common.Hash) string {
-	if len(in) == 0 {
-		return "."
-	}
-
 	return hex.EncodeToString(in[:])
 }
 

@@ -501,17 +501,22 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
 
+	if deepmind.Enabled {
+		deepmind.PrintEnterCall("CREATE")
+		deepmind.PrintCallParams("CREATE", caller.Address(), address, value, gas, nil)
+	}
+
 	nonce := evm.StateDB.GetNonce(caller.Address())
 	evm.StateDB.SetNonce(caller.Address(), nonce+1)
 
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
+		if deepmind.Enabled {
+			deepmind.PrintCallFailed(gas, ErrContractAddressCollision.Error())
+			deepmind.PrintEndCall(gas, nil)
+		}
 		return nil, common.Address{}, 0, ErrContractAddressCollision
-	}
-
-	if deepmind.Enabled {
-		deepmind.PrintEnterCall("CREATE")
 	}
 
 	// Create a new account on the state
@@ -527,10 +532,6 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// The contract is a scoped environment for this execution context only.
 	contract := NewContract(caller, AccountRef(address), value, gas)
 	contract.SetCodeOptionalHash(&address, codeAndHash)
-
-	if deepmind.Enabled {
-		deepmind.PrintCallParams("CREATE", contract.Caller(), address, contract.value, gas, nil)
-	}
 
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		if deepmind.Enabled {
