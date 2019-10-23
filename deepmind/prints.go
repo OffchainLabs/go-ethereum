@@ -73,14 +73,22 @@ func Print(input ...string) {
 	line := "DMLOG " + strings.Join(input, " ") + "\n"
 	var written int
 	var err error
-	for i := 0; i < 5; i++ {
-		written, err = fmt.Print(line[written:])
+	var i int
+	loops := 10
+	for i = 0; i < loops; i++ {
+		toWrite := line[written:]
+		written, err = fmt.Print(toWrite)
+		if len(toWrite) != written {
+			continue
+		}
 		if err == nil {
 			return
 		}
-		fmt.Println("DMLOG FAILED WRITING:", err)
+		if i == loops - 1 {
+			fmt.Println("\nDMLOG FAILED WRITING:", err)
+		}
 	}
-	fmt.Println("DMLOG FAILED RETRIES")
+	fmt.Printf("\nDMLOG FAILED RETRIES %d\n", loops)
 }
 
 func PrintEnterCall(callType string) {
