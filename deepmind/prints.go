@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"runtime/debug"
 	"strconv"
@@ -73,22 +74,24 @@ func Print(input ...string) {
 	line := "DMLOG " + strings.Join(input, " ") + "\n"
 	var written int
 	var err error
-	var i int
 	loops := 10
-	for i = 0; i < loops; i++ {
-		toWrite := line[written:]
-		written, err = fmt.Print(toWrite)
-		if len(toWrite) != written {
-			continue
-		}
-		if err == nil {
+	for i := 0; i < loops; i++ {
+		written, err = fmt.Print(line)
+
+		if len(line) == written {
 			return
 		}
-		if i == loops - 1 {
-			fmt.Println("\nDMLOG FAILED WRITING:", err)
+
+		line = line[written:]
+
+		if i == loops-1 {
+			break
 		}
 	}
-	fmt.Printf("\nDMLOG FAILED RETRIES %d\n", loops)
+	errstr := fmt.Sprintf("\nDMLOG FAILED WRITING %dx: %s\n", loops, err)
+
+	ioutil.WriteFile("/tmp/wuuuut", []byte(errstr), 0644)
+	fmt.Print(errstr)
 }
 
 func PrintEnterCall(callType string) {
