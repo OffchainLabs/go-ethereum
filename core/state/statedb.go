@@ -171,7 +171,7 @@ func (self *StateDB) AddLog(log *types.Log) {
 			strtopics[idx] = deepmind.Hash(topic)
 		}
 
-		deepmind.Print("ADD_LOG", deepmind.CallIndex(), deepmind.Addr(log.Address), strings.Join(strtopics, ","), deepmind.Hex(log.Data))
+		deepmind.Print("ADD_LOG", deepmind.CallIndex(), deepmind.LogIndex(), deepmind.Addr(log.Address), strings.Join(strtopics, ","), deepmind.Hex(log.Data))
 	}
 
 	self.logs[self.thash] = append(self.logs[self.thash], log)

@@ -22,6 +22,8 @@ var activeIndex = "0"
 var nextIndex = uint64(0)
 var indexStack = &ExtendedStack{}
 
+var logIndex = uint64(0)
+
 var seenBlock = atomic.NewBool(false)
 var inBlock = atomic.NewBool(false)
 var inTransaction = atomic.NewBool(false)
@@ -61,6 +63,7 @@ func EndBlock() {
 	if !inBlock.CAS(true, false) {
 		panic("exiting a block while not already within a block scope")
 	}
+	logIndex = 0
 }
 
 func Print(input ...string) {
@@ -219,6 +222,12 @@ func CallReturn() string {
 	activeIndex = indexStack.MustPeek()
 
 	return previousIndex
+}
+
+func LogIndex() string {
+	activeIndex = strconv.FormatUint(logIndex, 10)
+	logIndex++
+	return activeIndex
 }
 
 type ExtendedStack struct {
