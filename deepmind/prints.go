@@ -225,9 +225,9 @@ func CallReturn() string {
 }
 
 func LogIndex() string {
-	activeIndex = strconv.FormatUint(logIndex, 10)
+	current := strconv.FormatUint(logIndex, 10)
 	logIndex++
-	return activeIndex
+	return current
 }
 
 type ExtendedStack struct {
