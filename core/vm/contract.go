@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/deepmind"
 )
 
 // ContractRef is a reference to the contract's backing object
@@ -149,11 +150,16 @@ func (c *Contract) Caller() common.Address {
 }
 
 // UseGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) UseGas(gas uint64) (ok bool) {
+func (c *Contract) UseGas(gas uint64, reason string) (ok bool) {
 	if c.Gas < gas {
 		return false
 	}
+
 	c.Gas -= gas
+	if deepmind.Enabled {
+		deepmind.Print("CONSUME_GAS", deepmind.CallIndex(), deepmind.Uint64(gas), reason)
+	}
+
 	return true
 }
 

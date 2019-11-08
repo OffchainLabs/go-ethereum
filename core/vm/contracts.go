@@ -23,6 +23,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
@@ -78,7 +79,7 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
 func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contract) (ret []byte, err error) {
 	gas := p.RequiredGas(input)
-	if contract.UseGas(gas) {
+	if contract.UseGas(gas, deepmind.ConsumeGasReason("precompiled_contract")) {
 		return p.Run(input)
 	}
 	return nil, ErrOutOfGas

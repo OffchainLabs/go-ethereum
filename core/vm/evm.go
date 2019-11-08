@@ -268,11 +268,11 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if err != nil {
 		if deepmind.Enabled {
 			deepmind.PrintCallFailed(contract.Gas, err.Error())
-		}
+
 
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != errExecutionReverted {
-			contract.UseGas(contract.Gas)
+			contract.UseGas(contract.Gas, deepmind.FailedExecutionConsumeGas)
 		} else {
 			if deepmind.Enabled {
 				deepmind.PrintCallReverted()
@@ -346,7 +346,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != errExecutionReverted {
-			contract.UseGas(contract.Gas)
+			contract.UseGas(contract.Gas, deepmind.FailedExecutionConsumeGas)
 		} else {
 			if deepmind.Enabled {
 				deepmind.PrintCallReverted()
@@ -401,7 +401,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != errExecutionReverted {
-			contract.UseGas(contract.Gas)
+			contract.UseGas(contract.Gas, deepmind.FailedExecutionConsumeGas)
 		} else {
 			if deepmind.Enabled {
 				deepmind.PrintCallReverted()
@@ -463,7 +463,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != errExecutionReverted {
-			contract.UseGas(contract.Gas)
+			contract.UseGas(contract.Gas, deepmind.FailedExecutionConsumeGas)
 		} else {
 			if deepmind.Enabled {
 				deepmind.PrintCallReverted()
@@ -513,6 +513,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
 		if deepmind.Enabled {
+			// FIXME? Does it consume all gas in the end and that would mean no REFUND_GAS in dmlogs
+			//        It appears that it is **NOT** consume all the remaining gas since all gas consumption
+			//        seems to always fit with `contract.UseGas(gas)`
 			deepmind.PrintCallFailed(gas, ErrContractAddressCollision.Error())
 			deepmind.PrintEndCall(gas, nil)
 		}
@@ -565,7 +568,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if err == nil && !maxCodeSizeExceeded {
 		createDataGas := uint64(len(ret)) * params.CreateDataGas
 
-		if contract.UseGas(createDataGas) {
+		if contract.UseGas(createDataGas, deepmind.ConsumeGasReason("create_data")) {
 			evm.StateDB.SetCode(address, ret)
 		} else {
 			err = ErrCodeStoreOutOfGas
@@ -586,7 +589,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if maxCodeSizeExceeded || (err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas)) {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != errExecutionReverted {
-			contract.UseGas(contract.Gas)
+			contract.UseGas(contract.Gas, deepmind.FailedExecutionConsumeGas)
 		} else {
 			if deepmind.Enabled {
 				deepmind.PrintCallReverted()

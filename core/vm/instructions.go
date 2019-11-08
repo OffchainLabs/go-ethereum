@@ -708,7 +708,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memor
 		gas -= gas / 64
 	}
 
-	contract.UseGas(gas)
+	contract.UseGas(gas, deepmind.ConsumeGasReason("opcode_create"))
 	res, addr, returnGas, suberr := interpreter.evm.Create(contract, input, gas, value)
 	// Push item on the stack based on the returned error. If the ruleset is
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
@@ -741,7 +741,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memo
 
 	// Apply EIP150
 	gas -= gas / 64
-	contract.UseGas(gas)
+	contract.UseGas(gas, deepmind.ConsumeGasReason("opcode_create2"))
 	res, addr, returnGas, suberr := interpreter.evm.Create2(contract, input, gas, endowment, salt)
 	// Push item on the stack based on the returned error.
 	if suberr != nil {
