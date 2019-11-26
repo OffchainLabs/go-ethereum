@@ -70,10 +70,6 @@ var (
 		utils.NoUSBFlag,
 		utils.SmartCardDaemonPathFlag,
 		utils.OverrideIstanbulFlag,
-		utils.DashboardEnabledFlag,
-		utils.DashboardAddrFlag,
-		utils.DashboardPortFlag,
-		utils.DashboardRefreshFlag,
 		utils.EthashCacheDirFlag,
 		utils.EthashCachesInMemoryFlag,
 		utils.EthashCachesOnDiskFlag,
@@ -236,21 +232,14 @@ func init() {
 	app.Flags = append(app.Flags, metricsFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
+		// Force sync mode to `full` for deep mind code (whatever the value flag!)
 		log.Info("NOTE enabling --syncmode=full")
-		if err := ctx.GlobalSet("syncmode", "full"); err != nil {
-			log.Error("wuuut", err)
+		if err := ctx.GlobalSet(utils.SyncModeFlag.Name, "full"); err != nil {
+			log.Error("deep mind failed to set sync mode to full", err)
 		}
 
-		logdir := ""
-		if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
-			logdir = (&node.Config{DataDir: utils.MakeDataDir(ctx)}).ResolvePath("logs")
-		}
-		if err := debug.Setup(ctx, logdir); err != nil {
-			return err
-		}
-		return nil
+		return debug.Setup(ctx, "")
 	}
-
 	app.After = func(ctx *cli.Context) error {
 		debug.Exit()
 		console.Stdin.Close() // Resets terminal mode.

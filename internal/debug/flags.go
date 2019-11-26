@@ -31,7 +31,6 @@ import (
 	"github.com/fjl/memsize/memsizeui"
 	colorable "github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
-	"github.com/syndtr/goleveldb/leveldb"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -92,10 +91,6 @@ var (
 		Name:  "deep-mind",
 		Usage: "Activate/deactivate deep-mind instrumentation, disabled by default",
 	}
-	deepMindNocompactionFlag = cli.BoolFlag{
-		Name:  "deep-mind-nocompaction",
-		Usage: "Deactivate compaction of LevelDB",
-	}
 	deepMindBlockProgressFlag = cli.BoolFlag{
 		Name:  "deep-mind-block-progress",
 		Usage: "Activate/deactivate deep-mind block progress output instrumentation, disabled by default",
@@ -107,7 +102,7 @@ var Flags = []cli.Flag{
 	verbosityFlag, vmoduleFlag, backtraceAtFlag, debugFlag,
 	pprofFlag, pprofAddrFlag, pprofPortFlag,
 	memprofilerateFlag, blockprofilerateFlag, cpuprofileFlag, traceFlag,
-	deepMindFlag, deepMindNocompactionFlag, deepMindBlockProgressFlag,
+	deepMindFlag, deepMindBlockProgressFlag,
 }
 
 var (
@@ -170,7 +165,6 @@ func Setup(ctx *cli.Context, logdir string) error {
 	log.Info("Initializing deep mind")
 	deepmind.Enabled = ctx.GlobalBool(deepMindFlag.Name)
 	deepmind.BlockProgressEnabled = ctx.GlobalBool(deepMindBlockProgressFlag.Name)
-	leveldb.CompactionDisabled = ctx.GlobalBool(deepMindNocompactionFlag.Name)
 	log.Info("Deep mind initialized", "enabled", deepmind.Enabled, "block_progress_enabled", deepmind.BlockProgressEnabled)
 
 	return nil

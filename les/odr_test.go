@@ -126,7 +126,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 
 			if err == nil {
 				from := statedb.GetOrNewStateObject(bankAddr)
-				from.SetBalance(math.MaxBig256)
+				from.SetBalance(math.MaxBig256, "test")
 
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false)}
 
@@ -141,7 +141,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 		} else {
 			header := lc.GetHeaderByHash(bhash)
 			state := light.NewState(ctx, header, lc.Odr())
-			state.SetBalance(bankAddr, math.MaxBig256)
+			state.SetBalance(bankAddr, math.MaxBig256, "test")
 			msg := callmsg{types.NewMessage(bankAddr, &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false)}
 			context := core.NewEVMContext(msg, header, lc, nil)
 			vmenv := vm.NewEVM(context, state, config, vm.Config{})
@@ -188,6 +188,15 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 
 	client.handler.synchronise(client.peer.peer)
 
+	// Ensure the client has synced all necessary data.
+	clientHead := client.handler.backend.blockchain.CurrentHeader()
+	if clientHead.Number.Uint64() != 4 {
+		t.Fatalf("Failed to sync the chain with server, head: %v", clientHead.Number.Uint64())
+	}
+	// Disable the mechanism that we will wait a few time for request
+	// even there is no suitable peer to send right now.
+	waitForPeers = 0
+
 	test := func(expFail uint64) {
 		// Mark this as a helper to put the failures at the correct lines
 		t.Helper()
@@ -196,7 +205,9 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 			bhash := rawdb.ReadCanonicalHash(server.db, i)
 			b1 := fn(light.NoOdr, server.db, server.handler.server.chainConfig, server.handler.blockchain, nil, bhash)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			// Set the timeout as 1 second here, ensure there is enough time
+			// for travis to make the action.
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			b2 := fn(ctx, client.db, client.handler.backend.chainConfig, nil, client.handler.backend.blockchain, bhash)
 			cancel()
 

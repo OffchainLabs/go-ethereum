@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/gorilla/websocket"
 )
 
 // Node represents a node in a simulation network which is created by a
@@ -51,7 +52,7 @@ type Node interface {
 	Client() (*rpc.Client, error)
 
 	// ServeRPC serves RPC requests over the given connection
-	ServeRPC(net.Conn) error
+	ServeRPC(*websocket.Conn) error
 
 	// Start starts the node with the given snapshots
 	Start(snapshots map[string][]byte) error
@@ -101,6 +102,11 @@ type NodeConfig struct {
 	// services registered by calling the RegisterService function)
 	Services []string
 
+	// Properties are the names of the properties this node should hold
+	// within running services (e.g. "bootnode", "lightnode" or any custom values)
+	// These values need to be checked and acted upon by node Services
+	Properties []string
+
 	// Enode
 	node *enode.Node
 
@@ -120,6 +126,7 @@ type nodeConfigJSON struct {
 	PrivateKey      string   `json:"private_key"`
 	Name            string   `json:"name"`
 	Services        []string `json:"services"`
+	Properties      []string `json:"properties"`
 	EnableMsgEvents bool     `json:"enable_msg_events"`
 	Port            uint16   `json:"port"`
 }
@@ -131,6 +138,7 @@ func (n *NodeConfig) MarshalJSON() ([]byte, error) {
 		ID:              n.ID.String(),
 		Name:            n.Name,
 		Services:        n.Services,
+		Properties:      n.Properties,
 		Port:            n.Port,
 		EnableMsgEvents: n.EnableMsgEvents,
 	}
@@ -168,6 +176,7 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 
 	n.Name = confJSON.Name
 	n.Services = confJSON.Services
+	n.Properties = confJSON.Properties
 	n.Port = confJSON.Port
 	n.EnableMsgEvents = confJSON.EnableMsgEvents
 
