@@ -128,7 +128,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			}
 
 			deepmind.EndTransaction()
-			deepmind.Print("END_APPLY_TRX", deepmind.Uint64(*usedGas), deepmind.Hex(receipt.PostState), deepmind.Uint64(receipt.CumulativeGasUsed), deepmind.Hex(receipt.Bloom[:]), deepmind.JSON(logs))
+			deepmind.Print("END_APPLY_TRX", deepmind.Uint64(receipt.GasUsed), deepmind.Hex(receipt.PostState), deepmind.Uint64(receipt.CumulativeGasUsed), deepmind.Hex(receipt.Bloom[:]), deepmind.JSON(logs))
 		}
 
 		receipts = append(receipts, receipt)
@@ -183,6 +183,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	vmenv := vm.NewEVM(context, statedb, config, cfg)
 	// Apply the transaction to the current state (included in the env)
 	_, gas, failed, err := ApplyMessage(vmenv, msg, gp)
+
 	if err != nil {
 		return nil, err
 	}

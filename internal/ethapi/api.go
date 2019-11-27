@@ -25,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -40,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -788,6 +788,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		}
 		// Override account balance.
 		if account.Balance != nil {
+			// FIXME: I'm really not sure about the meaning of this one, seems it's API based, so should have no impact on replay through deep mind
 			state.SetBalance(addr, (*big.Int)(*account.Balance), deepmind.BalanceChangeReason("call_balance_override"))
 		}
 		if account.State != nil && account.StateDiff != nil {

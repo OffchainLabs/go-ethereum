@@ -19,7 +19,6 @@ package vm
 import (
 	"fmt"
 	"hash"
-	"strings"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -230,9 +229,19 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 				return nil, errWriteProtection
 			}
 		}
+
+		// Deep mind instead of impacting performance with a `defer` here, we have a "finalizer" call inserted where `return` are performed in the flow
+		maybeAfterCallGasEvent := func() {}
+		if deepmind.Enabled && ShouldRecordCallGasEventForOpCode(op) {
+			deepmind.PrintBeforeCallGasEvent(contract.Gas)
+			maybeAfterCallGasEvent = func() { deepmind.PrintAfterCallGasEvent(contract.Gas) }
+		}
+
 		// Static portion of gas
 		cost = operation.constantGas // For tracing
-		if !contract.UseGas(operation.constantGas, deepmind.ConsumeGasReason("opcode_"+strings.ToLower(op.String()))) {
+		// Deep mind we ignore dynamic cost because below, we perform a single GAS_CHANGE for both static + dynamic to aggregate the 2 gas change events
+		if !contract.UseGas(operation.constantGas, deepmind.IgnoredGasChangeReason) {
+			maybeAfterCallGasEvent()
 			return nil, ErrOutOfGas
 		}
 
@@ -244,11 +253,13 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if operation.memorySize != nil {
 			memSize, overflow := operation.memorySize(stack)
 			if overflow {
+				maybeAfterCallGasEvent()
 				return nil, errGasUintOverflow
 			}
 			// memory is expanded in words of 32 bytes. Gas
 			// is also calculated in words.
 			if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
+				maybeAfterCallGasEvent()
 				return nil, errGasUintOverflow
 			}
 		}
@@ -259,10 +270,22 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			var dynamicCost uint64
 			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
 			cost += dynamicCost // total cost, for debug tracing
-			if err != nil || !contract.UseGas(dynamicCost, "opcode_"+strings.ToLower(op.String())) {
+
+			// Deep mind we ignore dynamic cost because later below, we perform a single GAS_CHANGE for both static + dynamic to aggregate the 2 gas change events
+			if err != nil || !contract.UseGas(dynamicCost, deepmind.IgnoredGasChangeReason) {
+				maybeAfterCallGasEvent()
 				return nil, ErrOutOfGas
 			}
 		}
+
+		if deepmind.Enabled && cost != 0 {
+			gasChangeReason := OpCodeToGasChangeReason(op)
+			if gasChangeReason != deepmind.IgnoredGasChangeReason {
+				// The previous value is the current gas + cost since at this point, it already been removed from c.Gas
+				deepmind.PrintGasChange(contract.Gas+cost, contract.Gas, gasChangeReason)
+			}
+		}
+
 		if memorySize > 0 {
 			mem.Resize(memorySize)
 		}
@@ -274,6 +297,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 		// execute the operation
 		res, err = operation.execute(&pc, in, contract, mem, stack)
+
+		// Deep mind record after call event last here since operation has been executed
+		maybeAfterCallGasEvent()
+
 		// verifyPool is a build flag. Pool verification makes sure the integrity
 		// of the integer pool by comparing values to a default value.
 		if verifyPool {

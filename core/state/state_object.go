@@ -364,7 +364,7 @@ func (s *stateObject) SubBalance(amount *big.Int, reason deepmind.BalanceChangeR
 }
 
 func (s *stateObject) SetBalance(amount *big.Int, reason deepmind.BalanceChangeReason) {
-	if deepmind.Enabled {
+	if deepmind.Enabled && reason != deepmind.IgnoredBalanceChangeReason {
 		// THOUGHTS: There is a choice between storage vs CPU here as we store the old balance and new the balance.
 		//           Usually, balances are quite big. Storing instead the old balance and the delta would probably
 		//           reduce a lot the storage space at the expense of CPU time to compute the delta and recomputed

@@ -154,6 +154,20 @@ func PrintEndCall(gasLeft uint64, returnValue []byte) {
 	Print("EVM_END_CALL", CallReturn(), Uint64(gasLeft), Hex(returnValue))
 }
 
+func PrintGasChange(gasOld, gasNew uint64, reason GasChangeReason) {
+	Print("GAS_CHANGE", CallIndex(), Uint64(gasOld), Uint64(gasNew), string(reason))
+}
+
+func PrintBeforeCallGasEvent(gasValue uint64) {
+	// The `nextIndex` has not been incremented yet, so we add +1 for the linked call index
+	Print("GAS_EVENT", CallIndex(), Uint64(nextIndex + 1), string(BeforeCallGasEventID), Uint64(gasValue))
+}
+
+func PrintAfterCallGasEvent(gasValue uint64) {
+	// The `nextIndex` is already pointing to previous call index, so we simply use it for the linked call index
+	Print("GAS_EVENT", CallIndex(), Uint64(nextIndex), string(AfterCallGasEventID), Uint64(gasValue))
+}
+
 func Addr(in common.Address) string {
 	return hex.EncodeToString(in[:])
 }

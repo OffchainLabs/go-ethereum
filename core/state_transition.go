@@ -145,9 +145,13 @@ func (st *StateTransition) to() common.Address {
 	return *st.msg.To()
 }
 
-func (st *StateTransition) useGas(amount uint64) error {
+func (st *StateTransition) useGas(amount uint64, reason deepmind.GasChangeReason) error {
 	if st.gas < amount {
 		return vm.ErrOutOfGas
+	}
+
+	if deepmind.Enabled && reason != deepmind.IgnoredGasChangeReason {
+		deepmind.PrintGasChange(st.gas, st.gas-amount, reason)
 	}
 	st.gas -= amount
 
@@ -189,6 +193,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	if err = st.preCheck(); err != nil {
 		return
 	}
+
 	msg := st.msg
 	sender := vm.AccountRef(msg.From())
 	homestead := st.evm.ChainConfig().IsHomestead(st.evm.BlockNumber)
@@ -199,7 +204,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	if err != nil {
 		return nil, 0, false, err
 	}
-	if err = st.useGas(gas); err != nil {
+	if err = st.useGas(gas, deepmind.GasChangeReason("intrinsic_gas")); err != nil {
 		return nil, 0, false, err
 	}
 

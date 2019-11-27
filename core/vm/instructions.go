@@ -708,7 +708,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memor
 		gas -= gas / 64
 	}
 
-	contract.UseGas(gas, deepmind.ConsumeGasReason("opcode_create"))
+	contract.UseGas(gas, deepmind.GasChangeReason("contract_creation"))
 	res, addr, returnGas, suberr := interpreter.evm.Create(contract, input, gas, value)
 	// Push item on the stack based on the returned error. If the ruleset is
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
@@ -722,6 +722,9 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memor
 		stack.push(interpreter.intPool.get().SetBytes(addr.Bytes()))
 	}
 	contract.Gas += returnGas
+	if deepmind.Enabled && returnGas != 0 {
+		deepmind.PrintGasChange(contract.Gas-returnGas, contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
+	}
 	interpreter.intPool.put(value, offset, size)
 
 	if suberr == errExecutionReverted {
@@ -741,7 +744,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memo
 
 	// Apply EIP150
 	gas -= gas / 64
-	contract.UseGas(gas, deepmind.ConsumeGasReason("opcode_create2"))
+	contract.UseGas(gas, deepmind.GasChangeReason("contract_creation2"))
 	res, addr, returnGas, suberr := interpreter.evm.Create2(contract, input, gas, endowment, salt)
 	// Push item on the stack based on the returned error.
 	if suberr != nil {
@@ -750,6 +753,9 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memo
 		stack.push(interpreter.intPool.get().SetBytes(addr.Bytes()))
 	}
 	contract.Gas += returnGas
+	if deepmind.Enabled && returnGas != 0 {
+		deepmind.PrintGasChange(contract.Gas-returnGas, contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
+	}
 	interpreter.intPool.put(endowment, offset, size, salt)
 
 	if suberr == errExecutionReverted {
@@ -782,7 +788,9 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 	contract.Gas += returnGas
-
+	if deepmind.Enabled && returnGas != 0 {
+		deepmind.PrintGasChange(contract.Gas-returnGas, contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
+	}
 	interpreter.intPool.put(addr, value, inOffset, inSize, retOffset, retSize)
 	return ret, nil
 }
@@ -811,7 +819,9 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, contract *Contract, mem
 		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 	contract.Gas += returnGas
-
+	if deepmind.Enabled && returnGas != 0 {
+		deepmind.PrintGasChange(contract.Gas-returnGas, contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
+	}
 	interpreter.intPool.put(addr, value, inOffset, inSize, retOffset, retSize)
 	return ret, nil
 }
@@ -836,7 +846,9 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract,
 		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 	contract.Gas += returnGas
-
+	if deepmind.Enabled && returnGas != 0 {
+		deepmind.PrintGasChange(contract.Gas-returnGas, contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
+	}
 	interpreter.intPool.put(addr, inOffset, inSize, retOffset, retSize)
 	return ret, nil
 }
@@ -861,7 +873,9 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, m
 		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 	contract.Gas += returnGas
-
+	if deepmind.Enabled && returnGas != 0 {
+		deepmind.PrintGasChange(contract.Gas-returnGas, contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
+	}
 	interpreter.intPool.put(addr, inOffset, inSize, retOffset, retSize)
 	return ret, nil
 }
