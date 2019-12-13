@@ -1,3 +1,5 @@
+**Note** This is a **private** dfuse fork for `Geth` client, see [README.dfuse.md](./README.dfuse.md) for instructions on how to manage this repository.
+
 ## Go Ethereum
 
 Official Golang implementation of the Ethereum protocol.
