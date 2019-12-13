@@ -95,6 +95,10 @@ var (
 		Name:  "deep-mind-block-progress",
 		Usage: "Activate/deactivate deep-mind block progress output instrumentation, disabled by default",
 	}
+	deepMindCompactionDisabledFlag = cli.BoolFlag{
+		Name:  "deep-mind-compaction-disabled",
+		Usage: "Disabled database compaction, enabled by default",
+	}
 )
 
 // Flags holds all command-line flags required for debugging.
@@ -102,7 +106,7 @@ var Flags = []cli.Flag{
 	verbosityFlag, vmoduleFlag, backtraceAtFlag, debugFlag,
 	pprofFlag, pprofAddrFlag, pprofPortFlag,
 	memprofilerateFlag, blockprofilerateFlag, cpuprofileFlag, traceFlag,
-	deepMindFlag, deepMindBlockProgressFlag,
+	deepMindFlag, deepMindBlockProgressFlag, deepMindCompactionDisabledFlag,
 }
 
 var (
@@ -165,7 +169,13 @@ func Setup(ctx *cli.Context, logdir string) error {
 	log.Info("Initializing deep mind")
 	deepmind.Enabled = ctx.GlobalBool(deepMindFlag.Name)
 	deepmind.BlockProgressEnabled = ctx.GlobalBool(deepMindBlockProgressFlag.Name)
-	log.Info("Deep mind initialized", "enabled", deepmind.Enabled, "block_progress_enabled", deepmind.BlockProgressEnabled)
+	deepmind.CompactionDisabled = ctx.GlobalBool(deepMindCompactionDisabledFlag.Name)
+
+	log.Info("Deep mind initialized",
+		"enabled", deepmind.Enabled,
+		"block_progress_enabled", deepmind.BlockProgressEnabled,
+		"compaction_disabled", deepmind.CompactionDisabled,
+	)
 
 	return nil
 }

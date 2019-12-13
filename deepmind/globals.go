@@ -15,3 +15,11 @@ var Enabled = false
 // instrumentation, activate deep mind. The deep mind setting has
 // precedence over this setting.
 var BlockProgressEnabled = false
+
+// CompactionDisabled disables all leveldb table compaction that could
+// happen.
+//
+// It does so mainly be increasing to their maximum all the settings that
+// causes compaction to happen as well as disabling some code path inside
+// Geth where manual compaction can be triggered.
+var CompactionDisabled = false
