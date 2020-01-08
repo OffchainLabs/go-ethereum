@@ -580,7 +580,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	if err := pool.validateTx(tx, local); err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
 		if deepmind.Enabled {
-			deepmind.PrintTrxPool("TRX_DISCARDED", tx, err)
+			deepmind.PrintTrxPool(deepmind.GlobalPrinter, "TRX_DISCARDED", tx, err)
 		}
 
 		invalidTxMeter.Mark(1)
@@ -588,7 +588,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	}
 
 	if deepmind.Enabled {
-		deepmind.PrintTrxPool("TRX_ENTER_POOL", tx, nil)
+		deepmind.PrintTrxPool(deepmind.GlobalPrinter, "TRX_ENTER_POOL", tx, nil)
 	}
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.all.Count()) >= pool.config.GlobalSlots+pool.config.GlobalQueue {

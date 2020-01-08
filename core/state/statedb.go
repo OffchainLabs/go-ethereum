@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -192,12 +191,7 @@ func (s *StateDB) AddLog(log *types.Log) {
 	log.Index = s.logSize
 
 	if deepmind.Enabled {
-		strtopics := make([]string, len(log.Topics))
-		for idx, topic := range log.Topics {
-			strtopics[idx] = deepmind.Hash(topic)
-		}
-
-		deepmind.Print("ADD_LOG", deepmind.CallIndex(), deepmind.LogIndex(), deepmind.Addr(log.Address), strings.Join(strtopics, ","), deepmind.Hex(log.Data))
+		deepmind.PrintAddLog(deepmind.GlobalPrinter, log)
 	}
 
 	s.logs[s.thash] = append(s.logs[s.thash], log)
@@ -460,13 +454,7 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 	})
 
 	if deepmind.Enabled {
-		// This infers a balance change, a reduction from this account. In the `opSuicide` op code,
-		// the corresponding AddBalance is emitted.
-		deepmind.Print("SUICIDE_CHANGE", deepmind.CallIndex(), deepmind.Addr(addr), deepmind.Bool(stateObject.suicided), deepmind.BigInt(stateObject.Balance()))
-		// TODO: In our data model, add `suicided: true` (index
-		// accordingly in `search`), and add a BalanceChange reducing
-		// this value to zero.
-		deepmind.Print("BALANCE_CHANGE", deepmind.CallIndex(), deepmind.Addr(addr), deepmind.BigInt(stateObject.Balance()), "0", "suicide_withdraw")
+		deepmind.PrintSuicide(deepmind.GlobalPrinter, stateObject.address, stateObject.suicided, stateObject.Balance())
 	}
 
 	stateObject.markSuicided()
@@ -624,15 +612,7 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 	}
 
 	if deepmind.Enabled {
-		// TODO: the CallIndex should be attached to the NEXT EVM call.
-		// add as `pendingCreateAccount`, prochain EVM_CALL start whatever ,il les pluck et les
-		// clear.
-		deepmind.Print("CREATED_ACCOUNT", deepmind.CallIndex(), deepmind.Addr(addr))
-		// TODO: in our data, we simply flag `account_created: true`,
-		// and index in `search` accordingly.
-		// created:true address:0x123123123213213
-		// { creatorCall
-		// } }
+		deepmind.PrintCreatedAccount(deepmind.GlobalPrinter, addr)
 	}
 
 	s.setStateObject(newobj)

@@ -61,11 +61,13 @@ type Contract struct {
 
 	Gas   uint64
 	value *big.Int
+
+	dmPrinter deepmind.Printer
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
-func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uint64) *Contract {
-	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object}
+func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uint64, dmPrinter deepmind.Printer) *Contract {
+	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object, dmPrinter: dmPrinter}
 
 	if parent, ok := caller.(*Contract); ok {
 		// Reuse JUMPDEST analysis from parent context if available.
@@ -183,8 +185,8 @@ func (c *Contract) UseGas(gas uint64, reason deepmind.GasChangeReason) (ok bool)
 		return false
 	}
 
-	if deepmind.Enabled && gas != 0 && reason != deepmind.IgnoredGasChangeReason {
-		deepmind.PrintGasChange(c.Gas, c.Gas-gas, reason)
+	if deepmind.Enabled {
+		deepmind.PrintGasConsume(c.dmPrinter, c.Gas, gas, reason)
 	}
 	c.Gas -= gas
 

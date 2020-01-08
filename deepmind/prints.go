@@ -1,16 +1,11 @@
 package deepmind
 
 import (
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"math/big"
 	"runtime/debug"
 	"strconv"
-	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/golang-collections/collections/stack"
 	"go.uber.org/atomic"
@@ -32,10 +27,6 @@ func init() {
 	indexStack.Push(activeIndex)
 }
 
-func IsInTransaction() bool {
-	return inTransaction.Load()
-}
-
 func EnterBlock() {
 	if !inBlock.CAS(false, true) {
 		panic("entering a block while already in a block scope")
@@ -44,92 +35,18 @@ func EnterBlock() {
 	seenBlock.Store(true)
 }
 
-func EnterTransaction() {
-	// FIXME: Should we make some validation here?
-	nextIndex = 0
+func BeginTransaction(printer Printer, tx *types.Transaction) {
+	v, r, s := tx.RawSignatureValues()
 
-	if !inTransaction.CAS(false, true) {
-		panic("entering a transaction while already in a transaction scope")
-	}
-}
-
-func EndTransaction() {
-	if !inTransaction.CAS(true, false) {
-		panic("exiting a transaction while not already within a transaction scope")
-	}
-}
-
-func EndBlock() {
-	if !inBlock.CAS(true, false) {
-		panic("exiting a block while not already within a block scope")
-	}
-	logIndex = 0
-}
-
-func Print(input ...string) {
-	// All Print should be wrapped to avoid unecessary memory allocation
-	// to happen. This is just a safe guard, even wondering if we should
-	// not remove it altogether.
-	if !Enabled && !BlockProgressEnabled {
-		return
-	}
-
-	line := "DMLOG " + strings.Join(input, " ") + "\n"
-	var written int
-	var err error
-	loops := 10
-	for i := 0; i < loops; i++ {
-		written, err = fmt.Print(line)
-
-		if len(line) == written {
-			return
-		}
-
-		line = line[written:]
-
-		if i == loops-1 {
-			break
-		}
-	}
-	errstr := fmt.Sprintf("\nDMLOG FAILED WRITING %dx: %s\n", loops, err)
-
-	ioutil.WriteFile("/tmp/wuuuut", []byte(errstr), 0644)
-	fmt.Print(errstr)
-}
-
-func PrintEnterCall(callType string) {
-	Print("EVM_RUN_CALL", callType, CallEnter())
-}
-
-func PrintCallParams(callType string, caller common.Address, callee common.Address, value *big.Int, gasLimit uint64, input []byte) {
-	Print("EVM_PARAM", callType, CallIndex(), Addr(caller), Addr(callee), Hex(value.Bytes()), Uint64(gasLimit), Hex(input))
-}
-
-func PrintTrxPool(callType string, tx *types.Transaction, err error) {
-	var signer types.Signer = types.FrontierSigner{}
-	if tx.Protected() {
-		signer = types.NewEIP155Signer(tx.ChainId())
-	}
-
-	fromAsString := "."
-	from, err := types.Sender(signer, tx)
-	if err == nil {
-		fromAsString = Addr(from)
-	}
-
+	// We start assuming the "null" value (i.e. a dot character), and update if `to` is set
 	toAsString := "."
 	if tx.To() != nil {
 		toAsString = Addr(*tx.To())
 	}
 
-	v, r, s := tx.RawSignatureValues()
-
-	//todo: handle error message
-
-	Print(
-		callType,
+	EnterTransaction()
+	printer.Print("BEGIN_APPLY_TRX",
 		Hash(tx.Hash()),
-		fromAsString,
 		toAsString,
 		Hex(tx.Value().Bytes()),
 		Hex(v.Bytes()),
@@ -142,75 +59,57 @@ func PrintTrxPool(callType string, tx *types.Transaction, err error) {
 	)
 }
 
-func PrintCallFailed(gasLeft uint64, reason string) {
-	Print("EVM_CALL_FAILED", CallIndex(), Uint64(gasLeft), reason)
+func FailedTransaction(printer Printer, err error) {
+	printer.Print("FAILED_APPLY_TRX", err.Error())
+	if !inTransaction.CAS(true, false) {
+		panic("exiting a transaction while not already within a transaction scope")
+	}
 }
 
-func PrintCallReverted() {
-	Print("EVM_REVERTED", CallIndex())
-}
+type logItem = map[string]interface{}
 
-func PrintEndCall(gasLeft uint64, returnValue []byte) {
-	Print("EVM_END_CALL", CallReturn(), Uint64(gasLeft), Hex(returnValue))
-}
-
-func PrintGasChange(gasOld, gasNew uint64, reason GasChangeReason) {
-	Print("GAS_CHANGE", CallIndex(), Uint64(gasOld), Uint64(gasNew), string(reason))
-}
-
-func PrintBeforeCallGasEvent(gasValue uint64) {
-	// The `nextIndex` has not been incremented yet, so we add +1 for the linked call index
-	Print("GAS_EVENT", CallIndex(), Uint64(nextIndex + 1), string(BeforeCallGasEventID), Uint64(gasValue))
-}
-
-func PrintAfterCallGasEvent(gasValue uint64) {
-	// The `nextIndex` is already pointing to previous call index, so we simply use it for the linked call index
-	Print("GAS_EVENT", CallIndex(), Uint64(nextIndex), string(AfterCallGasEventID), Uint64(gasValue))
-}
-
-func Addr(in common.Address) string {
-	return hex.EncodeToString(in[:])
-}
-
-func Bool(in bool) string {
-	if in {
-		return "true"
+func EndTransaction(printer Printer, receipt *types.Receipt) {
+	if !inTransaction.CAS(true, false) {
+		panic("exiting a transaction while not already within a transaction scope")
 	}
 
-	return "false"
-}
-
-func Hash(in common.Hash) string {
-	return hex.EncodeToString(in[:])
-}
-
-func Hex(in []byte) string {
-	if len(in) == 0 {
-		return "."
+	logItems := make([]logItem, len(receipt.Logs))
+	for i, log := range receipt.Logs {
+		logItems[i] = logItem{
+			"address": log.Address,
+			"topics":  log.Topics,
+			"data":    hexutil.Bytes(log.Data),
+		}
 	}
 
-	return hex.EncodeToString(in)
+	printer.Print(
+		"END_APPLY_TRX",
+		Uint64(receipt.GasUsed),
+		Hex(receipt.PostState),
+		Uint64(receipt.CumulativeGasUsed),
+		Hex(receipt.Bloom[:]),
+		JSON(logItems),
+	)
 }
 
-func BigInt(in *big.Int) string {
-	return Hex(in.Bytes())
+func IsInTransaction() bool {
+	return inTransaction.Load()
 }
 
-func Uint(in uint) string {
-	return strconv.FormatUint(uint64(in), 10)
-}
+func EnterTransaction() {
+	// FIXME: Should we make some validation here?
+	nextIndex = 0
 
-func Uint64(in uint64) string {
-	return strconv.FormatUint(in, 10)
-}
-
-func JSON(in interface{}) string {
-	out, err := json.Marshal(in)
-	if err != nil {
-		panic(err)
+	if !inTransaction.CAS(false, true) {
+		panic("entering a transaction while already in a transaction scope")
 	}
+}
 
-	return string(out)
+func EndBlock() {
+	if !inBlock.CAS(true, false) {
+		panic("exiting a block while not already within a block scope")
+	}
+	logIndex = 0
 }
 
 func CallEnter() string {

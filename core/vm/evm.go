@@ -135,11 +135,13 @@ type EVM struct {
 	// available gas is calculated in gasCall* according to the 63/64 rule and later
 	// applied in opCall*.
 	callGasTemp uint64
+
+	dmPrinter deepmind.Printer
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
-func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmConfig Config) *EVM {
+func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmConfig Config, dmPrinter deepmind.Printer) *EVM {
 	evm := &EVM{
 		Context:      ctx,
 		StateDB:      statedb,
@@ -147,6 +149,7 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 		chainConfig:  chainConfig,
 		chainRules:   chainConfig.Rules(ctx.BlockNumber),
 		interpreters: make([]Interpreter, 0, 1),
+		dmPrinter:    dmPrinter,
 	}
 
 	if chainConfig.IsEWASM(ctx.BlockNumber) {
@@ -221,13 +224,13 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 
 		if deepmind.Enabled {
-			deepmind.PrintEnterCall("CALL")
+			deepmind.PrintEnterCall(evm.dmPrinter, "CALL")
 		}
 		evm.StateDB.CreateAccount(addr)
 
 	} else {
 		if deepmind.Enabled {
-			deepmind.PrintEnterCall("CALL")
+			deepmind.PrintEnterCall(evm.dmPrinter, "CALL")
 		}
 	}
 	evm.Transfer(evm.StateDB, caller.Address(), addr, value)
@@ -242,25 +245,25 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	if deepmind.Enabled {
 		// TODO: Shall we do something of interest with the fact that it's a pre-compiled contract? Most probably!
-		deepmind.PrintCallParams("CALL", caller.Address(), addr, value, gas, input)
+		deepmind.PrintCallParams(evm.dmPrinter, "CALL", caller.Address(), addr, value, gas, input)
 	}
 
 	if isPrecompile {
-		ret, gas, err = RunPrecompiledContract(p, input, gas)
+		ret, gas, err = RunPrecompiledContract(evm.dmPrinter, p, input, gas)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		code := evm.StateDB.GetCode(addr)
 		if len(code) == 0 {
 			if deepmind.Enabled {
-				deepmind.Print("ACCOUNT_WITHOUT_CODE", deepmind.CallIndex())
+				deepmind.Print(evm.dmPrinter, "ACCOUNT_WITHOUT_CODE", deepmind.CallIndex())
 			}
 			ret, err = nil, nil // gas is unchanged
 		} else {
 			addrCopy := addr
 			// If the account has no code, we can abort here
 			// The depth-check is already done, and precompiles handled above
-			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
+			contract := NewContract(caller, AccountRef(addrCopy), value, gas, evm.dmPrinter)
 			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code)
 			ret, err = run(evm, contract, input, false)
 			gas = contract.Gas
@@ -271,18 +274,18 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil {
 		if deepmind.Enabled {
-			deepmind.PrintCallFailed(gas, err.Error())
+			deepmind.PrintCallFailed(evm.dmPrinter, gas, err.Error())
 		}
 
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			if deepmind.Enabled {
-				deepmind.PrintGasChange(gas, 0, deepmind.FailedExecutionGasChangeReason)
+				deepmind.PrintGasConsume(evm.dmPrinter, gas, gas, deepmind.FailedExecutionGasChangeReason)
 			}
 			gas = 0
 		} else {
 			if deepmind.Enabled {
-				deepmind.PrintCallReverted()
+				deepmind.PrintCallReverted(evm.dmPrinter)
 			}
 		}
 		// TODO: consider clearing up unused snapshots:
@@ -291,7 +294,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 
 	if deepmind.Enabled {
-		deepmind.PrintEndCall(gas, ret)
+		deepmind.PrintEndCall(evm.dmPrinter, gas, ret)
 	}
 
 	return ret, gas, err
@@ -320,23 +323,23 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		return nil, gas, ErrInsufficientBalance
 	}
 	if deepmind.Enabled {
-		deepmind.PrintEnterCall("CALLCODE")
+		deepmind.PrintEnterCall(evm.dmPrinter, "CALLCODE")
 	}
 
 	var snapshot = evm.StateDB.Snapshot()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		ret, gas, err = RunPrecompiledContract(p, input, gas)
+		ret, gas, err = RunPrecompiledContract(evm.dmPrinter, p, input, gas)
 	} else {
 		addrCopy := addr
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
-		contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
+		contract := NewContract(caller, AccountRef(caller.Address()), value, gas, evm.dmPrinter)
 		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
 
 		if deepmind.Enabled {
-			deepmind.PrintCallParams("CALLCODE", contract.Caller(), addr, value, gas, input)
+			deepmind.PrintCallParams(evm.dmPrinter, "CALLCODE", contract.Caller(), addr, value, gas, input)
 		}
 
 		ret, err = run(evm, contract, input, false)
@@ -345,18 +348,18 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	if err != nil {
 
 		if deepmind.Enabled {
-			deepmind.PrintCallFailed(gas, err.Error())
+			deepmind.PrintCallFailed(evm.dmPrinter, gas, err.Error())
 		}
 
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			if deepmind.Enabled {
-				deepmind.PrintGasChange(gas, 0, deepmind.FailedExecutionGasChangeReason)
+				deepmind.PrintGasConsume(evm.dmPrinter, gas, gas, deepmind.FailedExecutionGasChangeReason)
 			}
 			gas = 0
 		} else {
 			if deepmind.Enabled {
-				deepmind.PrintCallReverted()
+				deepmind.PrintCallReverted(evm.dmPrinter)
 			}
 		}
 	}
@@ -377,23 +380,23 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		return nil, gas, ErrDepth
 	}
 	if deepmind.Enabled {
-		deepmind.PrintEnterCall("DELEGATE")
+		deepmind.PrintEnterCall(evm.dmPrinter, "DELEGATE")
 	}
 
 	var snapshot = evm.StateDB.Snapshot()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		ret, gas, err = RunPrecompiledContract(p, input, gas)
+		ret, gas, err = RunPrecompiledContract(evm.dmPrinter, p, input, gas)
 	} else {
 		addrCopy := addr
 		// Initialise a new contract and make initialise the delegate values
-		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
+		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas, evm.dmPrinter).AsDelegate()
 		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
 
 		if deepmind.Enabled {
 			// DMLOG: We use `contract.Caller()` as it is fixed with `AsDelegate()`.
-			deepmind.PrintCallParams("DELEGATE", contract.Caller(), addr, contract.value, gas, input)
+			deepmind.PrintCallParams(evm.dmPrinter, "DELEGATE", contract.Caller(), addr, contract.value, gas, input)
 		}
 
 		ret, err = run(evm, contract, input, false)
@@ -401,24 +404,24 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	}
 	if err != nil {
 		if deepmind.Enabled {
-			deepmind.PrintCallFailed(gas, err.Error())
+			deepmind.PrintCallFailed(evm.dmPrinter, gas, err.Error())
 		}
 
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			if deepmind.Enabled {
-				deepmind.PrintGasChange(gas, 0, deepmind.FailedExecutionGasChangeReason)
+				deepmind.PrintGasConsume(evm.dmPrinter, gas, gas, deepmind.FailedExecutionGasChangeReason)
 			}
 			gas = 0
 		} else {
 			if deepmind.Enabled {
-				deepmind.PrintCallReverted()
+				deepmind.PrintCallReverted(evm.dmPrinter)
 			}
 		}
 	}
 
 	if deepmind.Enabled {
-		deepmind.PrintEndCall(gas, ret)
+		deepmind.PrintEndCall(evm.dmPrinter, gas, ret)
 	}
 
 	return ret, gas, err
@@ -437,7 +440,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		return nil, gas, ErrDepth
 	}
 	if deepmind.Enabled {
-		deepmind.PrintEnterCall("STATIC")
+		deepmind.PrintEnterCall(evm.dmPrinter, "STATIC")
 	}
 
 	// We take a snapshot here. This is a bit counter-intuitive, and could probably be skipped.
@@ -454,7 +457,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	evm.StateDB.AddBalance(addr, big0, deepmind.IgnoredBalanceChangeReason)
 
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		ret, gas, err = RunPrecompiledContract(p, input, gas)
+		ret, gas, err = RunPrecompiledContract(evm.dmPrinter, p, input, gas)
 	} else {
 		// At this point, we use a copy of address. If we don't, the go compiler will
 		// leak the 'contract' to the outer scope, and make allocation for 'contract'
@@ -462,11 +465,11 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		addrCopy := addr
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
-		contract := NewContract(caller, AccountRef(addrCopy), new(big.Int), gas)
+		contract := NewContract(caller, AccountRef(addrCopy), new(big.Int), gas, evm.dmPrinter)
 		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
 
 		if deepmind.Enabled {
-			deepmind.PrintCallParams("STATIC", contract.Caller(), addr, deepmind.EmptyValue, gas, input)
+			deepmind.PrintCallParams(evm.dmPrinter, "STATIC", contract.Caller(), addr, deepmind.EmptyValue, gas, input)
 		}
 
 		// When an error was returned by the EVM or when setting the creation code
@@ -477,24 +480,24 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	}
 	if err != nil {
 		if deepmind.Enabled {
-			deepmind.PrintCallFailed(gas, err.Error())
+			deepmind.PrintCallFailed(evm.dmPrinter, gas, err.Error())
 		}
 
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			if deepmind.Enabled {
-				deepmind.PrintGasChange(gas, 0, deepmind.FailedExecutionGasChangeReason)
+				deepmind.PrintGasConsume(evm.dmPrinter, gas, gas, deepmind.FailedExecutionGasChangeReason)
 			}
 			gas = 0
 		} else {
 			if deepmind.Enabled {
-				deepmind.PrintCallReverted()
+				deepmind.PrintCallReverted(evm.dmPrinter)
 			}
 		}
 	}
 
 	if deepmind.Enabled {
-		deepmind.PrintEndCall(gas, ret)
+		deepmind.PrintEndCall(evm.dmPrinter, gas, ret)
 	}
 
 	return ret, gas, err
@@ -524,8 +527,8 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 
 	if deepmind.Enabled {
-		deepmind.PrintEnterCall("CREATE")
-		deepmind.PrintCallParams("CREATE", caller.Address(), address, value, gas, nil)
+		deepmind.PrintEnterCall(evm.dmPrinter, "CREATE")
+		deepmind.PrintCallParams(evm.dmPrinter, "CREATE", caller.Address(), address, value, gas, nil)
 	}
 
 	nonce := evm.StateDB.GetNonce(caller.Address())
@@ -535,8 +538,8 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
 		if deepmind.Enabled {
-			deepmind.PrintCallFailed(gas, ErrContractAddressCollision.Error())
-			deepmind.PrintEndCall(gas, nil)
+			deepmind.PrintCallFailed(evm.dmPrinter, gas, ErrContractAddressCollision.Error())
+			deepmind.PrintEndCall(evm.dmPrinter, gas, nil)
 		}
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}
@@ -552,7 +555,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
-	contract := NewContract(caller, AccountRef(address), value, gas)
+	contract := NewContract(caller, AccountRef(address), value, gas, evm.dmPrinter)
 	contract.SetCodeOptionalHash(&address, codeAndHash)
 
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
@@ -565,7 +568,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 			// Our data model for now will be an empty create call, however, here would mean
 			// no code execution (i.e. the constructor would have **not** being called). Would
 			// we want to show data at some point? Is it even possible on non-custom chain?
-			deepmind.PrintEndCall(contract.Gas, nil)
+			deepmind.PrintEndCall(evm.dmPrinter, contract.Gas, nil)
 		}
 
 		return nil, address, gas, nil
@@ -596,9 +599,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	if deepmind.Enabled {
 		if err != nil {
-			deepmind.PrintCallFailed(contract.Gas, err.Error())
+			deepmind.PrintCallFailed(evm.dmPrinter, contract.Gas, err.Error())
 		} else if maxCodeSizeExceeded {
-			deepmind.PrintCallFailed(contract.Gas, ErrMaxCodeSizeExceeded.Error())
+			deepmind.PrintCallFailed(evm.dmPrinter, contract.Gas, ErrMaxCodeSizeExceeded.Error())
 		}
 	}
 
@@ -611,7 +614,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 			contract.UseGas(contract.Gas, deepmind.FailedExecutionGasChangeReason)
 		} else {
 			if deepmind.Enabled {
-				deepmind.PrintCallReverted()
+				deepmind.PrintCallReverted(evm.dmPrinter)
 			}
 		}
 	}
@@ -624,7 +627,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 
 	if deepmind.Enabled {
-		deepmind.PrintEndCall(contract.Gas, nil)
+		deepmind.PrintEndCall(evm.dmPrinter, contract.Gas, nil)
 	}
 
 	return ret, address, contract.Gas, err

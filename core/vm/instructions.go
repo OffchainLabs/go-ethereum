@@ -251,7 +251,7 @@ func opSha3(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 	}
 
 	if deepmind.Enabled {
-		deepmind.Print("EVM_KECCAK", deepmind.CallIndex(), deepmind.Hash(interpreter.hasherBuf), deepmind.Hex(data))
+		deepmind.PrintEVMKeccak(interpreter.dmPrinter(), interpreter.hasherBuf, data)
 	}
 
 	size.SetBytes(interpreter.hasherBuf[:])
@@ -632,11 +632,13 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 	} else {
 		stackvalue.SetBytes(addr.Bytes())
 	}
+
+	if deepmind.Enabled {
+		deepmind.PrintGasRefund(interpreter.dmPrinter(), callContext.contract.Gas, returnGas)
+	}
+
 	callContext.stack.push(&stackvalue)
 	callContext.contract.Gas += returnGas
-	if deepmind.Enabled && returnGas != 0 {
-		deepmind.PrintGasChange(callContext.contract.Gas-returnGas, callContext.contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
-	}
 
 	if suberr == ErrExecutionReverted {
 		return res, nil
@@ -671,11 +673,13 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 	} else {
 		stackvalue.SetBytes(addr.Bytes())
 	}
+
+	if deepmind.Enabled {
+		deepmind.PrintGasRefund(interpreter.dmPrinter(), callContext.contract.Gas, returnGas)
+	}
+
 	callContext.stack.push(&stackvalue)
 	callContext.contract.Gas += returnGas
-	if deepmind.Enabled && returnGas != 0 {
-		deepmind.PrintGasChange(callContext.contract.Gas-returnGas, callContext.contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
-	}
 
 	if suberr == ErrExecutionReverted {
 		return res, nil
@@ -715,10 +719,12 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 	if err == nil || err == ErrExecutionReverted {
 		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	callContext.contract.Gas += returnGas
-	if deepmind.Enabled && returnGas != 0 {
-		deepmind.PrintGasChange(callContext.contract.Gas-returnGas, callContext.contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
+
+	if deepmind.Enabled {
+		deepmind.PrintGasRefund(interpreter.dmPrinter(), callContext.contract.Gas, returnGas)
 	}
+
+	callContext.contract.Gas += returnGas
 	return ret, nil
 }
 
@@ -751,10 +757,12 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 	if err == nil || err == ErrExecutionReverted {
 		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	callContext.contract.Gas += returnGas
-	if deepmind.Enabled && returnGas != 0 {
-		deepmind.PrintGasChange(callContext.contract.Gas-returnGas, callContext.contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
+
+	if deepmind.Enabled {
+		deepmind.PrintGasRefund(interpreter.dmPrinter(), callContext.contract.Gas, returnGas)
 	}
+
+	callContext.contract.Gas += returnGas
 	return ret, nil
 }
 
@@ -780,10 +788,12 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 	if err == nil || err == ErrExecutionReverted {
 		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	callContext.contract.Gas += returnGas
-	if deepmind.Enabled && returnGas != 0 {
-		deepmind.PrintGasChange(callContext.contract.Gas-returnGas, callContext.contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
+
+	if deepmind.Enabled {
+		deepmind.PrintGasRefund(interpreter.dmPrinter(), callContext.contract.Gas, returnGas)
 	}
+
+	callContext.contract.Gas += returnGas
 	return ret, nil
 }
 
@@ -809,10 +819,12 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx)
 	if err == nil || err == ErrExecutionReverted {
 		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	callContext.contract.Gas += returnGas
-	if deepmind.Enabled && returnGas != 0 {
-		deepmind.PrintGasChange(callContext.contract.Gas-returnGas, callContext.contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
+
+	if deepmind.Enabled {
+		deepmind.PrintGasRefund(interpreter.dmPrinter(), callContext.contract.Gas, returnGas)
 	}
+
+	callContext.contract.Gas += returnGas
 	return ret, nil
 }
 

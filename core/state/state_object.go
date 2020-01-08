@@ -252,7 +252,7 @@ func (s *stateObject) SetState(db Database, key, value common.Hash) {
 	}
 
 	if deepmind.Enabled {
-		deepmind.Print("STORAGE_CHANGE", deepmind.CallIndex(), deepmind.Addr(s.address), deepmind.Hash(key), deepmind.Hash(prev), deepmind.Hash(value))
+		deepmind.PrintStorageChange(deepmind.GlobalPrinter, s.address, key, prev, value)
 	}
 
 	// New value is different, update and journal the change
@@ -406,13 +406,8 @@ func (s *stateObject) SubBalance(amount *big.Int, reason deepmind.BalanceChangeR
 }
 
 func (s *stateObject) SetBalance(amount *big.Int, reason deepmind.BalanceChangeReason) {
-	if deepmind.Enabled && reason != deepmind.IgnoredBalanceChangeReason {
-		// THOUGHTS: There is a choice between storage vs CPU here as we store the old balance and new the balance.
-		//           Usually, balances are quite big. Storing instead the old balance and the delta would probably
-		//           reduce a lot the storage space at the expense of CPU time to compute the delta and recomputed
-		//           the new balance in place where it's required. This would need to be computed (the space
-		//           savings) to see if it make sense to apply it or not.
-		deepmind.Print("BALANCE_CHANGE", deepmind.CallIndex(), deepmind.Addr(s.address), deepmind.BigInt(s.data.Balance), deepmind.BigInt(amount), string(reason))
+	if deepmind.Enabled {
+		deepmind.PrintBalanceChange(deepmind.GlobalPrinter, s.address, s.data.Balance, amount, reason)
 	}
 
 	s.db.journal.append(balanceChange{
@@ -490,11 +485,7 @@ func (s *stateObject) SetCode(codeHash common.Hash, code []byte) {
 	prevcode := s.Code(s.db.db)
 
 	if deepmind.Enabled {
-		deepmind.Print("CODE_CHANGE", deepmind.CallIndex(), deepmind.Addr(s.address), deepmind.Hex(s.CodeHash()), deepmind.Hex(prevcode), deepmind.Hash(codeHash), deepmind.Hex(code))
-		// TODO: in our data model, `setCode` could contains all these values, set on the EVM Call
-		// ethq could bubble it up with a logo when any of its child EVM calls have a setCode..
-		// search could index `setsCode:true`, or `created:eoa` or `created:contract`, based on
-		// such values.
+		deepmind.PrintCodeChange(deepmind.GlobalPrinter, s.address, s.CodeHash(), prevcode, codeHash, code)
 	}
 
 	s.db.journal.append(codeChange{
@@ -513,7 +504,7 @@ func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 
 func (s *stateObject) SetNonce(nonce uint64) {
 	if deepmind.Enabled {
-		deepmind.Print("NONCE_CHANGE", deepmind.CallIndex(), deepmind.Addr(s.address), deepmind.Uint64(s.data.Nonce), deepmind.Uint64(nonce))
+		deepmind.PrintNonceChange(deepmind.GlobalPrinter, s.address, s.data.Nonce, nonce)
 	}
 
 	s.db.journal.append(nonceChange{

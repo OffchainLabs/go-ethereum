@@ -53,6 +53,7 @@ type StateTransition struct {
 	data       []byte
 	state      vm.StateDB
 	evm        *vm.EVM
+	dmPrinter  deepmind.Printer
 }
 
 // Message represents a message sent to a contract.
@@ -142,7 +143,7 @@ func IntrinsicGas(data []byte, contractCreation, isHomestead bool, isEIP2028 boo
 }
 
 // NewStateTransition initialises and returns a new state transition object.
-func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
+func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool, dmPrinter deepmind.Printer) *StateTransition {
 	return &StateTransition{
 		gp:       gp,
 		evm:      evm,
@@ -151,6 +152,8 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition 
 		value:    msg.Value(),
 		data:     msg.Data(),
 		state:    evm.StateDB,
+
+		dmPrinter: dmPrinter,
 	}
 }
 
@@ -162,7 +165,7 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition 
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
 func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool) (*ExecutionResult, error) {
-	return NewStateTransition(evm, msg, gp).TransitionDb()
+	return NewStateTransition(evm, msg, gp, deepmind.GlobalPrinter).TransitionDb()
 }
 
 // to returns the recipient of the message.
@@ -246,7 +249,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	if deepmind.Enabled {
-		deepmind.PrintGasChange(st.gas, st.gas-gas, deepmind.GasChangeReason("intrinsic_gas"))
+		deepmind.PrintGasConsume(st.dmPrinter, st.gas, gas, deepmind.GasChangeReason("intrinsic_gas"))
 	}
 	st.gas -= gas
 
