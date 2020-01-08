@@ -68,6 +68,12 @@ type ToStringPrinter struct {
 	buffer *bufio.Writer
 }
 
+func NewToStringPrinter(writer io.Writer) *ToStringPrinter {
+	return &ToStringPrinter{
+		buffer: bufio.NewWriter(writer),
+	}
+}
+
 func (p *ToStringPrinter) Print(input ...string) {
 	p.buffer.WriteString("DMLOG " + strings.Join(input, " ") + "\n")
 }
