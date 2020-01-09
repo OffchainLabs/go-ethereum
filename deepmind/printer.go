@@ -1,7 +1,7 @@
 package deepmind
 
 import (
-	"bufio"
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -64,18 +64,22 @@ func (p *DelegateToWriterPrinter) Print(input ...string) {
 	fmt.Fprint(p.writer, errstr)
 }
 
-type ToStringPrinter struct {
-	buffer *bufio.Writer
+type ToBufferPrinter struct {
+	buffer *bytes.Buffer
 }
 
-func NewToStringPrinter(writer io.Writer) *ToStringPrinter {
-	return &ToStringPrinter{
-		buffer: bufio.NewWriter(writer),
+func NewToBufferPrinter() *ToBufferPrinter {
+	return &ToBufferPrinter{
+		buffer: bytes.NewBuffer(nil),
 	}
 }
 
-func (p *ToStringPrinter) Print(input ...string) {
+func (p *ToBufferPrinter) Print(input ...string) {
 	p.buffer.WriteString("DMLOG " + strings.Join(input, " ") + "\n")
+}
+
+func (p *ToBufferPrinter) Buffer() *bytes.Buffer {
+	return p.buffer
 }
 
 // Helper Shortcuts
