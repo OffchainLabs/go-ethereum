@@ -405,16 +405,16 @@ func (s *stateObject) SubBalance(amount *big.Int, reason deepmind.BalanceChangeR
 	s.SetBalance(new(big.Int).Sub(s.Balance(), amount), reason)
 }
 
-func (s *stateObject) SetBalance(amount *big.Int, reason deepmind.BalanceChangeReason) {
+func (s *stateObject) SetBalance(newBalance *big.Int, reason deepmind.BalanceChangeReason) {
 	if deepmind.Enabled {
-		deepmind.PrintBalanceChange(deepmind.GlobalPrinter, s.address, s.data.Balance, amount, reason)
+		deepmind.PrintBalanceChange(deepmind.GlobalPrinter, s.address, s.data.Balance, newBalance, reason)
 	}
 
 	s.db.journal.append(balanceChange{
 		account: &s.address,
 		prev:    new(big.Int).Set(s.data.Balance),
 	})
-	s.setBalance(amount)
+	s.setBalance(newBalance)
 }
 
 func (s *stateObject) setBalance(amount *big.Int) {

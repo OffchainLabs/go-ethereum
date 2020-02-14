@@ -217,10 +217,6 @@ func PrintCreatedAccount(printer Printer, addr common.Address) {
 }
 
 func PrintCodeChange(printer Printer, addr common.Address, inputHash, prevCode []byte, codeHash common.Hash, code []byte) {
-	// TODO: in our data model, `setCode` could contains all these values, set on the EVM Call
-	// ethq could bubble it up with a logo when any of its child EVM calls have a setCode..
-	// search could index `setsCode:true`, or `created:eoa` or `created:contract`, based on
-	// such values.
 	printer.Print("CODE_CHANGE", CallIndex(), Addr(addr), Hex(inputHash), Hex(prevCode), Hash(codeHash), Hex(code))
 }
 
