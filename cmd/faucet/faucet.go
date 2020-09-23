@@ -162,7 +162,6 @@ func main() {
 	if blob, err = ioutil.ReadFile(*accPassFlag); err != nil {
 		log.Crit("Failed to read account password contents", "file", *accPassFlag, "err", err)
 	}
-	// Delete trailing newline in password
 	pass := strings.TrimSuffix(string(blob), "\n")
 
 	ks := keystore.NewKeyStore(filepath.Join(os.Getenv("HOME"), ".faucet", "keys"), keystore.StandardScryptN, keystore.StandardScryptP)
@@ -170,11 +169,12 @@ func main() {
 		log.Crit("Failed to read account key contents", "file", *accJSONFlag, "err", err)
 	}
 	acc, err := ks.Import(blob, pass, pass)
-	if err != nil {
+	if err != nil && err != keystore.ErrAccountAlreadyExists {
 		log.Crit("Failed to import faucet signer account", "err", err)
 	}
-	ks.Unlock(acc, pass)
-
+	if err := ks.Unlock(acc, pass); err != nil {
+		log.Crit("Failed to unlock faucet signer account", "err", err)
+	}
 	// Assemble and start the faucet light service
 	faucet, err := newFaucet(genesis, *ethPortFlag, enodes, *netFlag, *statsFlag, ks, website.Bytes())
 	if err != nil {
@@ -235,23 +235,20 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 	if err != nil {
 		return nil, err
 	}
+
 	// Assemble the Ethereum light client protocol
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		cfg := eth.DefaultConfig
-		cfg.SyncMode = downloader.LightSync
-		cfg.NetworkId = network
-		cfg.Genesis = genesis
-		return les.New(ctx, &cfg)
-	}); err != nil {
-		return nil, err
+	cfg := eth.DefaultConfig
+	cfg.SyncMode = downloader.LightSync
+	cfg.NetworkId = network
+	cfg.Genesis = genesis
+	lesBackend, err := les.New(stack, &cfg)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to register the Ethereum service: %w", err)
 	}
+
 	// Assemble the ethstats monitoring and reporting service'
 	if stats != "" {
-		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			var serv *les.LightEthereum
-			ctx.Service(&serv)
-			return ethstats.New(stats, nil, serv)
-		}); err != nil {
+		if err := ethstats.New(stack, lesBackend.ApiBackend, lesBackend.Engine(), stats); err != nil {
 			return nil, err
 		}
 	}
@@ -268,7 +265,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 	// Attach to the client and retrieve and interesting metadatas
 	api, err := stack.Attach()
 	if err != nil {
-		stack.Stop()
+		stack.Close()
 		return nil, err
 	}
 	client := ethclient.NewClient(api)
@@ -360,11 +357,14 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// Send over the initial stats and the latest header
+	f.lock.RLock()
+	reqs := f.reqs
+	f.lock.RUnlock()
 	if err = send(conn, map[string]interface{}{
 		"funds":    new(big.Int).Div(balance, ether),
 		"funded":   nonce,
 		"peers":    f.stack.Server().PeerCount(),
-		"requests": f.reqs,
+		"requests": reqs,
 	}, 3*time.Second); err != nil {
 		log.Warn("Failed to send initial stats to client", "err", err)
 		return
@@ -691,8 +691,11 @@ func authTwitter(url string) (string, string, common.Address, error) {
 		return "", "", common.Address{}, errors.New("Invalid Twitter status URL")
 	}
 	// Twitter's API isn't really friendly with direct links. Still, we don't
-	// want to do ask read permissions from users, so just load the public posts and
-	// scrape it for the Ethereum address and profile URL.
+	// want to do ask read permissions from users, so just load the public posts
+	// and scrape it for the Ethereum address and profile URL. We need to load
+	// the mobile page though since the main page loads tweet contents via JS.
+	url = strings.Replace(url, "https://twitter.com/", "https://mobile.twitter.com/", 1)
+
 	res, err := http.Get(url)
 	if err != nil {
 		return "", "", common.Address{}, err

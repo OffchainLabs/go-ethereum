@@ -115,6 +115,9 @@ const schema string = `
         # Logs is a list of log entries emitted by this transaction. If the
         # transaction has not yet been mined, this field will be null.
         logs: [Log!]
+        r: BigInt!
+        s: BigInt!
+        v: BigInt!
     }
 
     # BlockFilterCriteria encapsulates log filter criteria for a filter applied
@@ -311,6 +314,8 @@ const schema string = `
         protocolVersion: Int!
         # Syncing returns information on the current synchronisation state.
         syncing: SyncState
+        # ChainID returns the current chain ID for transaction replay protection.
+        chainID: BigInt!
     }
 
     type Mutation {
