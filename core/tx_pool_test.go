@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -1110,7 +1111,7 @@ func TestTransactionAllowedTxSize(t *testing.T) {
 	defer pool.Stop()
 
 	account := crypto.PubkeyToAddress(key.PublicKey)
-	pool.currentState.AddBalance(account, big.NewInt(1000000000))
+	pool.currentState.AddBalance(account, big.NewInt(1000000000), deepmind.IgnoredBalanceChangeReason)
 
 	// Compute maximal data size for transactions (lower bound).
 	//

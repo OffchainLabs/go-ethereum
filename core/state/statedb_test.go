@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/deepmind"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
@@ -693,10 +694,10 @@ func TestMissingTrieNodes(t *testing.T) {
 	state, _ := New(common.Hash{}, db, nil)
 	addr := toAddr([]byte("so"))
 	{
-		state.SetBalance(addr, big.NewInt(1))
+		state.SetBalance(addr, big.NewInt(1), deepmind.IgnoredBalanceChangeReason)
 		state.SetCode(addr, []byte{1, 2, 3})
 		a2 := toAddr([]byte("another"))
-		state.SetBalance(a2, big.NewInt(100))
+		state.SetBalance(a2, big.NewInt(100), deepmind.IgnoredBalanceChangeReason)
 		state.SetCode(a2, []byte{1, 2, 4})
 		root, _ = state.Commit(false)
 		t.Logf("root: %x", root)
@@ -721,7 +722,7 @@ func TestMissingTrieNodes(t *testing.T) {
 		t.Errorf("expected %d, got %d", exp, got)
 	}
 	// Modify the state
-	state.SetBalance(addr, big.NewInt(2))
+	state.SetBalance(addr, big.NewInt(2), deepmind.IgnoredBalanceChangeReason)
 	root, err := state.Commit(false)
 	if err == nil {
 		t.Fatalf("expected error, got root :%x", root)
