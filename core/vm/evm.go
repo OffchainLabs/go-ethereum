@@ -252,6 +252,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// The contract is a scoped environment for this execution context only.
 		code := evm.StateDB.GetCode(addr)
 		if len(code) == 0 {
+			if deepmind.Enabled {
+				deepmind.Print("ACCOUNT_WITHOUT_CODE", deepmind.CallIndex())
+			}
 			ret, err = nil, nil // gas is unchanged
 		} else {
 			addrCopy := addr
@@ -413,6 +416,11 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 			}
 		}
 	}
+
+	if deepmind.Enabled {
+		deepmind.PrintEndCall(gas, ret)
+	}
+
 	return ret, gas, err
 }
 
