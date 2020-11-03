@@ -174,14 +174,14 @@ func PrintStorageChange(printer Printer, addr common.Address, key, oldData, newD
 	printer.Print("STORAGE_CHANGE", CallIndex(), Addr(addr), Hash(key), Hash(oldData), Hash(newData))
 }
 
-func PrintBalanceChange(printer Printer, addr common.Address, balance, amount *big.Int, reason BalanceChangeReason) {
+func PrintBalanceChange(printer Printer, addr common.Address, oldBalance, newBalance *big.Int, reason BalanceChangeReason) {
 	if reason != IgnoredBalanceChangeReason {
-		// THOUGHTS: There is a choice between storage vs CPU here as we store the old balance and new the balance.
+		// THOUGHTS: There is a choice between storage vs CPU here as we store the old balance and the new balance.
 		//           Usually, balances are quite big. Storing instead the old balance and the delta would probably
 		//           reduce a lot the storage space at the expense of CPU time to compute the delta and recomputed
 		//           the new balance in place where it's required. This would need to be computed (the space
 		//           savings) to see if it make sense to apply it or not.
-		printer.Print("BALANCE_CHANGE", CallIndex(), Addr(addr), BigInt(balance), BigInt(amount), string(reason))
+		printer.Print("BALANCE_CHANGE", CallIndex(), Addr(addr), BigInt(oldBalance), BigInt(newBalance), string(reason))
 	}
 }
 
@@ -198,10 +198,12 @@ func PrintSuicide(printer Printer, addr common.Address, suicided bool, balanceBe
 	// This infers a balance change, a reduction from this account. In the `opSuicide` op code, the corresponding AddBalance is emitted.
 	printer.Print("SUICIDE_CHANGE", CallIndex(), Addr(addr), Bool(suicided), BigInt(balanceBeforeSuicide))
 
-	// We need to explicit add a balance change removing the suicided contract balance since
-	// the remaining balance of the contract has already been resetted to 0 by the time we
-	// do the print call.
-	PrintBalanceChange(printer, addr, balanceBeforeSuicide, new(big.Int).Neg(balanceBeforeSuicide), BalanceChangeReason("suicide_withdraw"))
+	if balanceBeforeSuicide.Sign() != 0 {
+		// We need to explicit add a balance change removing the suicided contract balance since
+		// the remaining balance of the contract has already been resetted to 0 by the time we
+		// do the print call.
+		PrintBalanceChange(printer, addr, balanceBeforeSuicide, common.Big0, BalanceChangeReason("suicide_withdraw"))
+	}
 }
 
 func PrintCreatedAccount(printer Printer, addr common.Address) {
