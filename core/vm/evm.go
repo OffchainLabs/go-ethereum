@@ -37,7 +37,7 @@ type (
 	// CanTransferFunc is the signature of a transfer guard function
 	CanTransferFunc func(StateDB, common.Address, *big.Int) bool
 	// TransferFunc is the signature of a transfer function
-	TransferFunc func(StateDB, common.Address, common.Address, *big.Int)
+	TransferFunc func(StateDB, common.Address, common.Address, *big.Int, deepmind.Printer)
 	// GetHashFunc returns the n'th block hash in the blockchain
 	// and is used by the BLOCKHASH EVM op code.
 	GetHashFunc func(uint64) common.Hash
@@ -139,6 +139,10 @@ type EVM struct {
 	dmPrinter deepmind.Printer
 }
 
+func (evm *EVM) DeepmindPrinter() deepmind.Printer {
+	return evm.dmPrinter
+}
+
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
 func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmConfig Config, dmPrinter deepmind.Printer) *EVM {
@@ -226,14 +230,14 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		if deepmind.Enabled {
 			deepmind.PrintEnterCall(evm.dmPrinter, "CALL")
 		}
-		evm.StateDB.CreateAccount(addr)
+		evm.StateDB.CreateAccount(addr, evm.dmPrinter)
 
 	} else {
 		if deepmind.Enabled {
 			deepmind.PrintEnterCall(evm.dmPrinter, "CALL")
 		}
 	}
-	evm.Transfer(evm.StateDB, caller.Address(), addr, value)
+	evm.Transfer(evm.StateDB, caller.Address(), addr, value, evm.dmPrinter)
 
 	// Capture the tracer start/end events in debug mode
 	if evm.vmConfig.Debug && evm.depth == 0 {
@@ -454,7 +458,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
 	// but is the correct thing to do and matters on other networks, in tests, and potential
 	// future scenarios
-	evm.StateDB.AddBalance(addr, big0, deepmind.IgnoredBalanceChangeReason)
+	evm.StateDB.AddBalance(addr, big0, evm.dmPrinter, deepmind.IgnoredBalanceChangeReason)
 
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(evm.dmPrinter, p, input, gas)
@@ -532,7 +536,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 
 	nonce := evm.StateDB.GetNonce(caller.Address())
-	evm.StateDB.SetNonce(caller.Address(), nonce+1)
+	evm.StateDB.SetNonce(caller.Address(), nonce+1, evm.dmPrinter)
 
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(address)
@@ -546,12 +550,12 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	// Create a new account on the state
 	snapshot := evm.StateDB.Snapshot()
-	evm.StateDB.CreateAccount(address)
+	evm.StateDB.CreateAccount(address, evm.dmPrinter)
 	if evm.chainRules.IsEIP158 {
-		evm.StateDB.SetNonce(address, 1)
+		evm.StateDB.SetNonce(address, 1, evm.dmPrinter)
 	}
 
-	evm.Transfer(evm.StateDB, caller.Address(), address, value)
+	evm.Transfer(evm.StateDB, caller.Address(), address, value, evm.dmPrinter)
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
@@ -591,7 +595,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		createDataGas := uint64(len(ret)) * params.CreateDataGas
 
 		if contract.UseGas(createDataGas, deepmind.GasChangeReason("code_storage")) {
-			evm.StateDB.SetCode(address, ret)
+			evm.StateDB.SetCode(address, ret, evm.dmPrinter)
 		} else {
 			err = ErrCodeStoreOutOfGas
 		}

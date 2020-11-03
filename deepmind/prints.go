@@ -5,6 +5,7 @@ import (
 	"runtime/debug"
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/golang-collections/collections/stack"
@@ -36,30 +37,70 @@ func EnterBlock() {
 }
 
 func BeginTransaction(printer Printer, tx *types.Transaction) {
+	if printer.Disabled() {
+		return
+	}
+
+	hash := tx.Hash()
 	v, r, s := tx.RawSignatureValues()
+
+	EnterTransaction()
+	BeginApplyTransaction(printer,
+		hash,
+		tx.To(),
+		tx.Value(),
+		v.Bytes(),
+		r.Bytes(),
+		s.Bytes(),
+		tx.Gas(),
+		tx.GasPrice(),
+		tx.Nonce(),
+		tx.Data(),
+	)
+}
+
+// BeginApplyTransaction unlike `BeginTransaction` does not enter a transaction so we are able to process
+// multiple transaction in parallel.
+func BeginApplyTransaction(
+	printer Printer,
+	hash common.Hash,
+	to *common.Address,
+	value *big.Int,
+	v, r, s []byte,
+	gasLimit uint64,
+	gasPrice *big.Int,
+	nonce uint64,
+	data []byte,
+) {
+	if printer.Disabled() {
+		return
+	}
 
 	// We start assuming the "null" value (i.e. a dot character), and update if `to` is set
 	toAsString := "."
-	if tx.To() != nil {
-		toAsString = Addr(*tx.To())
+	if to != nil {
+		toAsString = Addr(*to)
 	}
 
-	EnterTransaction()
 	printer.Print("BEGIN_APPLY_TRX",
-		Hash(tx.Hash()),
+		Hash(hash),
 		toAsString,
-		Hex(tx.Value().Bytes()),
-		Hex(v.Bytes()),
-		Hex(r.Bytes()),
-		Hex(s.Bytes()),
-		Uint64(tx.Gas()),
-		Hex(tx.GasPrice().Bytes()),
-		Uint64(tx.Nonce()),
-		Hex(tx.Data()),
+		Hex(value.Bytes()),
+		Hex(v),
+		Hex(r),
+		Hex(s),
+		Uint64(gasLimit),
+		Hex(gasPrice.Bytes()),
+		Uint64(nonce),
+		Hex(data),
 	)
 }
 
 func FailedTransaction(printer Printer, err error) {
+	if printer.Disabled() {
+		return
+	}
+
 	printer.Print("FAILED_APPLY_TRX", err.Error())
 	if !inTransaction.CAS(true, false) {
 		panic("exiting a transaction while not already within a transaction scope")
@@ -69,8 +110,22 @@ func FailedTransaction(printer Printer, err error) {
 type logItem = map[string]interface{}
 
 func EndTransaction(printer Printer, receipt *types.Receipt) {
+	if printer.Disabled() {
+		return
+	}
+
 	if !inTransaction.CAS(true, false) {
 		panic("exiting a transaction while not already within a transaction scope")
+	}
+
+	EndApplyTransaction(printer, receipt)
+}
+
+// EndApplyTransaction unlike `EndTransaction` does not enter a transaction so we are able to process
+// multiple transaction in parallel.
+func EndApplyTransaction(printer Printer, receipt *types.Receipt) {
+	if printer.Disabled() {
+		return
 	}
 
 	logItems := make([]logItem, len(receipt.Logs))

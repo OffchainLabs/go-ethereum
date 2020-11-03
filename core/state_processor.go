@@ -65,12 +65,12 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 	if deepmind.Enabled {
 		deepmind.EnterBlock()
-		deepmind.Print(deepmind.GlobalPrinter, "BEGIN_BLOCK", deepmind.Uint64(block.NumberU64()))
+		deepmind.Print(deepmind.GlobalPrinter(), "BEGIN_BLOCK", deepmind.Uint64(block.NumberU64()))
 	}
 
 	// Mutate the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
-		misc.ApplyDAOHardFork(statedb)
+		misc.ApplyDAOHardFork(statedb, deepmind.GlobalPrinter())
 	}
 
 	// Iterate over and process the individual transactions
@@ -78,13 +78,13 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
 
 		if deepmind.Enabled {
-			deepmind.BeginTransaction(deepmind.GlobalPrinter, tx)
+			deepmind.BeginTransaction(deepmind.GlobalPrinter(), tx)
 		}
 
 		receipt, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
 		if err != nil {
 			if deepmind.Enabled {
-				deepmind.FailedTransaction(deepmind.GlobalPrinter, err)
+				deepmind.FailedTransaction(deepmind.GlobalPrinter(), err)
 				deepmind.EndBlock()
 			}
 
@@ -92,7 +92,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		}
 
 		if deepmind.Enabled {
-			deepmind.EndTransaction(deepmind.GlobalPrinter, receipt)
+			deepmind.EndTransaction(deepmind.GlobalPrinter(), receipt)
 		}
 
 		receipts = append(receipts, receipt)
@@ -100,15 +100,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 
 	if deepmind.Enabled || deepmind.BlockProgressEnabled {
-		deepmind.Print(deepmind.GlobalPrinter, "FINALIZE_BLOCK", deepmind.Uint64(block.NumberU64()))
+		deepmind.Print(deepmind.GlobalPrinter(), "FINALIZE_BLOCK", deepmind.Uint64(block.NumberU64()))
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())
+	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), deepmind.GlobalPrinter())
 
 	if deepmind.Enabled {
 		deepmind.EndBlock()
-		deepmind.Print(deepmind.GlobalPrinter, "END_BLOCK",
+		deepmind.Print(deepmind.GlobalPrinter(), "END_BLOCK",
 			deepmind.Uint64(block.NumberU64()),
 			deepmind.Uint64(uint64(block.Size())),
 			deepmind.JSON(map[string]interface{}{
@@ -132,14 +132,14 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	}
 
 	if deepmind.Enabled {
-		deepmind.PrintTrxFrom(deepmind.GlobalPrinter, msg.From())
+		deepmind.PrintTrxFrom(deepmind.GlobalPrinter(), msg.From())
 	}
 
 	// Create a new context to be used in the EVM environment
 	context := NewEVMContext(msg, header, bc, author)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmenv := vm.NewEVM(context, statedb, config, cfg, deepmind.GlobalPrinter)
+	vmenv := vm.NewEVM(context, statedb, config, cfg, deepmind.GlobalPrinter())
 	// Apply the transaction to the current state (included in the env)
 	result, err := ApplyMessage(vmenv, msg, gp)
 	if err != nil {

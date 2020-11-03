@@ -224,15 +224,15 @@ func (e *NoRewardEngine) accumulateRewards(config *params.ChainConfig, state *st
 	// Simply touch miner and uncle coinbase accounts
 	reward := big.NewInt(0)
 	for _, uncle := range uncles {
-		state.AddBalance(uncle.Coinbase, reward, deepmind.BalanceChangeReason("reward_mine_uncle"))
+		state.AddBalance(uncle.Coinbase, reward, deepmind.DiscardingPrinter, deepmind.BalanceChangeReason("reward_mine_uncle"))
 	}
-	state.AddBalance(header.Coinbase, reward, deepmind.BalanceChangeReason("reward_mine_block"))
+	state.AddBalance(header.Coinbase, reward, deepmind.DiscardingPrinter, deepmind.BalanceChangeReason("reward_mine_block"))
 }
 
 func (e *NoRewardEngine) Finalize(chain consensus.ChainHeaderReader, header *types.Header, statedb *state.StateDB, txs []*types.Transaction,
-	uncles []*types.Header) {
+	uncles []*types.Header, printer deepmind.Printer) {
 	if e.rewardsOn {
-		e.inner.Finalize(chain, header, statedb, txs, uncles)
+		e.inner.Finalize(chain, header, statedb, txs, uncles, printer)
 	} else {
 		e.accumulateRewards(chain.Config(), statedb, header, uncles)
 		header.Root = statedb.IntermediateRoot(chain.Config().IsEIP158(header.Number))
@@ -240,9 +240,9 @@ func (e *NoRewardEngine) Finalize(chain consensus.ChainHeaderReader, header *typ
 }
 
 func (e *NoRewardEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, statedb *state.StateDB, txs []*types.Transaction,
-	uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+	uncles []*types.Header, receipts []*types.Receipt, printer deepmind.Printer) (*types.Block, error) {
 	if e.rewardsOn {
-		return e.inner.FinalizeAndAssemble(chain, header, statedb, txs, uncles, receipts)
+		return e.inner.FinalizeAndAssemble(chain, header, statedb, txs, uncles, receipts, printer)
 	} else {
 		e.accumulateRewards(chain.Config(), statedb, header, uncles)
 		header.Root = statedb.IntermediateRoot(chain.Config().IsEIP158(header.Number))
@@ -498,7 +498,7 @@ func (api *RetestethAPI) mineBlock() error {
 		return err
 	}
 	if api.chainConfig.DAOForkSupport && api.chainConfig.DAOForkBlock != nil && api.chainConfig.DAOForkBlock.Cmp(header.Number) == 0 {
-		misc.ApplyDAOHardFork(statedb)
+		misc.ApplyDAOHardFork(statedb, deepmind.DiscardingPrinter)
 	}
 	gasPool := new(core.GasPool).AddGas(header.GasLimit)
 	txCount := 0
@@ -546,7 +546,7 @@ func (api *RetestethAPI) mineBlock() error {
 			}
 		}
 	}
-	block, err := api.engine.FinalizeAndAssemble(api.blockchain, header, statedb, txs, []*types.Header{}, receipts)
+	block, err := api.engine.FinalizeAndAssemble(api.blockchain, header, statedb, txs, []*types.Header{}, receipts, deepmind.DiscardingPrinter)
 	if err != nil {
 		return err
 	}

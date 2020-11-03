@@ -432,7 +432,7 @@ func (w *worker) mainLoop() {
 	for {
 		select {
 		case req := <-w.newWorkCh:
-			if deepmind.Enabled {
+			if deepmind.Enabled && !deepmind.MiningEnabled {
 				// This receives and processes all transactions received on the P2P network.
 				// By **not** processing this now received transaction, it prevents doing a
 				// speculative execution of the transaction and thus, breaking deep mind that
@@ -443,7 +443,7 @@ func (w *worker) mainLoop() {
 			w.commitNewWork(req.interrupt, req.noempty, req.timestamp)
 
 		case ev := <-w.chainSideCh:
-			if deepmind.Enabled {
+			if deepmind.Enabled && !deepmind.MiningEnabled {
 				// This receives and processes all transactions received on the P2P network.
 				// By **not** processing this now received transaction, it prevents doing a
 				// speculative execution of the transaction and thus, breaking deep mind that
@@ -490,7 +490,7 @@ func (w *worker) mainLoop() {
 			}
 
 		case ev := <-w.txsCh:
-			if deepmind.Enabled {
+			if deepmind.Enabled && !deepmind.MiningEnabled {
 				// This receives and processes all transactions received on the P2P network.
 				// By **not** processing this now received transaction, it prevents doing a
 				// speculative execution of the transaction and thus, breaking deep mind that
@@ -931,7 +931,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	// Create the current work task and check any fork transitions needed
 	env := w.current
 	if w.chainConfig.DAOForkSupport && w.chainConfig.DAOForkBlock != nil && w.chainConfig.DAOForkBlock.Cmp(header.Number) == 0 {
-		misc.ApplyDAOHardFork(env.state)
+		misc.ApplyDAOHardFork(env.state, deepmind.DiscardingPrinter)
 	}
 	// Accumulate the uncles for the current block
 	uncles := make([]*types.Header, 0, 2)
@@ -1006,7 +1006,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	// Deep copy receipts here to avoid interaction between different tasks.
 	receipts := copyReceipts(w.current.receipts)
 	s := w.current.state.Copy()
-	block, err := w.engine.FinalizeAndAssemble(w.chain, w.current.header, s, w.current.txs, uncles, receipts)
+	block, err := w.engine.FinalizeAndAssemble(w.chain, w.current.header, s, w.current.txs, uncles, receipts, deepmind.DiscardingPrinter)
 	if err != nil {
 		return err
 	}

@@ -815,7 +815,9 @@ type account struct {
 	StateDiff *map[common.Hash]common.Hash `json:"stateDiff"`
 }
 
-func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides map[common.Address]account, vmCfg vm.Config, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
+var unsetTrxHash = common.Hash{}
+
+func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides map[common.Address]account, vmCfg vm.Config, timeout time.Duration, globalGasCap uint64, printer deepmind.Printer) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
@@ -826,28 +828,27 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	for addr, account := range overrides {
 		// Override account nonce.
 		if account.Nonce != nil {
-			state.SetNonce(addr, uint64(*account.Nonce))
+			state.SetNonce(addr, uint64(*account.Nonce), deepmind.DiscardingPrinter)
 		}
 		// Override account(contract) code.
 		if account.Code != nil {
-			state.SetCode(addr, *account.Code)
+			state.SetCode(addr, *account.Code, deepmind.DiscardingPrinter)
 		}
 		// Override account balance.
 		if account.Balance != nil {
-			// FIXME: I'm really not sure about the meaning of this one, seems it's API based, so should have no impact on replay through deep mind
-			state.SetBalance(addr, (*big.Int)(*account.Balance), deepmind.BalanceChangeReason("call_balance_override"))
+			state.SetBalance(addr, (*big.Int)(*account.Balance), deepmind.DiscardingPrinter, deepmind.IgnoredBalanceChangeReason)
 		}
 		if account.State != nil && account.StateDiff != nil {
 			return nil, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
 		}
 		// Replace entire state if caller requires.
 		if account.State != nil {
-			state.SetStorage(addr, *account.State)
+			state.SetStorage(addr, *account.State, deepmind.DiscardingPrinter)
 		}
 		// Apply state diff into specified accounts.
 		if account.StateDiff != nil {
 			for key, value := range *account.StateDiff {
-				state.SetState(addr, key, value)
+				state.SetState(addr, key, value, deepmind.DiscardingPrinter)
 			}
 		}
 	}
@@ -865,7 +866,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 
 	// Get a new instance of the EVM.
 	msg := args.ToMessage(globalGasCap)
-	evm, vmError, err := b.GetEVM(ctx, msg, state, header)
+	evm, vmError, err := b.GetEVM(ctx, msg, state, header, printer)
 	if err != nil {
 		return nil, err
 	}
@@ -875,6 +876,19 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		<-ctx.Done()
 		evm.Cancel()
 	}()
+
+	if deepmind.Enabled {
+		deepmind.BeginApplyTransaction(printer,
+			unsetTrxHash,
+			msg.To(),
+			msg.Value(),
+			nil, nil, nil,
+			msg.Gas(),
+			msg.GasPrice(),
+			msg.Nonce(),
+			msg.Data(),
+		)
+	}
 
 	// Setup the gas pool (also for unmetered requests)
 	// and apply the message.
@@ -887,9 +901,42 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	if evm.Cancelled() {
 		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
 	}
+
+	// FIXME (dm): We should probably do this only when speculative execution is enabled...
+	if deepmind.Enabled {
+		config := evm.ChainConfig()
+		// Update the state with pending changes
+		var root []byte
+		if config.IsByzantium(header.Number) {
+			state.Finalise(true)
+		} else {
+			root = state.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
+		}
+
+		// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
+		// based on the eip phase, we're passing whether the root touch-delete accounts.
+		receipt := types.NewReceipt(root, result.Failed(), result.UsedGas)
+		receipt.TxHash = unsetTrxHash
+		receipt.GasUsed = result.UsedGas
+		// if the transaction created a contract, store the creation address in the receipt.
+		if msg.To() == nil {
+			// FIXME (dm): This was `crypto.CreateAddress(vmenv.Context.Origin, tx.Nonce())`, is `tx.Nonce()` equivalent to `msg.Nonce()`?
+			receipt.ContractAddress = crypto.CreateAddress(evm.Context.Origin, msg.Nonce())
+		}
+		// Set the receipt logs and create a bloom for filtering
+		receipt.Logs = state.GetLogs(unsetTrxHash)
+		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+		receipt.BlockHash = header.Hash()
+		receipt.BlockNumber = header.Number
+		receipt.TransactionIndex = 0
+
+		deepmind.EndApplyTransaction(printer, receipt)
+	}
+
 	if err != nil {
 		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
 	}
+
 	return result, nil
 }
 
@@ -934,7 +981,7 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 	if overrides != nil {
 		accounts = *overrides
 	}
-	result, err := DoCall(ctx, s.b, args, blockNrOrHash, accounts, vm.Config{}, 5*time.Second, s.b.RPCGasCap())
+	result, err := DoCall(ctx, s.b, args, blockNrOrHash, accounts, vm.Config{}, 5*time.Second, s.b.RPCGasCap(), deepmind.DiscardingPrinter)
 	if err != nil {
 		return nil, err
 	}
@@ -943,6 +990,29 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 		return nil, newRevertError(result)
 	}
 	return result.Return(), result.Err
+}
+
+// Execute the given contract's call using deep mind instrumentation return raw bytes containing the
+// string representation of the deep mind log output
+func (s *PublicBlockChainAPI) Execute(ctx context.Context, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *map[common.Address]account) (hexutil.Bytes, error) {
+	var accounts map[common.Address]account
+	if overrides != nil {
+		accounts = *overrides
+	}
+
+	printer := deepmind.NewToBufferPrinter()
+	result, err := DoCall(ctx, s.b, args, blockNrOrHash, accounts, vm.Config{}, 5*time.Second, s.b.RPCGasCap(), printer)
+
+	// As soon as we have an execution result, we should have a complete deep mind log, so let's return it
+	if result != nil {
+		return printer.Buffer().Bytes(), nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, errors.New("no error and no result, invalid state")
 }
 
 func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {
@@ -1008,7 +1078,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
 
-		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, vm.Config{}, 0, gasCap)
+		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, vm.Config{}, 0, gasCap, deepmind.DiscardingPrinter)
 		if err != nil {
 			if errors.Is(err, core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit

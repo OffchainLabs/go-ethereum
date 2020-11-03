@@ -523,7 +523,7 @@ func opSstore(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 	loc := callContext.stack.pop()
 	val := callContext.stack.pop()
 	interpreter.evm.StateDB.SetState(callContext.contract.Address(),
-		common.Hash(loc.Bytes32()), common.Hash(val.Bytes32()))
+		common.Hash(loc.Bytes32()), common.Hash(val.Bytes32()), interpreter.evm.dmPrinter)
 	return nil, nil
 }
 
@@ -849,8 +849,8 @@ func opStop(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 func opSuicide(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	beneficiary := callContext.stack.pop()
 	balance := interpreter.evm.StateDB.GetBalance(callContext.contract.Address())
-	interpreter.evm.StateDB.AddBalance(common.Address(beneficiary.Bytes20()), balance, deepmind.BalanceChangeReason("suicide_refund"))
-	interpreter.evm.StateDB.Suicide(callContext.contract.Address())
+	interpreter.evm.StateDB.AddBalance(common.Address(beneficiary.Bytes20()), balance, interpreter.evm.dmPrinter, deepmind.BalanceChangeReason("suicide_refund"))
+	interpreter.evm.StateDB.Suicide(callContext.contract.Address(), interpreter.evm.dmPrinter)
 	return nil, nil
 }
 
@@ -875,7 +875,7 @@ func makeLog(size int) executionFunc {
 			// This is a non-consensus field, but assigned here because
 			// core/state doesn't know the current block number.
 			BlockNumber: interpreter.evm.BlockNumber.Uint64(),
-		})
+		}, interpreter.evm.dmPrinter)
 
 		return nil, nil
 	}
