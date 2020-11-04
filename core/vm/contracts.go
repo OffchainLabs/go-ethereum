@@ -107,14 +107,14 @@ var PrecompiledContractsYoloV1 = map[common.Address]PrecompiledContract{
 // - the returned bytes,
 // - the _remaining_ gas,
 // - any error that occurred
-func RunPrecompiledContract(printer deepmind.Printer, p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64, dmContext *deepmind.Context) (ret []byte, remainingGas uint64, err error) {
 	gasCost := p.RequiredGas(input)
 	if suppliedGas < gasCost {
 		return nil, 0, ErrOutOfGas
 	}
 
-	if deepmind.Enabled {
-		deepmind.PrintGasConsume(printer, suppliedGas, gasCost, deepmind.GasChangeReason("precompiled_contract"))
+	if dmContext.Enabled() {
+		dmContext.RecordGasConsume(suppliedGas, gasCost, deepmind.GasChangeReason("precompiled_contract"))
 	}
 	suppliedGas -= gasCost
 	output, err := p.Run(input)

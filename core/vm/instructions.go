@@ -250,8 +250,8 @@ func opSha3(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 		evm.StateDB.AddPreimage(interpreter.hasherBuf, data)
 	}
 
-	if deepmind.Enabled {
-		deepmind.PrintEVMKeccak(interpreter.dmPrinter(), interpreter.hasherBuf, data)
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordKeccak(interpreter.hasherBuf, data)
 	}
 
 	size.SetBytes(interpreter.hasherBuf[:])
@@ -523,7 +523,7 @@ func opSstore(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 	loc := callContext.stack.pop()
 	val := callContext.stack.pop()
 	interpreter.evm.StateDB.SetState(callContext.contract.Address(),
-		common.Hash(loc.Bytes32()), common.Hash(val.Bytes32()), interpreter.evm.dmPrinter)
+		common.Hash(loc.Bytes32()), common.Hash(val.Bytes32()), interpreter.evm.dmContext)
 	return nil, nil
 }
 
@@ -633,8 +633,8 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 		stackvalue.SetBytes(addr.Bytes())
 	}
 
-	if deepmind.Enabled {
-		deepmind.PrintGasRefund(interpreter.dmPrinter(), callContext.contract.Gas, returnGas)
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
 	}
 
 	callContext.stack.push(&stackvalue)
@@ -674,8 +674,8 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 		stackvalue.SetBytes(addr.Bytes())
 	}
 
-	if deepmind.Enabled {
-		deepmind.PrintGasRefund(interpreter.dmPrinter(), callContext.contract.Gas, returnGas)
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
 	}
 
 	callContext.stack.push(&stackvalue)
@@ -720,8 +720,8 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if deepmind.Enabled {
-		deepmind.PrintGasRefund(interpreter.dmPrinter(), callContext.contract.Gas, returnGas)
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
 	}
 
 	callContext.contract.Gas += returnGas
@@ -758,8 +758,8 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if deepmind.Enabled {
-		deepmind.PrintGasRefund(interpreter.dmPrinter(), callContext.contract.Gas, returnGas)
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
 	}
 
 	callContext.contract.Gas += returnGas
@@ -789,8 +789,8 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if deepmind.Enabled {
-		deepmind.PrintGasRefund(interpreter.dmPrinter(), callContext.contract.Gas, returnGas)
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
 	}
 
 	callContext.contract.Gas += returnGas
@@ -820,8 +820,8 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx)
 		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if deepmind.Enabled {
-		deepmind.PrintGasRefund(interpreter.dmPrinter(), callContext.contract.Gas, returnGas)
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
 	}
 
 	callContext.contract.Gas += returnGas
@@ -849,8 +849,8 @@ func opStop(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 func opSuicide(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	beneficiary := callContext.stack.pop()
 	balance := interpreter.evm.StateDB.GetBalance(callContext.contract.Address())
-	interpreter.evm.StateDB.AddBalance(common.Address(beneficiary.Bytes20()), balance, interpreter.evm.dmPrinter, deepmind.BalanceChangeReason("suicide_refund"))
-	interpreter.evm.StateDB.Suicide(callContext.contract.Address(), interpreter.evm.dmPrinter)
+	interpreter.evm.StateDB.AddBalance(common.Address(beneficiary.Bytes20()), balance, interpreter.evm.dmContext, deepmind.BalanceChangeReason("suicide_refund"))
+	interpreter.evm.StateDB.Suicide(callContext.contract.Address(), interpreter.evm.dmContext)
 	return nil, nil
 }
 
@@ -875,7 +875,7 @@ func makeLog(size int) executionFunc {
 			// This is a non-consensus field, but assigned here because
 			// core/state doesn't know the current block number.
 			BlockNumber: interpreter.evm.BlockNumber.Uint64(),
-		}, interpreter.evm.dmPrinter)
+		}, interpreter.evm.dmContext)
 
 		return nil, nil
 	}

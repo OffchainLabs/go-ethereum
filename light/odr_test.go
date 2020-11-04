@@ -194,10 +194,10 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 		}
 
 		// Perform read-only call.
-		st.SetBalance(testBankAddress, math.MaxBig256, "test")
+		st.SetBalance(testBankAddress, math.MaxBig256, deepmind.NoOpContext, "test")
 		msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), 1000000, new(big.Int), data, false)}
 		context := core.NewEVMContext(msg, header, chain, nil)
-		vmenv := vm.NewEVM(context, st, config, vm.Config{}, deepmind.DiscardingPrinter)
+		vmenv := vm.NewEVM(context, st, config, vm.Config{}, deepmind.NoOpContext)
 		gp := new(core.GasPool).AddGas(math.MaxUint64)
 		result, _ := core.ApplyMessage(vmenv, msg, gp)
 		res = append(res, result.Return()...)

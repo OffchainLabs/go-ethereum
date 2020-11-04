@@ -53,7 +53,7 @@ type StateTransition struct {
 	data       []byte
 	state      vm.StateDB
 	evm        *vm.EVM
-	dmPrinter  deepmind.Printer
+	dmContext  *deepmind.Context
 }
 
 // Message represents a message sent to a contract.
@@ -143,7 +143,7 @@ func IntrinsicGas(data []byte, contractCreation, isHomestead bool, isEIP2028 boo
 }
 
 // NewStateTransition initialises and returns a new state transition object.
-func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool, dmPrinter deepmind.Printer) *StateTransition {
+func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool, dmContext *deepmind.Context) *StateTransition {
 	return &StateTransition{
 		gp:       gp,
 		evm:      evm,
@@ -153,7 +153,7 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool, dmPrinter deepmin
 		data:     msg.Data(),
 		state:    evm.StateDB,
 
-		dmPrinter: dmPrinter,
+		dmContext: dmContext,
 	}
 }
 
@@ -187,7 +187,7 @@ func (st *StateTransition) buyGas() error {
 	st.gas += st.msg.Gas()
 
 	st.initialGas = st.msg.Gas()
-	st.state.SubBalance(st.msg.From(), mgval, st.dmPrinter, deepmind.BalanceChangeReason("gas_buy"))
+	st.state.SubBalance(st.msg.From(), mgval, st.dmContext, deepmind.BalanceChangeReason("gas_buy"))
 	return nil
 }
 
@@ -248,8 +248,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, ErrIntrinsicGas
 	}
 
-	if deepmind.Enabled {
-		deepmind.PrintGasConsume(st.dmPrinter, st.gas, gas, deepmind.GasChangeReason("intrinsic_gas"))
+	if st.dmContext.Enabled() {
+		st.dmContext.RecordGasConsume(st.gas, gas, deepmind.GasChangeReason("intrinsic_gas"))
 	}
 	st.gas -= gas
 
@@ -265,11 +265,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 	} else {
 		// Increment the nonce for the next transaction
-		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1, st.dmPrinter)
+		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1, st.dmContext)
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 	st.refundGas()
-	st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice), st.dmPrinter, deepmind.BalanceChangeReason("reward_transaction_fee"))
+	st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice), st.dmContext, deepmind.BalanceChangeReason("reward_transaction_fee"))
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),
@@ -288,7 +288,7 @@ func (st *StateTransition) refundGas() {
 
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
-	st.state.AddBalance(st.msg.From(), remaining, st.dmPrinter, deepmind.BalanceChangeReason("gas_refund"))
+	st.state.AddBalance(st.msg.From(), remaining, st.dmContext, deepmind.BalanceChangeReason("gas_refund"))
 
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.

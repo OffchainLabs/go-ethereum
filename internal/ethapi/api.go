@@ -817,7 +817,7 @@ type account struct {
 
 var unsetTrxHash = common.Hash{}
 
-func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides map[common.Address]account, vmCfg vm.Config, timeout time.Duration, globalGasCap uint64, printer deepmind.Printer) (*core.ExecutionResult, error) {
+func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides map[common.Address]account, vmCfg vm.Config, timeout time.Duration, globalGasCap uint64, dmContext *deepmind.Context) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
@@ -828,27 +828,27 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	for addr, account := range overrides {
 		// Override account nonce.
 		if account.Nonce != nil {
-			state.SetNonce(addr, uint64(*account.Nonce), deepmind.DiscardingPrinter)
+			state.SetNonce(addr, uint64(*account.Nonce), deepmind.NoOpContext)
 		}
 		// Override account(contract) code.
 		if account.Code != nil {
-			state.SetCode(addr, *account.Code, deepmind.DiscardingPrinter)
+			state.SetCode(addr, *account.Code, deepmind.NoOpContext)
 		}
 		// Override account balance.
 		if account.Balance != nil {
-			state.SetBalance(addr, (*big.Int)(*account.Balance), deepmind.DiscardingPrinter, deepmind.IgnoredBalanceChangeReason)
+			state.SetBalance(addr, (*big.Int)(*account.Balance), deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
 		}
 		if account.State != nil && account.StateDiff != nil {
 			return nil, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
 		}
 		// Replace entire state if caller requires.
 		if account.State != nil {
-			state.SetStorage(addr, *account.State, deepmind.DiscardingPrinter)
+			state.SetStorage(addr, *account.State, deepmind.NoOpContext)
 		}
 		// Apply state diff into specified accounts.
 		if account.StateDiff != nil {
 			for key, value := range *account.StateDiff {
-				state.SetState(addr, key, value, deepmind.DiscardingPrinter)
+				state.SetState(addr, key, value, deepmind.NoOpContext)
 			}
 		}
 	}
@@ -866,7 +866,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 
 	// Get a new instance of the EVM.
 	msg := args.ToMessage(globalGasCap)
-	evm, vmError, err := b.GetEVM(ctx, msg, state, header, printer)
+	evm, vmError, err := b.GetEVM(ctx, msg, state, header, dmContext)
 	if err != nil {
 		return nil, err
 	}
@@ -877,8 +877,8 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		evm.Cancel()
 	}()
 
-	if deepmind.Enabled {
-		deepmind.BeginApplyTransaction(printer,
+	if dmContext.Enabled() {
+		dmContext.StartTransactionRaw(
 			unsetTrxHash,
 			msg.To(),
 			msg.Value(),
@@ -888,6 +888,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 			msg.Nonce(),
 			msg.Data(),
 		)
+		dmContext.RecordTrxFrom(msg.From())
 	}
 
 	// Setup the gas pool (also for unmetered requests)
@@ -902,8 +903,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
 	}
 
-	// FIXME (dm): We should probably do this only when speculative execution is enabled...
-	if deepmind.Enabled {
+	if dmContext.Enabled() {
 		config := evm.ChainConfig()
 		// Update the state with pending changes
 		var root []byte
@@ -930,7 +930,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		receipt.BlockNumber = header.Number
 		receipt.TransactionIndex = 0
 
-		deepmind.EndApplyTransaction(printer, receipt)
+		dmContext.EndTransaction(receipt)
 	}
 
 	if err != nil {
@@ -981,7 +981,7 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 	if overrides != nil {
 		accounts = *overrides
 	}
-	result, err := DoCall(ctx, s.b, args, blockNrOrHash, accounts, vm.Config{}, 5*time.Second, s.b.RPCGasCap(), deepmind.DiscardingPrinter)
+	result, err := DoCall(ctx, s.b, args, blockNrOrHash, accounts, vm.Config{}, 5*time.Second, s.b.RPCGasCap(), deepmind.NoOpContext)
 	if err != nil {
 		return nil, err
 	}
@@ -1000,12 +1000,12 @@ func (s *PublicBlockChainAPI) Execute(ctx context.Context, args CallArgs, blockN
 		accounts = *overrides
 	}
 
-	printer := deepmind.NewToBufferPrinter()
-	result, err := DoCall(ctx, s.b, args, blockNrOrHash, accounts, vm.Config{}, 5*time.Second, s.b.RPCGasCap(), printer)
+	dmContext := deepmind.NewSpeculativeExecutionContext()
+	result, err := DoCall(ctx, s.b, args, blockNrOrHash, accounts, vm.Config{}, 5*time.Second, s.b.RPCGasCap(), dmContext)
 
 	// As soon as we have an execution result, we should have a complete deep mind log, so let's return it
 	if result != nil {
-		return printer.Buffer().Bytes(), nil
+		return dmContext.DeepMindLog(), nil
 	}
 
 	if err != nil {
@@ -1078,7 +1078,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
 
-		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, vm.Config{}, 0, gasCap, deepmind.DiscardingPrinter)
+		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, vm.Config{}, 0, gasCap, deepmind.NoOpContext)
 		if err != nil {
 			if errors.Is(err, core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit

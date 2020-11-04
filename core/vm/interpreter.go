@@ -92,10 +92,6 @@ type EVMInterpreter struct {
 	returnData []byte // Last CALL's return data for subsequent reuse
 }
 
-func (i *EVMInterpreter) dmPrinter() deepmind.Printer {
-	return i.evm.dmPrinter
-}
-
 // NewEVMInterpreter returns a new instance of the Interpreter.
 func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	// We use the STOP instruction whether to see
@@ -162,8 +158,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 	// Don't bother with the execution if there's no code.
 	if len(contract.Code) == 0 {
-		if deepmind.Enabled {
-			deepmind.Print(in.dmPrinter(), "ACCOUNT_WITHOUT_CODE", deepmind.CallIndex())
+		if in.evm.dmContext.Enabled() {
+			in.evm.dmContext.RecordCallWithoutCode()
 		}
 
 		return nil, nil
@@ -253,9 +249,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 		// Deep mind instead of impacting performance with a `defer` here, we have a "finalizer" call inserted where `return` are performed in the flow
 		maybeAfterCallGasEvent := func() {}
-		if deepmind.Enabled && ShouldRecordCallGasEventForOpCode(op) {
-			deepmind.PrintBeforeCallGasEvent(in.dmPrinter(), contract.Gas)
-			maybeAfterCallGasEvent = func() { deepmind.PrintAfterCallGasEvent(in.dmPrinter(), contract.Gas) }
+		if in.evm.dmContext.Enabled() && ShouldRecordCallGasEventForOpCode(op) {
+			in.evm.dmContext.RecordBeforeCallGasEvent(contract.Gas)
+			maybeAfterCallGasEvent = func() { in.evm.dmContext.RecordAfterCallGasEvent(contract.Gas) }
 		}
 
 		// Static portion of gas
@@ -299,7 +295,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 		}
 
-		if deepmind.Enabled && cost != 0 {
+		if in.evm.dmContext.Enabled() && cost != 0 {
 			gasChangeReason := OpCodeToGasChangeReason(op)
 			if gasChangeReason != deepmind.IgnoredGasChangeReason {
 				// When execution reach this point, `contract.UseGas` has been called once
@@ -309,7 +305,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 				//
 				// Hence to retrieve the `gasOld` value, we need to come back at state when
 				// gas was not consumed, which means doing `contract.Gas + cost`.
-				deepmind.PrintGasConsume(in.dmPrinter(), contract.Gas+cost, cost, gasChangeReason)
+				in.evm.dmContext.RecordGasConsume(contract.Gas+cost, cost, gasChangeReason)
 			}
 		}
 

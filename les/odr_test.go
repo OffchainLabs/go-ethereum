@@ -126,13 +126,13 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			statedb, err := state.New(header.Root, state.NewDatabase(db), nil)
 
 			if err == nil {
-				from := statedb.GetOrNewStateObject(bankAddr)
-				from.SetBalance(math.MaxBig256, "test")
+				from := statedb.GetOrNewStateObject(bankAddr, deepmind.NoOpContext)
+				from.SetBalance(math.MaxBig256, deepmind.NoOpContext, "test")
 
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false)}
 
 				context := core.NewEVMContext(msg, header, bc, nil)
-				vmenv := vm.NewEVM(context, statedb, config, vm.Config{}, deepmind.DiscardingPrinter)
+				vmenv := vm.NewEVM(context, statedb, config, vm.Config{}, deepmind.NoOpContext)
 
 				//vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(math.MaxUint64)
@@ -142,10 +142,10 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 		} else {
 			header := lc.GetHeaderByHash(bhash)
 			state := light.NewState(ctx, header, lc.Odr())
-			state.SetBalance(bankAddr, math.MaxBig256, "test")
+			state.SetBalance(bankAddr, math.MaxBig256, deepmind.NoOpContext, "test")
 			msg := callmsg{types.NewMessage(bankAddr, &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false)}
 			context := core.NewEVMContext(msg, header, lc, nil)
-			vmenv := vm.NewEVM(context, state, config, vm.Config{}, deepmind.DiscardingPrinter)
+			vmenv := vm.NewEVM(context, state, config, vm.Config{}, deepmind.NoOpContext)
 			gp := new(core.GasPool).AddGas(math.MaxUint64)
 			result, _ := core.ApplyMessage(vmenv, msg, gp)
 			if state.Error() == nil {

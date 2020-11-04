@@ -182,7 +182,7 @@ func (s *StateDB) Reset(root common.Hash) error {
 	return nil
 }
 
-func (s *StateDB) AddLog(log *types.Log, printer deepmind.Printer) {
+func (s *StateDB) AddLog(log *types.Log, dmContext *deepmind.Context) {
 	s.journal.append(addLogChange{txhash: s.thash})
 
 	log.TxHash = s.thash
@@ -190,8 +190,8 @@ func (s *StateDB) AddLog(log *types.Log, printer deepmind.Printer) {
 	log.TxIndex = uint(s.txIndex)
 	log.Index = s.logSize
 
-	if deepmind.Enabled {
-		deepmind.PrintAddLog(printer, log)
+	if dmContext.Enabled() {
+		dmContext.RecordLog(log)
 	}
 
 	s.logs[s.thash] = append(s.logs[s.thash], log)
@@ -231,8 +231,8 @@ func (s *StateDB) AddRefund(gas uint64) {
 	// storage for example, and a few other OPCODES.. the day we want
 	// that granularity of introspection, we know where to find it:
 
-	// if deepmind.Enabled {
-	// 	deepmind.Print("ADD_REFUND", deepmind.Uint64(s.refund), deepmind.Uint64(gas), deepmind.Uint64(s.refund+gas))
+	// if dmContext.Enabled() {
+	// 	dmContext.Print("ADD_REFUND", deepmind.Uint64(s.refund), deepmind.Uint64(gas), deepmind.Uint64(s.refund+gas))
 	// }
 
 	s.journal.append(refundChange{prev: s.refund})
@@ -247,8 +247,8 @@ func (s *StateDB) SubRefund(gas uint64) {
 		panic(fmt.Sprintf("Refund counter below zero (gas: %d > refund: %d)", gas, s.refund))
 	}
 
-	// if deepmind.Enabled {
-	// 	deepmind.Print("SUB_REFUND", deepmind.Uint64(s.refund), deepmind.Uint64(gas), deepmind.Uint64(s.refund-gas))
+	// if dmContext.Enabled() {
+	// 	dmContext.Print("SUB_REFUND", deepmind.Uint64(s.refund), deepmind.Uint64(gas), deepmind.Uint64(s.refund-gas))
 	// }
 
 	s.refund -= gas
@@ -385,53 +385,53 @@ func (s *StateDB) HasSuicided(addr common.Address) bool {
  */
 
 // AddBalance adds amount to the account associated with addr.
-func (s *StateDB) AddBalance(addr common.Address, amount *big.Int, printer deepmind.Printer, reason deepmind.BalanceChangeReason) {
-	stateObject := s.GetOrNewStateObject(addr, printer)
+func (s *StateDB) AddBalance(addr common.Address, amount *big.Int, dmContext *deepmind.Context, reason deepmind.BalanceChangeReason) {
+	stateObject := s.GetOrNewStateObject(addr, dmContext)
 	if stateObject != nil {
-		stateObject.AddBalance(amount, printer, reason)
+		stateObject.AddBalance(amount, dmContext, reason)
 	}
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (s *StateDB) SubBalance(addr common.Address, amount *big.Int, printer deepmind.Printer, reason deepmind.BalanceChangeReason) {
-	stateObject := s.GetOrNewStateObject(addr, printer)
+func (s *StateDB) SubBalance(addr common.Address, amount *big.Int, dmContext *deepmind.Context, reason deepmind.BalanceChangeReason) {
+	stateObject := s.GetOrNewStateObject(addr, dmContext)
 	if stateObject != nil {
-		stateObject.SubBalance(amount, printer, reason)
+		stateObject.SubBalance(amount, dmContext, reason)
 	}
 }
 
-func (s *StateDB) SetBalance(addr common.Address, amount *big.Int, printer deepmind.Printer, reason deepmind.BalanceChangeReason) {
-	stateObject := s.GetOrNewStateObject(addr, printer)
+func (s *StateDB) SetBalance(addr common.Address, amount *big.Int, dmContext *deepmind.Context, reason deepmind.BalanceChangeReason) {
+	stateObject := s.GetOrNewStateObject(addr, dmContext)
 	if stateObject != nil {
-		stateObject.SetBalance(amount, printer, reason)
+		stateObject.SetBalance(amount, dmContext, reason)
 	}
 }
 
-func (s *StateDB) SetNonce(addr common.Address, nonce uint64, printer deepmind.Printer) {
-	stateObject := s.GetOrNewStateObject(addr, printer)
+func (s *StateDB) SetNonce(addr common.Address, nonce uint64, dmContext *deepmind.Context) {
+	stateObject := s.GetOrNewStateObject(addr, dmContext)
 	if stateObject != nil {
-		stateObject.SetNonce(nonce, printer)
+		stateObject.SetNonce(nonce, dmContext)
 	}
 }
 
-func (s *StateDB) SetCode(addr common.Address, code []byte, printer deepmind.Printer) {
-	stateObject := s.GetOrNewStateObject(addr, printer)
+func (s *StateDB) SetCode(addr common.Address, code []byte, dmContext *deepmind.Context) {
+	stateObject := s.GetOrNewStateObject(addr, dmContext)
 	if stateObject != nil {
-		stateObject.SetCode(crypto.Keccak256Hash(code), code, printer)
+		stateObject.SetCode(crypto.Keccak256Hash(code), code, dmContext)
 	}
 }
 
-func (s *StateDB) SetState(addr common.Address, key, value common.Hash, printer deepmind.Printer) {
-	stateObject := s.GetOrNewStateObject(addr, printer)
+func (s *StateDB) SetState(addr common.Address, key, value common.Hash, dmContext *deepmind.Context) {
+	stateObject := s.GetOrNewStateObject(addr, dmContext)
 	if stateObject != nil {
-		stateObject.SetState(s.db, key, value, printer)
+		stateObject.SetState(s.db, key, value, dmContext)
 	}
 }
 
 // SetStorage replaces the entire storage for the specified account with given
 // storage. This function should only be used for debugging.
-func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common.Hash, printer deepmind.Printer) {
-	stateObject := s.GetOrNewStateObject(addr, printer)
+func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common.Hash, dmContext *deepmind.Context) {
+	stateObject := s.GetOrNewStateObject(addr, dmContext)
 	if stateObject != nil {
 		stateObject.SetStorage(storage)
 	}
@@ -442,7 +442,7 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 //
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after Suicide.
-func (s *StateDB) Suicide(addr common.Address, printer deepmind.Printer) bool {
+func (s *StateDB) Suicide(addr common.Address, dmContext *deepmind.Context) bool {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		return false
@@ -453,8 +453,8 @@ func (s *StateDB) Suicide(addr common.Address, printer deepmind.Printer) bool {
 		prevbalance: new(big.Int).Set(stateObject.Balance()),
 	})
 
-	if deepmind.Enabled {
-		deepmind.PrintSuicide(printer, stateObject.address, stateObject.suicided, stateObject.Balance())
+	if dmContext.Enabled() {
+		dmContext.RecordSuicide(stateObject.address, stateObject.suicided, stateObject.Balance())
 	}
 
 	stateObject.markSuicided()
@@ -583,17 +583,17 @@ func (s *StateDB) setStateObject(object *stateObject) {
 }
 
 // GetOrNewStateObject retrieves a state object or create a new state object if nil.
-func (s *StateDB) GetOrNewStateObject(addr common.Address, printer deepmind.Printer) *stateObject {
+func (s *StateDB) GetOrNewStateObject(addr common.Address, dmContext *deepmind.Context) *stateObject {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		stateObject, _ = s.createObject(addr, printer)
+		stateObject, _ = s.createObject(addr, dmContext)
 	}
 	return stateObject
 }
 
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
-func (s *StateDB) createObject(addr common.Address, printer deepmind.Printer) (newobj, prev *stateObject) {
+func (s *StateDB) createObject(addr common.Address, dmContext *deepmind.Context) (newobj, prev *stateObject) {
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
 
 	var prevdestruct bool
@@ -611,8 +611,8 @@ func (s *StateDB) createObject(addr common.Address, printer deepmind.Printer) (n
 		s.journal.append(resetObjectChange{prev: prev, prevdestruct: prevdestruct})
 	}
 
-	if deepmind.Enabled {
-		deepmind.PrintCreatedAccount(printer, addr)
+	if dmContext.Enabled() {
+		dmContext.RecordNewAccount(addr)
 	}
 
 	s.setStateObject(newobj)
@@ -632,8 +632,8 @@ func (s *StateDB) createObject(addr common.Address, printer deepmind.Printer) (n
 //   2. tx_create(sha(account ++ nonce)) (note that this gets the address of 1)
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
-func (s *StateDB) CreateAccount(addr common.Address, printer deepmind.Printer) {
-	newObj, prev := s.createObject(addr, printer)
+func (s *StateDB) CreateAccount(addr common.Address, dmContext *deepmind.Context) {
+	newObj, prev := s.createObject(addr, dmContext)
 	if prev != nil {
 		newObj.setBalance(prev.data.Balance)
 	}

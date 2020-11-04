@@ -52,12 +52,12 @@ func (*dummyStatedb) GetRefund() uint64 { return 1337 }
 
 func TestStoreCapture(t *testing.T) {
 	var (
-		env      = NewEVM(Context{}, &dummyStatedb{}, params.TestChainConfig, Config{}, deepmind.DiscardingPrinter)
+		env      = NewEVM(Context{}, &dummyStatedb{}, params.TestChainConfig, Config{}, deepmind.NoOpContext)
 		logger   = NewStructLogger(nil)
 		mem      = NewMemory()
 		stack    = newstack()
 		rstack   = newReturnStack()
-		contract = NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 0, deepmind.DiscardingPrinter)
+		contract = NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 0, deepmind.NoOpContext)
 	)
 	stack.push(uint256.NewInt().SetUint64(1))
 	stack.push(uint256.NewInt())

@@ -26,18 +26,18 @@ import (
 
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
-	CreateAccount(common.Address, deepmind.Printer)
+	CreateAccount(common.Address, *deepmind.Context)
 
-	SubBalance(common.Address, *big.Int, deepmind.Printer, deepmind.BalanceChangeReason)
-	AddBalance(common.Address, *big.Int, deepmind.Printer, deepmind.BalanceChangeReason)
+	SubBalance(common.Address, *big.Int, *deepmind.Context, deepmind.BalanceChangeReason)
+	AddBalance(common.Address, *big.Int, *deepmind.Context, deepmind.BalanceChangeReason)
 	GetBalance(common.Address) *big.Int
 
 	GetNonce(common.Address) uint64
-	SetNonce(common.Address, uint64, deepmind.Printer)
+	SetNonce(common.Address, uint64, *deepmind.Context)
 
 	GetCodeHash(common.Address) common.Hash
 	GetCode(common.Address) []byte
-	SetCode(common.Address, []byte, deepmind.Printer)
+	SetCode(common.Address, []byte, *deepmind.Context)
 	GetCodeSize(common.Address) int
 
 	AddRefund(uint64)
@@ -46,9 +46,9 @@ type StateDB interface {
 
 	GetCommittedState(common.Address, common.Hash) common.Hash
 	GetState(common.Address, common.Hash) common.Hash
-	SetState(common.Address, common.Hash, common.Hash, deepmind.Printer)
+	SetState(common.Address, common.Hash, common.Hash, *deepmind.Context)
 
-	Suicide(common.Address, deepmind.Printer) bool
+	Suicide(common.Address, *deepmind.Context) bool
 	HasSuicided(common.Address) bool
 
 	// Exist reports whether the given account exists in state.
@@ -61,7 +61,7 @@ type StateDB interface {
 	RevertToSnapshot(int)
 	Snapshot() int
 
-	AddLog(*types.Log, deepmind.Printer)
+	AddLog(*types.Log, *deepmind.Context)
 	AddPreimage(common.Hash, []byte)
 
 	ForEachStorage(common.Address, func(common.Hash, common.Hash) bool) error

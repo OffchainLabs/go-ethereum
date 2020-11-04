@@ -127,7 +127,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	if chainConfig.DAOForkSupport &&
 		chainConfig.DAOForkBlock != nil &&
 		chainConfig.DAOForkBlock.Cmp(new(big.Int).SetUint64(pre.Env.Number)) == 0 {
-		misc.ApplyDAOHardFork(statedb, deepmind.DiscardingPrinter)
+		misc.ApplyDAOHardFork(statedb, deepmind.NoOpContext)
 	}
 
 	for i, tx := range txs {
@@ -147,7 +147,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		vmContext.GasPrice = msg.GasPrice()
 		vmContext.Origin = msg.From()
 
-		evm := vm.NewEVM(vmContext, statedb, chainConfig, vmConfig, deepmind.DiscardingPrinter)
+		evm := vm.NewEVM(vmContext, statedb, chainConfig, vmConfig, deepmind.NoOpContext)
 		snapshot := statedb.Snapshot()
 		// (ret []byte, usedGas uint64, failed bool, err error)
 		msgResult, err := core.ApplyMessage(evm, msg, gaspool)
@@ -210,9 +210,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			reward.Sub(reward, big.NewInt(0).SetUint64(ommer.Delta))
 			reward.Mul(reward, blockReward)
 			reward.Div(reward, big.NewInt(8))
-			statedb.AddBalance(ommer.Address, reward, deepmind.IgnoredBalanceChangeReason)
+			statedb.AddBalance(ommer.Address, reward, deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
 		}
-		statedb.AddBalance(pre.Env.Coinbase, minerReward, deepmind.IgnoredBalanceChangeReason)
+		statedb.AddBalance(pre.Env.Coinbase, minerReward, deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
 	}
 	// Commit block
 	root, err := statedb.Commit(chainConfig.IsEIP158(vmContext.BlockNumber))
@@ -236,11 +236,11 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB 
 	sdb := state.NewDatabase(db)
 	statedb, _ := state.New(common.Hash{}, sdb, nil)
 	for addr, a := range accounts {
-		statedb.SetCode(addr, a.Code)
-		statedb.SetNonce(addr, a.Nonce)
-		statedb.SetBalance(addr, a.Balance, deepmind.IgnoredBalanceChangeReason)
+		statedb.SetCode(addr, a.Code, deepmind.NoOpContext)
+		statedb.SetNonce(addr, a.Nonce, deepmind.NoOpContext)
+		statedb.SetBalance(addr, a.Balance, deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
 		for k, v := range a.Storage {
-			statedb.SetState(addr, k, v)
+			statedb.SetState(addr, k, v, deepmind.NoOpContext)
 		}
 	}
 	// Commit and re-open to start with a clean state.

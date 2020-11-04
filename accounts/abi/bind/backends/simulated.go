@@ -422,7 +422,7 @@ func (b *SimulatedBackend) PendingNonceAt(ctx context.Context, account common.Ad
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	return b.pendingState.GetOrNewStateObject(account, deepmind.DiscardingPrinter).Nonce(), nil
+	return b.pendingState.GetOrNewStateObject(account, deepmind.NoOpContext).Nonce(), nil
 }
 
 // SuggestGasPrice implements ContractTransactor.SuggestGasPrice. Since the simulated
@@ -538,18 +538,18 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 		call.Value = new(big.Int)
 	}
 	// Set infinite balance to the fake caller account.
-	from := stateDB.GetOrNewStateObject(call.From, deepmind.DiscardingPrinter)
-	from.SetBalance(math.MaxBig256, deepmind.DiscardingPrinter, deepmind.IgnoredBalanceChangeReason)
+	from := stateDB.GetOrNewStateObject(call.From, deepmind.NoOpContext)
+	from.SetBalance(math.MaxBig256, nil, deepmind.IgnoredBalanceChangeReason)
 	// Execute the call.
 	msg := callMsg{call}
 
 	evmContext := core.NewEVMContext(msg, block.Header(), b.blockchain, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmEnv := vm.NewEVM(evmContext, stateDB, b.config, vm.Config{}, deepmind.DiscardingPrinter)
+	vmEnv := vm.NewEVM(evmContext, stateDB, b.config, vm.Config{}, deepmind.NoOpContext)
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 
-	return core.NewStateTransition(vmEnv, msg, gasPool, deepmind.DiscardingPrinter).TransitionDb()
+	return core.NewStateTransition(vmEnv, msg, gasPool, nil).TransitionDb()
 }
 
 // SendTransaction updates the pending block to include the given transaction.
