@@ -913,9 +913,21 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 			root = state.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
 		}
 
+		var failed bool
+		var gasUsed uint64
+		if result != nil {
+			failed = result.Failed()
+			gasUsed = result.UsedGas
+		}
+
+		// FIXME: The ApplyMessage can in speculative mode error out with some errors that in sync mode would
+		//        not have been possible. Like ErrNonceTooHight or ErrNonceTooLow. Those error will be in
+		//        `err` value but there is no real way to return it right now. You will get a failed transaction
+		//        without any call and that's it.
+
 		// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
 		// based on the eip phase, we're passing whether the root touch-delete accounts.
-		receipt := types.NewReceipt(root, result.Failed(), result.UsedGas)
+		receipt := types.NewReceipt(root, failed, gasUsed)
 		receipt.TxHash = unsetTrxHash
 		receipt.GasUsed = result.UsedGas
 		// if the transaction created a contract, store the creation address in the receipt.
@@ -933,6 +945,10 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		dmContext.EndTransaction(receipt)
 	}
 
+	// If in deep mind context, we should most probably attach the error here inside the deep mind context
+	// somehow so it's attached to the top-leve transaction trace and not return this here. The handler above
+	// us will need to understand that a nil error and nil result means send me everything. For now, it will
+	// simply fail, might even be the "good condition" to do.
 	if err != nil {
 		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
 	}
