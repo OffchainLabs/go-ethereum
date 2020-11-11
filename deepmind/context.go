@@ -102,10 +102,8 @@ func (ctx *Context) StartBlock(block *types.Block) {
 }
 
 func (ctx *Context) FinalizeBlock(block *types.Block) {
-	if !ctx.inBlock.Load() {
-		panic("finalizing a block while not already within a block scope")
-	}
-
+	// We must not check if the finalize block is actually in the a block since
+	// when deep mind block progress only is enabled, it would hit a panic
 	ctx.printer.Print("FINALIZE_BLOCK", Uint64(block.NumberU64()))
 }
 
