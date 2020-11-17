@@ -191,9 +191,6 @@ func (ctx *Context) StartTransactionRaw(
 }
 
 func (ctx *Context) openTransaction() {
-	// FIXME: Should we make some validation here?
-	ctx.nextCallIndex = 0
-
 	if !ctx.inTransaction.CAS(false, true) {
 		panic("entering a transaction while already in a transaction scope")
 	}
@@ -249,6 +246,11 @@ func (ctx *Context) EndTransaction(receipt *types.Receipt) {
 		Hex(receipt.Bloom[:]),
 		JSON(logItems),
 	)
+
+	ctx.nextCallIndex = 0
+	ctx.activeCallIndex = "0"
+	ctx.callIndexStack = &ExtendedStack{}
+	ctx.callIndexStack.Push(ctx.activeCallIndex)
 }
 
 // Call methods
