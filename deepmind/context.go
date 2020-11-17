@@ -194,6 +194,7 @@ func (ctx *Context) openTransaction() {
 	// FIXME: Should we make some validation here?
 	ctx.nextCallIndex = 0
 	ctx.activeCallIndex = "0"
+	ctx.callIndexStack = &ExtendedStack{}
 
 	if !ctx.inTransaction.CAS(false, true) {
 		panic("entering a transaction while already in a transaction scope")
@@ -250,6 +251,10 @@ func (ctx *Context) EndTransaction(receipt *types.Receipt) {
 		Hex(receipt.Bloom[:]),
 		JSON(logItems),
 	)
+
+	ctx.nextCallIndex = 0
+	ctx.activeCallIndex = "0"
+	ctx.callIndexStack = &ExtendedStack{}
 }
 
 // Call methods
@@ -325,9 +330,6 @@ func (ctx *Context) EndCall(gasLeft uint64, returnValue []byte) {
 	}
 
 	ctx.printer.Print("EVM_END_CALL", ctx.closeCall(), Uint64(gasLeft), Hex(returnValue))
-
-	ctx.activeCallIndex = "0"
-	ctx.nextCallIndex = 0
 }
 
 // In-call methods
