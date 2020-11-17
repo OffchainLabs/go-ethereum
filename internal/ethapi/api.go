@@ -929,7 +929,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		// based on the eip phase, we're passing whether the root touch-delete accounts.
 		receipt := types.NewReceipt(root, failed, gasUsed)
 		receipt.TxHash = unsetTrxHash
-		receipt.GasUsed = result.UsedGas
+		receipt.GasUsed = gasUsed
 		// if the transaction created a contract, store the creation address in the receipt.
 		if msg.To() == nil {
 			// FIXME (dm): This was `crypto.CreateAddress(vmenv.Context.Origin, tx.Nonce())`, is `tx.Nonce()` equivalent to `msg.Nonce()`?
