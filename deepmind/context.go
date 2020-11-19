@@ -421,15 +421,7 @@ func (ctx *Context) RecordNewAccount(addr common.Address) {
 		return
 	}
 
-	// TODO: the CallIndex should be attached to the NEXT EVM call.
-	// add as `pendingCreateAccount`, prochain EVM_CALL start whatever ,il les pluck et les
-	// clear.
 	ctx.printer.Print("CREATED_ACCOUNT", ctx.callIndex(), Addr(addr))
-	// TODO: in our data, we simply flag `account_created: true`,
-	// and index in `search` accordingly.
-	// created:true address:0x123123123213213
-	// { creatorCall
-	// } }
 }
 
 func (ctx *Context) RecordCodeChange(addr common.Address, inputHash, prevCode []byte, codeHash common.Hash, code []byte) {

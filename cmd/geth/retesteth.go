@@ -224,9 +224,9 @@ func (e *NoRewardEngine) accumulateRewards(config *params.ChainConfig, state *st
 	// Simply touch miner and uncle coinbase accounts
 	reward := big.NewInt(0)
 	for _, uncle := range uncles {
-		state.AddBalance(uncle.Coinbase, reward, deepmind.NoOpContext, deepmind.BalanceChangeReason("reward_mine_uncle"))
+		state.AddBalance(uncle.Coinbase, reward, false, deepmind.NoOpContext, deepmind.BalanceChangeReason("reward_mine_uncle"))
 	}
-	state.AddBalance(header.Coinbase, reward, deepmind.NoOpContext, deepmind.BalanceChangeReason("reward_mine_block"))
+	state.AddBalance(header.Coinbase, reward, false, deepmind.NoOpContext, deepmind.BalanceChangeReason("reward_mine_block"))
 }
 
 func (e *NoRewardEngine) Finalize(chain consensus.ChainHeaderReader, header *types.Header, statedb *state.StateDB, txs []*types.Transaction,

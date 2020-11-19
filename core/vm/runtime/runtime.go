@@ -178,7 +178,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 
 	vmenv := NewEnv(cfg)
 
-	sender := cfg.State.GetOrNewStateObject(cfg.Origin, deepmind.NoOpContext)
+	sender := cfg.State.GetOrNewStateObject(cfg.Origin, false, deepmind.NoOpContext)
 	if cfg.ChainConfig.IsYoloV2(vmenv.BlockNumber) {
 		cfg.State.AddAddressToAccessList(cfg.Origin)
 		cfg.State.AddAddressToAccessList(address)

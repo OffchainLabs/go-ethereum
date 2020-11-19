@@ -259,7 +259,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	}
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db), nil)
 	for addr, account := range g.Alloc {
-		statedb.AddBalance(addr, account.Balance, deepmind.SyncContext(), deepmind.BalanceChangeReason("genesis_balance"))
+		statedb.AddBalance(addr, account.Balance, false, deepmind.SyncContext(), deepmind.BalanceChangeReason("genesis_balance"))
 		statedb.SetCode(addr, account.Code, deepmind.SyncContext())
 		statedb.SetNonce(addr, account.Nonce, deepmind.SyncContext())
 		for key, value := range account.Storage {

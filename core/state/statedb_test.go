@@ -45,7 +45,7 @@ func TestUpdateLeaks(t *testing.T) {
 	// Update it with some accounts
 	for i := byte(0); i < 255; i++ {
 		addr := common.BytesToAddress([]byte{i})
-		state.AddBalance(addr, big.NewInt(int64(11*i)), deepmind.NoOpContext, "test")
+		state.AddBalance(addr, big.NewInt(int64(11*i)), false, deepmind.NoOpContext, "test")
 		state.SetNonce(addr, uint64(42*i), deepmind.NoOpContext)
 		if i%2 == 0 {
 			state.SetState(addr, common.BytesToHash([]byte{i, i, i}), common.BytesToHash([]byte{i, i, i, i}), deepmind.NoOpContext)
@@ -153,7 +153,7 @@ func TestCopy(t *testing.T) {
 	orig, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()), nil)
 
 	for i := byte(0); i < 255; i++ {
-		obj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}), deepmind.NoOpContext)
+		obj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}), false, deepmind.NoOpContext)
 		obj.AddBalance(big.NewInt(int64(i)), deepmind.NoOpContext, "test")
 		orig.updateStateObject(obj)
 	}
@@ -167,9 +167,9 @@ func TestCopy(t *testing.T) {
 
 	// modify all in memory
 	for i := byte(0); i < 255; i++ {
-		origObj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}), deepmind.NoOpContext)
-		copyObj := copy.GetOrNewStateObject(common.BytesToAddress([]byte{i}), deepmind.NoOpContext)
-		ccopyObj := ccopy.GetOrNewStateObject(common.BytesToAddress([]byte{i}), deepmind.NoOpContext)
+		origObj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}), false, deepmind.NoOpContext)
+		copyObj := copy.GetOrNewStateObject(common.BytesToAddress([]byte{i}), false, deepmind.NoOpContext)
+		ccopyObj := ccopy.GetOrNewStateObject(common.BytesToAddress([]byte{i}), false, deepmind.NoOpContext)
 
 		origObj.AddBalance(big.NewInt(2*int64(i)), deepmind.NoOpContext, "test")
 		copyObj.AddBalance(big.NewInt(3*int64(i)), deepmind.NoOpContext, "test")
@@ -195,9 +195,9 @@ func TestCopy(t *testing.T) {
 
 	// Verify that the three states have been updated independently
 	for i := byte(0); i < 255; i++ {
-		origObj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}), deepmind.NoOpContext)
-		copyObj := copy.GetOrNewStateObject(common.BytesToAddress([]byte{i}), deepmind.NoOpContext)
-		ccopyObj := ccopy.GetOrNewStateObject(common.BytesToAddress([]byte{i}), deepmind.NoOpContext)
+		origObj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}), false, deepmind.NoOpContext)
+		copyObj := copy.GetOrNewStateObject(common.BytesToAddress([]byte{i}), false, deepmind.NoOpContext)
+		ccopyObj := ccopy.GetOrNewStateObject(common.BytesToAddress([]byte{i}), false, deepmind.NoOpContext)
 
 		if want := big.NewInt(3 * int64(i)); origObj.Balance().Cmp(want) != 0 {
 			t.Errorf("orig obj %d: balance mismatch: have %v, want %v", i, origObj.Balance(), want)
@@ -260,7 +260,7 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		{
 			name: "AddBalance",
 			fn: func(a testAction, s *StateDB) {
-				s.AddBalance(addr, big.NewInt(a.args[0]), deepmind.NoOpContext, "test")
+				s.AddBalance(addr, big.NewInt(a.args[0]), false, deepmind.NoOpContext, "test")
 			},
 			args: make([]int64, 1),
 		},
@@ -473,12 +473,12 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 
 func TestTouchDelete(t *testing.T) {
 	s := newStateTest()
-	s.state.GetOrNewStateObject(common.Address{}, deepmind.NoOpContext)
+	s.state.GetOrNewStateObject(common.Address{}, false, deepmind.NoOpContext)
 	root, _ := s.state.Commit(false)
 	s.state.Reset(root)
 
 	snapshot := s.state.Snapshot()
-	s.state.AddBalance(common.Address{}, new(big.Int), deepmind.NoOpContext, "test")
+	s.state.AddBalance(common.Address{}, new(big.Int), false, deepmind.NoOpContext, "test")
 
 	if len(s.state.journal.dirties) != 1 {
 		t.Fatal("expected one dirty state object")

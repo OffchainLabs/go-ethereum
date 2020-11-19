@@ -849,7 +849,7 @@ func opStop(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 func opSuicide(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	beneficiary := callContext.stack.pop()
 	balance := interpreter.evm.StateDB.GetBalance(callContext.contract.Address())
-	interpreter.evm.StateDB.AddBalance(common.Address(beneficiary.Bytes20()), balance, interpreter.evm.dmContext, deepmind.BalanceChangeReason("suicide_refund"))
+	interpreter.evm.StateDB.AddBalance(common.Address(beneficiary.Bytes20()), balance, false, interpreter.evm.dmContext, deepmind.BalanceChangeReason("suicide_refund"))
 	interpreter.evm.StateDB.Suicide(callContext.contract.Address(), interpreter.evm.dmContext)
 	return nil, nil
 }

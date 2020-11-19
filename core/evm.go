@@ -102,5 +102,5 @@ func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int) bool {
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db
 func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int, dmContext *deepmind.Context) {
 	db.SubBalance(sender, amount, dmContext, deepmind.BalanceChangeReason("transfer"))
-	db.AddBalance(recipient, amount, dmContext, deepmind.BalanceChangeReason("transfer"))
+	db.AddBalance(recipient, amount, false, dmContext, deepmind.BalanceChangeReason("transfer"))
 }

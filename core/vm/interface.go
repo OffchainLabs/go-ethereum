@@ -29,7 +29,7 @@ type StateDB interface {
 	CreateAccount(common.Address, *deepmind.Context)
 
 	SubBalance(common.Address, *big.Int, *deepmind.Context, deepmind.BalanceChangeReason)
-	AddBalance(common.Address, *big.Int, *deepmind.Context, deepmind.BalanceChangeReason)
+	AddBalance(common.Address, *big.Int, bool, *deepmind.Context, deepmind.BalanceChangeReason)
 	GetBalance(common.Address) *big.Int
 
 	GetNonce(common.Address) uint64
