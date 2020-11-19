@@ -45,11 +45,11 @@ func TestDump(t *testing.T) {
 	s := newStateTest()
 
 	// generate a few entries
-	obj1 := s.state.GetOrNewStateObject(toAddr([]byte{0x01}), deepmind.NoOpContext)
+	obj1 := s.state.GetOrNewStateObject(toAddr([]byte{0x01}), false, deepmind.NoOpContext)
 	obj1.AddBalance(big.NewInt(22), deepmind.NoOpContext, "test")
-	obj2 := s.state.GetOrNewStateObject(toAddr([]byte{0x01, 0x02}), deepmind.NoOpContext)
+	obj2 := s.state.GetOrNewStateObject(toAddr([]byte{0x01, 0x02}), false, deepmind.NoOpContext)
 	obj2.SetCode(crypto.Keccak256Hash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3}, deepmind.NoOpContext)
-	obj3 := s.state.GetOrNewStateObject(toAddr([]byte{0x02}), deepmind.NoOpContext)
+	obj3 := s.state.GetOrNewStateObject(toAddr([]byte{0x02}), false, deepmind.NoOpContext)
 	obj3.SetBalance(big.NewInt(44), deepmind.NoOpContext, "test")
 
 	// write some of them to the trie

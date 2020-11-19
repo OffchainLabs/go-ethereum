@@ -269,7 +269,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 	st.refundGas()
-	st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice), st.dmContext, deepmind.BalanceChangeReason("reward_transaction_fee"))
+	st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice), false, st.dmContext, deepmind.BalanceChangeReason("reward_transaction_fee"))
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),
@@ -288,7 +288,7 @@ func (st *StateTransition) refundGas() {
 
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
-	st.state.AddBalance(st.msg.From(), remaining, st.dmContext, deepmind.BalanceChangeReason("gas_refund"))
+	st.state.AddBalance(st.msg.From(), remaining, false, st.dmContext, deepmind.BalanceChangeReason("gas_refund"))
 
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.

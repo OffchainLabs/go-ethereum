@@ -385,8 +385,8 @@ func (s *StateDB) HasSuicided(addr common.Address) bool {
  */
 
 // AddBalance adds amount to the account associated with addr.
-func (s *StateDB) AddBalance(addr common.Address, amount *big.Int, dmContext *deepmind.Context, reason deepmind.BalanceChangeReason) {
-	stateObject := s.GetOrNewStateObject(addr, dmContext)
+func (s *StateDB) AddBalance(addr common.Address, amount *big.Int, isPrecompiledAddr bool, dmContext *deepmind.Context, reason deepmind.BalanceChangeReason) {
+	stateObject := s.GetOrNewStateObject(addr, isPrecompiledAddr, dmContext)
 	if stateObject != nil {
 		stateObject.AddBalance(amount, dmContext, reason)
 	}
@@ -394,35 +394,35 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int, dmContext *de
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *big.Int, dmContext *deepmind.Context, reason deepmind.BalanceChangeReason) {
-	stateObject := s.GetOrNewStateObject(addr, dmContext)
+	stateObject := s.GetOrNewStateObject(addr, false, dmContext)
 	if stateObject != nil {
 		stateObject.SubBalance(amount, dmContext, reason)
 	}
 }
 
 func (s *StateDB) SetBalance(addr common.Address, amount *big.Int, dmContext *deepmind.Context, reason deepmind.BalanceChangeReason) {
-	stateObject := s.GetOrNewStateObject(addr, dmContext)
+	stateObject := s.GetOrNewStateObject(addr, false, dmContext)
 	if stateObject != nil {
 		stateObject.SetBalance(amount, dmContext, reason)
 	}
 }
 
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64, dmContext *deepmind.Context) {
-	stateObject := s.GetOrNewStateObject(addr, dmContext)
+	stateObject := s.GetOrNewStateObject(addr, false, dmContext)
 	if stateObject != nil {
 		stateObject.SetNonce(nonce, dmContext)
 	}
 }
 
 func (s *StateDB) SetCode(addr common.Address, code []byte, dmContext *deepmind.Context) {
-	stateObject := s.GetOrNewStateObject(addr, dmContext)
+	stateObject := s.GetOrNewStateObject(addr, false, dmContext)
 	if stateObject != nil {
 		stateObject.SetCode(crypto.Keccak256Hash(code), code, dmContext)
 	}
 }
 
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash, dmContext *deepmind.Context) {
-	stateObject := s.GetOrNewStateObject(addr, dmContext)
+	stateObject := s.GetOrNewStateObject(addr, false, dmContext)
 	if stateObject != nil {
 		stateObject.SetState(s.db, key, value, dmContext)
 	}
@@ -431,7 +431,7 @@ func (s *StateDB) SetState(addr common.Address, key, value common.Hash, dmContex
 // SetStorage replaces the entire storage for the specified account with given
 // storage. This function should only be used for debugging.
 func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common.Hash, dmContext *deepmind.Context) {
-	stateObject := s.GetOrNewStateObject(addr, dmContext)
+	stateObject := s.GetOrNewStateObject(addr, false, dmContext)
 	if stateObject != nil {
 		stateObject.SetStorage(storage)
 	}
@@ -583,17 +583,17 @@ func (s *StateDB) setStateObject(object *stateObject) {
 }
 
 // GetOrNewStateObject retrieves a state object or create a new state object if nil.
-func (s *StateDB) GetOrNewStateObject(addr common.Address, dmContext *deepmind.Context) *stateObject {
+func (s *StateDB) GetOrNewStateObject(addr common.Address, isPrecompiledAddr bool, dmContext *deepmind.Context) *stateObject {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		stateObject, _ = s.createObject(addr, dmContext)
+		stateObject, _ = s.createObject(addr, isPrecompiledAddr, dmContext)
 	}
 	return stateObject
 }
 
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
-func (s *StateDB) createObject(addr common.Address, dmContext *deepmind.Context) (newobj, prev *stateObject) {
+func (s *StateDB) createObject(addr common.Address, isPrecompiledAddr bool, dmContext *deepmind.Context) (newobj, prev *stateObject) {
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
 
 	var prevdestruct bool
@@ -611,7 +611,7 @@ func (s *StateDB) createObject(addr common.Address, dmContext *deepmind.Context)
 		s.journal.append(resetObjectChange{prev: prev, prevdestruct: prevdestruct})
 	}
 
-	if dmContext.Enabled() {
+	if dmContext.Enabled() && !isPrecompiledAddr {
 		dmContext.RecordNewAccount(addr)
 	}
 
@@ -633,7 +633,7 @@ func (s *StateDB) createObject(addr common.Address, dmContext *deepmind.Context)
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
 func (s *StateDB) CreateAccount(addr common.Address, dmContext *deepmind.Context) {
-	newObj, prev := s.createObject(addr, dmContext)
+	newObj, prev := s.createObject(addr, false, dmContext)
 	if prev != nil {
 		newObj.setBalance(prev.data.Balance)
 	}

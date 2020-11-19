@@ -164,7 +164,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 
 	vmenv := NewEnv(cfg)
 
-	sender := cfg.State.GetOrNewStateObject(cfg.Origin, deepmind.NoOpContext)
+	sender := cfg.State.GetOrNewStateObject(cfg.Origin, false, deepmind.NoOpContext)
 	// Call the code with the given configuration.
 	ret, leftOverGas, err := vmenv.Call(
 		sender,

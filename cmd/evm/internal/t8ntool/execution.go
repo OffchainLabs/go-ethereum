@@ -210,9 +210,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			reward.Sub(reward, big.NewInt(0).SetUint64(ommer.Delta))
 			reward.Mul(reward, blockReward)
 			reward.Div(reward, big.NewInt(8))
-			statedb.AddBalance(ommer.Address, reward, deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
+			statedb.AddBalance(ommer.Address, reward, false, deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
 		}
-		statedb.AddBalance(pre.Env.Coinbase, minerReward, deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
+		statedb.AddBalance(pre.Env.Coinbase, minerReward, false, deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
 	}
 	// Commit block
 	root, err := statedb.Commit(chainConfig.IsEIP158(vmContext.BlockNumber))

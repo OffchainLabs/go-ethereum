@@ -350,7 +350,6 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		gas = contract.Gas
 	}
 	if err != nil {
-
 		if evm.dmContext.Enabled() {
 			evm.dmContext.RecordCallFailed(gas, err.Error())
 		}
@@ -367,6 +366,11 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 			}
 		}
 	}
+
+	if evm.dmContext.Enabled() {
+		evm.dmContext.EndCall(gas, ret)
+	}
+
 	return ret, gas, err
 }
 
@@ -454,13 +458,19 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// We could change this, but for now it's left for legacy reasons
 	var snapshot = evm.StateDB.Snapshot()
 
+	p, isPrecompile := evm.precompile(addr)
+
 	// We do an AddBalance of zero here, just in order to trigger a touch.
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
 	// but is the correct thing to do and matters on other networks, in tests, and potential
 	// future scenarios
-	evm.StateDB.AddBalance(addr, big0, evm.dmContext, deepmind.IgnoredBalanceChangeReason)
+	evm.StateDB.AddBalance(addr, big0, isPrecompile, evm.dmContext, deepmind.IgnoredBalanceChangeReason)
 
-	if p, isPrecompile := evm.precompile(addr); isPrecompile {
+	if isPrecompile {
+		if evm.dmContext.Enabled() {
+			evm.dmContext.RecordCallParams("STATIC", caller.Address(), addr, deepmind.EmptyValue, gas, input)
+		}
+
 		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.dmContext)
 	} else {
 		// At this point, we use a copy of address. If we don't, the go compiler will
