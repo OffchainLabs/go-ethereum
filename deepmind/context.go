@@ -18,13 +18,13 @@ var NoOpContext *Context
 
 var syncContext *Context = NewContext(&DelegateToWriterPrinter{writer: os.Stdout})
 
-// SyncContext is used when syncing blocks with the network for mindreader consumption, there
+// MaybeSyncContext is used when syncing blocks with the network for mindreader consumption, there
 // is always a single active sync context use for the whole syncing process, should not be used
 // for other purposes.
 //
 // It responsibility of the user of sync context to ensure it's being used in a concurrent safe
 // way and to handle its lifecycle behavior (like resetting it at the end of a block).
-func SyncContext() *Context {
+func MaybeSyncContext() *Context {
 	if !Enabled {
 		return NoOpContext
 	}
@@ -33,6 +33,13 @@ func SyncContext() *Context {
 		return NoOpContext
 	}
 
+	return syncContext
+}
+
+// SyncContext returns the sync context without any checking if deep mind is enabled or not. Use
+// it only for specific cases and ensure you only use it when it's strictly correct to do so as this
+// will print stdout lines.
+func SyncContext() *Context {
 	return syncContext
 }
 

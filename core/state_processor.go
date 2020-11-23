@@ -61,7 +61,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		header    = block.Header()
 		allLogs   []*types.Log
 		gp        = new(GasPool).AddGas(block.GasLimit())
-		dmContext = deepmind.SyncContext()
+		dmContext = deepmind.MaybeSyncContext()
 	)
 
 	if dmContext.Enabled() {
@@ -70,7 +70,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 	// Mutate the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
-		misc.ApplyDAOHardFork(statedb, deepmind.SyncContext())
+		misc.ApplyDAOHardFork(statedb, dmContext)
 	}
 
 	// Iterate over and process the individual transactions
@@ -99,8 +99,13 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 
-	if dmContext.Enabled() || deepmind.BlockProgressEnabled {
+	// Finalize block is a bit special since it can be enabled without the full deep mind sync.
+	// As such, if deep mind is enabled, we log it and us the deep mind context. Otherwise if
+	// block progress is enabled.
+	if dmContext.Enabled() {
 		dmContext.FinalizeBlock(block)
+	} else if deepmind.BlockProgressEnabled {
+		deepmind.SyncContext().FinalizeBlock(block)
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
