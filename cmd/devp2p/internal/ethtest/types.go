@@ -42,10 +42,14 @@ type Error struct {
 	err error
 }
 
-func (e *Error) Unwrap() error    { return e.err }
-func (e *Error) Error() string    { return e.err.Error() }
-func (e *Error) Code() int        { return -1 }
-func (e *Error) GoString() string { return e.Error() }
+func (e *Error) Unwrap() error  { return e.err }
+func (e *Error) Error() string  { return e.err.Error() }
+func (e *Error) Code() int      { return -1 }
+func (e *Error) String() string { return e.Error() }
+
+func errorf(format string, args ...interface{}) *Error {
+	return &Error{fmt.Errorf(format, args...)}
+}
 
 // Hello is the RLP structure of the protocol handshake.
 type Hello struct {
@@ -96,13 +100,9 @@ type NewBlockHashes []struct {
 
 func (nbh NewBlockHashes) Code() int { return 17 }
 
-// NewBlock is the network packet for the block propagation message.
-type NewBlock struct {
-	Block *types.Block
-	TD    *big.Int
-}
+type Transactions []*types.Transaction
 
-func (nb NewBlock) Code() int { return 23 }
+func (t Transactions) Code() int { return 18 }
 
 // GetBlockHeaders represents a block header query.
 type GetBlockHeaders struct {
@@ -117,6 +117,29 @@ func (g GetBlockHeaders) Code() int { return 19 }
 type BlockHeaders []*types.Header
 
 func (bh BlockHeaders) Code() int { return 20 }
+
+// GetBlockBodies represents a GetBlockBodies request
+type GetBlockBodies []common.Hash
+
+func (gbb GetBlockBodies) Code() int { return 21 }
+
+// BlockBodies is the network packet for block content distribution.
+type BlockBodies []*types.Body
+
+func (bb BlockBodies) Code() int { return 22 }
+
+// NewBlock is the network packet for the block propagation message.
+type NewBlock struct {
+	Block *types.Block
+	TD    *big.Int
+}
+
+func (nb NewBlock) Code() int { return 23 }
+
+// NewPooledTransactionHashes is the network packet for the tx hash propagation message.
+type NewPooledTransactionHashes [][32]byte
+
+func (nb NewPooledTransactionHashes) Code() int { return 24 }
 
 // HashOrNumber is a combined field for specifying an origin block.
 type hashOrNumber struct {
@@ -154,16 +177,6 @@ func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
 	return err
 }
 
-// GetBlockBodies represents a GetBlockBodies request
-type GetBlockBodies []common.Hash
-
-func (gbb GetBlockBodies) Code() int { return 21 }
-
-// BlockBodies is the network packet for block content distribution.
-type BlockBodies []*types.Body
-
-func (bb BlockBodies) Code() int { return 22 }
-
 // Conn represents an individual connection with a peer
 type Conn struct {
 	*rlpx.Conn
@@ -174,7 +187,7 @@ type Conn struct {
 func (c *Conn) Read() Message {
 	code, rawData, _, err := c.Conn.Read()
 	if err != nil {
-		return &Error{fmt.Errorf("could not read from connection: %v", err)}
+		return errorf("could not read from connection: %v", err)
 	}
 
 	var msg Message
@@ -201,21 +214,27 @@ func (c *Conn) Read() Message {
 		msg = new(NewBlock)
 	case (NewBlockHashes{}).Code():
 		msg = new(NewBlockHashes)
+	case (Transactions{}).Code():
+		msg = new(Transactions)
+	case (NewPooledTransactionHashes{}).Code():
+		msg = new(NewPooledTransactionHashes)
 	default:
-		return &Error{fmt.Errorf("invalid message code: %d", code)}
+		return errorf("invalid message code: %d", code)
 	}
 
 	if err := rlp.DecodeBytes(rawData, msg); err != nil {
-		return &Error{fmt.Errorf("could not rlp decode message: %v", err)}
+		return errorf("could not rlp decode message: %v", err)
 	}
-
 	return msg
 }
 
 // ReadAndServe serves GetBlockHeaders requests while waiting
 // on another message from the node.
-func (c *Conn) ReadAndServe(chain *Chain) Message {
-	for {
+func (c *Conn) ReadAndServe(chain *Chain, timeout time.Duration) Message {
+	start := time.Now()
+	for time.Since(start) < timeout {
+		timeout := time.Now().Add(10 * time.Second)
+		c.SetReadDeadline(timeout)
 		switch msg := c.Read().(type) {
 		case *Ping:
 			c.Write(&Pong{})
@@ -223,16 +242,17 @@ func (c *Conn) ReadAndServe(chain *Chain) Message {
 			req := *msg
 			headers, err := chain.GetHeaders(req)
 			if err != nil {
-				return &Error{fmt.Errorf("could not get headers for inbound header request: %v", err)}
+				return errorf("could not get headers for inbound header request: %v", err)
 			}
 
 			if err := c.Write(headers); err != nil {
-				return &Error{fmt.Errorf("could not write to connection: %v", err)}
+				return errorf("could not write to connection: %v", err)
 			}
 		default:
 			return msg
 		}
 	}
+	return errorf("no message received within %v", timeout)
 }
 
 func (c *Conn) Write(msg Message) error {
@@ -242,12 +262,14 @@ func (c *Conn) Write(msg Message) error {
 	}
 	_, err = c.Conn.Write(uint64(msg.Code()), payload)
 	return err
-
 }
 
 // handshake checks to make sure a `HELLO` is received.
 func (c *Conn) handshake(t *utesting.T) Message {
-	// write protoHandshake to client
+	defer c.SetDeadline(time.Time{})
+	c.SetDeadline(time.Now().Add(10 * time.Second))
+
+	// write hello to client
 	pub0 := crypto.FromECDSAPub(&c.ourKey.PublicKey)[1:]
 	ourHandshake := &Hello{
 		Version: 5,
@@ -260,14 +282,13 @@ func (c *Conn) handshake(t *utesting.T) Message {
 	if err := c.Write(ourHandshake); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
-	// read protoHandshake from client
+	// read hello from client
 	switch msg := c.Read().(type) {
 	case *Hello:
 		// set snappy if version is at least 5
 		if msg.Version >= 5 {
 			c.SetSnappy(true)
 		}
-
 		c.negotiateEthProtocol(msg.Caps)
 		if c.ethProtocolVersion == 0 {
 			t.Fatalf("unexpected eth protocol version")
@@ -296,16 +317,18 @@ func (c *Conn) negotiateEthProtocol(caps []p2p.Cap) {
 
 // statusExchange performs a `Status` message exchange with the given
 // node.
-func (c *Conn) statusExchange(t *utesting.T, chain *Chain) Message {
+func (c *Conn) statusExchange(t *utesting.T, chain *Chain, status *Status) Message {
+	defer c.SetDeadline(time.Time{})
+	c.SetDeadline(time.Now().Add(20 * time.Second))
+
 	// read status message from client
 	var message Message
-
 loop:
 	for {
 		switch msg := c.Read().(type) {
 		case *Status:
 			if msg.Head != chain.blocks[chain.Len()-1].Hash() {
-				t.Fatalf("wrong head in status: %v", msg.Head)
+				t.Fatalf("wrong head block in status: %s", msg.Head.String())
 			}
 			if msg.TD.Cmp(chain.TD(chain.Len())) != 0 {
 				t.Fatalf("wrong TD in status: %v", msg.TD)
@@ -321,23 +344,26 @@ loop:
 			c.Write(&Pong{}) // TODO (renaynay): in the future, this should be an error
 			// (PINGs should not be a response upon fresh connection)
 		default:
-			t.Fatalf("bad status message: %#v", msg)
+			t.Fatalf("bad status message: %s", pretty.Sdump(msg))
 		}
 	}
 	// make sure eth protocol version is set for negotiation
 	if c.ethProtocolVersion == 0 {
 		t.Fatalf("eth protocol version must be set in Conn")
 	}
-	// write status message to client
-	status := Status{
-		ProtocolVersion: uint32(c.ethProtocolVersion),
-		NetworkID:       1,
-		TD:              chain.TD(chain.Len()),
-		Head:            chain.blocks[chain.Len()-1].Hash(),
-		Genesis:         chain.blocks[0].Hash(),
-		ForkID:          chain.ForkID(),
+	if status == nil {
+		// write status message to client
+		status = &Status{
+			ProtocolVersion: uint32(c.ethProtocolVersion),
+			NetworkID:       chain.chainConfig.ChainID.Uint64(),
+			TD:              chain.TD(chain.Len()),
+			Head:            chain.blocks[chain.Len()-1].Hash(),
+			Genesis:         chain.blocks[0].Hash(),
+			ForkID:          chain.ForkID(),
+		}
 	}
-	if err := c.Write(status); err != nil {
+
+	if err := c.Write(*status); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 
@@ -347,12 +373,15 @@ loop:
 // waitForBlock waits for confirmation from the client that it has
 // imported the given block.
 func (c *Conn) waitForBlock(block *types.Block) error {
+	defer c.SetReadDeadline(time.Time{})
+
+	timeout := time.Now().Add(20 * time.Second)
+	c.SetReadDeadline(timeout)
 	for {
 		req := &GetBlockHeaders{Origin: hashOrNumber{Hash: block.Hash()}, Amount: 1}
 		if err := c.Write(req); err != nil {
 			return err
 		}
-
 		switch msg := c.Read().(type) {
 		case *BlockHeaders:
 			if len(*msg) > 0 {
@@ -360,7 +389,7 @@ func (c *Conn) waitForBlock(block *types.Block) error {
 			}
 			time.Sleep(100 * time.Millisecond)
 		default:
-			return fmt.Errorf("invalid message: %v", msg)
+			return fmt.Errorf("invalid message: %s", pretty.Sdump(msg))
 		}
 	}
 }

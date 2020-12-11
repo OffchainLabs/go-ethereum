@@ -600,7 +600,7 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 			if storageError != nil {
 				return nil, storageError
 			}
-			storageProof[i] = StorageResult{key, (*hexutil.Big)(state.GetState(address, common.HexToHash(key)).Big()), common.ToHexArray(proof)}
+			storageProof[i] = StorageResult{key, (*hexutil.Big)(state.GetState(address, common.HexToHash(key)).Big()), toHexSlice(proof)}
 		} else {
 			storageProof[i] = StorageResult{key, &hexutil.Big{}, []string{}}
 		}
@@ -614,7 +614,7 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 
 	return &AccountResult{
 		Address:      address,
-		AccountProof: common.ToHexArray(accountProof),
+		AccountProof: toHexSlice(accountProof),
 		Balance:      (*hexutil.Big)(state.GetBalance(address)),
 		CodeHash:     codeHash,
 		Nonce:        hexutil.Uint64(state.GetNonce(address)),
@@ -794,7 +794,7 @@ func (args *CallArgs) ToMessage(globalGasCap uint64) types.Message {
 
 	var data []byte
 	if args.Data != nil {
-		data = []byte(*args.Data)
+		data = *args.Data
 	}
 
 	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, false)
@@ -932,8 +932,8 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		receipt.GasUsed = gasUsed
 		// if the transaction created a contract, store the creation address in the receipt.
 		if msg.To() == nil {
-			// FIXME (dm): This was `crypto.CreateAddress(vmenv.Context.Origin, tx.Nonce())`, is `tx.Nonce()` equivalent to `msg.Nonce()`?
-			receipt.ContractAddress = crypto.CreateAddress(evm.Context.Origin, msg.Nonce())
+			// FIXME (dm): This was `crypto.CreateAddress(vmenv.TxContext.Origin, tx.Nonce())`, is `tx.Nonce()` equivalent to `msg.Nonce()`?
+			receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, msg.Nonce())
 		}
 		// Set the receipt logs and create a bloom for filtering
 		receipt.Logs = state.GetLogs(unsetTrxHash)
@@ -2030,4 +2030,13 @@ func checkTxFee(gasPrice *big.Int, gas uint64, cap float64) error {
 		return fmt.Errorf("tx fee (%.2f ether) exceeds the configured cap (%.2f ether)", feeFloat, cap)
 	}
 	return nil
+}
+
+// toHexSlice creates a slice of hex-strings based on []byte.
+func toHexSlice(b [][]byte) []string {
+	r := make([]string, len(b))
+	for i := range b {
+		r[i] = hexutil.Encode(b[i])
+	}
+	return r
 }

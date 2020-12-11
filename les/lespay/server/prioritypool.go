@@ -253,12 +253,12 @@ func (pp *PriorityPool) SetActiveBias(bias time.Duration) {
 	pp.tryActivate()
 }
 
-// ActiveCapacity returns the total capacity of currently active nodes
-func (pp *PriorityPool) ActiveCapacity() uint64 {
+// Active returns the number and total capacity of currently active nodes
+func (pp *PriorityPool) Active() (uint64, uint64) {
 	pp.lock.Lock()
 	defer pp.lock.Unlock()
 
-	return pp.activeCap
+	return pp.activeCount, pp.activeCap
 }
 
 // inactiveSetIndex callback updates ppNodeInfo item index in inactiveQueue
@@ -288,9 +288,8 @@ func activePriority(a interface{}, now mclock.AbsTime) int64 {
 	}
 	if c.bias == 0 {
 		return invertPriority(c.nodePriority.Priority(now, c.capacity))
-	} else {
-		return invertPriority(c.nodePriority.EstMinPriority(now+mclock.AbsTime(c.bias), c.capacity, true))
 	}
+	return invertPriority(c.nodePriority.EstMinPriority(now+mclock.AbsTime(c.bias), c.capacity, true))
 }
 
 // activeMaxPriority callback returns estimated maximum priority of ppNodeInfo item in activeQueue
