@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -103,14 +104,14 @@ func New(file string, cache int, handles int, namespace string) (*Database, erro
 		DisableSeeksCompaction: true,
 	}
 
-	// if deepmind.CompactionDisabled {
-	// 	// By setting those values really high, we disable compaction of the database completely
-	// 	maxInt := int(^uint(0) >> 1)
+	if deepmind.CompactionDisabled {
+		// By setting those values really high, we disable compaction of the database completely
+		maxInt := int(^uint(0) >> 1)
 
-	// 	opts.CompactionL0Trigger = maxInt
-	// 	opts.WriteL0PauseTrigger = maxInt
-	// 	opts.WriteL0SlowdownTrigger = maxInt
-	// }
+		opts.CompactionL0Trigger = maxInt
+		opts.WriteL0PauseTrigger = maxInt
+		opts.WriteL0SlowdownTrigger = maxInt
+	}
 
 	db, err := leveldb.OpenFile(file, opts)
 	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
@@ -214,9 +215,9 @@ func (db *Database) Stat(property string) (string, error) {
 // is treated as a key after all keys in the data store. If both is nil then it
 // will compact entire data store.
 func (db *Database) Compact(start []byte, limit []byte) error {
-	// if deepmind.CompactionDisabled {
-	// 	return nil
-	// }
+	if deepmind.CompactionDisabled {
+		return nil
+	}
 
 	return db.db.CompactRange(util.Range{Start: start, Limit: limit})
 }

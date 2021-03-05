@@ -577,7 +577,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 // If a newly added transaction is marked as local, its sending account will be
 // whitelisted, preventing any associated transaction from being dropped out of the pool
 // due to pricing constraints.
-func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err error) {
+func (pool *TxPool) add(tx *types.Transaction, local bool, dmContext *deepmind.Context) (replaced bool, err error) {
 	// If the transaction is already known, discard it
 	hash := tx.Hash()
 	if pool.all.Get(hash) != nil {
@@ -588,16 +588,16 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	// If the transaction fails basic validation, discard it
 	if err := pool.validateTx(tx, local); err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
-		if deepmind.Enabled {
-			deepmind.PrintTrxPool("TRX_DISCARDED", tx, err)
+		if dmContext.Enabled() {
+			dmContext.RecordTrxPool("TRX_DISCARDED", tx, err)
 		}
 
 		invalidTxMeter.Mark(1)
 		return false, err
 	}
 
-	if deepmind.Enabled {
-		deepmind.PrintTrxPool("TRX_ENTER_POOL", tx, nil)
+	if dmContext.Enabled() {
+		dmContext.RecordTrxPool("TRX_ENTER_POOL", tx, nil)
 	}
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.all.Count()) >= pool.config.GlobalSlots+pool.config.GlobalQueue {
@@ -837,8 +837,10 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) ([]error, *accountSet) {
 	dirty := newAccountSet(pool.signer)
 	errs := make([]error, len(txs))
+	dmContext := deepmind.MaybeSyncContext()
+
 	for i, tx := range txs {
-		replaced, err := pool.add(tx, local)
+		replaced, err := pool.add(tx, local, dmContext)
 		errs[i] = err
 		if err == nil && !replaced {
 			dirty.addTx(tx)

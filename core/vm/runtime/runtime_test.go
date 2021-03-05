@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -107,7 +108,7 @@ func TestCall(t *testing.T) {
 		byte(vm.PUSH1), 32,
 		byte(vm.PUSH1), 0,
 		byte(vm.RETURN),
-	})
+	}, deepmind.NoOpContext)
 
 	ret, _, err := Call(address, nil, &Config{State: state})
 	if err != nil {
@@ -159,8 +160,8 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 		receiver   = common.BytesToAddress([]byte("receiver"))
 	)
 
-	statedb.CreateAccount(sender)
-	statedb.SetCode(receiver, common.FromHex(code))
+	statedb.CreateAccount(sender, deepmind.NoOpContext)
+	statedb.SetCode(receiver, common.FromHex(code), deepmind.NoOpContext)
 	runtimeConfig := Config{
 		Origin:      sender,
 		State:       statedb,

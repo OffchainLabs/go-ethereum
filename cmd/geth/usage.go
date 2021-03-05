@@ -258,6 +258,10 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "MISC",
 	},
+	{
+		Name:  "DEEP MIND",
+		Flags: debug.DeepMindFlags,
+	},
 }
 
 // byCategory sorts an array of flagGroup by Name in the order

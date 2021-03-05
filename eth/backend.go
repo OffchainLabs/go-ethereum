@@ -188,7 +188,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			SnapshotLimit:       config.SnapshotCache,
 		}
 	)
-
 	if deepmind.Enabled {
 		log.Info("Ensuring no prefetch is set to true for proper deep mind functionning")
 		cacheConfig.TrieCleanNoPrefetch = true

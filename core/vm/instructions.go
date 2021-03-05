@@ -402,8 +402,8 @@ func opSha3(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 	}
 
 	// preimage hash
-	if deepmind.Enabled {
-		deepmind.Print("EVM_KECCAK", deepmind.CallIndex(), deepmind.Hash(interpreter.hasherBuf), deepmind.Hex(data))
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordKeccak(interpreter.hasherBuf, data)
 	}
 
 	callContext.stack.push(interpreter.intPool.get().SetBytes(interpreter.hasherBuf[:]))
@@ -642,7 +642,7 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]b
 func opSstore(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	loc := common.BigToHash(callContext.stack.pop())
 	val := callContext.stack.pop()
-	interpreter.evm.StateDB.SetState(callContext.contract.Address(), loc, common.BigToHash(val))
+	interpreter.evm.StateDB.SetState(callContext.contract.Address(), loc, common.BigToHash(val), interpreter.evm.dmContext)
 
 	interpreter.intPool.putOne(val)
 	return nil, nil
@@ -717,10 +717,12 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 	} else {
 		callContext.stack.push(interpreter.intPool.get().SetBytes(addr.Bytes()))
 	}
-	callContext.contract.Gas += returnGas
-	if deepmind.Enabled && returnGas != 0 {
-		deepmind.PrintGasChange(callContext.contract.Gas-returnGas, callContext.contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
+
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
 	}
+
+	callContext.contract.Gas += returnGas
 	interpreter.intPool.put(value, offset, size)
 
 	if suberr == errExecutionReverted {
@@ -748,10 +750,12 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 	} else {
 		callContext.stack.push(interpreter.intPool.get().SetBytes(addr.Bytes()))
 	}
-	callContext.contract.Gas += returnGas
-	if deepmind.Enabled && returnGas != 0 {
-		deepmind.PrintGasChange(callContext.contract.Gas-returnGas, callContext.contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
+
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
 	}
+
+	callContext.contract.Gas += returnGas
 	interpreter.intPool.put(endowment, offset, size, salt)
 
 	if suberr == errExecutionReverted {
@@ -783,10 +787,12 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 	if err == nil || err == errExecutionReverted {
 		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	callContext.contract.Gas += returnGas
-	if deepmind.Enabled && returnGas != 0 {
-		deepmind.PrintGasChange(callContext.contract.Gas-returnGas, callContext.contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
+
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
 	}
+
+	callContext.contract.Gas += returnGas
 	interpreter.intPool.put(addr, value, inOffset, inSize, retOffset, retSize)
 	return ret, nil
 }
@@ -814,10 +820,12 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 	if err == nil || err == errExecutionReverted {
 		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	callContext.contract.Gas += returnGas
-	if deepmind.Enabled && returnGas != 0 {
-		deepmind.PrintGasChange(callContext.contract.Gas-returnGas, callContext.contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
+
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
 	}
+
+	callContext.contract.Gas += returnGas
 	interpreter.intPool.put(addr, value, inOffset, inSize, retOffset, retSize)
 	return ret, nil
 }
@@ -841,10 +849,12 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 	if err == nil || err == errExecutionReverted {
 		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	callContext.contract.Gas += returnGas
-	if deepmind.Enabled && returnGas != 0 {
-		deepmind.PrintGasChange(callContext.contract.Gas-returnGas, callContext.contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
+
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
 	}
+
+	callContext.contract.Gas += returnGas
 	interpreter.intPool.put(addr, inOffset, inSize, retOffset, retSize)
 	return ret, nil
 }
@@ -868,10 +878,12 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx)
 	if err == nil || err == errExecutionReverted {
 		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	callContext.contract.Gas += returnGas
-	if deepmind.Enabled && returnGas != 0 {
-		deepmind.PrintGasChange(callContext.contract.Gas-returnGas, callContext.contract.Gas, deepmind.RefundAfterExecutionGasChangeReason)
+
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
 	}
+
+	callContext.contract.Gas += returnGas
 	interpreter.intPool.put(addr, inOffset, inSize, retOffset, retSize)
 	return ret, nil
 }
@@ -898,9 +910,9 @@ func opStop(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 
 func opSuicide(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	balance := interpreter.evm.StateDB.GetBalance(callContext.contract.Address())
-	interpreter.evm.StateDB.AddBalance(common.BigToAddress(callContext.stack.pop()), balance, deepmind.BalanceChangeReason("suicide_refund"))
+	interpreter.evm.StateDB.AddBalance(common.BigToAddress(callContext.stack.pop()), balance, false, interpreter.evm.dmContext, deepmind.BalanceChangeReason("suicide_refund"))
 
-	interpreter.evm.StateDB.Suicide(callContext.contract.Address())
+	interpreter.evm.StateDB.Suicide(callContext.contract.Address(), interpreter.evm.dmContext)
 	return nil, nil
 }
 
@@ -923,7 +935,7 @@ func makeLog(size int) executionFunc {
 			// This is a non-consensus field, but assigned here because
 			// core/state doesn't know the current block number.
 			BlockNumber: interpreter.evm.BlockNumber.Uint64(),
-		})
+		}, interpreter.evm.dmContext)
 
 		interpreter.intPool.put(mStart, mSize)
 		return nil, nil

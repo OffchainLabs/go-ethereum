@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -185,7 +184,7 @@ func (s *StateDB) Reset(root common.Hash) error {
 	return nil
 }
 
-func (s *StateDB) AddLog(log *types.Log) {
+func (s *StateDB) AddLog(log *types.Log, dmContext *deepmind.Context) {
 	s.journal.append(addLogChange{txhash: s.thash})
 
 	log.TxHash = s.thash
@@ -193,13 +192,8 @@ func (s *StateDB) AddLog(log *types.Log) {
 	log.TxIndex = uint(s.txIndex)
 	log.Index = s.logSize
 
-	if deepmind.Enabled {
-		strtopics := make([]string, len(log.Topics))
-		for idx, topic := range log.Topics {
-			strtopics[idx] = deepmind.Hash(topic)
-		}
-
-		deepmind.Print("ADD_LOG", deepmind.CallIndex(), deepmind.LogIndex(), deepmind.Addr(log.Address), strings.Join(strtopics, ","), deepmind.Hex(log.Data))
+	if dmContext.Enabled() {
+		dmContext.RecordLog(log)
 	}
 
 	s.logs[s.thash] = append(s.logs[s.thash], log)
@@ -235,14 +229,6 @@ func (s *StateDB) Preimages() map[common.Hash][]byte {
 
 // AddRefund adds gas to the refund counter
 func (s *StateDB) AddRefund(gas uint64) {
-	// DEEP-MIND: This is called when some bytes are freed from
-	// storage for example, and a few other OPCODES.. the day we want
-	// that granularity of introspection, we know where to find it:
-
-	// if deepmind.Enabled {
-	// 	deepmind.Print("ADD_REFUND", deepmind.Uint64(s.refund), deepmind.Uint64(gas), deepmind.Uint64(s.refund+gas))
-	// }
-
 	s.journal.append(refundChange{prev: s.refund})
 	s.refund += gas
 }
@@ -254,10 +240,6 @@ func (s *StateDB) SubRefund(gas uint64) {
 	if gas > s.refund {
 		panic(fmt.Sprintf("Refund counter below zero (gas: %d > refund: %d)", gas, s.refund))
 	}
-
-	// if deepmind.Enabled {
-	// 	deepmind.Print("SUB_REFUND", deepmind.Uint64(s.refund), deepmind.Uint64(gas), deepmind.Uint64(s.refund-gas))
-	// }
 
 	s.refund -= gas
 }
@@ -400,53 +382,53 @@ func (s *StateDB) HasSuicided(addr common.Address) bool {
  */
 
 // AddBalance adds amount to the account associated with addr.
-func (s *StateDB) AddBalance(addr common.Address, amount *big.Int, reason deepmind.BalanceChangeReason) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) AddBalance(addr common.Address, amount *big.Int, isPrecompiledAddr bool, dmContext *deepmind.Context, reason deepmind.BalanceChangeReason) {
+	stateObject := s.GetOrNewStateObject(addr, isPrecompiledAddr, dmContext)
 	if stateObject != nil {
-		stateObject.AddBalance(amount, reason)
+		stateObject.AddBalance(amount, dmContext, reason)
 	}
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (s *StateDB) SubBalance(addr common.Address, amount *big.Int, reason deepmind.BalanceChangeReason) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) SubBalance(addr common.Address, amount *big.Int, dmContext *deepmind.Context, reason deepmind.BalanceChangeReason) {
+	stateObject := s.GetOrNewStateObject(addr, false, dmContext)
 	if stateObject != nil {
-		stateObject.SubBalance(amount, reason)
+		stateObject.SubBalance(amount, dmContext, reason)
 	}
 }
 
-func (s *StateDB) SetBalance(addr common.Address, amount *big.Int, reason deepmind.BalanceChangeReason) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) SetBalance(addr common.Address, amount *big.Int, dmContext *deepmind.Context, reason deepmind.BalanceChangeReason) {
+	stateObject := s.GetOrNewStateObject(addr, false, dmContext)
 	if stateObject != nil {
-		stateObject.SetBalance(amount, reason)
+		stateObject.SetBalance(amount, dmContext, reason)
 	}
 }
 
-func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) SetNonce(addr common.Address, nonce uint64, dmContext *deepmind.Context) {
+	stateObject := s.GetOrNewStateObject(addr, false, dmContext)
 	if stateObject != nil {
-		stateObject.SetNonce(nonce)
+		stateObject.SetNonce(nonce, dmContext)
 	}
 }
 
-func (s *StateDB) SetCode(addr common.Address, code []byte) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) SetCode(addr common.Address, code []byte, dmContext *deepmind.Context) {
+	stateObject := s.GetOrNewStateObject(addr, false, dmContext)
 	if stateObject != nil {
-		stateObject.SetCode(crypto.Keccak256Hash(code), code)
+		stateObject.SetCode(crypto.Keccak256Hash(code), code, dmContext)
 	}
 }
 
-func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) SetState(addr common.Address, key, value common.Hash, dmContext *deepmind.Context) {
+	stateObject := s.GetOrNewStateObject(addr, false, dmContext)
 	if stateObject != nil {
-		stateObject.SetState(s.db, key, value)
+		stateObject.SetState(s.db, key, value, dmContext)
 	}
 }
 
 // SetStorage replaces the entire storage for the specified account with given
 // storage. This function should only be used for debugging.
-func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common.Hash) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common.Hash, dmContext *deepmind.Context) {
+	stateObject := s.GetOrNewStateObject(addr, false, dmContext)
 	if stateObject != nil {
 		stateObject.SetStorage(storage)
 	}
@@ -457,7 +439,7 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 //
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after Suicide.
-func (s *StateDB) Suicide(addr common.Address) bool {
+func (s *StateDB) Suicide(addr common.Address, dmContext *deepmind.Context) bool {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		return false
@@ -468,14 +450,8 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 		prevbalance: new(big.Int).Set(stateObject.Balance()),
 	})
 
-	if deepmind.Enabled {
-		// This infers a balance change, a reduction from this account. In the `opSuicide` op code,
-		// the corresponding AddBalance is emitted.
-		deepmind.Print("SUICIDE_CHANGE", deepmind.CallIndex(), deepmind.Addr(addr), deepmind.Bool(stateObject.suicided), deepmind.BigInt(stateObject.Balance()))
-		// TODO: In our data model, add `suicided: true` (index
-		// accordingly in `search`), and add a BalanceChange reducing
-		// this value to zero.
-		deepmind.Print("BALANCE_CHANGE", deepmind.CallIndex(), deepmind.Addr(addr), deepmind.BigInt(stateObject.Balance()), "0", "suicide_withdraw")
+	if dmContext.Enabled() {
+		dmContext.RecordSuicide(stateObject.address, stateObject.suicided, stateObject.Balance())
 	}
 
 	stateObject.markSuicided()
@@ -592,17 +568,17 @@ func (s *StateDB) setStateObject(object *stateObject) {
 }
 
 // Retrieve a state object or create a new state object if nil.
-func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
+func (s *StateDB) GetOrNewStateObject(addr common.Address, isPrecompiledAddr bool, dmContext *deepmind.Context) *stateObject {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		stateObject, _ = s.createObject(addr)
+		stateObject, _ = s.createObject(addr, isPrecompiledAddr, dmContext)
 	}
 	return stateObject
 }
 
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
-func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
+func (s *StateDB) createObject(addr common.Address, isPrecompiledAddr bool, dmContext *deepmind.Context) (newobj, prev *stateObject) {
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
 
 	var prevdestruct bool
@@ -620,16 +596,8 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 		s.journal.append(resetObjectChange{prev: prev, prevdestruct: prevdestruct})
 	}
 
-	if deepmind.Enabled {
-		// TODO: the CallIndex should be attached to the NEXT EVM call.
-		// add as `pendingCreateAccount`, prochain EVM_CALL start whatever ,il les pluck et les
-		// clear.
-		deepmind.Print("CREATED_ACCOUNT", deepmind.CallIndex(), deepmind.Addr(addr))
-		// TODO: in our data, we simply flag `account_created: true`,
-		// and index in `search` accordingly.
-		// created:true address:0x123123123213213
-		// { creatorCall
-		// } }
+	if dmContext.Enabled() && !isPrecompiledAddr {
+		dmContext.RecordNewAccount(addr)
 	}
 
 	s.setStateObject(newobj)
@@ -646,8 +614,8 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 //   2. tx_create(sha(account ++ nonce)) (note that this gets the address of 1)
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
-func (s *StateDB) CreateAccount(addr common.Address) {
-	newObj, prev := s.createObject(addr)
+func (s *StateDB) CreateAccount(addr common.Address, dmContext *deepmind.Context) {
+	newObj, prev := s.createObject(addr, false, dmContext)
 	if prev != nil {
 		newObj.setBalance(prev.data.Balance)
 	}

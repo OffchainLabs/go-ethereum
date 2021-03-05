@@ -87,9 +87,19 @@ var (
 		Name:  "trace",
 		Usage: "Write execution trace to the given file",
 	}
+
+	// Deep Mind Flags
 	deepMindFlag = cli.BoolFlag{
 		Name:  "deep-mind",
 		Usage: "Activate/deactivate deep-mind instrumentation, disabled by default",
+	}
+	deepMindSyncInstrumentationFlag = cli.BoolTFlag{
+		Name:  "deep-mind-sync-instrumentation",
+		Usage: "Activate/deactivate deep-mind sync output instrumentation, enabled by default",
+	}
+	deepMindMiningEnabledFlag = cli.BoolFlag{
+		Name:  "deep-mind-mining-enabled",
+		Usage: "Activate/deactivate mining code even if deep-mind is active, required speculative execution on local miner node, disabled by default",
 	}
 	deepMindBlockProgressFlag = cli.BoolFlag{
 		Name:  "deep-mind-block-progress",
@@ -107,6 +117,10 @@ var Flags = []cli.Flag{
 	pprofFlag, pprofAddrFlag, pprofPortFlag,
 	memprofilerateFlag, blockprofilerateFlag, cpuprofileFlag, traceFlag,
 	deepMindFlag, deepMindBlockProgressFlag, deepMindCompactionDisabledFlag,
+}
+
+var DeepMindFlags = []cli.Flag{
+	deepMindFlag, deepMindSyncInstrumentationFlag, deepMindMiningEnabledFlag, deepMindBlockProgressFlag, deepMindCompactionDisabledFlag,
 }
 
 var (
@@ -160,8 +174,18 @@ func Setup(ctx *cli.Context) error {
 	deepmind.BlockProgressEnabled = ctx.GlobalBool(deepMindBlockProgressFlag.Name)
 	deepmind.CompactionDisabled = ctx.GlobalBool(deepMindCompactionDisabledFlag.Name)
 
+	// deep mind
+	log.Info("Initializing deep mind")
+	deepmind.Enabled = ctx.GlobalBool(deepMindFlag.Name)
+	deepmind.SyncInstrumentationEnabled = ctx.GlobalBoolT(deepMindSyncInstrumentationFlag.Name)
+	deepmind.MiningEnabled = ctx.GlobalBool(deepMindMiningEnabledFlag.Name)
+	deepmind.BlockProgressEnabled = ctx.GlobalBool(deepMindBlockProgressFlag.Name)
+	deepmind.CompactionDisabled = ctx.GlobalBool(deepMindCompactionDisabledFlag.Name)
+
 	log.Info("Deep mind initialized",
 		"enabled", deepmind.Enabled,
+		"sync_instrumentation_enabled", deepmind.SyncInstrumentationEnabled,
+		"mining_enabled", deepmind.MiningEnabled,
 		"block_progress_enabled", deepmind.BlockProgressEnabled,
 		"compaction_disabled", deepmind.CompactionDisabled,
 	)
