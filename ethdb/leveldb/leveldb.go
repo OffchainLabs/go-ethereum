@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -104,14 +103,14 @@ func New(file string, cache int, handles int, namespace string) (*Database, erro
 		DisableSeeksCompaction: true,
 	}
 
-	if deepmind.CompactionDisabled {
-		// By setting those values really high, we disable compaction of the database completely
-		maxInt := int(^uint(0) >> 1)
+	// if deepmind.CompactionDisabled {
+	// 	// By setting those values really high, we disable compaction of the database completely
+	// 	maxInt := int(^uint(0) >> 1)
 
-		opts.CompactionL0Trigger = maxInt
-		opts.WriteL0PauseTrigger = maxInt
-		opts.WriteL0SlowdownTrigger = maxInt
-	}
+	// 	opts.CompactionL0Trigger = maxInt
+	// 	opts.WriteL0PauseTrigger = maxInt
+	// 	opts.WriteL0SlowdownTrigger = maxInt
+	// }
 
 	db, err := leveldb.OpenFile(file, opts)
 	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
@@ -195,23 +194,11 @@ func (db *Database) NewBatch() ethdb.Batch {
 	}
 }
 
-// NewIterator creates a binary-alphabetical iterator over the entire keyspace
-// contained within the leveldb database.
-func (db *Database) NewIterator() ethdb.Iterator {
-	return db.db.NewIterator(new(util.Range), nil)
-}
-
-// NewIteratorWithStart creates a binary-alphabetical iterator over a subset of
-// database content starting at a particular initial key (or after, if it does
-// not exist).
-func (db *Database) NewIteratorWithStart(start []byte) ethdb.Iterator {
-	return db.db.NewIterator(&util.Range{Start: start}, nil)
-}
-
-// NewIteratorWithPrefix creates a binary-alphabetical iterator over a subset
-// of database content with a particular key prefix.
-func (db *Database) NewIteratorWithPrefix(prefix []byte) ethdb.Iterator {
-	return db.db.NewIterator(util.BytesPrefix(prefix), nil)
+// NewIterator creates a binary-alphabetical iterator over a subset
+// of database content with a particular key prefix, starting at a particular
+// initial key (or after, if it does not exist).
+func (db *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
+	return db.db.NewIterator(bytesPrefixRange(prefix, start), nil)
 }
 
 // Stat returns a particular internal stat of the database.
@@ -227,9 +214,9 @@ func (db *Database) Stat(property string) (string, error) {
 // is treated as a key after all keys in the data store. If both is nil then it
 // will compact entire data store.
 func (db *Database) Compact(start []byte, limit []byte) error {
-	if deepmind.CompactionDisabled {
-		return nil
-	}
+	// if deepmind.CompactionDisabled {
+	// 	return nil
+	// }
 
 	return db.db.CompactRange(util.Range{Start: start, Limit: limit})
 }
@@ -503,4 +490,13 @@ func (r *replayer) Delete(key []byte) {
 		return
 	}
 	r.failure = r.writer.Delete(key)
+}
+
+// bytesPrefixRange returns key range that satisfy
+// - the given prefix, and
+// - the given seek position
+func bytesPrefixRange(prefix, start []byte) *util.Range {
+	r := util.BytesPrefix(prefix)
+	r.Start = append(r.Start, start...)
+	return r
 }
