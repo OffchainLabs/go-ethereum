@@ -116,9 +116,9 @@ var Flags = []cli.Flag{
 	verbosityFlag, vmoduleFlag, backtraceAtFlag, debugFlag,
 	pprofFlag, pprofAddrFlag, pprofPortFlag,
 	memprofilerateFlag, blockprofilerateFlag, cpuprofileFlag, traceFlag,
-	deepMindFlag, deepMindBlockProgressFlag, deepMindCompactionDisabledFlag,
 }
 
+// DeepMindFlags holds all dfuse Deep Mind related command-line flags.
 var DeepMindFlags = []cli.Flag{
 	deepMindFlag, deepMindSyncInstrumentationFlag, deepMindMiningEnabledFlag, deepMindBlockProgressFlag, deepMindCompactionDisabledFlag,
 }
