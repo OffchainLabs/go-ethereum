@@ -93,12 +93,12 @@ func TestAccountImport(t *testing.T) {
 		{
 			name:   "correct account",
 			key:    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-			output: "Address: {fcad0b19bb29d4674531d6f115237e16afce377c}\n",
+			output: ".*Address: {fcad0b19bb29d4674531d6f115237e16afce377c}\n",
 		},
 		{
 			name:   "invalid character",
 			key:    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1",
-			output: "Fatal: Failed to load the private key: invalid character '1' at end of key file\n",
+			output: ".*Fatal: Failed to load the private key: invalid character '1' at end of key file\n",
 		},
 	}
 	for _, test := range tests {
@@ -121,7 +121,7 @@ func importAccountWithExpect(t *testing.T, key string, expected string) {
 	}
 	geth := runGeth(t, "account", "import", keyfile, "-password", passwordFile)
 	defer geth.ExpectExit()
-	geth.Expect(expected)
+	geth.ExpectRegexp(expected)
 }
 
 func TestAccountNewBadRepeat(t *testing.T) {

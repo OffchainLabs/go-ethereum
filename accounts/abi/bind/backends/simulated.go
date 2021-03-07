@@ -541,7 +541,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	}
 	// Set infinite balance to the fake caller account.
 	from := stateDB.GetOrNewStateObject(call.From, false, deepmind.NoOpContext)
-	from.SetBalance(math.MaxBig256, nil, deepmind.IgnoredBalanceChangeReason)
+	from.SetBalance(math.MaxBig256, deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
 	// Execute the call.
 	msg := callMsg{call}
 
@@ -552,7 +552,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{}, deepmind.NoOpContext)
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 
-	return core.NewStateTransition(vmEnv, msg, gasPool, nil).TransitionDb()
+	return core.NewStateTransition(vmEnv, msg, gasPool, deepmind.NoOpContext).TransitionDb()
 }
 
 // SendTransaction updates the pending block to include the given transaction.

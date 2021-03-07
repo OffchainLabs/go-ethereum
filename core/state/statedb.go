@@ -232,14 +232,6 @@ func (s *StateDB) Preimages() map[common.Hash][]byte {
 
 // AddRefund adds gas to the refund counter
 func (s *StateDB) AddRefund(gas uint64) {
-	// DEEP-MIND: This is called when some bytes are freed from
-	// storage for example, and a few other OPCODES.. the day we want
-	// that granularity of introspection, we know where to find it:
-
-	// if dmContext.Enabled() {
-	// 	dmContext.Print("ADD_REFUND", deepmind.Uint64(s.refund), deepmind.Uint64(gas), deepmind.Uint64(s.refund+gas))
-	// }
-
 	s.journal.append(refundChange{prev: s.refund})
 	s.refund += gas
 }
@@ -251,10 +243,6 @@ func (s *StateDB) SubRefund(gas uint64) {
 	if gas > s.refund {
 		panic(fmt.Sprintf("Refund counter below zero (gas: %d > refund: %d)", gas, s.refund))
 	}
-
-	// if dmContext.Enabled() {
-	// 	dmContext.Print("SUB_REFUND", deepmind.Uint64(s.refund), deepmind.Uint64(gas), deepmind.Uint64(s.refund-gas))
-	// }
 
 	s.refund -= gas
 }

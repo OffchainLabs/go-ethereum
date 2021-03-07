@@ -46,7 +46,7 @@ for us, versions that we will manages and deploy.
 
 Currently supported forks & version and the release branch
 
-- `release/vanilla-1.9.x-dm` - Ethereum vanilla, latest update for this branch is `1.9.25`.
+- `release/geth-1.9.x-dm` - Ethereum geth, latest update for this branch is `1.9.25`.
 - `release/polygon-0.2.x-dm` - Polygon fork (a.k.a Matic), latest update for this branch is `0.2.4` (based on Geth `1.9.24`).
 - `deep-mind` - based on Geth `1.9.23` version of Ethereum repository, with all dfuse Deep Mind commits in it.
 
@@ -64,7 +64,7 @@ and support.
 
     # Perform necessary changes, tests and commit(s)
 
-    git checkout release/vanilla-1.9.x-dm
+    git checkout release/geth-1.9.x-dm
     git pull -p
     git merge deep-mind
 
@@ -72,7 +72,7 @@ and support.
     git pull -p
     git merge deep-mind
 
-    git push dfuse-io-private deep-mind release/vanilla-1.9.x-dm release/polygon-0.2.x-dm
+    git push dfuse-io-private deep-mind release/geth-1.9.x-dm release/polygon-0.2.x-dm
 
 ### Update to New Upstream Version
 
@@ -87,7 +87,7 @@ those with your own values.
 First step is to checkout the release branch of the series you are currently
 updating to:
 
-    git checkout release/vanilla-1.9.x-dm
+    git checkout release/geth-1.9.x-dm
     git pull -p
 
 You first fetch the origin repository new data from Git:
@@ -101,11 +101,11 @@ Then apply the update
 Solve conflicts if any. Once all conflicts have been resolved, commit then
 create a tag with release
 
-    git tag vanilla-v1.9.25-dm
+    git tag geth-v1.9.25-dm
 
 Then push all that to the repository:
 
-    git push dfuse-io-private release/vanilla-1.9.x-dm vanilla-v1.9.25-dm
+    git push dfuse-io-private release/geth-1.9.x-dm geth-v1.9.25-dm
 
 ### Development
 
