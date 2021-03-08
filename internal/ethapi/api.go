@@ -879,6 +879,47 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	if evm.Cancelled() {
 		return nil, 0, false, fmt.Errorf("execution aborted (timeout = %v)", timeout)
 	}
+
+	if dmContext.Enabled() {
+		config := evm.ChainConfig()
+		// Update the state with pending changes
+		var root []byte
+		if config.IsByzantium(header.Number) {
+			state.Finalise(true)
+		} else {
+			root = state.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
+		}
+
+		var gasUsed uint64
+		if err != nil {
+			gasUsed = gas
+		}
+
+		// FIXME: The ApplyMessage can in speculative mode error out with some errors that in sync mode would
+		//        not have been possible. Like ErrNonceTooHight or ErrNonceTooLow. Those error will be in
+		//        `err` value but there is no real way to return it right now. You will get a failed transaction
+		//        without any call and that's it.
+
+		// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
+		// based on the eip phase, we're passing whether the root touch-delete accounts.
+		receipt := types.NewReceipt(root, failed, gasUsed)
+		receipt.TxHash = unsetTrxHash
+		receipt.GasUsed = gasUsed
+		// if the transaction created a contract, store the creation address in the receipt.
+		if msg.To() == nil {
+			// FIXME (dm): This was `crypto.CreateAddress(vmenv.TxContext.Origin, tx.Nonce())`, is `tx.Nonce()` equivalent to `msg.Nonce()`?
+			receipt.ContractAddress = crypto.CreateAddress(msg.From(), msg.Nonce())
+		}
+		// Set the receipt logs and create a bloom for filtering
+		receipt.Logs = state.GetLogs(unsetTrxHash)
+		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+		receipt.BlockHash = header.Hash()
+		receipt.BlockNumber = header.Number
+		receipt.TransactionIndex = 0
+
+		dmContext.EndTransaction(receipt)
+	}
+
 	return res, gas, failed, err
 }
 
