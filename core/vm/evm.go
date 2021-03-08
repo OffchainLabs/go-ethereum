@@ -609,7 +609,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 
 	if evm.dmContext.Enabled() {
-		evm.dmContext.EndCall(contract.Gas, ret)
+		evm.dmContext.EndCall(contract.Gas, nil)
 	}
 
 	return ret, address, contract.Gas, err
