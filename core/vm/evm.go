@@ -449,11 +449,24 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	contract := NewContract(caller, to, new(big.Int), gas, evm.dmContext)
 	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
 
+	isPrecompiledContract := false
+	if evm.dmContext.Enabled() && contract.CodeAddr != nil {
+		precompiles := PrecompiledContractsHomestead
+		if evm.chainRules.IsByzantium {
+			precompiles = PrecompiledContractsByzantium
+		}
+		if evm.chainRules.IsIstanbul {
+			precompiles = PrecompiledContractsIstanbul
+		}
+
+		isPrecompiledContract = precompiles[*contract.CodeAddr] != nil
+	}
+
 	// We do an AddBalance of zero here, just in order to trigger a touch.
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
 	// but is the correct thing to do and matters on other networks, in tests, and potential
 	// future scenarios
-	evm.StateDB.AddBalance(addr, bigZero, false, evm.dmContext, deepmind.IgnoredBalanceChangeReason)
+	evm.StateDB.AddBalance(addr, bigZero, isPrecompiledContract, evm.dmContext, deepmind.IgnoredBalanceChangeReason)
 
 	if evm.dmContext.Enabled() {
 		evm.dmContext.RecordCallParams("STATIC", caller.Address(), addr, deepmind.EmptyValue, gas, input)
