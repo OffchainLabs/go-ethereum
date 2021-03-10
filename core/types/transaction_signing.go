@@ -84,6 +84,9 @@ func Sender(signer Signer, tx *Transaction) (common.Address, error) {
 	if err != nil {
 		return common.Address{}, err
 	}
+	// DMLOG: tweak `Sender` interface to return a `sigCache` instead of an Address, and
+	// and store the pubkey in the sigCache, so we can print it inline with the the transaction
+	// execution in `AsMessage`.
 	tx.from.Store(sigCache{signer: signer, from: addr})
 	return addr, nil
 }
@@ -133,7 +136,7 @@ func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
 	}
 	V := new(big.Int).Sub(tx.data.V, s.chainIdMul)
 	V.Sub(V, big8)
-	return recoverPlain(s.Hash(tx), tx.data.R, tx.data.S, V, true)
+	return recoverPlain(tx, s.Hash(tx), tx.data.R, tx.data.S, V, true)
 }
 
 // SignatureValues returns signature values. This signature
@@ -180,7 +183,7 @@ func (hs HomesteadSigner) SignatureValues(tx *Transaction, sig []byte) (r, s, v 
 }
 
 func (hs HomesteadSigner) Sender(tx *Transaction) (common.Address, error) {
-	return recoverPlain(hs.Hash(tx), tx.data.R, tx.data.S, tx.data.V, true)
+	return recoverPlain(tx, hs.Hash(tx), tx.data.R, tx.data.S, tx.data.V, true)
 }
 
 type FrontierSigner struct{}
@@ -216,10 +219,10 @@ func (fs FrontierSigner) Hash(tx *Transaction) common.Hash {
 }
 
 func (fs FrontierSigner) Sender(tx *Transaction) (common.Address, error) {
-	return recoverPlain(fs.Hash(tx), tx.data.R, tx.data.S, tx.data.V, false)
+	return recoverPlain(tx, fs.Hash(tx), tx.data.R, tx.data.S, tx.data.V, false)
 }
 
-func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (common.Address, error) {
+func recoverPlain(tx *Transaction, sighash common.Hash, R, S, Vb *big.Int, homestead bool) (common.Address, error) {
 	if Vb.BitLen() > 8 {
 		return common.Address{}, ErrInvalidSig
 	}
@@ -241,8 +244,10 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (commo
 	if len(pub) == 0 || pub[0] != 4 {
 		return common.Address{}, errors.New("invalid public key")
 	}
+
 	var addr common.Address
 	copy(addr[:], crypto.Keccak256(pub[1:])[12:])
+
 	return addr, nil
 }
 

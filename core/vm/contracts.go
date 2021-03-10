@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/params"
 
 	//lint:ignore SA1019 Needed for precompile
@@ -78,9 +79,9 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 }
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
-func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contract) (ret []byte, err error) {
+func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contract, dmContext *deepmind.Context) (ret []byte, err error) {
 	gas := p.RequiredGas(input)
-	if contract.UseGas(gas) {
+	if contract.UseGas(gas, deepmind.GasChangeReason("precompiled_contract")) {
 		return p.Run(input)
 	}
 	return nil, ErrOutOfGas

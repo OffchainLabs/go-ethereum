@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -179,7 +180,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config) (*stat
 	}
 	context := core.NewEVMContext(msg, block.Header(), nil, &t.json.Env.Coinbase)
 	context.GetHash = vmTestBlockHash
-	evm := vm.NewEVM(context, statedb, config, vmconfig)
+	evm := vm.NewEVM(context, statedb, config, vmconfig, deepmind.NoOpContext)
 
 	gaspool := new(core.GasPool)
 	gaspool.AddGas(block.GasLimit())
@@ -194,7 +195,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config) (*stat
 	// - the coinbase suicided, or
 	// - there are only 'bad' transactions, which aren't executed. In those cases,
 	//   the coinbase gets no txfee, so isn't created, and thus needs to be touched
-	statedb.AddBalance(block.Coinbase(), new(big.Int))
+	statedb.AddBalance(block.Coinbase(), new(big.Int), false, deepmind.NoOpContext, "test")
 	// And _now_ get the state root
 	root := statedb.IntermediateRoot(config.IsEIP158(block.Number()))
 	return statedb, root, nil
@@ -208,11 +209,11 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB 
 	sdb := state.NewDatabase(db)
 	statedb, _ := state.New(common.Hash{}, sdb)
 	for addr, a := range accounts {
-		statedb.SetCode(addr, a.Code)
-		statedb.SetNonce(addr, a.Nonce)
-		statedb.SetBalance(addr, a.Balance)
+		statedb.SetCode(addr, a.Code, deepmind.NoOpContext)
+		statedb.SetNonce(addr, a.Nonce, deepmind.NoOpContext)
+		statedb.SetBalance(addr, a.Balance, deepmind.NoOpContext, "test")
 		for k, v := range a.Storage {
-			statedb.SetState(addr, k, v)
+			statedb.SetState(addr, k, v, deepmind.NoOpContext)
 		}
 	}
 	// Commit and re-open to start with a clean state.

@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -353,7 +354,7 @@ func (b *SimulatedBackend) PendingNonceAt(ctx context.Context, account common.Ad
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	return b.pendingState.GetOrNewStateObject(account).Nonce(), nil
+	return b.pendingState.GetOrNewStateObject(account, false, deepmind.NoOpContext).Nonce(), nil
 }
 
 // SuggestGasPrice implements ContractTransactor.SuggestGasPrice. Since the simulated
@@ -426,18 +427,18 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 		call.Value = new(big.Int)
 	}
 	// Set infinite balance to the fake caller account.
-	from := statedb.GetOrNewStateObject(call.From)
-	from.SetBalance(math.MaxBig256)
+	from := statedb.GetOrNewStateObject(call.From, false, deepmind.NoOpContext)
+	from.SetBalance(math.MaxBig256, deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
 	// Execute the call.
 	msg := callmsg{call}
 
 	evmContext := core.NewEVMContext(msg, block.Header(), b.blockchain, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmenv := vm.NewEVM(evmContext, statedb, b.config, vm.Config{})
+	vmenv := vm.NewEVM(evmContext, statedb, b.config, vm.Config{}, deepmind.NoOpContext)
 	gaspool := new(core.GasPool).AddGas(math.MaxUint64)
 
-	return core.NewStateTransition(vmenv, msg, gaspool).TransitionDb()
+	return core.NewStateTransition(vmenv, msg, gaspool, deepmind.NoOpContext).TransitionDb()
 }
 
 // SendTransaction updates the pending block to include the given transaction.

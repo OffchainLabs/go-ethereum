@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/deepmind"
 )
 
 // ContractRef is a reference to the contract's backing object
@@ -59,11 +60,13 @@ type Contract struct {
 
 	Gas   uint64
 	value *big.Int
+
+	dmContext *deepmind.Context
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
-func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uint64) *Contract {
-	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object}
+func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uint64, dmContext *deepmind.Context) *Contract {
+	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object, dmContext: dmContext}
 
 	if parent, ok := caller.(*Contract); ok {
 		// Reuse JUMPDEST analysis from parent context if available.
@@ -149,11 +152,16 @@ func (c *Contract) Caller() common.Address {
 }
 
 // UseGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) UseGas(gas uint64) (ok bool) {
+func (c *Contract) UseGas(gas uint64, reason deepmind.GasChangeReason) (ok bool) {
 	if c.Gas < gas {
 		return false
 	}
+
+	if c.dmContext.Enabled() {
+		c.dmContext.RecordGasConsume(c.Gas, gas, reason)
+	}
 	c.Gas -= gas
+
 	return true
 }
 

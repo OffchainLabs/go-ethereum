@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -82,16 +83,16 @@ func TestEIP2200(t *testing.T) {
 		address := common.BytesToAddress([]byte("contract"))
 
 		statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
-		statedb.CreateAccount(address)
-		statedb.SetCode(address, hexutil.MustDecode(tt.input))
-		statedb.SetState(address, common.Hash{}, common.BytesToHash([]byte{tt.original}))
+		statedb.CreateAccount(address, deepmind.NoOpContext)
+		statedb.SetCode(address, hexutil.MustDecode(tt.input), deepmind.NoOpContext)
+		statedb.SetState(address, common.Hash{}, common.BytesToHash([]byte{tt.original}), deepmind.NoOpContext)
 		statedb.Finalise(true) // Push the state into the "original" slot
 
 		vmctx := Context{
 			CanTransfer: func(StateDB, common.Address, *big.Int) bool { return true },
-			Transfer:    func(StateDB, common.Address, common.Address, *big.Int) {},
+			Transfer:    func(StateDB, common.Address, common.Address, *big.Int, *deepmind.Context) {},
 		}
-		vmenv := NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, Config{ExtraEips: []int{2200}})
+		vmenv := NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, Config{ExtraEips: []int{2200}}, deepmind.NoOpContext)
 
 		_, gas, err := vmenv.Call(AccountRef(common.Address{}), address, nil, tt.gaspool, new(big.Int))
 		if err != tt.failure {

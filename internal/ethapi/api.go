@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -757,7 +758,9 @@ type account struct {
 	StateDiff *map[common.Hash]common.Hash `json:"stateDiff"`
 }
 
-func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides map[common.Address]account, vmCfg vm.Config, timeout time.Duration, globalGasCap *big.Int) ([]byte, uint64, bool, error) {
+var unsetTrxHash = common.Hash{}
+
+func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides map[common.Address]account, vmCfg vm.Config, timeout time.Duration, globalGasCap *big.Int, dmContext *deepmind.Context) ([]byte, uint64, bool, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
@@ -779,27 +782,27 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	for addr, account := range overrides {
 		// Override account nonce.
 		if account.Nonce != nil {
-			state.SetNonce(addr, uint64(*account.Nonce))
+			state.SetNonce(addr, uint64(*account.Nonce), deepmind.NoOpContext)
 		}
 		// Override account(contract) code.
 		if account.Code != nil {
-			state.SetCode(addr, *account.Code)
+			state.SetCode(addr, *account.Code, deepmind.NoOpContext)
 		}
 		// Override account balance.
 		if account.Balance != nil {
-			state.SetBalance(addr, (*big.Int)(*account.Balance))
+			state.SetBalance(addr, (*big.Int)(*account.Balance), deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
 		}
 		if account.State != nil && account.StateDiff != nil {
 			return nil, 0, false, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
 		}
 		// Replace entire state if caller requires.
 		if account.State != nil {
-			state.SetStorage(addr, *account.State)
+			state.SetStorage(addr, *account.State, deepmind.NoOpContext)
 		}
 		// Apply state diff into specified accounts.
 		if account.StateDiff != nil {
 			for key, value := range *account.StateDiff {
-				state.SetState(addr, key, value)
+				state.SetState(addr, key, value, deepmind.NoOpContext)
 			}
 		}
 	}
@@ -843,7 +846,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	defer cancel()
 
 	// Get a new instance of the EVM.
-	evm, vmError, err := b.GetEVM(ctx, msg, state, header)
+	evm, vmError, err := b.GetEVM(ctx, msg, state, header, dmContext)
 	if err != nil {
 		return nil, 0, false, err
 	}
@@ -853,6 +856,20 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		<-ctx.Done()
 		evm.Cancel()
 	}()
+
+	if dmContext.Enabled() {
+		dmContext.StartTransactionRaw(
+			unsetTrxHash,
+			msg.To(),
+			msg.Value(),
+			nil, nil, nil,
+			msg.Gas(),
+			msg.GasPrice(),
+			msg.Nonce(),
+			msg.Data(),
+		)
+		dmContext.RecordTrxFrom(msg.From())
+	}
 
 	// Setup the gas pool (also for unmetered requests)
 	// and apply the message.
@@ -865,6 +882,47 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	if evm.Cancelled() {
 		return nil, 0, false, fmt.Errorf("execution aborted (timeout = %v)", timeout)
 	}
+
+	if dmContext.Enabled() {
+		config := evm.ChainConfig()
+		// Update the state with pending changes
+		var root []byte
+		if config.IsByzantium(header.Number) {
+			state.Finalise(true)
+		} else {
+			root = state.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
+		}
+
+		var gasUsed uint64
+		if err != nil {
+			gasUsed = gas
+		}
+
+		// FIXME: The ApplyMessage can in speculative mode error out with some errors that in sync mode would
+		//        not have been possible. Like ErrNonceTooHight or ErrNonceTooLow. Those error will be in
+		//        `err` value but there is no real way to return it right now. You will get a failed transaction
+		//        without any call and that's it.
+
+		// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
+		// based on the eip phase, we're passing whether the root touch-delete accounts.
+		receipt := types.NewReceipt(root, failed, gasUsed)
+		receipt.TxHash = unsetTrxHash
+		receipt.GasUsed = gasUsed
+		// if the transaction created a contract, store the creation address in the receipt.
+		if msg.To() == nil {
+			// FIXME (dm): This was `crypto.CreateAddress(vmenv.TxContext.Origin, tx.Nonce())`, is `tx.Nonce()` equivalent to `msg.Nonce()`?
+			receipt.ContractAddress = crypto.CreateAddress(msg.From(), msg.Nonce())
+		}
+		// Set the receipt logs and create a bloom for filtering
+		receipt.Logs = state.GetLogs(unsetTrxHash)
+		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+		receipt.BlockHash = header.Hash()
+		receipt.BlockNumber = header.Number
+		receipt.TransactionIndex = 0
+
+		dmContext.EndTransaction(receipt)
+	}
+
 	return res, gas, failed, err
 }
 
@@ -879,7 +937,7 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 	if overrides != nil {
 		accounts = *overrides
 	}
-	result, _, _, err := DoCall(ctx, s.b, args, blockNrOrHash, accounts, vm.Config{}, 5*time.Second, s.b.RPCGasCap())
+	result, _, _, err := DoCall(ctx, s.b, args, blockNrOrHash, accounts, vm.Config{}, 5*time.Second, s.b.RPCGasCap(), deepmind.NoOpContext)
 	return (hexutil.Bytes)(result), err
 }
 
@@ -922,7 +980,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 	executable := func(gas uint64) bool {
 		args.Gas = (*hexutil.Uint64)(&gas)
 
-		_, _, failed, err := DoCall(ctx, b, args, blockNrOrHash, nil, vm.Config{}, 0, gasCap)
+		_, _, failed, err := DoCall(ctx, b, args, blockNrOrHash, nil, vm.Config{}, 0, gasCap, deepmind.NoOpContext)
 		if err != nil || failed {
 			return false
 		}

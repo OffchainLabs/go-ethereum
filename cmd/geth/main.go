@@ -229,10 +229,17 @@ func init() {
 	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, consoleFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
+	app.Flags = append(app.Flags, debug.DeepMindFlags...)
 	app.Flags = append(app.Flags, whisperFlags...)
 	app.Flags = append(app.Flags, metricsFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
+		// Force sync mode to `full` for deep mind code (whatever the value flag!)
+		log.Info("NOTE enabling --syncmode=full")
+		if err := ctx.GlobalSet(utils.SyncModeFlag.Name, "full"); err != nil {
+			log.Error("deep mind failed to set sync mode to full", err)
+		}
+
 		return debug.Setup(ctx, "")
 	}
 	app.After = func(ctx *cli.Context) error {
