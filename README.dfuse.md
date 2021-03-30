@@ -8,13 +8,27 @@ The tooling and other instructions expect the following project
 structure, it's easier to work with the dfuse fork when you use
 the same names and settings.
 
-    cd ~/work
-    git clone --branch="deep-mind" git@github.com:dfuse-io/go-ethereum-private.git
-    cd go-ethereum-private
+```
+cd ~/work
+git clone --branch="deep-mind" git@github.com:dfuse-io/go-ethereum-private.git
+cd go-ethereum-private
 
-    git remote rename origin dfuse-io-private
-    git remote add origin https://github.com/ethereum/go-ethereum
-    git fetch origin
+git remote rename origin dfuse-io-private
+
+git remote add origin https://github.com/ethereum/go-ethereum
+git remote add polygon https://github.com/maticnetwork/bor.git
+git remote add bsc https://github.com/binance-chain/bsc.git
+git remote add heco https://github.com/HuobiGroup/huobi-eco-chain.git
+git remote add optimism https://github.com/ethereum-optimism/go-ethereum.git
+git remote add fantom-geth https://github.com/Fantom-foundation/go-ethereum.git
+
+git fetch origin
+git fetch polygon
+git fetch bsc
+git fetch heco
+git fetch optimism
+git fetch fantom-geth
+```
 
 ##### Assumptions
 
@@ -46,12 +60,16 @@ for us, versions that we will manages and deploy.
 
 Currently supported forks & version and the release branch
 
-- `release/geth-1.9.x-dm` - Ethereum geth, latest update for this branch is `1.9.25`.
-- `release/polygon-0.2.x-dm` - Polygon fork (a.k.a Matic), latest update for this branch is `0.2.4` (based on Geth `1.9.24`).
-- `deep-mind` - based on Geth `1.9.23` version of Ethereum repository, with all dfuse Deep Mind commits in it.
+- `deep-mind` - Default branch with all dfuse Deep Mind commits in it, based on Geth `1.9.10`.
+- `release/geth-1.9.x-dm` - Ethereum Geth, latest update for this branch is `1.9.25` ([https://github.com/ethereum/go-ethereum](https://github.com/ethereum/go-ethereum)).
+- `release/geth-1.10.x-dm` - Ethereum Geth, latest update for this branch is `1.10.0` ([https://github.com/ethereum/go-ethereum](https://github.com/ethereum/go-ethereum)).
+- `release/polygon-0.2.x-dm` - Polygon fork (a.k.a Matic), based on Geth `1.9.24`, latest update for this branch is `v0.2.4` ([https://github.com/maticnetwork/bor](https://github.com/maticnetwork/bor)).
+- `release/bsc-1.0.x-dm` - BSC fork (Binance), based on Geth `1.9.13`, latest update for this branch is `v1.0.6` ([https://github.com/binance-chain/bsc](https://github.com/binance-chain/bsc)).
+- `release/heco-1.0.x-dm` - HECO fork (a.k.a Huobi Eco Chain), based on Geth `1.9.23`, latest update for this branch is `v1.0.0` ([https://github.com/HuobiGroup/huobi-eco-chain](https://github.com/HuobiGroup/huobi-eco-chain)).
+- `release/optimism-0.1.x-dm` - Optimism fork, based on Geth `1.9.10`, latest update for this branch is `v0.1.3` ([https://github.com/ethereum-optimism/go-ethereum](https://github.com/ethereum-optimism/go-ethereum)).
+- `release/fantom-geth-1.9.x-dm` - Fantom Geth fork, based on Geth `1.9.22`, latest update for this branch is `v1.9.22-ftm-0.1` ([https://github.com/Fantom-foundation/go-ethereum](https://github.com/Fantom-foundation/go-ethereum)).
 
-**Note** We are planning some other fork support that might go down to Geth `1.9.13`, hence why we keep the
-version to `1.9.23`.
+*Note* To find on which Geth version a particular fork is, you can do `git merge-base dfuse-io-private/release/heco-v1.0.x-dm origin/master` where `origin/master` is the `master` branch of the original Geth repository (https://github.com/ethereum/go-ethereum).
 
 #### Making New Deep Mind Changes
 
