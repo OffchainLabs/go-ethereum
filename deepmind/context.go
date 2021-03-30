@@ -50,14 +50,15 @@ func SyncContext() *Context {
 type Context struct {
 	printer Printer
 
-	blockLogIndex   uint64
-	activeCallIndex string
-	nextCallIndex   uint64
-	callIndexStack  *ExtendedStack
+	blockLogIndex    uint64
+	activeCallIndex  string
+	nextCallIndex    uint64
+	gasEventStack   *ExtendedStack
+	callIndexStack   *ExtendedStack
 
-	seenBlock     *atomic.Bool
-	inBlock       *atomic.Bool
-	inTransaction *atomic.Bool
+	seenBlock                *atomic.Bool
+	inBlock                  *atomic.Bool
+	inTransaction            *atomic.Bool
 }
 
 func NewContext(printer Printer) *Context {
@@ -65,6 +66,7 @@ func NewContext(printer Printer) *Context {
 		printer: printer,
 
 		activeCallIndex: "0",
+		gasEventStack:   &ExtendedStack{},
 		callIndexStack:  &ExtendedStack{},
 
 		seenBlock:     atomic.NewBool(false),
@@ -452,8 +454,16 @@ func (ctx *Context) RecordBeforeCallGasEvent(gasValue uint64) {
 		return
 	}
 
+	forCallIndex := Uint64(ctx.nextCallIndex+1)
+	ctx.gasEventStack.Push(forCallIndex)
+
 	// The `ctx.nextCallIndex` has not been incremented yet, so we add +1 for the linked call index
-	ctx.printer.Print("GAS_EVENT", ctx.callIndex(), Uint64(ctx.nextCallIndex+1), string(BeforeCallGasEventID), Uint64(gasValue))
+	ctx.printer.Print("GAS_EVENT",
+		ctx.callIndex(),
+		forCallIndex,
+		string(BeforeCallGasEventID),
+		Uint64(gasValue),
+	)
 }
 
 func (ctx *Context) RecordAfterCallGasEvent(gasValue uint64) {
@@ -462,7 +472,12 @@ func (ctx *Context) RecordAfterCallGasEvent(gasValue uint64) {
 	}
 
 	// The `ctx.nextCallIndex` is already pointing to previous call index, so we simply use it for the linked call index
-	ctx.printer.Print("GAS_EVENT", ctx.callIndex(), Uint64(ctx.nextCallIndex), string(AfterCallGasEventID), Uint64(gasValue))
+	ctx.printer.Print("GAS_EVENT",
+		ctx.callIndex(),
+		ctx.gasEventStack.MustPop(),
+		string(AfterCallGasEventID),
+		Uint64(gasValue),
+	)
 }
 
 // Mempool methods
