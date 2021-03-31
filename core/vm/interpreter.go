@@ -230,8 +230,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 		}
 
-		// deepmind recording contract gas event to instrument before ga event
-		beforeCallGasEvent := contract.Gas
+		// Deepmind keeps contract gas at this point, used later just before executing the call to record the gas before event
+		dmBeforeCallGasEvent := contract.Gas
 
 		// Static portion of gas
 		cost = operation.constantGas // For tracing
@@ -272,8 +272,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 		if in.evm.dmContext.Enabled() {
 			if ShouldRecordCallGasEventForOpCode(op) {
-				// Deep mind record before call event last here since operation has been executed
-				in.evm.dmContext.RecordBeforeCallGasEvent(beforeCallGasEvent)
+				// Deep mind record before call event last here since operation is about to be executed, 100% sure
+				in.evm.dmContext.RecordBeforeCallGasEvent(dmBeforeCallGasEvent)
 			}
 
 			if cost != 0 {
@@ -304,7 +304,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		res, err = operation.execute(&pc, in, contract, mem, stack)
 
 		if in.evm.dmContext.Enabled() && ShouldRecordCallGasEventForOpCode(op) {
-			// Deep mind record after call event last here since operation has been executed
+			// Deep mind records after call event last here since operation has been executed
 			in.evm.dmContext.RecordAfterCallGasEvent(contract.Gas)
 		}
 

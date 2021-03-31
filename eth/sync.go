@@ -188,9 +188,9 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		}
 	}
 	if deepmind.Enabled {
-		// We want to override the feature up here that bases its fast sync decision on
-		// CurrentFastBlock.
-		// Our goal is to process everything at the slow speed, to extract all computations.
+		// If deepmind is enabled, we force the mode to be a FullSync mode to ensure we correctly
+		// process all transactions. It should probably be adapter so that speculative execution
+		// node could use fast sync which is not the case here.
 		mode = downloader.FullSync
 		atomic.StoreUint32(&pm.fastSync, 0)
 	}

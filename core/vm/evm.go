@@ -534,7 +534,15 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
 		if evm.dmContext.Enabled() {
 			evm.dmContext.RecordCallFailed(gas, ErrContractAddressCollision.Error())
-			evm.dmContext.EndCall(gas, nil)
+
+			// In the case of a contract collision, it appears that Geth does not actually do the gas consumption
+			// to bring the current call's gas value to 0. This is however technically the case since we just hit
+			// here a fully failed call which do consume the gas and does no refund at all. So, we record the
+			// actuall gas change manually.
+			evm.dmContext.RecordGasConsume(gas, gas, deepmind.FailedExecutionGasChangeReason)
+
+			// And when the call ends, it's actually at 0 gas since all gas has been consumed
+			evm.dmContext.EndCall(0, nil)
 		}
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}

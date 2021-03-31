@@ -179,13 +179,7 @@ func Setup(ctx *cli.Context, logdir string) error {
 		StartPProf(address)
 	}
 
-	// deep mind
-	log.Info("Initializing deep mind")
-	deepmind.Enabled = ctx.GlobalBool(deepMindFlag.Name)
-	deepmind.BlockProgressEnabled = ctx.GlobalBool(deepMindBlockProgressFlag.Name)
-	deepmind.CompactionDisabled = ctx.GlobalBool(deepMindCompactionDisabledFlag.Name)
-
-	// deep mind
+	// Deep mind
 	log.Info("Initializing deep mind")
 	deepmind.Enabled = ctx.GlobalBool(deepMindFlag.Name)
 	deepmind.SyncInstrumentationEnabled = ctx.GlobalBoolT(deepMindSyncInstrumentationFlag.Name)
