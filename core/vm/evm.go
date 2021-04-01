@@ -196,16 +196,33 @@ func (evm *EVM) Interpreter() Interpreter {
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+	if evm.dmContext.Enabled() {
+		evm.dmContext.StartCall("CALL")
+		evm.dmContext.RecordCallParams("CALL", caller.Address(), addr, value, gas, input)
+	}
+
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
+		if evm.dmContext.Enabled() {
+			evm.dmContext.EndFailedCall(gas, true, ErrDepth.Error())
+		}
+
 		return nil, gas, nil
 	}
 
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
+		if evm.dmContext.Enabled() {
+			evm.dmContext.EndFailedCall(gas, true, ErrDepth.Error())
+		}
+
 		return nil, gas, ErrDepth
 	}
 	// Fail if we're trying to transfer more than the available balance
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
+		if evm.dmContext.Enabled() {
+			evm.dmContext.EndFailedCall(gas, true, ErrInsufficientBalance.Error())
+		}
+
 		return nil, gas, ErrInsufficientBalance
 	}
 	var (
@@ -228,19 +245,14 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 				evm.vmConfig.Tracer.CaptureEnd(ret, 0, 0, nil)
 			}
 
-			// DMLOG: do we want to instrument this call which does nothing?
+			if evm.dmContext.Enabled() {
+				evm.dmContext.EndCall(gas, nil)
+			}
+
 			return nil, gas, nil
 		}
 
-		if evm.dmContext.Enabled() {
-			evm.dmContext.StartCall("CALL")
-		}
 		evm.StateDB.CreateAccount(addr, evm.dmContext)
-
-	} else {
-		if evm.dmContext.Enabled() {
-			evm.dmContext.StartCall("CALL")
-		}
 	}
 
 	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value, evm.dmContext)
@@ -262,9 +274,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		defer func() { // Lazy evaluation of the parameters
 			evm.vmConfig.Tracer.CaptureEnd(ret, gas-contract.Gas, time.Since(start), err)
 		}()
-	}
-	if evm.dmContext.Enabled() {
-		evm.dmContext.RecordCallParams("CALL", contract.Caller(), addr, value, gas, input)
 	}
 
 	ret, err = run(evm, contract, input, false)
@@ -302,51 +311,46 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 // CallCode differs from Call in the sense that it executes the given address'
 // code with the caller as context.
 func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+	if evm.dmContext.Enabled() {
+		evm.dmContext.StartCall("CALLCODE")
+		evm.dmContext.RecordCallParams("CALLCODE", caller.Address(), addr, value, gas, input)
+	}
+
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
+		if evm.dmContext.Enabled() {
+			evm.dmContext.EndFailedCall(gas, true, ErrDepth.Error())
+		}
+
 		return nil, gas, nil
 	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
+		if evm.dmContext.Enabled() {
+			evm.dmContext.EndFailedCall(gas, true, ErrDepth.Error())
+		}
+
 		return nil, gas, ErrDepth
 	}
 	// Fail if we're trying to transfer more than the available balance
 	if !evm.CanTransfer(evm.StateDB, caller.Address(), value) {
-		return nil, gas, ErrInsufficientBalance
-	}
+		if evm.dmContext.Enabled() {
+			evm.dmContext.EndFailedCall(gas, true, ErrInsufficientBalance.Error())
+		}
 
-	if evm.dmContext.Enabled() {
-		evm.dmContext.StartCall("CALLCODE")
+		return nil, gas, ErrInsufficientBalance
 	}
 
 	var (
 		snapshot = evm.StateDB.Snapshot()
 		to       = AccountRef(caller.Address())
 	)
-
-	// Call() does a  `evm.Transfer(stateDB, caller.Address(), to.Address(), value)` here..
-	// There's none here for these reasons:
-	// The CALLCODE opcode - as far as I know - is a way to execute a different contract's code against the local contract's state. It's kind of meant to allow calling a library function. The execution environment however is not the called contract, since we just pull the code and execute in the local context, we don't "enter" fully into the remote contract. As such, the state that CALLCODE can access is that of the originating contract, not of the target contract. - Péter Szilágyi <peter@ethereum.org>
-	// To clarify: callcode has transfer of ether - so it's quirky in the sense that we need to validate that the caller cannot send more than it has. The quirk is that the ether is sent to itself, so thus we need to validate the value, but there's no need to actually perform the transfer. - Martin Swende <martin.swende@ethereum.org>
-
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
 	contract := NewContract(caller, to, value, gas, evm.dmContext)
 	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
 
-	// DM:TODO: Deep-mind instrument here, and DelegateCall, and Call...
-	// so we can have a tree of the different calls, and the logs for each
-	// at each level.
-	// and also an agglomerated view...
-	// see if there's a lot of tree-nesting.. if so, it's useful to resurface
-	// such trees.  Let's GO DEEP like we did on EOS :)
-
-	if evm.dmContext.Enabled() {
-		evm.dmContext.RecordCallParams("CALLCODE", contract.Caller(), addr, value, gas, input)
-	}
-
 	ret, err = run(evm, contract, input, false)
 	if err != nil {
-
 		if evm.dmContext.Enabled() {
 			evm.dmContext.RecordCallFailed(contract.Gas, err.Error())
 		}
@@ -374,16 +378,41 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 // DelegateCall differs from CallCode in the sense that it executes the given address'
 // code with the caller as context and the caller is set to the caller of the caller.
 func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+	if evm.dmContext.Enabled() {
+		evm.dmContext.StartCall("DELEGATE")
+
+		// Deepmind a Delegate Call is quite different then a standard Call or event Call Code
+		// because it executes using the state of the parent call. Assumuming a contract that
+		// receives a method `execute`, let's say this contract is A. When in the `execute`
+		// method a `delegatecall` is performed to contract B, the net effect is that code of
+		// B is loaded and executed against the current state and value of contract A. As such,
+		// the real caller is the one that called contract A.
+		//
+		// Thoughts: When I wrote this comment, I realized that it's misleading in dfuse stack
+		// in fact. The caller is still contract A, we should probably have recorded the parent
+		// caller as actually another extra field only available on Delegate Call. The same problem
+		// arise with the `value` field, it's actually the value sent to parent call that initiate
+		// `execute` on contract A.
+
+		// It's a sure thing that caller is a Contract, it cannot be anything else, so we are safe
+		parent := caller.(*Contract)
+		evm.dmContext.RecordCallParams("DELEGATE", parent.CallerAddress, addr, parent.value, gas, input)
+	}
+
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
+		if evm.dmContext.Enabled() {
+			evm.dmContext.EndFailedCall(gas, true, ErrDepth.Error())
+		}
+
 		return nil, gas, nil
 	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, gas, ErrDepth
-	}
+		if evm.dmContext.Enabled() {
+			evm.dmContext.EndFailedCall(gas, true, ErrDepth.Error())
+		}
 
-	if evm.dmContext.Enabled() {
-		evm.dmContext.StartCall("DELEGATE")
+		return nil, gas, ErrDepth
 	}
 
 	var (
@@ -394,11 +423,6 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	// Initialise a new contract and make initialise the delegate values
 	contract := NewContract(caller, to, nil, gas, evm.dmContext).AsDelegate()
 	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
-
-	if evm.dmContext.Enabled() {
-		// DMLOG: We use `contract.Caller()` as it is fixed with `AsDelegate()`.
-		evm.dmContext.RecordCallParams("DELEGATE", contract.Caller(), addr, contract.value, gas, input)
-	}
 
 	ret, err = run(evm, contract, input, false)
 	if err != nil {
@@ -428,16 +452,25 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 // Opcodes that attempt to perform such modifications will result in exceptions
 // instead of performing the modifications.
 func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+	if evm.dmContext.Enabled() {
+		evm.dmContext.StartCall("STATIC")
+		evm.dmContext.RecordCallParams("STATIC", caller.Address(), addr, deepmind.EmptyValue, gas, input)
+	}
+
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
+		if evm.dmContext.Enabled() {
+			evm.dmContext.EndFailedCall(gas, true, ErrDepth.Error())
+		}
+
 		return nil, gas, nil
 	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, gas, ErrDepth
-	}
+		if evm.dmContext.Enabled() {
+			evm.dmContext.EndFailedCall(gas, true, ErrDepth.Error())
+		}
 
-	if evm.dmContext.Enabled() {
-		evm.dmContext.StartCall("STATIC")
+		return nil, gas, ErrDepth
 	}
 
 	var (
@@ -467,10 +500,6 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// but is the correct thing to do and matters on other networks, in tests, and potential
 	// future scenarios
 	evm.StateDB.AddBalance(addr, bigZero, isPrecompiledContract, evm.dmContext, deepmind.IgnoredBalanceChangeReason)
-
-	if evm.dmContext.Enabled() {
-		evm.dmContext.RecordCallParams("STATIC", caller.Address(), addr, deepmind.EmptyValue, gas, input)
-	}
 
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
@@ -512,18 +541,26 @@ func (c *codeAndHash) Hash() common.Hash {
 
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address) ([]byte, common.Address, uint64, error) {
-	// Depth check execution. Fail if we're trying to execute above the
-	// limit.
-	if evm.depth > int(params.CallCreateDepth) {
-		return nil, common.Address{}, gas, ErrDepth
-	}
-	if !evm.CanTransfer(evm.StateDB, caller.Address(), value) {
-		return nil, common.Address{}, gas, ErrInsufficientBalance
-	}
-
 	if evm.dmContext.Enabled() {
 		evm.dmContext.StartCall("CREATE")
 		evm.dmContext.RecordCallParams("CREATE", caller.Address(), address, value, gas, nil)
+	}
+
+	// Depth check execution. Fail if we're trying to execute above the
+	// limit.
+	if evm.depth > int(params.CallCreateDepth) {
+		if evm.dmContext.Enabled() {
+			evm.dmContext.EndFailedCall(gas, true, ErrDepth.Error())
+		}
+
+		return nil, common.Address{}, gas, ErrDepth
+	}
+	if !evm.CanTransfer(evm.StateDB, caller.Address(), value) {
+		if evm.dmContext.Enabled() {
+			evm.dmContext.EndFailedCall(gas, true, ErrInsufficientBalance.Error())
+		}
+
+		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
 
 	nonce := evm.StateDB.GetNonce(caller.Address())
@@ -533,17 +570,14 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
 		if evm.dmContext.Enabled() {
-			evm.dmContext.RecordCallFailed(gas, ErrContractAddressCollision.Error())
-
-			// In the case of a contract collision, it appears that Geth does not actually do the gas consumption
-			// to bring the current call's gas value to 0. This is however technically the case since we just hit
-			// here a fully failed call which do consume the gas and does no refund at all. So, we record the
-			// actuall gas change manually.
-			evm.dmContext.RecordGasConsume(gas, gas, deepmind.FailedExecutionGasChangeReason)
-
-			// And when the call ends, it's actually at 0 gas since all gas has been consumed
-			evm.dmContext.EndCall(0, nil)
+			// In the case of a contract collision, the gas is fully consume since the retured gas value in the
+			// return a little below is 0. This means we are facing not a revertion like other early failure
+			// reasons we usually see but with an actual assertion failure which burns the remaining gas that
+			// was allowed to the creation. Hence why we have an `EndFailedCall` and using `false` to show
+			// the call is **not** reverted.
+			evm.dmContext.EndFailedCall(gas, false, ErrContractAddressCollision.Error())
 		}
+
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}
 
@@ -563,15 +597,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		if evm.dmContext.Enabled() {
-			// What to do with this related to our data model? This seems to results
-			// in the **non-execution** of the contract code when the depth is > 0 and
-			// no recursion option is set. We need to close the call, otherwise it will
-			// fucked up everything.
-			//
-			// Our data model for now will be an empty create call, however, here would mean
-			// no code execution (i.e. the constructor would have **not** being called). Would
-			// we want to show data at some point? Is it even possible on non-custom chain?
-			evm.dmContext.EndCall(contract.Gas, nil)
+			evm.dmContext.EndFailedCall(gas, true, ErrDepth.Error())
 		}
 
 		return nil, address, gas, nil

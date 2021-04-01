@@ -337,6 +337,27 @@ func (ctx *Context) EndCall(gasLeft uint64, returnValue []byte) {
 	ctx.printer.Print("EVM_END_CALL", ctx.closeCall(), Uint64(gasLeft), Hex(returnValue))
 }
 
+// EndFailedCall is works similarly to EndCall but actualy also prints extra required line
+// like EVM_CALL_FAILED and EVM_REVERTED when it's the case. This is used on early exit in the
+// the instrumentation when a failure (and revertion) occurs to reduce the actual method call
+// peformed.
+func (ctx *Context) EndFailedCall(gasLeft uint64, reverted bool, reason string) {
+	if ctx == nil {
+		return
+	}
+
+	ctx.RecordCallFailed(gasLeft, reason)
+
+	if reverted {
+		ctx.RecordCallReverted()
+	} else {
+		ctx.RecordGasConsume(gasLeft, gasLeft, FailedExecutionGasChangeReason)
+		gasLeft = 0
+	}
+
+	ctx.printer.Print("EVM_END_CALL", ctx.closeCall(), Uint64(gasLeft), Hex(nil))
+}
+
 // In-call methods
 
 func (ctx *Context) RecordKeccak(hashOfdata common.Hash, data []byte) {
