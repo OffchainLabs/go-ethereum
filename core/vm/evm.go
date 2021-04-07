@@ -134,7 +134,7 @@ type EVM struct {
 	dmContext *deepmind.Context
 }
 
-func (evm *EVM) DeepmindPrinter() *deepmind.Context {
+func (evm *EVM) DeepmindContext() *deepmind.Context {
 	return evm.dmContext
 }
 
