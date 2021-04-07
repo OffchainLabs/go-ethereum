@@ -121,7 +121,7 @@ func importAccountWithExpect(t *testing.T, key string, expected string) {
 	}
 	geth := runGeth(t, "account", "import", keyfile, "-password", passwordFile)
 	defer geth.ExpectExit()
-	geth.Expect(expected)
+	geth.ExpectRegexp(expected)
 }
 
 func TestAccountNewBadRepeat(t *testing.T) {

@@ -19,6 +19,7 @@ package vm
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
@@ -245,7 +246,12 @@ func opSha3(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 
 	evm := interpreter.evm
 	if evm.vmConfig.EnablePreimageRecording {
+		// DM: this is always run when deep-mind is enabled
 		evm.StateDB.AddPreimage(interpreter.hasherBuf, data)
+	}
+
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordKeccak(interpreter.hasherBuf, data)
 	}
 
 	size.SetBytes(interpreter.hasherBuf[:])
@@ -517,7 +523,7 @@ func opSstore(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 	loc := callContext.stack.pop()
 	val := callContext.stack.pop()
 	interpreter.evm.StateDB.SetState(callContext.contract.Address(),
-		common.Hash(loc.Bytes32()), common.Hash(val.Bytes32()))
+		common.Hash(loc.Bytes32()), common.Hash(val.Bytes32()), interpreter.evm.dmContext)
 	return nil, nil
 }
 
@@ -607,7 +613,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 	// reuse size int for stackvalue
 	stackvalue := size
 
-	callContext.contract.UseGas(gas)
+	callContext.contract.UseGas(gas, deepmind.GasChangeReason("contract_creation"))
 	//TODO: use uint256.Int instead of converting with toBig()
 	var bigVal = big0
 	if !value.IsZero() {
@@ -627,6 +633,11 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 		stackvalue.SetBytes(addr.Bytes())
 	}
 	callContext.stack.push(&stackvalue)
+
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
+	}
+
 	callContext.contract.Gas += returnGas
 
 	if suberr == ErrExecutionReverted {
@@ -646,7 +657,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 
 	// Apply EIP150
 	gas -= gas / 64
-	callContext.contract.UseGas(gas)
+	callContext.contract.UseGas(gas, deepmind.GasChangeReason("contract_creation2"))
 	// reuse size int for stackvalue
 	stackvalue := size
 	//TODO: use uint256.Int instead of converting with toBig()
@@ -663,6 +674,11 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 		stackvalue.SetBytes(addr.Bytes())
 	}
 	callContext.stack.push(&stackvalue)
+
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
+	}
+
 	callContext.contract.Gas += returnGas
 
 	if suberr == ErrExecutionReverted {
@@ -703,6 +719,11 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 	if err == nil || err == ErrExecutionReverted {
 		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
+
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
+	}
+
 	callContext.contract.Gas += returnGas
 
 	return ret, nil
@@ -737,6 +758,11 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 	if err == nil || err == ErrExecutionReverted {
 		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
+
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
+	}
+
 	callContext.contract.Gas += returnGas
 
 	return ret, nil
@@ -764,6 +790,11 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 	if err == nil || err == ErrExecutionReverted {
 		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
+
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
+	}
+
 	callContext.contract.Gas += returnGas
 
 	return ret, nil
@@ -791,6 +822,11 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx)
 	if err == nil || err == ErrExecutionReverted {
 		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
+
+	if interpreter.evm.dmContext.Enabled() {
+		interpreter.evm.dmContext.RecordGasRefund(callContext.contract.Gas, returnGas)
+	}
+
 	callContext.contract.Gas += returnGas
 
 	return ret, nil
@@ -817,8 +853,8 @@ func opStop(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 func opSuicide(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	beneficiary := callContext.stack.pop()
 	balance := interpreter.evm.StateDB.GetBalance(callContext.contract.Address())
-	interpreter.evm.StateDB.AddBalance(common.Address(beneficiary.Bytes20()), balance)
-	interpreter.evm.StateDB.Suicide(callContext.contract.Address())
+	interpreter.evm.StateDB.AddBalance(common.Address(beneficiary.Bytes20()), balance, false, interpreter.evm.dmContext, deepmind.BalanceChangeReason("suicide_refund"))
+	interpreter.evm.StateDB.Suicide(callContext.contract.Address(), interpreter.evm.dmContext)
 	return nil, nil
 }
 
@@ -843,7 +879,7 @@ func makeLog(size int) executionFunc {
 			// This is a non-consensus field, but assigned here because
 			// core/state doesn't know the current block number.
 			BlockNumber: interpreter.evm.BlockNumber.Uint64(),
-		})
+		}, interpreter.evm.dmContext)
 
 		return nil, nil
 	}

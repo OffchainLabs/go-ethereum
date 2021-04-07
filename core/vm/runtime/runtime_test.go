@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -111,7 +112,7 @@ func TestCall(t *testing.T) {
 		byte(vm.PUSH1), 32,
 		byte(vm.PUSH1), 0,
 		byte(vm.RETURN),
-	})
+	}, deepmind.NoOpContext)
 
 	ret, _, err := Call(address, nil, &Config{State: state})
 	if err != nil {
@@ -163,8 +164,8 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 		receiver   = common.BytesToAddress([]byte("receiver"))
 	)
 
-	statedb.CreateAccount(sender)
-	statedb.SetCode(receiver, common.FromHex(code))
+	statedb.CreateAccount(sender, deepmind.NoOpContext)
+	statedb.SetCode(receiver, common.FromHex(code), deepmind.NoOpContext)
 	runtimeConfig := Config{
 		Origin:      sender,
 		State:       statedb,
@@ -361,7 +362,7 @@ func TestJumpSub1024Limit(t *testing.T) {
 		byte(vm.BEGINSUB),
 		byte(vm.PUSH1), 3,
 		byte(vm.JUMPSUB),
-	})
+	}, deepmind.NoOpContext)
 	tracer := stepCounter{inner: vm.NewJSONLogger(nil, os.Stdout)}
 	// Enable 2315
 	_, _, err := Call(address, nil, &Config{State: state,
@@ -395,7 +396,7 @@ func TestReturnSubShallow(t *testing.T) {
 		byte(vm.BEGINSUB),
 		byte(vm.RETURNSUB),
 		byte(vm.PC),
-	})
+	}, deepmind.NoOpContext)
 	tracer := stepCounter{}
 
 	// Enable 2315
@@ -578,25 +579,25 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, b *testing.
 		vmenv       = NewEnv(cfg)
 		sender      = vm.AccountRef(cfg.Origin)
 	)
-	cfg.State.CreateAccount(destination)
+	cfg.State.CreateAccount(destination, deepmind.NoOpContext)
 	eoa := common.HexToAddress("E0")
 	{
-		cfg.State.CreateAccount(eoa)
-		cfg.State.SetNonce(eoa, 100)
+		cfg.State.CreateAccount(eoa, deepmind.NoOpContext)
+		cfg.State.SetNonce(eoa, 100, deepmind.NoOpContext)
 	}
 	reverting := common.HexToAddress("EE")
 	{
-		cfg.State.CreateAccount(reverting)
+		cfg.State.CreateAccount(reverting, deepmind.NoOpContext)
 		cfg.State.SetCode(reverting, []byte{
 			byte(vm.PUSH1), 0x00,
 			byte(vm.PUSH1), 0x00,
 			byte(vm.REVERT),
-		})
+		}, deepmind.NoOpContext)
 	}
 
 	//cfg.State.CreateAccount(cfg.Origin)
 	// set the receiver's (the executing contract) code for execution.
-	cfg.State.SetCode(destination, code)
+	cfg.State.SetCode(destination, code, deepmind.NoOpContext)
 	vmenv.Call(sender, destination, nil, gas, cfg.Value)
 
 	b.Run(name, func(b *testing.B) {

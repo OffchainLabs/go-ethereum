@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -157,6 +158,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 	// Don't bother with the execution if there's no code.
 	if len(contract.Code) == 0 {
+		if in.evm.dmContext.Enabled() {
+			in.evm.dmContext.RecordCallWithoutCode()
+		}
+
 		return nil, nil
 	}
 
@@ -241,9 +246,14 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 				return nil, ErrWriteProtection
 			}
 		}
+
+		// Deepmind keeps contract gas at this point, used later just before executing the call to record the gas before event
+		dmBeforeCallGasEvent := contract.Gas
+
 		// Static portion of gas
 		cost = operation.constantGas // For tracing
-		if !contract.UseGas(operation.constantGas) {
+		// Deep mind we ignore constant cost because below, we perform a single GAS_CHANGE for both constant + dynamic to aggregate the 2 gas change events
+		if !contract.UseGas(operation.constantGas, deepmind.IgnoredGasChangeReason) {
 			return nil, ErrOutOfGas
 		}
 
@@ -270,10 +280,34 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			var dynamicCost uint64
 			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
 			cost += dynamicCost // total cost, for debug tracing
-			if err != nil || !contract.UseGas(dynamicCost) {
+
+			// Deep mind we ignore dynamic cost because later below, we perform a single GAS_CHANGE for both constant + dynamic to aggregate the 2 gas change events
+			if err != nil || !contract.UseGas(dynamicCost, deepmind.IgnoredGasChangeReason) {
 				return nil, ErrOutOfGas
 			}
 		}
+
+		if in.evm.dmContext.Enabled() {
+			if ShouldRecordCallGasEventForOpCode(op) {
+				// Deep mind record before call event last here since operation is about to be executed, 100% sure
+				in.evm.dmContext.RecordBeforeCallGasEvent(dmBeforeCallGasEvent)
+			}
+
+			if cost != 0 {
+				gasChangeReason := OpCodeToGasChangeReason(op)
+				if gasChangeReason != deepmind.IgnoredGasChangeReason {
+					// When execution reach this point, `contract.UseGas` has been called once
+					// (for only a static) or twice (for both static + dynamic cost). Since it
+					// has been called, it's mean the `c.Gas` has already been adjusted down
+					// to remaining after cost.
+					//
+					// Hence to retrieve the `gasOld` value, we need to come back at state when
+					// gas was not consumed, which means doing `contract.Gas + cost`.
+					in.evm.dmContext.RecordGasConsume(contract.Gas+cost, cost, gasChangeReason)
+				}
+			}
+		}
+
 		if memorySize > 0 {
 			mem.Resize(memorySize)
 		}
@@ -285,6 +319,12 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 		// execute the operation
 		res, err = operation.execute(&pc, in, callContext)
+
+		if in.evm.dmContext.Enabled() && ShouldRecordCallGasEventForOpCode(op) {
+			// Deep mind records after call event last here since operation has been executed
+			in.evm.dmContext.RecordAfterCallGasEvent(contract.Gas)
+		}
+
 		// if the operation clears the return data (e.g. it has returning data)
 		// set the last return to the result of the operation.
 		if operation.returns {

@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
@@ -44,12 +45,12 @@ func TestDump(t *testing.T) {
 	s := newStateTest()
 
 	// generate a few entries
-	obj1 := s.state.GetOrNewStateObject(toAddr([]byte{0x01}))
-	obj1.AddBalance(big.NewInt(22))
-	obj2 := s.state.GetOrNewStateObject(toAddr([]byte{0x01, 0x02}))
-	obj2.SetCode(crypto.Keccak256Hash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3})
-	obj3 := s.state.GetOrNewStateObject(toAddr([]byte{0x02}))
-	obj3.SetBalance(big.NewInt(44))
+	obj1 := s.state.GetOrNewStateObject(toAddr([]byte{0x01}), false, deepmind.NoOpContext)
+	obj1.AddBalance(big.NewInt(22), deepmind.NoOpContext, "test")
+	obj2 := s.state.GetOrNewStateObject(toAddr([]byte{0x01, 0x02}), false, deepmind.NoOpContext)
+	obj2.SetCode(crypto.Keccak256Hash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3}, deepmind.NoOpContext)
+	obj3 := s.state.GetOrNewStateObject(toAddr([]byte{0x02}), false, deepmind.NoOpContext)
+	obj3.SetBalance(big.NewInt(44), deepmind.NoOpContext, "test")
 
 	// write some of them to the trie
 	s.state.updateStateObject(obj1)
@@ -90,11 +91,11 @@ func TestDump(t *testing.T) {
 func TestNull(t *testing.T) {
 	s := newStateTest()
 	address := common.HexToAddress("0x823140710bf13990e4500136726d8b55")
-	s.state.CreateAccount(address)
+	s.state.CreateAccount(address, deepmind.NoOpContext)
 	//value := common.FromHex("0x823140710bf13990e4500136726d8b55")
 	var value common.Hash
 
-	s.state.SetState(address, common.Hash{}, value)
+	s.state.SetState(address, common.Hash{}, value, deepmind.NoOpContext)
 	s.state.Commit(false)
 
 	if value := s.state.GetState(address, common.Hash{}); value != (common.Hash{}) {
@@ -116,11 +117,11 @@ func TestSnapshot(t *testing.T) {
 	genesis := s.state.Snapshot()
 
 	// set initial state object value
-	s.state.SetState(stateobjaddr, storageaddr, data1)
+	s.state.SetState(stateobjaddr, storageaddr, data1, deepmind.NoOpContext)
 	snapshot := s.state.Snapshot()
 
 	// set a new state object value, revert it and ensure correct content
-	s.state.SetState(stateobjaddr, storageaddr, data2)
+	s.state.SetState(stateobjaddr, storageaddr, data2, deepmind.NoOpContext)
 	s.state.RevertToSnapshot(snapshot)
 
 	if v := s.state.GetState(stateobjaddr, storageaddr); v != data1 {
@@ -155,14 +156,14 @@ func TestSnapshot2(t *testing.T) {
 	data0 := common.BytesToHash([]byte{17})
 	data1 := common.BytesToHash([]byte{18})
 
-	state.SetState(stateobjaddr0, storageaddr, data0)
-	state.SetState(stateobjaddr1, storageaddr, data1)
+	state.SetState(stateobjaddr0, storageaddr, data0, deepmind.NoOpContext)
+	state.SetState(stateobjaddr1, storageaddr, data1, deepmind.NoOpContext)
 
 	// db, trie are already non-empty values
 	so0 := state.getStateObject(stateobjaddr0)
-	so0.SetBalance(big.NewInt(42))
-	so0.SetNonce(43)
-	so0.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'})
+	so0.SetBalance(big.NewInt(42), deepmind.NoOpContext, "test")
+	so0.SetNonce(43, deepmind.NoOpContext)
+	so0.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'}, deepmind.NoOpContext)
 	so0.suicided = false
 	so0.deleted = false
 	state.setStateObject(so0)
@@ -172,9 +173,9 @@ func TestSnapshot2(t *testing.T) {
 
 	// and one with deleted == true
 	so1 := state.getStateObject(stateobjaddr1)
-	so1.SetBalance(big.NewInt(52))
-	so1.SetNonce(53)
-	so1.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e', '2'}), []byte{'c', 'a', 'f', 'e', '2'})
+	so1.SetBalance(big.NewInt(52), deepmind.NoOpContext, "test")
+	so1.SetNonce(53, deepmind.NoOpContext)
+	so1.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e', '2'}), []byte{'c', 'a', 'f', 'e', '2'}, deepmind.NoOpContext)
 	so1.suicided = true
 	so1.deleted = true
 	state.setStateObject(so1)

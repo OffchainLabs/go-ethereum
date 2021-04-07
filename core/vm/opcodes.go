@@ -18,6 +18,8 @@ package vm
 
 import (
 	"fmt"
+
+	"github.com/ethereum/go-ethereum/deepmind"
 )
 
 // OpCode is an EVM opcode
@@ -552,4 +554,47 @@ var stringToOp = map[string]OpCode{
 // StringToOp finds the opcode whose name is stored in `str`.
 func StringToOp(str string) OpCode {
 	return stringToOp[str]
+}
+
+// Deep mind additions
+
+var opCodeToGasChangeReasonMap = map[OpCode]deepmind.GasChangeReason{
+	CREATE:         deepmind.GasChangeReason("contract_creation"),
+	CREATE2:        deepmind.GasChangeReason("contract_creation2"),
+	CALL:           deepmind.GasChangeReason("call"),
+	STATICCALL:     deepmind.GasChangeReason("static_call"),
+	CALLCODE:       deepmind.GasChangeReason("call_code"),
+	DELEGATECALL:   deepmind.GasChangeReason("delegate_call"),
+	RETURN:         deepmind.GasChangeReason("return"),
+	REVERT:         deepmind.GasChangeReason("revert"),
+	LOG0:           deepmind.GasChangeReason("event_log"),
+	LOG1:           deepmind.GasChangeReason("event_log"),
+	LOG2:           deepmind.GasChangeReason("event_log"),
+	LOG3:           deepmind.GasChangeReason("event_log"),
+	LOG4:           deepmind.GasChangeReason("event_log"),
+	SELFDESTRUCT:   deepmind.GasChangeReason("self_destruct"),
+	CALLDATACOPY:   deepmind.GasChangeReason("call_data_copy"),
+	CODECOPY:       deepmind.GasChangeReason("code_copy"),
+	EXTCODECOPY:    deepmind.GasChangeReason("ext_code_copy"),
+	RETURNDATACOPY: deepmind.GasChangeReason("return_data_copy"),
+}
+
+// We only track a few high costs op code that gives a rough idea where gas is spent
+func OpCodeToGasChangeReason(op OpCode) deepmind.GasChangeReason {
+	reason, found := opCodeToGasChangeReasonMap[op]
+	if found {
+		return reason
+	}
+
+	return deepmind.IgnoredGasChangeReason
+}
+
+// List of opcodes for which we will add a BeforeCall and AfterCall gas events pair
+func ShouldRecordCallGasEventForOpCode(op OpCode) bool {
+	return op == CREATE ||
+		op == CREATE2 ||
+		op == CALL ||
+		op == STATICCALL ||
+		op == CALLCODE ||
+		op == DELEGATECALL
 }

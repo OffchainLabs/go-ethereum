@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/deepmind"
 )
 
 var dumper = spew.ConfigState{Indent: "    "}
@@ -68,7 +69,7 @@ func TestAccountRange(t *testing.T) {
 		hash := common.HexToHash(fmt.Sprintf("%x", i))
 		addr := common.BytesToAddress(crypto.Keccak256Hash(hash.Bytes()).Bytes())
 		addrs[i] = addr
-		state.SetBalance(addrs[i], big.NewInt(1))
+		state.SetBalance(addrs[i], big.NewInt(1), deepmind.NoOpContext, "test")
 		if _, ok := m[addr]; ok {
 			t.Fatalf("bad")
 		} else {
@@ -160,7 +161,7 @@ func TestStorageRangeAt(t *testing.T) {
 		}
 	)
 	for _, entry := range storage {
-		state.SetState(addr, *entry.Key, entry.Value)
+		state.SetState(addr, *entry.Key, entry.Value, deepmind.NoOpContext)
 	}
 
 	// Check a few combinations of limit and start/end.
