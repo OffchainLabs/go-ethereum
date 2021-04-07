@@ -397,10 +397,9 @@ func opSha3(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 
 	evm := interpreter.evm
 	if evm.vmConfig.EnablePreimageRecording {
-		// DM: this is always run when deep-mind is enabled
 		evm.StateDB.AddPreimage(interpreter.hasherBuf, data)
 	}
-	// preimage hash
+
 	if interpreter.evm.dmContext.Enabled() {
 		interpreter.evm.dmContext.RecordKeccak(interpreter.hasherBuf, data)
 	}
