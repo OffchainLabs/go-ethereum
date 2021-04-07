@@ -1883,9 +1883,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
 		blockInsertTimer.UpdateSince(start)
 
-		// DM: TODO: verify the `status`, what it means... are we sometimes aware we're
-		// applying a forked block? Are we simply going to revert it after?
-
 		switch status {
 		case CanonStatTy:
 			log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),

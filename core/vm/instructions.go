@@ -246,7 +246,6 @@ func opSha3(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 
 	evm := interpreter.evm
 	if evm.vmConfig.EnablePreimageRecording {
-		// DM: this is always run when deep-mind is enabled
 		evm.StateDB.AddPreimage(interpreter.hasherBuf, data)
 	}
 

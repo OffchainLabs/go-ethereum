@@ -66,8 +66,8 @@ Currently supported forks & version and the release branch
 - `release/polygon-0.2.x-dm` - Polygon fork (a.k.a Matic), based on Geth `1.9.24`, latest update for this branch is `v0.2.4` ([https://github.com/maticnetwork/bor](https://github.com/maticnetwork/bor)).
 - `release/bsc-1.0.x-dm` - BSC fork (Binance), based on Geth `1.9.13`, latest update for this branch is `v1.0.6` ([https://github.com/binance-chain/bsc](https://github.com/binance-chain/bsc)).
 - `release/heco-1.0.x-dm` - HECO fork (a.k.a Huobi Eco Chain), based on Geth `1.9.23`, latest update for this branch is `v1.0.0` ([https://github.com/HuobiGroup/huobi-eco-chain](https://github.com/HuobiGroup/huobi-eco-chain)).
-- `release/optimism-0.1.x-dm` - Optimism fork, based on Geth `1.9.10`, latest update for this branch is `v0.1.3` ([https://github.com/ethereum-optimism/go-ethereum](https://github.com/ethereum-optimism/go-ethereum)).
-- `release/fantom-geth-1.9.x-dm` - Fantom Geth fork, based on Geth `1.9.22`, latest update for this branch is `v1.9.22-ftm-0.1` ([https://github.com/Fantom-foundation/go-ethereum](https://github.com/Fantom-foundation/go-ethereum)).
+- `release/optimism-0.1.x-dm` - Optimism fork, based on Geth `1.9.10`, latest update for this branch is `v0.1.4` ([https://github.com/ethereum-optimism/go-ethereum](https://github.com/ethereum-optimism/go-ethereum)).
+- `release/fantom-geth-1.9.x-dm` - Fantom Geth fork, based on Geth `1.9.22`, latest update for this branch is `v1.9.22-ftm-0.5` (a branch) ([https://github.com/Fantom-foundation/go-ethereum](https://github.com/Fantom-foundation/go-ethereum)).
 
 *Note* To find on which Geth version a particular fork is, you can do `git merge-base dfuse-io-private/release/heco-v1.0.x-dm origin/master` where `origin/master` is the `master` branch of the original Geth repository (https://github.com/ethereum/go-ethereum).
 

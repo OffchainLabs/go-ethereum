@@ -945,6 +945,10 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		dmContext.EndTransaction(receipt)
 	}
 
+	// If in deep mind context, we should most probably attach the error here inside the deep mind context
+	// somehow so it's attached to the top-leve transaction trace and not return this here. The handler above
+	// us will need to understand that a nil error and nil result means send me everything. For now, it will
+	// simply fail, might even be the "good condition" to do.
 	if err != nil {
 		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
 	}
