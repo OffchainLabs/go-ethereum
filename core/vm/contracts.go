@@ -138,6 +138,7 @@ func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uin
 	if dmContext.Enabled() {
 		dmContext.RecordGasConsume(suppliedGas, gasCost, deepmind.GasChangeReason("precompiled_contract"))
 	}
+
 	suppliedGas -= gasCost
 	output, err := p.Run(input)
 	return output, suppliedGas, err

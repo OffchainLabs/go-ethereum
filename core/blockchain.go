@@ -91,7 +91,6 @@ const (
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
 	badBlockLimit       = 10
-	TriesInMemory       = 128
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -118,6 +117,17 @@ const (
 	//    * New scheme for contract code in order to separate the codes and trie nodes
 	BlockChainVersion uint64 = 8
 )
+
+// Deepmind tweaked constants
+const (
+	// DefaultTriesInMemory keeps the default value of TriesInMemory value so we can determine if it changed.
+	// The default values is still used in the P2P network so we don't advertise that we keep more state than
+	// other Full nodes keep by default.
+	DefaultTriesInMemory = uint64(128)
+)
+
+// Deepmind turned this into a `var` to allow overriding, was a `const`
+var TriesInMemory = DefaultTriesInMemory
 
 // CacheConfig contains the configuration values for the trie caching/pruning
 // that's resident in a blockchain.
@@ -219,6 +229,14 @@ type BlockChain struct {
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
 func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(block *types.Block) bool, txLookupLimit *uint64) (*BlockChain, error) {
+	// This is one of the rare case where deepmind is not enabled and we still perform something.
+	if deepmind.ArchiveBlocksToKeep != 0 {
+		old := TriesInMemory
+		TriesInMemory = deepmind.ArchiveBlocksToKeep
+
+		log.Info("Deepmind overrode TriesInMemory value (coming from archive blocks to keep value)", "tries_in_memory", deepmind.ArchiveBlocksToKeep, "was", old)
+	}
+
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -1565,12 +1583,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				// diff sidechain. Suspend committing until this operation is completed.
 				header := bc.GetHeaderByNumber(chosen)
 				if header == nil {
-					log.Warn("Reorg in progress, trie commit postponed", "number", chosen)
+					log.Warn("Reorg in progress or TriesInMemory value has been increased, trie commit postponed", "number", chosen, "default_tries_in_memory", DefaultTriesInMemory, "tries_in_memory", TriesInMemory)
 				} else {
 					// If we're exceeding limits but haven't reached a large enough memory gap,
 					// warn the user that the system is becoming unstable.
 					if chosen < lastWrite+TriesInMemory && bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
-						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/TriesInMemory)
+						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/float64(TriesInMemory))
 					}
 					// Flush an entire trie and restart the counters
 					triedb.Commit(header.Root, true, nil)
@@ -1874,10 +1892,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		var followupInterrupt uint32
 		if !bc.cacheConfig.TrieCleanNoPrefetch {
 			if followup, err := it.peek(); followup != nil && err == nil {
-				if deepmind.Enabled {
-					panic("this code path should never be enabled while deep mind is active, something is wrong as it should be disabled")
-				}
-
 				throwaway, _ := state.New(parent.Root, bc.stateCache, bc.snaps)
 				go func(start time.Time, followup *types.Block, throwaway *state.StateDB, interrupt *uint32) {
 					bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)

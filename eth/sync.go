@@ -327,6 +327,15 @@ func (pm *ProtocolManager) doSync(op *chainSyncOp) error {
 			log.Warn("Update txLookup limit", "provided", limit, "updated", *stored)
 		}
 	}
+
+	if deepmind.Enabled {
+		// If deepmind is enabled, we force the mode to be a FullSync mode to ensure we correctly
+		// process all transactions. It should probably be adapter so that speculative execution
+		// node could use fast sync which is not the case here.
+		op.mode = downloader.FullSync
+		atomic.StoreUint32(&pm.fastSync, 0)
+	}
+
 	// Run the sync cycle, and disable fast sync if we're past the pivot block
 	err := pm.downloader.Synchronise(op.peer.id, op.head, op.td, op.mode)
 	if err != nil {

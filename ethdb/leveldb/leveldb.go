@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -104,14 +103,19 @@ func New(file string, cache int, handles int, namespace string) (*Database, erro
 		DisableSeeksCompaction: true,
 	}
 
-	if deepmind.CompactionDisabled {
-		// By setting those values really high, we disable compaction of the database completely
-		maxInt := int(^uint(0) >> 1)
+	// DM: Having it currently causes an import cycle in tests because trie/trie_test.go depends on ethdb/leveldb/leveldb.go
+	//     which depends on deepmind/context.go which depends on core/types in which core/types/derive_sha.go depends on trie
+	//     which creates the cycle. The problem is fixed in later version of Geth, since compaction is not that a problem (and
+	//     because some better extensive data point are required), we leave like that until we are abe to re-activate in future
+	//     version of Geth.
+	// if deepmind.CompactionDisabled {
+	// 	// By setting those values really high, we disable compaction of the database completely
+	// 	maxInt := int(^uint(0) >> 1)
 
-		opts.CompactionL0Trigger = maxInt
-		opts.WriteL0PauseTrigger = maxInt
-		opts.WriteL0SlowdownTrigger = maxInt
-	}
+	// 	opts.CompactionL0Trigger = maxInt
+	// 	opts.WriteL0PauseTrigger = maxInt
+	// 	opts.WriteL0SlowdownTrigger = maxInt
+	// }
 
 	db, err := leveldb.OpenFile(file, opts)
 	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
@@ -215,9 +219,14 @@ func (db *Database) Stat(property string) (string, error) {
 // is treated as a key after all keys in the data store. If both is nil then it
 // will compact entire data store.
 func (db *Database) Compact(start []byte, limit []byte) error {
-	if deepmind.CompactionDisabled {
-		return nil
-	}
+	// DM: Having it currently causes an import cycle in tests because trie/trie_test.go depends on ethdb/leveldb/leveldb.go
+	//     which depends on deepmind/context.go which depends on core/types in which core/types/derive_sha.go depends on trie
+	//     which creates the cycle. The problem is fixed in later version of Geth, since compaction is not that a problem (and
+	//     because some better extensive data point are required), we leave like that until we are abe to re-activate in future
+	//     version of Geth.
+	// if deepmind.CompactionDisabled {
+	// 	return nil
+	// }
 
 	return db.db.CompactRange(util.Range{Start: start, Limit: limit})
 }

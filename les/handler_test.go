@@ -287,7 +287,7 @@ func TestGetStaleCodeLes2(t *testing.T) { testGetStaleCode(t, 2) }
 func TestGetStaleCodeLes3(t *testing.T) { testGetStaleCode(t, 3) }
 
 func testGetStaleCode(t *testing.T, protocol int) {
-	server, tearDown := newServerEnv(t, core.TriesInMemory+4, protocol, nil, false, true, 0)
+	server, tearDown := newServerEnv(t, int(core.TriesInMemory+4), protocol, nil, false, true, 0)
 	defer tearDown()
 	bc := server.handler.blockchain
 
@@ -373,7 +373,7 @@ func TestGetStaleProofLes2(t *testing.T) { testGetStaleProof(t, 2) }
 func TestGetStaleProofLes3(t *testing.T) { testGetStaleProof(t, 3) }
 
 func testGetStaleProof(t *testing.T, protocol int) {
-	server, tearDown := newServerEnv(t, core.TriesInMemory+4, protocol, nil, false, true, 0)
+	server, tearDown := newServerEnv(t, int(core.TriesInMemory+4), protocol, nil, false, true, 0)
 	defer tearDown()
 	bc := server.handler.blockchain
 

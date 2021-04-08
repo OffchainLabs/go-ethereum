@@ -63,8 +63,7 @@ func makeTestState() (Database, common.Hash, []*testAccount) {
 		}
 		if i%5 == 0 {
 			for j := byte(0); j < 5; j++ {
-				hash := crypto.Keccak256Hash([]byte{i, i, i, i, i, j, j})
-				obj.SetState(db, hash, hash, deepmind.NoOpContext)
+				obj.SetState(db, crypto.Keccak256Hash([]byte{i, i, i, i, i, j, j}), crypto.Keccak256Hash([]byte{i, i, i, i, i, j, j}), deepmind.NoOpContext)
 			}
 		}
 		state.updateStateObject(obj)

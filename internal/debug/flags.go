@@ -133,6 +133,11 @@ var (
 		Name:  "deep-mind-compaction-disabled",
 		Usage: "Disabled database compaction, enabled by default",
 	}
+	deepMindArchiveBlocksToKeepFlag = cli.Uint64Flag{
+		Name:  "deep-mind-archive-blocks-to-keep",
+		Usage: "Controls how many archive blocks the node should keep, this tweaks the core/blockchain.go constant value TriesInMemory, the default value of 0 can be used to use Geth default value instead which is 128",
+		Value: deepmind.ArchiveBlocksToKeep,
+	}
 )
 
 // Flags holds all command-line flags required for debugging.
@@ -147,8 +152,10 @@ var DeprecatedFlags = []cli.Flag{
 	legacyBlockprofilerateFlag, legacyCpuprofileFlag,
 }
 
+// DeepMindFlags holds all dfuse Deep Mind related command-line flags.
 var DeepMindFlags = []cli.Flag{
-	deepMindFlag, deepMindSyncInstrumentationFlag, deepMindMiningEnabledFlag, deepMindBlockProgressFlag, deepMindCompactionDisabledFlag,
+	deepMindFlag, deepMindSyncInstrumentationFlag, deepMindMiningEnabledFlag, deepMindBlockProgressFlag,
+	deepMindCompactionDisabledFlag,
 }
 
 var (
@@ -227,13 +234,14 @@ func Setup(ctx *cli.Context) error {
 		StartPProf(address, !ctx.GlobalIsSet("metrics.addr"))
 	}
 
-	// deep mind
+	// Deep mind
 	log.Info("Initializing deep mind")
 	deepmind.Enabled = ctx.GlobalBool(deepMindFlag.Name)
 	deepmind.SyncInstrumentationEnabled = ctx.GlobalBoolT(deepMindSyncInstrumentationFlag.Name)
 	deepmind.MiningEnabled = ctx.GlobalBool(deepMindMiningEnabledFlag.Name)
 	deepmind.BlockProgressEnabled = ctx.GlobalBool(deepMindBlockProgressFlag.Name)
 	deepmind.CompactionDisabled = ctx.GlobalBool(deepMindCompactionDisabledFlag.Name)
+	deepmind.ArchiveBlocksToKeep = ctx.GlobalUint64(deepMindArchiveBlocksToKeepFlag.Name)
 
 	log.Info("Deep mind initialized",
 		"enabled", deepmind.Enabled,
@@ -241,6 +249,7 @@ func Setup(ctx *cli.Context) error {
 		"mining_enabled", deepmind.MiningEnabled,
 		"block_progress_enabled", deepmind.BlockProgressEnabled,
 		"compaction_disabled", deepmind.CompactionDisabled,
+		"archive_blocks_to_keep", deepmind.ArchiveBlocksToKeep,
 	)
 
 	return nil
