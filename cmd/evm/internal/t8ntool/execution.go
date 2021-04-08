@@ -219,9 +219,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			reward.Sub(reward, big.NewInt(0).SetUint64(ommer.Delta))
 			reward.Mul(reward, blockReward)
 			reward.Div(reward, big.NewInt(8))
-			statedb.AddBalance(ommer.Address, reward, false, deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
+			statedb.AddBalance(ommer.Address, reward, false, deepmind.NoOpContext, "test")
 		}
-		statedb.AddBalance(pre.Env.Coinbase, minerReward, false, deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
+		statedb.AddBalance(pre.Env.Coinbase, minerReward, false, deepmind.NoOpContext, "test")
 	}
 	// Commit block
 	root, err := statedb.Commit(chainConfig.IsEIP158(vmContext.BlockNumber))
@@ -247,7 +247,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB 
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code, deepmind.NoOpContext)
 		statedb.SetNonce(addr, a.Nonce, deepmind.NoOpContext)
-		statedb.SetBalance(addr, a.Balance, deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
+		statedb.SetBalance(addr, a.Balance, deepmind.NoOpContext, "test")
 		for k, v := range a.Storage {
 			statedb.SetState(addr, k, v, deepmind.NoOpContext)
 		}

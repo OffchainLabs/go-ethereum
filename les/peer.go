@@ -1005,7 +1005,7 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 
 			// If local ethereum node is running in archive mode, advertise ourselves we have
 			// all version state data. Otherwise only recent state is available.
-			stateRecent := uint64(core.TriesInMemory - blockSafetyMargin)
+			stateRecent := uint64(core.DefaultTriesInMemory - blockSafetyMargin)
 			if server.archiveMode {
 				stateRecent = 0
 			}
