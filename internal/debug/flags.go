@@ -90,27 +90,27 @@ var (
 
 	// Deep Mind Flags
 	deepMindFlag = cli.BoolFlag{
-		Name:  "deep-mind",
+		Name:  "firehose-deep-mind",
 		Usage: "Activate/deactivate deep-mind instrumentation, disabled by default",
 	}
 	deepMindSyncInstrumentationFlag = cli.BoolTFlag{
-		Name:  "deep-mind-sync-instrumentation",
+		Name:  "firehose-deep-mind-sync-instrumentation",
 		Usage: "Activate/deactivate deep-mind sync output instrumentation, enabled by default",
 	}
 	deepMindMiningEnabledFlag = cli.BoolFlag{
-		Name:  "deep-mind-mining-enabled",
+		Name:  "firehose-deep-mind-mining-enabled",
 		Usage: "Activate/deactivate mining code even if deep-mind is active, required speculative execution on local miner node, disabled by default",
 	}
 	deepMindBlockProgressFlag = cli.BoolFlag{
-		Name:  "deep-mind-block-progress",
+		Name:  "firehose-deep-mind-block-progress",
 		Usage: "Activate/deactivate deep-mind block progress output instrumentation, disabled by default",
 	}
 	deepMindCompactionDisabledFlag = cli.BoolFlag{
-		Name:  "deep-mind-compaction-disabled",
+		Name:  "firehose-deep-mind-compaction-disabled",
 		Usage: "Disabled database compaction, enabled by default",
 	}
 	deepMindArchiveBlocksToKeepFlag = cli.Uint64Flag{
-		Name:  "deep-mind-archive-blocks-to-keep",
+		Name:  "firehose-deep-mind-archive-blocks-to-keep",
 		Usage: "Controls how many archive blocks the node should keep, this tweaks the core/blockchain.go constant value TriesInMemory, the default value of 0 can be used to use Geth default value instead which is 128",
 		Value: deepmind.ArchiveBlocksToKeep,
 	}

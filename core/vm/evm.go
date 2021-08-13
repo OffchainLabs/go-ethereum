@@ -388,7 +388,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		// B is loaded and executed against the current state and value of contract A. As such,
 		// the real caller is the one that called contract A.
 		//
-		// Thoughts: When I wrote this comment, I realized that it's misleading in dfuse stack
+		// Thoughts: When I wrote this comment, I realized that it's misleading in Firehose stack
 		// in fact. The caller is still contract A, we should probably have recorded the parent
 		// caller as actually another extra field only available on Delegate Call. The same problem
 		// arise with the `value` field, it's actually the value sent to parent call that initiate
