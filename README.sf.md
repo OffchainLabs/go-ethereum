@@ -28,6 +28,14 @@ git fetch bsc
 git fetch heco
 git fetch optimism
 git fetch fantom-geth
+
+git checkout release/geth-1.9.x-dm
+git checkout release/geth-1.10.x-dm
+git checkout release/bsc-1.0.x-dm
+git checkout release/polygon-0.2.x-dm
+git checkout release/heco-1.0.x-dm
+git checkout release/optimism-0.1.x-dm
+git checkout release/fantom-geth-1.9.x-dm
 ```
 
 ##### Assumptions
