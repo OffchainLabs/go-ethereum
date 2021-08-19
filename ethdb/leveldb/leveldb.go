@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -108,14 +109,14 @@ func New(file string, cache int, handles int, namespace string) (*Database, erro
 	//     which creates the cycle. The problem is fixed in later version of Geth, since compaction is not that a problem (and
 	//     because some better extensive data point are required), we leave like that until we are abe to re-activate in future
 	//     version of Geth.
-	// if deepmind.CompactionDisabled {
-	// 	// By setting those values really high, we disable compaction of the database completely
-	// 	maxInt := int(^uint(0) >> 1)
+	if deepmind.CompactionDisabled {
+		// By setting those values really high, we disable compaction of the database completely
+		maxInt := int(^uint(0) >> 1)
 
-	// 	opts.CompactionL0Trigger = maxInt
-	// 	opts.WriteL0PauseTrigger = maxInt
-	// 	opts.WriteL0SlowdownTrigger = maxInt
-	// }
+		opts.CompactionL0Trigger = maxInt
+		opts.WriteL0PauseTrigger = maxInt
+		opts.WriteL0SlowdownTrigger = maxInt
+	}
 
 	db, err := leveldb.OpenFile(file, opts)
 	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
