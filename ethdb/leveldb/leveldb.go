@@ -105,6 +105,7 @@ func New(file string, cache int, handles int, namespace string) (*Database, erro
 	}
 
 	if deepmind.CompactionDisabled {
+		logger.Info("Disabling database compaction by setting L0 Compaction + Write triggers threshold to MAX_INT")
 		// By setting those values really high, we disable compaction of the database completely
 		maxInt := int(^uint(0) >> 1)
 
@@ -228,6 +229,7 @@ func (db *Database) Stat(property string) (string, error) {
 // will compact entire data store.
 func (db *Database) Compact(start []byte, limit []byte) error {
 	if deepmind.CompactionDisabled {
+		db.log.Info("Database compaction is disabled through --firehose-deep-mind-compaction-disabled")
 		return nil
 	}
 
