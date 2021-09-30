@@ -36,6 +36,8 @@ type Config struct {
 	JumpTable [256]*operation // EVM instruction table, automatically populated if unset
 
 	ExtraEips []int // Additional EIPS that are to be enabled
+
+	ExtraPrecompiles map[common.Address]PrecompiledContract
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,

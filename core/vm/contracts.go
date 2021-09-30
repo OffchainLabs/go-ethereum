@@ -128,8 +128,7 @@ func init() {
 	}
 }
 
-// ActivePrecompiles returns the precompiles enabled with the current configuration.
-func ActivePrecompiles(rules params.Rules) []common.Address {
+func ethereumPrecompiles(rules params.Rules) []common.Address {
 	switch {
 	case rules.IsBerlin:
 		return PrecompiledAddressesBerlin
@@ -140,6 +139,15 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 	default:
 		return PrecompiledAddressesHomestead
 	}
+}
+
+// ActivePrecompiles returns the precompiles enabled with the current configuration.
+func ActivePrecompiles(rules params.Rules, chainConfig *params.ChainConfig) []common.Address {
+	res := ethereumPrecompiles(rules)
+	for _, precompile := range chainConfig.ExtraPrecompiles {
+		res = append(res, common.BigToAddress(&precompile))
+	}
+	return res
 }
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.

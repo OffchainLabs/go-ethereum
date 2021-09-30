@@ -42,6 +42,11 @@ type (
 )
 
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
+	p0, ok0 := evm.Config.ExtraPrecompiles[addr]
+	if ok0 {
+		return p0, ok0
+	}
+
 	var precompiles map[common.Address]PrecompiledContract
 	switch {
 	case evm.chainRules.IsBerlin:

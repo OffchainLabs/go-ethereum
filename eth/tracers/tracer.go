@@ -687,7 +687,7 @@ func (jst *Tracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 	jst.dbWrapper.db = env.StateDB
 	// Update list of precompiles based on current block
 	rules := env.ChainConfig().Rules(env.Context.BlockNumber)
-	jst.activePrecompiles = vm.ActivePrecompiles(rules)
+	jst.activePrecompiles = vm.ActivePrecompiles(rules, env.ChainConfig())
 
 	// Compute intrinsic gas
 	isHomestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
