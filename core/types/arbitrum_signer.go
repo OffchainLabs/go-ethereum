@@ -6,6 +6,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+var arbAddress = common.HexToAddress("0xabc")
+
 type arbitrumSigner struct { eip2930Signer }
 
 func NewArbitrumSigner(chainId *big.Int) Signer {
@@ -13,9 +15,9 @@ func NewArbitrumSigner(chainId *big.Int) Signer {
 }
 
 func (s arbitrumSigner) Sender(tx *Transaction) (common.Address, error) {
-	switch innerTx := tx.inner.(type) {
+	switch tx.inner.(type) {
 	case *DepositTx:
-		return innerTx.To, nil
+		return arbAddress, nil
 	default:
 		return s.eip2930Signer.Sender(tx)
 	}
