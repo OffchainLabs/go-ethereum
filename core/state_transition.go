@@ -259,6 +259,7 @@ func (st *StateTransition) preCheck() error {
 	return st.buyGas()
 }
 
+var ArbProcessMessage func(msg Message, state vm.StateDB) (*ExecutionResult, error)
 var ExtraGasChargingHook func(msg Message, txGasRemaining *uint64, gasPool *GasPool, state vm.StateDB) error
 var EndTxHook func(msg Message, totalGasUsed uint64, extraGasCharged uint64, gasPool *GasPool, success bool, state vm.StateDB) error
 
@@ -357,7 +358,11 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 }
 
 func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
-	res, err := st.transitionDbImpl()
+	res, err := ArbProcessMessage(st.msg, st.state)
+	if res != nil || err != nil {
+		return res, err
+	}
+	res, err = st.transitionDbImpl()
 	if err != nil && !errors.Is(err, ErrNonceTooLow) && !errors.Is(err, ErrNonceTooHigh) {
 		res = &ExecutionResult{
 			UsedGas:    st.gasUsed(),
