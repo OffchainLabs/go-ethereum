@@ -56,7 +56,7 @@ The state transitioning model does all the necessary work to work out a valid ne
 6) Derive new state root
 */
 type StateTransition struct {
-	extraGasUsedByHook uint64
+	processingHook TxProcessingHook
 
 	gp         *GasPool
 	msg        Message
@@ -69,8 +69,6 @@ type StateTransition struct {
 	data       []byte
 	state      vm.StateDB
 	evm        *vm.EVM
-
-	processingHook TxProcessingHook
 }
 
 // Message represents a message sent to a contract.
@@ -171,6 +169,8 @@ var CreateTxProcessingHook func(msg Message, evm *vm.EVM) TxProcessingHook
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
+		processingHook: CreateTxProcessingHook(msg, evm),
+
 		gp:        gp,
 		evm:       evm,
 		msg:       msg,
@@ -180,8 +180,6 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition 
 		value:     msg.Value(),
 		data:      msg.Data(),
 		state:     evm.StateDB,
-
-		processingHook: CreateTxProcessingHook(msg, evm),
 	}
 }
 
@@ -317,11 +315,7 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	st.gas -= gas
 
 	if st.processingHook != nil {
-		start := st.gas
 		st.processingHook.ExtraGasChargingHook(&st.gas, st.gp)
-		if start > st.gas {
-			st.extraGasUsedByHook += start - st.gas
-		}
 	}
 
 	// Check clause 6

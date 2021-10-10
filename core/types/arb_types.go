@@ -63,7 +63,7 @@ func (tx *ArbitrumUnsignedTx) gasFeeCap() *big.Int    { return tx.GasPrice }
 func (tx *ArbitrumUnsignedTx) value() *big.Int        { return tx.Value }
 func (tx *ArbitrumUnsignedTx) nonce() uint64          { return tx.Nonce }
 func (tx *ArbitrumUnsignedTx) to() *common.Address    { return tx.To }
-func (tx *ArbitrumUnsignedTx) isFake() bool { return true }
+func (tx *ArbitrumUnsignedTx) isFake() bool { return false }
 
 func (tx *ArbitrumUnsignedTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero
