@@ -32,6 +32,12 @@ import (
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
 
+type TxProcessingHook interface {
+	InterceptMessage() (*ExecutionResult, error)
+	ExtraGasChargingHook(gasRemaining *uint64, gasPool *GasPool) error
+	EndTxHook(totalGasUsed uint64, gasPool *GasPool, success bool) error
+}
+
 /*
 The State Transitioning Model
 
@@ -63,6 +69,8 @@ type StateTransition struct {
 	data       []byte
 	state      vm.StateDB
 	evm        *vm.EVM
+
+	processingHook TxProcessingHook
 }
 
 // Message represents a message sent to a contract.
@@ -158,6 +166,8 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 	return gas, nil
 }
 
+var CreateTxProcessingHook func(msg Message, evm *vm.EVM) TxProcessingHook
+
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
@@ -170,6 +180,8 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition 
 		value:     msg.Value(),
 		data:      msg.Data(),
 		state:     evm.StateDB,
+
+		processingHook: CreateTxProcessingHook(msg, evm),
 	}
 }
 
@@ -259,10 +271,6 @@ func (st *StateTransition) preCheck() error {
 	return st.buyGas()
 }
 
-var ArbProcessMessage func(msg Message, state vm.StateDB) (*ExecutionResult, error)
-var ExtraGasChargingHook func(msg Message, txGasRemaining *uint64, gasPool *GasPool, state vm.StateDB) error
-var EndTxHook func(msg Message, totalGasUsed uint64, extraGasCharged uint64, gasPool *GasPool, success bool, state vm.StateDB) error
-
 // TransitionDb will transition the state by applying the current message and
 // returning the evm execution result with following fields.
 //
@@ -308,9 +316,9 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	}
 	st.gas -= gas
 
-	if ExtraGasChargingHook != nil {
+	if st.processingHook != nil {
 		start := st.gas
-		ExtraGasChargingHook(st.msg, &st.gas, st.gp, st.state)
+		st.processingHook.ExtraGasChargingHook(&st.gas, st.gp)
 		if start > st.gas {
 			st.extraGasUsedByHook += start - st.gas
 		}
@@ -358,11 +366,13 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 }
 
 func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
-	res, err := ArbProcessMessage(st.msg, st.state)
-	if res != nil || err != nil {
-		return res, err
+	if st.processingHook != nil {
+		res, err := st.processingHook.InterceptMessage()
+		if res != nil || err != nil {
+			return res, err
+		}
 	}
-	res, err = st.transitionDbImpl()
+	res, err := st.transitionDbImpl()
 	if err != nil && !errors.Is(err, ErrNonceTooLow) && !errors.Is(err, ErrNonceTooHigh) {
 		res = &ExecutionResult{
 			UsedGas:    st.gasUsed(),
@@ -371,8 +381,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		}
 		err = nil
 	}
-	if err == nil && EndTxHook != nil {
-		EndTxHook(st.msg, st.gas, st.extraGasUsedByHook, st.gp, res.Err == nil, st.state)
+
+	if err == nil && st.processingHook != nil {
+		st.processingHook.EndTxHook(st.gas, st.gp, res.Err == nil)
 	}
 	return res, err
 }

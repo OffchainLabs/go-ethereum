@@ -46,6 +46,8 @@ const (
 	AccessListTxType
 	DynamicFeeTxType
 	ArbitrumDepositTxType = 200
+	ArbitrumUnsignedTxType = 201
+	ArbitrumContractTxType = 202
 )
 
 // Transaction is an Ethereum transaction.
@@ -86,6 +88,8 @@ type TxData interface {
 
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
+
+	isFake() bool
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -611,7 +615,7 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 		amount:     tx.Value(),
 		data:       tx.Data(),
 		accessList: tx.AccessList(),
-		isFake:     false,
+		isFake:     tx.inner.isFake(),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
