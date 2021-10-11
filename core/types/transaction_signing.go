@@ -40,8 +40,6 @@ type sigCache struct {
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer
 	switch {
-	case config.IsArbitrum(blockNumber):
-		signer = NewArbitrumSigner(config.ChainID)
 	case config.IsLondon(blockNumber):
 		signer = NewLondonSigner(config.ChainID)
 	case config.IsBerlin(blockNumber):
@@ -52,6 +50,9 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 		signer = HomesteadSigner{}
 	default:
 		signer = FrontierSigner{}
+	}
+	if config.IsArbitrum(blockNumber) {
+		signer = NewArbitrumSigner(signer)
 	}
 	return signer
 }
