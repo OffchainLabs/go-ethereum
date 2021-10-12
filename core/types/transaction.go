@@ -45,7 +45,7 @@ const (
 	LegacyTxType = iota
 	AccessListTxType
 	DynamicFeeTxType
-	ArbitrumDepositTxType = 200
+	ArbitrumDepositTxType  = 200
 	ArbitrumUnsignedTxType = 201
 	ArbitrumContractTxType = 202
 )
@@ -574,6 +574,8 @@ func (t *TransactionsByPriceAndNonce) Pop() {
 //
 // NOTE: In a future PR this will be removed.
 type Message struct {
+	tx *Transaction
+
 	to         *common.Address
 	from       common.Address
 	nonce      uint64
@@ -606,6 +608,8 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 // AsMessage returns the transaction as a core.Message.
 func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	msg := Message{
+		tx: tx,
+
 		nonce:      tx.Nonce(),
 		gasLimit:   tx.Gas(),
 		gasPrice:   new(big.Int).Set(tx.GasPrice()),
@@ -625,6 +629,8 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	msg.from, err = Sender(s, tx)
 	return msg, err
 }
+
+func (m Message) UnderlyingTransaction() *Transaction { return m.tx }
 
 func (m Message) From() common.Address   { return m.from }
 func (m Message) To() *common.Address    { return m.to }
