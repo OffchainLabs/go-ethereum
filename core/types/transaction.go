@@ -48,6 +48,7 @@ const (
 	ArbitrumDepositTxType  = 200
 	ArbitrumUnsignedTxType = 201
 	ArbitrumContractTxType = 202
+	ArbitrumWrappedTxType  = 203
 )
 
 // Transaction is an Ethereum transaction.
@@ -94,7 +95,7 @@ type TxData interface {
 
 // EncodeRLP implements rlp.Encoder
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
-	if tx.Type() == LegacyTxType {
+	if tx.realType() == LegacyTxType {
 		return rlp.Encode(w, tx.inner)
 	}
 	// It's an EIP-2718 typed TX envelope.
@@ -109,7 +110,7 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 
 // encodeTyped writes the canonical encoding of a typed transaction to w.
 func (tx *Transaction) encodeTyped(w *bytes.Buffer) error {
-	w.WriteByte(tx.Type())
+	w.WriteByte(tx.realType())
 	return rlp.Encode(w, tx.inner)
 }
 
@@ -145,7 +146,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		if b, err = s.Bytes(); err != nil {
 			return err
 		}
-		inner, err := tx.decodeTyped(b)
+		inner, err := tx.decodeTyped(b, true)
 		if err == nil {
 			tx.setDecoded(inner, len(b))
 		}
@@ -169,7 +170,7 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 		return nil
 	}
 	// It's an EIP2718 typed transaction envelope.
-	inner, err := tx.decodeTyped(b)
+	inner, err := tx.decodeTyped(b, false)
 	if err != nil {
 		return err
 	}
@@ -178,9 +179,29 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 }
 
 // decodeTyped decodes a typed transaction from the canonical format.
-func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
+func (tx *Transaction) decodeTyped(b []byte, arbParsing bool) (TxData, error) {
 	if len(b) == 0 {
 		return nil, errEmptyTypedTx
+	}
+	if arbParsing {
+		switch b[0] {
+		case ArbitrumDepositTxType:
+			var inner ArbitrumDepositTx
+			err := rlp.DecodeBytes(b[1:], &inner)
+			return &inner, err
+		case ArbitrumUnsignedTxType:
+			var inner ArbitrumUnsignedTx
+			err := rlp.DecodeBytes(b[1:], &inner)
+			return &inner, err
+		case ArbitrumContractTxType:
+			var inner ArbitrumContractTx
+			err := rlp.DecodeBytes(b[1:], &inner)
+			return &inner, err
+		case ArbitrumWrappedTxType:
+			var inner ArbitrumWrappedTx
+			err := rlp.DecodeBytes(b[1:], &inner)
+			return &inner, err
+		}
 	}
 	switch b[0] {
 	case AccessListTxType:
@@ -253,6 +274,19 @@ func (tx *Transaction) Protected() bool {
 // Type returns the transaction type.
 func (tx *Transaction) Type() uint8 {
 	return tx.inner.txType()
+}
+
+func (tx *Transaction) realType() uint8 {
+	_, isArbWrapped := tx.inner.(*ArbitrumWrappedTx)
+	if isArbWrapped {
+		return ArbitrumWrappedTxType
+	} else {
+		return tx.Type()
+	}
+}
+
+func (tx *Transaction) GetInner() TxData {
+	return tx.inner.copy()
 }
 
 // ChainId returns the EIP155 chain ID of the transaction. The return value will always be
