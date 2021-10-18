@@ -32,6 +32,12 @@ import (
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
 
+type TxProcessingHook interface {
+	InterceptMessage() (*ExecutionResult, error)
+	ExtraGasChargingHook(gasRemaining *uint64, gasPool *GasPool) error
+	EndTxHook(totalGasUsed uint64, gasPool *GasPool, success bool) error
+}
+
 /*
 The State Transitioning Model
 
@@ -50,7 +56,7 @@ The state transitioning model does all the necessary work to work out a valid ne
 6) Derive new state root
 */
 type StateTransition struct {
-	extraGasUsedByHook uint64
+	processingHook TxProcessingHook
 
 	gp         *GasPool
 	msg        Message
@@ -158,9 +164,13 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 	return gas, nil
 }
 
+var CreateTxProcessingHook func(msg Message, evm *vm.EVM) TxProcessingHook
+
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
+		processingHook: CreateTxProcessingHook(msg, evm),
+
 		gp:        gp,
 		evm:       evm,
 		msg:       msg,
@@ -259,9 +269,6 @@ func (st *StateTransition) preCheck() error {
 	return st.buyGas()
 }
 
-var ExtraGasChargingHook func(msg Message, txGasRemaining *uint64, gasPool *GasPool, state vm.StateDB) error
-var EndTxHook func(msg Message, totalGasUsed uint64, extraGasCharged uint64, gasPool *GasPool, success bool, state vm.StateDB) error
-
 // TransitionDb will transition the state by applying the current message and
 // returning the evm execution result with following fields.
 //
@@ -307,12 +314,8 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	}
 	st.gas -= gas
 
-	if ExtraGasChargingHook != nil {
-		start := st.gas
-		ExtraGasChargingHook(st.msg, &st.gas, st.gp, st.state)
-		if start > st.gas {
-			st.extraGasUsedByHook += start - st.gas
-		}
+	if st.processingHook != nil {
+		st.processingHook.ExtraGasChargingHook(&st.gas, st.gp)
 	}
 
 	// Check clause 6
@@ -357,6 +360,12 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 }
 
 func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
+	if st.processingHook != nil {
+		res, err := st.processingHook.InterceptMessage()
+		if res != nil || err != nil {
+			return res, err
+		}
+	}
 	res, err := st.transitionDbImpl()
 	if err != nil && !errors.Is(err, ErrNonceTooLow) && !errors.Is(err, ErrNonceTooHigh) {
 		res = &ExecutionResult{
@@ -366,8 +375,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		}
 		err = nil
 	}
-	if err == nil && EndTxHook != nil {
-		EndTxHook(st.msg, st.gas, st.extraGasUsedByHook, st.gp, res.Err == nil, st.state)
+
+	if err == nil && st.processingHook != nil {
+		st.processingHook.EndTxHook(st.gas, st.gp, res.Err == nil)
 	}
 	return res, err
 }

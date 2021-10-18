@@ -21,8 +21,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/crypto/sha3"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // Genesis hashes to enforce below configs on.
@@ -435,6 +436,10 @@ func (c *ChainConfig) IsLondon(num *big.Int) bool {
 // IsCatalyst returns whether num is either equal to the Merge fork block or greater.
 func (c *ChainConfig) IsCatalyst(num *big.Int) bool {
 	return isForked(c.CatalystBlock, num)
+}
+
+func (c *ChainConfig) IsArbitrum(_ *big.Int) bool {
+	return true
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
