@@ -64,7 +64,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 //
 // Use this in transaction-handling code where the current block number is unknown. If you
 // have the current block number available, use MakeSigner instead.
-func LatestSigner(config *params.ChainConfig) Signer {
+func latestSignerImpl(config *params.ChainConfig) Signer {
 	if config.ChainID != nil {
 		if config.LondonBlock != nil {
 			return NewLondonSigner(config.ChainID)
@@ -79,6 +79,10 @@ func LatestSigner(config *params.ChainConfig) Signer {
 	return HomesteadSigner{}
 }
 
+func LatestSigner(config *params.ChainConfig) Signer {
+	return NewArbitrumSigner(latestSignerImpl(config))
+}
+
 // LatestSignerForChainID returns the 'most permissive' Signer available. Specifically,
 // this enables support for EIP-155 replay protection and all implemented EIP-2718
 // transaction types if chainID is non-nil.
@@ -86,11 +90,15 @@ func LatestSigner(config *params.ChainConfig) Signer {
 // Use this in transaction-handling code where the current block number and fork
 // configuration are unknown. If you have a ChainConfig, use LatestSigner instead.
 // If you have a ChainConfig and know the current block number, use MakeSigner instead.
-func LatestSignerForChainID(chainID *big.Int) Signer {
+func latestSignerForChainIDImpl(chainID *big.Int) Signer {
 	if chainID == nil {
 		return HomesteadSigner{}
 	}
 	return NewLondonSigner(chainID)
+}
+
+func LatestSignerForChainID(chainID *big.Int) Signer {
+	return NewArbitrumSigner(latestSignerForChainIDImpl(chainID))
 }
 
 // SignTx signs the transaction using the given signer and private key.
