@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -49,6 +50,8 @@ The state transitioning model does all the necessary work to work out a valid ne
 6) Derive new state root
 */
 type StateTransition struct {
+	extraGasUsedByHook uint64
+
 	gp         *GasPool
 	msg        Message
 	gas        uint64
@@ -256,6 +259,9 @@ func (st *StateTransition) preCheck() error {
 	return st.buyGas()
 }
 
+var ExtraGasChargingHook func(msg Message, txGasRemaining *uint64, gasPool *GasPool, state vm.StateDB) error
+var EndTxHook func(msg Message, totalGasUsed uint64, extraGasCharged uint64, gasPool *GasPool, success bool, state vm.StateDB) error
+
 // TransitionDb will transition the state by applying the current message and
 // returning the evm execution result with following fields.
 //
@@ -269,7 +275,7 @@ func (st *StateTransition) preCheck() error {
 //
 // However if any consensus issue encountered, return the error directly with
 // nil evm execution result.
-func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
+func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	// First check this message satisfies all consensus rules before
 	// applying the message. The rules include these clauses
 	//
@@ -300,6 +306,14 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
 	}
 	st.gas -= gas
+
+	if ExtraGasChargingHook != nil {
+		start := st.gas
+		ExtraGasChargingHook(st.msg, &st.gas, st.gp, st.state)
+		if start > st.gas {
+			st.extraGasUsedByHook += start - st.gas
+		}
+	}
 
 	// Check clause 6
 	if msg.Value().Sign() > 0 && !st.evm.Context.CanTransfer(st.state, msg.From(), msg.Value()) {
@@ -340,6 +354,22 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		Err:        vmerr,
 		ReturnData: ret,
 	}, nil
+}
+
+func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
+	res, err := st.transitionDbImpl()
+	if err != nil && !errors.Is(err, ErrNonceTooLow) && !errors.Is(err, ErrNonceTooHigh) {
+		res = &ExecutionResult{
+			UsedGas:    st.gasUsed(),
+			Err:        err,
+			ReturnData: nil,
+		}
+		err = nil
+	}
+	if err == nil && EndTxHook != nil {
+		EndTxHook(st.msg, st.gas, st.extraGasUsedByHook, st.gp, res.Err == nil, st.state)
+	}
+	return res, err
 }
 
 func (st *StateTransition) refundGas(refundQuotient uint64) {

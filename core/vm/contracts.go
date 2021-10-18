@@ -128,8 +128,18 @@ func init() {
 	}
 }
 
+var ExtraPrecompiles = make(map[common.Address]PrecompiledContract)
+
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
+	list := ethereumPrecompiles(rules)
+	for addr := range ExtraPrecompiles {
+		list = append(list, addr)
+	}
+	return list
+}
+
+func ethereumPrecompiles(rules params.Rules) []common.Address {
 	switch {
 	case rules.IsBerlin:
 		return PrecompiledAddressesBerlin
@@ -142,12 +152,31 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 	}
 }
 
+type AdvancedPrecompileCall struct {
+	PrecompileAddress common.Address
+	ActingAsAddress   common.Address
+	Caller            common.Address
+	Value             *big.Int
+	ReadOnly          bool
+	Evm               *EVM
+}
+
+type AdvancedPrecompile interface {
+	RunAdvanced(input []byte, suppliedGas uint64, advancedInfo *AdvancedPrecompileCall) (ret []byte, remainingGas uint64, err error)
+	PrecompiledContract
+}
+
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
 // It returns
 // - the returned bytes,
 // - the _remaining_ gas,
 // - any error that occurred
-func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64, advancedInfo *AdvancedPrecompileCall) (ret []byte, remainingGas uint64, err error) {
+	advanced, isAdvanced := p.(AdvancedPrecompile)
+	if isAdvanced {
+		return advanced.RunAdvanced(input, suppliedGas, advancedInfo)
+	}
+
 	gasCost := p.RequiredGas(input)
 	if suppliedGas < gasCost {
 		return nil, 0, ErrOutOfGas
