@@ -24,10 +24,11 @@ func (bc *BlockChain) Reorg(newBlock *types.Block) error {
 	bc.chainmu.Lock()
 	defer bc.wg.Done()
 	defer bc.chainmu.Unlock()
-	err := bc.reorg(bc.CurrentBlock(), newBlock)
+	oldBlock := bc.CurrentBlock()
+	bc.writeHeadBlockImpl(newBlock, true)
+	err := bc.reorg(oldBlock, newBlock)
 	if err != nil {
 		return err
 	}
-	bc.writeHeadBlockImpl(newBlock, true)
 	return nil
 }
