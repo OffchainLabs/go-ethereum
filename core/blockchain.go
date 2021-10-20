@@ -2215,6 +2215,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	return nil
 }
 
+func (bc *BlockChain) Reorg(oldBlock, newBlock *types.Block) error {
+	return bc.reorg(oldBlock, newBlock)
+}
+
 func (bc *BlockChain) update() {
 	futureTimer := time.NewTicker(5 * time.Second)
 	defer futureTimer.Stop()
