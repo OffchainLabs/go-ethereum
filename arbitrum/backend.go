@@ -38,7 +38,7 @@ func NewBackend(stack *node.Node, config *ethconfig.Config, ethDatabase ethdb.Da
 		chanNewBlock: make(chan struct{}, 1),
 	}
 	stack.RegisterLifecycle(backend)
-	go backend.segmentQueueRutine()
+	go backend.segmentQueueRoutine()
 
 	createRegisterAPIBackend(backend)
 	return backend, nil
@@ -68,7 +68,7 @@ func (b *Backend) enqueueBlock(block *types.Block, reciepts types.Receipts, stat
 	b.blockChain.WriteBlockWithState(block, reciepts, logs, state, true)
 }
 
-func (b *Backend) segmentQueueRutine() {
+func (b *Backend) segmentQueueRoutine() {
 	for {
 		select {
 		case tx := <-b.chanTxs:
