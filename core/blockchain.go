@@ -2216,6 +2216,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 }
 
 func (bc *BlockChain) Reorg(oldBlock, newBlock *types.Block) error {
+	bc.wg.Add(1)
+	bc.chainmu.Lock()
+	defer bc.wg.Done()
+	defer bc.chainmu.Unlock()
 	return bc.reorg(oldBlock, newBlock)
 }
 
