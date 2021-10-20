@@ -2215,14 +2215,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	return nil
 }
 
-func (bc *BlockChain) Reorg(oldBlock, newBlock *types.Block) error {
-	bc.wg.Add(1)
-	bc.chainmu.Lock()
-	defer bc.wg.Done()
-	defer bc.chainmu.Unlock()
-	return bc.reorg(oldBlock, newBlock)
-}
-
 func (bc *BlockChain) update() {
 	futureTimer := time.NewTicker(5 * time.Second)
 	defer futureTimer.Stop()
