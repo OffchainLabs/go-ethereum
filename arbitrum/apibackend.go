@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -15,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -34,7 +36,15 @@ func createRegisterAPIBackend(backend *Backend) {
 }
 
 func (a *APIBackend) GetAPIs() []rpc.API {
-	return ethapi.GetAPIs(a)
+	apis := ethapi.GetAPIs(a)
+
+	apis = append(apis, rpc.API{
+		Namespace: "eth",
+		Version:   "1.0",
+		Service:   filters.NewPublicFilterAPI(a, false, 5*time.Minute),
+		Public:    true,
+	})
+	return apis
 }
 
 // General Ethereum API
@@ -207,8 +217,8 @@ func (a *APIBackend) TxPoolContentFrom(addr common.Address) (types.Transactions,
 	panic("not implemented") // TODO: Implement
 }
 
-func (a *APIBackend) SubscribeNewTxsEvent(_ chan<- core.NewTxsEvent) event.Subscription {
-	panic("not implemented") // TODO: Implement
+func (a *APIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+	return a.b.SubscribeNewTxsEvent(ch)
 }
 
 // Filter API
@@ -225,15 +235,17 @@ func (a *APIBackend) ServiceFilter(ctx context.Context, session *bloombits.Match
 }
 
 func (a *APIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	panic("not implemented") // TODO: Implement
+	return a.b.blockChain.SubscribeLogsEvent(ch)
 }
 
 func (a *APIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	panic("not implemented") // TODO: Implement
+	//TODO: this is a nop subscription
+	//Arbitrum doesn't really need pending logs. Logs are published as soon as we know them..
+	return event.NewSubscription(func(<-chan struct{}) error { return nil })
 }
 
 func (a *APIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
-	panic("not implemented") // TODO: Implement
+	return a.b.blockChain.SubscribeRemovedLogsEvent(ch)
 }
 
 func (a *APIBackend) ChainConfig() *params.ChainConfig {

@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/node"
 )
 
@@ -19,6 +20,9 @@ type Backend struct {
 	apiBackend  *APIBackend
 	ethConfig   *ethconfig.Config
 	ethDatabase ethdb.Database
+
+	txFeed event.Feed
+	scope  event.SubscriptionScope
 
 	chanTxs      chan *types.Transaction
 	chanClose    chan struct{} //close coroutine
@@ -57,6 +61,10 @@ func (b *Backend) CloseBlock() {
 	b.chanNewBlock <- struct{}{}
 }
 
+func (b *Backend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+	return b.scope.Track(b.txFeed.Subscribe(ch))
+}
+
 func (b *Backend) enqueueBlock(block *types.Block, reciepts types.Receipts, state *state.StateDB) {
 	if block == nil {
 		return
@@ -72,6 +80,7 @@ func (b *Backend) segmentQueueRoutine() {
 	for {
 		select {
 		case tx := <-b.chanTxs:
+			b.txFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx}})
 			b.arbos.EnqueueSequencerTx(tx)
 		case <-b.chanNewBlock:
 			b.enqueueBlock(b.arbos.BuildBlock(true))
@@ -88,6 +97,7 @@ func (b *Backend) Start() error {
 
 func (b *Backend) Stop() error {
 
+	b.scope.Close()
 	b.blockChain.Stop()
 
 	return nil
