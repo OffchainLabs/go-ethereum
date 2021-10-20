@@ -19,14 +19,14 @@ package core
 
 import "github.com/ethereum/go-ethereum/core/types"
 
-func (bc *BlockChain) Reorg(newBlock *types.Block) error {
+func (bc *BlockChain) ReorgToOldBlock(newHead *types.Block) error {
 	bc.wg.Add(1)
 	bc.chainmu.Lock()
 	defer bc.wg.Done()
 	defer bc.chainmu.Unlock()
-	oldBlock := bc.CurrentBlock()
-	bc.writeHeadBlockImpl(newBlock, true)
-	err := bc.reorg(oldBlock, newBlock)
+	oldHead := bc.CurrentBlock()
+	bc.writeHeadBlockImpl(newHead, true)
+	err := bc.reorg(oldHead, newHead)
 	if err != nil {
 		return err
 	}
