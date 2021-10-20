@@ -168,8 +168,12 @@ var CreateTxProcessingHook func(msg Message, evm *vm.EVM) TxProcessingHook
 
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
+	var processingHook TxProcessingHook
+	if CreateTxProcessingHook != nil {
+		processingHook = CreateTxProcessingHook(msg, evm)
+	}
 	return &StateTransition{
-		processingHook: CreateTxProcessingHook(msg, evm),
+		processingHook: processingHook,
 
 		gp:        gp,
 		evm:       evm,
