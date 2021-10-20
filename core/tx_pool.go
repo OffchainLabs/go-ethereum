@@ -676,11 +676,14 @@ func (pool *TxPool) add(tx *types.Transaction, local bool, dmContext *deepmind.C
 		return false, err
 	}
 
-	if dmContext.Enabled() {
-		dmContext.RecordTrxPool("TRX_ENTER_POOL", tx, nil)
-	}
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.all.Slots()+numSlots(tx)) > pool.config.GlobalSlots+pool.config.GlobalQueue {
+		if dmContext.Enabled() {
+			// hydrate the `from` attribute
+			types.Sender(pool.signer, tx) // already validated
+			dmContext.RecordTrxPool("TRX_ENTER_POOL", tx, nil)
+		}
+
 		// If the new transaction is underpriced, don't accept it
 		if !isLocal && pool.priced.Underpriced(tx) {
 			log.Trace("Discarding underpriced transaction", "hash", hash, "gasTipCap", tx.GasTipCap(), "gasFeeCap", tx.GasFeeCap())
@@ -716,8 +719,13 @@ func (pool *TxPool) add(tx *types.Transaction, local bool, dmContext *deepmind.C
 			pool.removeTx(tx.Hash(), false)
 		}
 	}
+
 	// Try to replace an existing transaction in the pending pool
 	from, _ := types.Sender(pool.signer, tx) // already validated
+	if dmContext.Enabled() {
+		dmContext.RecordTrxPool("TRX_ENTER_POOL", tx, nil)
+	}
+
 	if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
 		// Nonce already pending, check if required price bump is met
 		inserted, old := list.Add(tx, pool.config.PriceBump)
