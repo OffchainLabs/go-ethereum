@@ -11,12 +11,12 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 )
 
-type ArbBackend struct {
+type Backend struct {
 	arbos       ArbosWrapper
 	blockChain  *core.BlockChain
 	stack       *node.Node
 	chainId     *big.Int
-	apiBackend  *ArbAPIBackend
+	apiBackend  *APIBackend
 	ethConfig   *ethconfig.Config
 	ethDatabase ethdb.Database
 
@@ -25,8 +25,8 @@ type ArbBackend struct {
 	chanNewBlock chan struct{} //create new L2 block unless empty
 }
 
-func NewBackend(stack *node.Node, config *ethconfig.Config, ethDatabase ethdb.Database, blockChain *core.BlockChain, chainId *big.Int, arbos ArbosWrapper) (*ArbBackend, error) {
-	backend := &ArbBackend{
+func NewBackend(stack *node.Node, config *ethconfig.Config, ethDatabase ethdb.Database, blockChain *core.BlockChain, chainId *big.Int, arbos ArbosWrapper) (*Backend, error) {
+	backend := &Backend{
 		arbos:        arbos,
 		blockChain:   blockChain,
 		stack:        stack,
@@ -44,20 +44,20 @@ func NewBackend(stack *node.Node, config *ethconfig.Config, ethDatabase ethdb.Da
 	return backend, nil
 }
 
-func (b *ArbBackend) APIBackend() *ArbAPIBackend {
+func (b *Backend) APIBackend() *APIBackend {
 	return b.apiBackend
 }
 
-func (b *ArbBackend) EnqueueL2Message(tx *types.Transaction) error {
+func (b *Backend) EnqueueL2Message(tx *types.Transaction) error {
 	b.chanTxs <- tx
 	return nil
 }
 
-func (b *ArbBackend) CloseBlock() {
+func (b *Backend) CloseBlock() {
 	b.chanNewBlock <- struct{}{}
 }
 
-func (b *ArbBackend) enqueueBlock(block *types.Block, reciepts types.Receipts, state *state.StateDB) {
+func (b *Backend) enqueueBlock(block *types.Block, reciepts types.Receipts, state *state.StateDB) {
 	if block == nil {
 		return
 	}
@@ -68,7 +68,7 @@ func (b *ArbBackend) enqueueBlock(block *types.Block, reciepts types.Receipts, s
 	b.blockChain.WriteBlockWithState(block, reciepts, logs, state, true)
 }
 
-func (b *ArbBackend) segmentQueueRutine() {
+func (b *Backend) segmentQueueRutine() {
 	for {
 		select {
 		case tx := <-b.chanTxs:
@@ -82,11 +82,11 @@ func (b *ArbBackend) segmentQueueRutine() {
 }
 
 //TODO: this is used when registering backend as lifecycle in stack
-func (b *ArbBackend) Start() error {
+func (b *Backend) Start() error {
 	return nil
 }
 
-func (b *ArbBackend) Stop() error {
+func (b *Backend) Stop() error {
 
 	b.blockChain.Stop()
 
