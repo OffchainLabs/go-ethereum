@@ -239,9 +239,8 @@ func (a *APIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscripti
 }
 
 func (a *APIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	//TODO: this is a nop subscription
 	//Arbitrum doesn't really need pending logs. Logs are published as soon as we know them..
-	return event.NewSubscription(func(<-chan struct{}) error { return nil })
+	return a.SubscribeLogsEvent(ch)
 }
 
 func (a *APIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
