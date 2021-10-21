@@ -508,10 +508,8 @@ func (ctx *Context) RecordTrxPool(eventType string, tx *types.Transaction, err e
 		return
 	}
 
-	var signer types.Signer = types.FrontierSigner{}
-	if tx.Protected() {
-		signer = types.NewEIP155Signer(tx.ChainId())
-	}
+
+	signer := types.NewEIP155Signer(tx.ChainId())
 
 	fromAsString := "."
 	from, err := types.Sender(signer, tx)
@@ -527,7 +525,6 @@ func (ctx *Context) RecordTrxPool(eventType string, tx *types.Transaction, err e
 	v, r, s := tx.RawSignatureValues()
 
 	//todo: handle error message
-
 	ctx.printer.Print(
 		eventType,
 		Hash(tx.Hash()),
