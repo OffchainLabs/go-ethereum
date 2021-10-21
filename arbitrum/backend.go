@@ -81,7 +81,7 @@ func (b *Backend) segmentQueueRoutine() {
 		select {
 		case tx := <-b.chanTxs:
 			b.txFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx}})
-			b.arbos.EnqueueSequencerTx(tx, nil)
+			b.arbos.EnqueueSequencerTx(tx)
 		case <-b.chanNewBlock:
 			b.enqueueBlock(b.arbos.BuildBlock(true))
 		case <-b.chanClose:
