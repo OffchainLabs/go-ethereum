@@ -13,7 +13,7 @@ import (
 )
 
 type Backend struct {
-	arbos       ArbosWrapper
+	publisher   TransactionPublisher
 	blockChain  *core.BlockChain
 	stack       *node.Node
 	chainId     *big.Int
@@ -29,9 +29,9 @@ type Backend struct {
 	chanNewBlock chan struct{} //create new L2 block unless empty
 }
 
-func NewBackend(stack *node.Node, config *ethconfig.Config, ethDatabase ethdb.Database, blockChain *core.BlockChain, chainId *big.Int, arbos ArbosWrapper) (*Backend, error) {
+func NewBackend(stack *node.Node, config *ethconfig.Config, ethDatabase ethdb.Database, blockChain *core.BlockChain, chainId *big.Int, publisher TransactionPublisher) (*Backend, error) {
 	backend := &Backend{
-		arbos:        arbos,
+		publisher:    publisher,
 		blockChain:   blockChain,
 		stack:        stack,
 		chainId:      chainId,
@@ -42,7 +42,6 @@ func NewBackend(stack *node.Node, config *ethconfig.Config, ethDatabase ethdb.Da
 		chanNewBlock: make(chan struct{}, 1),
 	}
 	stack.RegisterLifecycle(backend)
-	go backend.segmentQueueRoutine()
 
 	createRegisterAPIBackend(backend)
 	return backend, nil
@@ -53,12 +52,7 @@ func (b *Backend) APIBackend() *APIBackend {
 }
 
 func (b *Backend) EnqueueL2Message(tx *types.Transaction) error {
-	b.chanTxs <- tx
-	return nil
-}
-
-func (b *Backend) CloseBlock() {
-	b.chanNewBlock <- struct{}{}
+	return b.publisher.PublishTransaction(tx)
 }
 
 func (b *Backend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
@@ -74,20 +68,6 @@ func (b *Backend) enqueueBlock(block *types.Block, reciepts types.Receipts, stat
 		logs = append(logs, receipt.Logs...)
 	}
 	b.blockChain.WriteBlockWithState(block, reciepts, logs, state, true)
-}
-
-func (b *Backend) segmentQueueRoutine() {
-	for {
-		select {
-		case tx := <-b.chanTxs:
-			b.txFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx}})
-			b.arbos.EnqueueSequencerTx(tx)
-		case <-b.chanNewBlock:
-			b.enqueueBlock(b.arbos.BuildBlock(true))
-		case <-b.chanClose:
-			return
-		}
-	}
 }
 
 //TODO: this is used when registering backend as lifecycle in stack
