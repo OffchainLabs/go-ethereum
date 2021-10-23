@@ -65,13 +65,14 @@ var _ = abi.NewType
 	type {{$contract.Type}}Impl interface {
 	// Non Mutating
 	{{range .Calls}}
-		{{.Normalized.Name}}(caller common.Address{{if ne .Normalized.StateMutability "pure"}}, st *state.StateDB{{end}}{{if .Normalized.Payable}}, value *big.Int,{{end}} {{range .Normalized.Inputs}}, {{.Name}} {{bindtype .Type $structs}} {{end}}) ({{if .Structured}}struct{ {{range .Normalized.Outputs}}{{.Name}} {{bindtype .Type $structs}};{{end}} },{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}},{{end}}{{end}} error)
+		{{.Normalized.Name}}(caller common.Address{{if ne .Normalized.StateMutability "pure"}}, st *state.StateDB{{end}}{{if .Normalized.IsPayable}}, value *big.Int,{{end}} {{range .Normalized.Inputs}}, {{.Name}} {{bindtype .Type $structs}} {{end}}) ({{if .Structured}}struct{ {{range .Normalized.Outputs}}{{.Name}} {{bindtype .Type $structs}};{{end}} },{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}},{{end}}{{end}} error)
 		{{.Normalized.Name}}GasCost({{range .Normalized.Inputs}}{{.Name}} {{bindtype .Type $structs}}, {{end}}) uint64
 	{{end}}
 
 	// Mutating
 	{{range .Transacts}}
-		{{.Normalized.Name}}(caller common.Address{{if ne .Normalized.StateMutability "pure"}}, st *state.StateDB{{end}}{{if .Normalized.Payable}}, value *big.Int,{{end}} {{range .Normalized.Inputs}}, {{.Name}} {{bindtype .Type $structs}} {{end}}) ({{if .Structured}}struct{ {{range .Normalized.Outputs}}{{.Name}} {{bindtype .Type $structs}};{{end}} },{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}},{{end}}{{end}} error)
+		// {{.Normalized.StateMutability}}
+		{{.Normalized.Name}}(caller common.Address{{if ne .Normalized.StateMutability "pure"}}, st *state.StateDB{{end}}{{if .Normalized.IsPayable}}, value *big.Int{{end}} {{range .Normalized.Inputs}}, {{.Name}} {{bindtype .Type $structs}} {{end}}) ({{if .Structured}}struct{ {{range .Normalized.Outputs}}{{.Name}} {{bindtype .Type $structs}};{{end}} },{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}},{{end}}{{end}} error)
 		{{.Normalized.Name}}GasCost({{range .Normalized.Inputs}}{{.Name}} {{bindtype .Type $structs}}, {{end}}) uint64
 	{{end}}
 	}
@@ -140,14 +141,14 @@ var _ = abi.NewType
 		switch id { {{range .Calls}}
 		case [4]byte{ {{range .Original.ID}} {{.}}, {{end}} }: {{range $i, $t := .Normalized.Inputs}} 
 			{{.Name}} := *abi.ConvertType(args[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
-			{{range $i, $t := .Normalized.Outputs}}out{{$i}},{{end}}err := c.impl.{{.Normalized.Name}}(caller {{if ne .Normalized.StateMutability "pure"}}, stateDB{{end}}{{if .Normalized.Payable}}, value {{end}} {{range $i, $t := .Normalized.Inputs}}, {{.Name}}{{end}})
+			{{range $i, $t := .Normalized.Outputs}}out{{$i}},{{end}}err := c.impl.{{.Normalized.Name}}(caller {{if ne .Normalized.StateMutability "pure"}}, stateDB{{end}}{{if .Normalized.IsPayable}}, value {{end}} {{range $i, $t := .Normalized.Inputs}}, {{.Name}}{{end}})
 			if err != nil {
 				return nil, err
 			}
 			return outputs.PackValues([]interface{}{ {{range $i, $t := .Normalized.Outputs}}out{{$i}},{{end}} }){{end}} {{range .Transacts}}
 		case [4]byte{ {{range .Original.ID}} {{.}}, {{end}} }: {{range $i, $t := .Normalized.Inputs}} 
 			{{.Name}} := *abi.ConvertType(args[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
-			{{range $i, $t := .Normalized.Outputs}}out{{$i}},{{end}}err := c.impl.{{.Normalized.Name}}(caller {{if ne .Normalized.StateMutability "pure"}}, stateDB{{end}}{{if .Normalized.Payable}}, value {{end}} {{range $i, $t := .Normalized.Inputs}}, {{.Name}}{{end}})
+			{{range $i, $t := .Normalized.Outputs}}out{{$i}},{{end}}err := c.impl.{{.Normalized.Name}}(caller {{if ne .Normalized.StateMutability "pure"}}, stateDB{{end}}{{if .Normalized.IsPayable}}, value {{end}} {{range $i, $t := .Normalized.Inputs}}, {{.Name}}{{end}})
 			if err != nil {
 				return nil, err
 			}
