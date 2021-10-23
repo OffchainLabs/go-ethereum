@@ -85,6 +85,12 @@ var _ = abi.NewType
 		return &{{$contract.Type}}{impl: impl}
 	}
 
+	var ( {{range .Calls}}
+		{{$contract.Type}}{{.Normalized.Name}}ID = [4]byte{ {{range .Original.ID}} {{.}}, {{end}} } {{end}}
+		{{range .Transacts}}
+		{{$contract.Type}}{{.Normalized.Name}}ID = [4]byte{ {{range .Original.ID}} {{.}}, {{end}} } {{end}}
+	)
+
 	func (c *{{$contract.Type}}) GasToCharge(input []byte) uint64 {
 		evmABI, err := {{.Type}}MetaData.GetAbi()
 		if err != nil {
@@ -102,10 +108,10 @@ var _ = abi.NewType
 		var id [4]byte
 		copy(id[:], input)
 		switch id { {{range .Calls}}
-		case [4]byte{ {{range .Original.ID}} {{.}}, {{end}} }: {{range $i, $t := .Normalized.Inputs}} 
+		case {{$contract.Type}}{{.Normalized.Name}}ID: {{range $i, $t := .Normalized.Inputs}} 
 			{{.Name}} := *abi.ConvertType(args[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
 			return c.impl.{{.Normalized.Name}}GasCost({{range $i, $t := .Normalized.Inputs}}{{.Name}},{{end}}){{end}}{{range .Transacts}}
-		case [4]byte{ {{range .Original.ID}} {{.}}, {{end}} }: {{range $i, $t := .Normalized.Inputs}} 
+		case {{$contract.Type}}{{.Normalized.Name}}ID: {{range $i, $t := .Normalized.Inputs}} 
 			{{.Name}} := *abi.ConvertType(args[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
 			return c.impl.{{.Normalized.Name}}GasCost({{range $i, $t := .Normalized.Inputs}}{{.Name}}, {{end}}){{end}}
 		default:
@@ -139,20 +145,20 @@ var _ = abi.NewType
 		var id [4]byte
 		copy(id[:], input)
 		switch id { {{range .Calls}}
-		case [4]byte{ {{range .Original.ID}} {{.}}, {{end}} }: {{range $i, $t := .Normalized.Inputs}} 
+		case {{$contract.Type}}{{.Normalized.Name}}ID: {{range $i, $t := .Normalized.Inputs}} 
 			{{.Name}} := *abi.ConvertType(args[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
 			{{range $i, $t := .Normalized.Outputs}}out{{$i}},{{end}}err := c.impl.{{.Normalized.Name}}(caller {{if ne .Normalized.StateMutability "pure"}}, stateDB{{end}}{{if .Normalized.IsPayable}}, value {{end}} {{range $i, $t := .Normalized.Inputs}}, {{.Name}}{{end}})
 			if err != nil {
 				return nil, err
 			}
-			return outputs.PackValues([]interface{}{ {{range $i, $t := .Normalized.Outputs}}out{{$i}},{{end}} }){{end}} {{range .Transacts}}
-		case [4]byte{ {{range .Original.ID}} {{.}}, {{end}} }: {{range $i, $t := .Normalized.Inputs}} 
+			return outputs.Pack({{range $i, $t := .Normalized.Outputs}}out{{$i}},{{end}}){{end}} {{range .Transacts}}
+		case {{$contract.Type}}{{.Normalized.Name}}ID: {{range $i, $t := .Normalized.Inputs}} 
 			{{.Name}} := *abi.ConvertType(args[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
 			{{range $i, $t := .Normalized.Outputs}}out{{$i}},{{end}}err := c.impl.{{.Normalized.Name}}(caller {{if ne .Normalized.StateMutability "pure"}}, stateDB{{end}}{{if .Normalized.IsPayable}}, value {{end}} {{range $i, $t := .Normalized.Inputs}}, {{.Name}}{{end}})
 			if err != nil {
 				return nil, err
 			}
-			return outputs.PackValues([]interface{}{ {{range $i, $t := .Normalized.Outputs}}out{{$i}},{{end}} }){{end}}
+			return outputs.Pack({{range $i, $t := .Normalized.Outputs}}out{{$i}},{{end}}){{end}}
 		default:
 			return nil, errors.New("unsupported method")
 		}
