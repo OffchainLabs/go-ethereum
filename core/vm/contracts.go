@@ -128,19 +128,11 @@ func init() {
 	}
 }
 
-var ExtraPrecompiles = make(map[common.Address]PrecompiledContract)
-
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
-	list := ethereumPrecompiles(rules)
-	for addr := range ExtraPrecompiles {
-		list = append(list, addr)
-	}
-	return list
-}
-
-func ethereumPrecompiles(rules params.Rules) []common.Address {
 	switch {
+	case rules.IsArbitrum:
+		return PrecompiledAddressesArbitrum
 	case rules.IsBerlin:
 		return PrecompiledAddressesBerlin
 	case rules.IsIstanbul:
