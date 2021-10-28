@@ -49,6 +49,7 @@ const (
 	ArbitrumUnsignedTxType = 201
 	ArbitrumContractTxType = 202
 	ArbitrumWrappedTxType  = 203
+	ArbitrumRetryTxType    = 204
 )
 
 // Transaction is an Ethereum transaction.
@@ -199,6 +200,10 @@ func (tx *Transaction) decodeTyped(b []byte, arbParsing bool) (TxData, error) {
 			return &inner, err
 		case ArbitrumWrappedTxType:
 			var inner ArbitrumWrappedTx
+			err := rlp.DecodeBytes(b[1:], &inner)
+			return &inner, err
+		case ArbitrumRetryTxType:
+			var inner ArbitrumRetryTx
 			err := rlp.DecodeBytes(b[1:], &inner)
 			return &inner, err
 		}
