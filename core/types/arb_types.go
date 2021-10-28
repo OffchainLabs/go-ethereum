@@ -130,6 +130,28 @@ func (tx *ArbitrumContractTx) rawSignatureValues() (v, r, s *big.Int) {
 func (tx *ArbitrumContractTx) setSignatureValues(chainID, v, r, s *big.Int) {}
 func (tx *ArbitrumContractTx) isFake() bool                                 { return true }
 
+type ArbitrumRetryTx struct {
+	ArbitrumContractTx
+	TicketId   common.Hash
+	RefundTo   common.Address
+}
+
+func (tx *ArbitrumRetryTx) chainID() *big.Int      { return tx.ArbitrumContractTx.chainID() }
+func (tx *ArbitrumRetryTx) accessList() AccessList { return tx.ArbitrumContractTx.accessList() }
+func (tx *ArbitrumRetryTx) data() []byte           { return tx.ArbitrumContractTx.data() }
+func (tx *ArbitrumRetryTx) gas() uint64            { return tx.ArbitrumContractTx.gas() }
+func (tx *ArbitrumRetryTx) gasPrice() *big.Int     { return tx.ArbitrumContractTx.gasPrice() }
+func (tx *ArbitrumRetryTx) gasTipCap() *big.Int    { return tx.ArbitrumContractTx.gasTipCap() }
+func (tx *ArbitrumRetryTx) gasFeeCap() *big.Int    { return tx.ArbitrumContractTx.gasFeeCap() }
+func (tx *ArbitrumRetryTx) value() *big.Int        { return tx.ArbitrumContractTx.value() }
+func (tx *ArbitrumRetryTx) nonce() uint64          { return tx.ArbitrumContractTx.nonce() }
+func (tx *ArbitrumRetryTx) to() *common.Address    { return tx.ArbitrumContractTx.to() }
+func (tx *ArbitrumRetryTx) rawSignatureValues() (v, r, s *big.Int) {
+	return tx.ArbitrumContractTx.rawSignatureValues()
+}
+func (tx *ArbitrumRetryTx) setSignatureValues(chainID, v, r, s *big.Int) { tx.ArbitrumContractTx.setSignatureValues(chainID, v, r, s)}
+func (tx *ArbitrumRetryTx) isFake() bool                                 { return tx.ArbitrumContractTx.isFake() }
+
 type ArbitrumDepositTx struct {
 	ChainId     *big.Int
 	L1RequestId common.Hash
