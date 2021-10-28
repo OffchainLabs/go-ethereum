@@ -185,6 +185,63 @@ func (tx *ArbitrumRetryTx) rawSignatureValues() (v, r, s *big.Int) {
 func (tx *ArbitrumRetryTx) setSignatureValues(chainID, v, r, s *big.Int) { tx.ArbitrumContractTx.setSignatureValues(chainID, v, r, s)}
 func (tx *ArbitrumRetryTx) isFake() bool                                 { return tx.ArbitrumContractTx.isFake() }
 
+type ArbitrumSubmitRetryableTx struct {
+	ChainId   *big.Int
+	RequestId common.Hash
+	From      common.Address
+
+	GasPrice *big.Int        // wei per gas
+	Gas      uint64          // gas limit
+	To       *common.Address `rlp:"nil"` // nil means contract creation
+	Value    *big.Int        // wei amount
+	Data     []byte          // contract invocation input data
+}
+
+func (tx *ArbitrumSubmitRetryableTx) txType() byte { return ArbitrumSubmitRetryableTxType }
+
+func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
+	cpy := &ArbitrumSubmitRetryableTx{
+		ChainId:   new(big.Int),
+		RequestId: tx.RequestId,
+		GasPrice:  new(big.Int),
+		Gas:       tx.Gas,
+		From:      tx.From,
+		To:        nil,
+		Value:     new(big.Int),
+		Data:      common.CopyBytes(tx.Data),
+	}
+	if tx.ChainId != nil {
+		cpy.ChainId.Set(tx.ChainId)
+	}
+	if tx.GasPrice != nil {
+		cpy.GasPrice.Set(tx.GasPrice)
+	}
+	if tx.To != nil {
+		tmp := *tx.To
+		cpy.To = &tmp
+	}
+	if tx.Value != nil {
+		cpy.Value.Set(tx.Value)
+	}
+	return cpy
+}
+
+func (tx *ArbitrumSubmitRetryableTx) chainID() *big.Int      { return tx.ChainId }
+func (tx *ArbitrumSubmitRetryableTx) accessList() AccessList { return nil }
+func (tx *ArbitrumSubmitRetryableTx) data() []byte           { return tx.Data }
+func (tx *ArbitrumSubmitRetryableTx) gas() uint64            { return tx.Gas }
+func (tx *ArbitrumSubmitRetryableTx) gasPrice() *big.Int     { return tx.GasPrice }
+func (tx *ArbitrumSubmitRetryableTx) gasTipCap() *big.Int    { return tx.GasPrice }
+func (tx *ArbitrumSubmitRetryableTx) gasFeeCap() *big.Int    { return tx.GasPrice }
+func (tx *ArbitrumSubmitRetryableTx) value() *big.Int        { return tx.Value }
+func (tx *ArbitrumSubmitRetryableTx) nonce() uint64          { return 0 }
+func (tx *ArbitrumSubmitRetryableTx) to() *common.Address    { return tx.To }
+func (tx *ArbitrumSubmitRetryableTx) rawSignatureValues() (v, r, s *big.Int) {
+	return bigZero, bigZero, bigZero
+}
+func (tx *ArbitrumSubmitRetryableTx) setSignatureValues(chainID, v, r, s *big.Int) {}
+func (tx *ArbitrumSubmitRetryableTx) isFake() bool                                 { return true }
+
 type ArbitrumDepositTx struct {
 	ChainId     *big.Int
 	L1RequestId common.Hash
