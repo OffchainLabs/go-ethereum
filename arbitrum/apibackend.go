@@ -44,6 +44,14 @@ func (a *APIBackend) GetAPIs() []rpc.API {
 		Service:   filters.NewPublicFilterAPI(a, false, 5*time.Minute),
 		Public:    true,
 	})
+
+	apis = append(apis, rpc.API{
+		Namespace: "net",
+		Version:   "1.0",
+		Service:   NewPublicNetAPI(a.ChainConfig().ChainID.Uint64()),
+		Public:    true,
+	})
+
 	return apis
 }
 
@@ -53,7 +61,7 @@ func (a *APIBackend) SyncProgress() ethereum.SyncProgress {
 }
 
 func (a *APIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
-	panic("not implemented") // TODO: Implement
+	return big.NewInt(1), nil // TODO: Implement
 }
 
 func (a *APIBackend) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
@@ -73,7 +81,7 @@ func (a *APIBackend) ExtRPCEnabled() bool {
 }
 
 func (a *APIBackend) RPCGasCap() uint64 {
-	panic("not implemented") // TODO: Implement
+	return a.b.ethConfig.RPCGasCap
 }
 
 func (a *APIBackend) RPCTxFeeCap() float64 {
@@ -164,11 +172,17 @@ func (a *APIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.R
 }
 
 func (a *APIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
-	panic("not implemented") // TODO: Implement
+	return a.b.blockChain.GetTdByHash(hash)
 }
 
 func (a *APIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
-	panic("not implemented") // TODO: Implement
+	vmError := func() error { return nil }
+	if vmConfig == nil {
+		vmConfig = a.b.blockChain.GetVMConfig()
+	}
+	txContext := core.NewEVMTxContext(msg)
+	context := core.NewEVMBlockContext(header, a.b.blockChain, nil)
+	return vm.NewEVM(context, txContext, state, a.b.blockChain.Config(), *vmConfig), vmError, nil
 }
 
 func (a *APIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
