@@ -216,7 +216,11 @@ func (a *APIBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction {
 }
 
 func (a *APIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	panic("not implemented") // TODO: Implement
+	stateDB, err := a.b.blockChain.State()
+	if err != nil {
+		return 0, err
+	}
+	return stateDB.GetNonce(addr), nil
 }
 
 func (a *APIBackend) Stats() (pending int, queued int) {
