@@ -129,6 +129,9 @@ func (a *APIBackend) CurrentBlock() *types.Block {
 }
 
 func (a *APIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
+	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
+		return a.b.blockChain.CurrentBlock(), nil
+	}
 	return a.b.blockChain.GetBlockByNumber(uint64(number.Int64())), nil
 }
 
