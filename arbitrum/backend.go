@@ -4,7 +4,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -14,7 +13,6 @@ import (
 
 type Backend struct {
 	publisher   TransactionPublisher
-	blockChain  *core.BlockChain
 	stack       *node.Node
 	chainId     *big.Int
 	apiBackend  *APIBackend
@@ -32,7 +30,6 @@ type Backend struct {
 func NewBackend(stack *node.Node, config *ethconfig.Config, ethDatabase ethdb.Database, blockChain *core.BlockChain, chainId *big.Int, publisher TransactionPublisher) (*Backend, error) {
 	backend := &Backend{
 		publisher:    publisher,
-		blockChain:   blockChain,
 		stack:        stack,
 		chainId:      chainId,
 		ethConfig:    config,
@@ -59,15 +56,12 @@ func (b *Backend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscri
 	return b.scope.Track(b.txFeed.Subscribe(ch))
 }
 
-func (b *Backend) enqueueBlock(block *types.Block, reciepts types.Receipts, state *state.StateDB) {
-	if block == nil {
-		return
-	}
-	logs := make([]*types.Log, 0)
-	for _, receipt := range reciepts {
-		logs = append(logs, receipt.Logs...)
-	}
-	b.blockChain.WriteBlockWithState(block, reciepts, logs, state, true)
+func (b *Backend) Stack() *node.Node {
+	return b.stack
+}
+
+func (b *Backend) Publisher() TransactionPublisher {
+	return b.publisher
 }
 
 //TODO: this is used when registering backend as lifecycle in stack
@@ -78,7 +72,6 @@ func (b *Backend) Start() error {
 func (b *Backend) Stop() error {
 
 	b.scope.Close()
-	b.blockChain.Stop()
 
 	return nil
 }
