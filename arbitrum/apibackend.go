@@ -248,11 +248,19 @@ func (a *APIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subs
 
 // Filter API
 func (a *APIBackend) BloomStatus() (uint64, uint64) {
-	panic("not implemented") // TODO: Implement
+	return params.BloomBitsBlocks, 0 // TODO: Implement second return value
 }
 
 func (a *APIBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {
-	panic("not implemented") // TODO: Implement
+	receipts := a.blockChain().GetReceiptsByHash(blockHash)
+	if receipts == nil {
+		return nil, nil
+	}
+	logs := make([][]*types.Log, len(receipts))
+	for i, receipt := range receipts {
+		logs[i] = receipt.Logs
+	}
+	return logs, nil
 }
 
 func (a *APIBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
