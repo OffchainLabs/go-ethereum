@@ -66,14 +66,12 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 
 // NewEVMTxContext creates a new transaction context for a single transaction.
 func NewEVMTxContext(msg Message) vm.TxContext {
-	return vm.TxContext{
-		Origin:   msg.From(),
-		GasPrice: new(big.Int).Set(msg.GasPrice()),
+	originWasRemapped := false
+	tx := msg.UnderlyingTransaction()
+	if tx != nil {
+		txType := tx.Type()
+		originWasRemapped = txType == types.ArbitrumUnsignedTxType || txType == types.ArbitrumContractTxType
 	}
-}
-
-// NewEVMTxContextWithRemapInfo creates a new transaction context for a single transaction.
-func NewEVMTxContextWithRemapInfo(msg Message, originWasRemapped bool) vm.TxContext {
 	return vm.TxContext{
 		Origin:   msg.From(),
 		GasPrice: new(big.Int).Set(msg.GasPrice()),
