@@ -72,6 +72,15 @@ func NewEVMTxContext(msg Message) vm.TxContext {
 	}
 }
 
+// NewEVMTxContextWithRemapInfo creates a new transaction context for a single transaction.
+func NewEVMTxContextWithRemapInfo(msg Message, originWasRemapped bool) vm.TxContext {
+	return vm.TxContext{
+		Origin:   msg.From(),
+		GasPrice: new(big.Int).Set(msg.GasPrice()),
+		OriginWasRemapped: originWasRemapped,
+	}
+}
+
 // GetHashFn returns a GetHashFunc which retrieves header hashes by number
 func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash {
 	// Cache will initially contain [refHash.parent],
