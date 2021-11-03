@@ -33,5 +33,6 @@ func (bc *BlockChain) ReorgToOldBlock(newHead *types.Block) error {
 	if err != nil {
 		return err
 	}
+	bc.chainHeadFeed.Send(ChainHeadEvent{Block: newHead})
 	return nil
 }
