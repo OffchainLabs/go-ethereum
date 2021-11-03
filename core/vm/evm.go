@@ -158,6 +158,11 @@ func (evm *EVM) Cancelled() bool {
 	return atomic.LoadInt32(&evm.abort) == 1
 }
 
+// Depth returns the current depth
+func (evm *EVM) Depth() int {
+	return evm.depth
+}
+
 // Interpreter returns the current interpreter
 func (evm *EVM) Interpreter() *EVMInterpreter {
 	return evm.interpreter
