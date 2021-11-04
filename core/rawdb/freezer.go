@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -82,8 +83,9 @@ type freezer struct {
 	writeLock  sync.Mutex
 	writeBatch *freezerBatch
 
-	readonly bool
-	tables   map[string]*freezerTable // Data tables for storing everything
+	readonly     bool
+	tables       map[string]*freezerTable // Data tables for storing everything
+	instanceLock Releaser                 // File-system lock to prevent double opens
 
 	trigger chan chan struct{} // Manual blocking freeze trigger, test determinism
 
@@ -111,13 +113,20 @@ func newFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 			return nil, errSymlinkDatadir
 		}
 	}
+	// Leveldb uses LOCK as the filelock filename. To prevent the
+	// name collision, we use FLOCK as the lock name.
+	lock, _, err := Flock(filepath.Join(datadir, "FLOCK"))
+	if err != nil {
+		return nil, err
+	}
 	// Open all the supported data tables
 	freezer := &freezer{
-		readonly:  readonly,
-		threshold: params.FullImmutabilityThreshold,
-		tables:    make(map[string]*freezerTable),
-		trigger:   make(chan chan struct{}),
-		quit:      make(chan struct{}),
+		readonly:     readonly,
+		threshold:    params.FullImmutabilityThreshold,
+		tables:       make(map[string]*freezerTable),
+		instanceLock: lock,
+		trigger:      make(chan chan struct{}),
+		quit:         make(chan struct{}),
 	}
 
 	// Create the tables.
@@ -127,6 +136,7 @@ func newFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 			for _, table := range freezer.tables {
 				table.Close()
 			}
+			lock.Release()
 			return nil, err
 		}
 		freezer.tables[name] = table
@@ -137,6 +147,7 @@ func newFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 		for _, table := range freezer.tables {
 			table.Close()
 		}
+		lock.Release()
 		return nil, err
 	}
 
@@ -161,6 +172,9 @@ func (f *freezer) Close() error {
 			if err := table.Close(); err != nil {
 				errs = append(errs, err)
 			}
+		}
+		if err := f.instanceLock.Release(); err != nil {
+			errs = append(errs, err)
 		}
 	})
 	if errs != nil {
