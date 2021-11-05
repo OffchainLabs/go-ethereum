@@ -133,6 +133,9 @@ func (a *APIBackend) CurrentBlock() *types.Block {
 }
 
 func (a *APIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
+	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
+		return a.blockChain().CurrentBlock(), nil
+	}
 	return a.blockChain().GetBlockByNumber(uint64(number.Int64())), nil
 }
 
@@ -220,7 +223,11 @@ func (a *APIBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction {
 }
 
 func (a *APIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	panic("not implemented") // TODO: Implement
+	stateDB, err := a.blockChain().State()
+	if err != nil {
+		return 0, err
+	}
+	return stateDB.GetNonce(addr), nil
 }
 
 func (a *APIBackend) Stats() (pending int, queued int) {
@@ -241,11 +248,19 @@ func (a *APIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subs
 
 // Filter API
 func (a *APIBackend) BloomStatus() (uint64, uint64) {
-	panic("not implemented") // TODO: Implement
+	return params.BloomBitsBlocks, 0 // TODO: Implement second return value
 }
 
 func (a *APIBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {
-	panic("not implemented") // TODO: Implement
+	receipts := a.blockChain().GetReceiptsByHash(blockHash)
+	if receipts == nil {
+		return nil, nil
+	}
+	logs := make([][]*types.Log, len(receipts))
+	for i, receipt := range receipts {
+		logs[i] = receipt.Logs
+	}
+	return logs, nil
 }
 
 func (a *APIBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
