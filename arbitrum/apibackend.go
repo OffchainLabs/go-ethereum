@@ -55,6 +55,10 @@ func (a *APIBackend) GetAPIs() []rpc.API {
 	return apis
 }
 
+func (a *APIBackend) blockChain() *core.BlockChain {
+	return a.b.publisher.BlockChain()
+}
+
 // General Ethereum API
 func (a *APIBackend) SyncProgress() ethereum.SyncProgress {
 	panic("not implemented") // TODO: Implement
@@ -99,13 +103,13 @@ func (a *APIBackend) SetHead(number uint64) {
 
 func (a *APIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	if number == rpc.LatestBlockNumber {
-		return a.b.blockChain.CurrentBlock().Header(), nil
+		return a.blockChain().CurrentBlock().Header(), nil
 	}
-	return a.b.blockChain.GetHeaderByNumber(uint64(number.Int64())), nil
+	return a.blockChain().GetHeaderByNumber(uint64(number.Int64())), nil
 }
 
 func (a *APIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
-	return a.b.blockChain.GetHeaderByHash(hash), nil
+	return a.blockChain().GetHeaderByHash(hash), nil
 }
 
 func (a *APIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
@@ -121,19 +125,22 @@ func (a *APIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc
 }
 
 func (a *APIBackend) CurrentHeader() *types.Header {
-	return a.b.blockChain.CurrentHeader()
+	return a.blockChain().CurrentHeader()
 }
 
 func (a *APIBackend) CurrentBlock() *types.Block {
-	return a.b.blockChain.CurrentBlock()
+	return a.blockChain().CurrentBlock()
 }
 
 func (a *APIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
-	return a.b.blockChain.GetBlockByNumber(uint64(number.Int64())), nil
+	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
+		return a.blockChain().CurrentBlock(), nil
+	}
+	return a.blockChain().GetBlockByNumber(uint64(number.Int64())), nil
 }
 
 func (a *APIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return a.b.blockChain.GetBlockByHash(hash), nil
+	return a.blockChain().GetBlockByHash(hash), nil
 }
 
 func (a *APIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
@@ -155,7 +162,7 @@ func (a *APIBackend) stateAndHeaderFromHeader(header *types.Header, err error) (
 	if header == nil {
 		return nil, nil, errors.New("header not found")
 	}
-	state, err := a.b.blockChain.StateAt(header.Root)
+	state, err := a.blockChain().StateAt(header.Root)
 	return state, header, err
 }
 
@@ -168,33 +175,33 @@ func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOr
 }
 
 func (a *APIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	return a.b.blockChain.GetReceiptsByHash(hash), nil
+	return a.blockChain().GetReceiptsByHash(hash), nil
 }
 
 func (a *APIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
-	return a.b.blockChain.GetTdByHash(hash)
+	return a.blockChain().GetTdByHash(hash)
 }
 
 func (a *APIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	vmError := func() error { return nil }
 	if vmConfig == nil {
-		vmConfig = a.b.blockChain.GetVMConfig()
+		vmConfig = a.blockChain().GetVMConfig()
 	}
 	txContext := core.NewEVMTxContext(msg)
-	context := core.NewEVMBlockContext(header, a.b.blockChain, nil)
-	return vm.NewEVM(context, txContext, state, a.b.blockChain.Config(), *vmConfig), vmError, nil
+	context := core.NewEVMBlockContext(header, a.blockChain(), nil)
+	return vm.NewEVM(context, txContext, state, a.blockChain().Config(), *vmConfig), vmError, nil
 }
 
 func (a *APIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
-	return a.b.blockChain.SubscribeChainEvent(ch)
+	return a.blockChain().SubscribeChainEvent(ch)
 }
 
 func (a *APIBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
-	return a.b.blockChain.SubscribeChainHeadEvent(ch)
+	return a.blockChain().SubscribeChainHeadEvent(ch)
 }
 
 func (a *APIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
-	return a.b.blockChain.SubscribeChainSideEvent(ch)
+	return a.blockChain().SubscribeChainSideEvent(ch)
 }
 
 // Transaction pool API
@@ -216,7 +223,11 @@ func (a *APIBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction {
 }
 
 func (a *APIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	panic("not implemented") // TODO: Implement
+	stateDB, err := a.blockChain().State()
+	if err != nil {
+		return 0, err
+	}
+	return stateDB.GetNonce(addr), nil
 }
 
 func (a *APIBackend) Stats() (pending int, queued int) {
@@ -237,11 +248,19 @@ func (a *APIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subs
 
 // Filter API
 func (a *APIBackend) BloomStatus() (uint64, uint64) {
-	panic("not implemented") // TODO: Implement
+	return params.BloomBitsBlocks, 0 // TODO: Implement second return value
 }
 
 func (a *APIBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {
-	panic("not implemented") // TODO: Implement
+	receipts := a.blockChain().GetReceiptsByHash(blockHash)
+	if receipts == nil {
+		return nil, nil
+	}
+	logs := make([][]*types.Log, len(receipts))
+	for i, receipt := range receipts {
+		logs[i] = receipt.Logs
+	}
+	return logs, nil
 }
 
 func (a *APIBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
@@ -249,7 +268,7 @@ func (a *APIBackend) ServiceFilter(ctx context.Context, session *bloombits.Match
 }
 
 func (a *APIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	return a.b.blockChain.SubscribeLogsEvent(ch)
+	return a.blockChain().SubscribeLogsEvent(ch)
 }
 
 func (a *APIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
@@ -258,13 +277,13 @@ func (a *APIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Sub
 }
 
 func (a *APIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
-	return a.b.blockChain.SubscribeRemovedLogsEvent(ch)
+	return a.blockChain().SubscribeRemovedLogsEvent(ch)
 }
 
 func (a *APIBackend) ChainConfig() *params.ChainConfig {
-	return a.b.blockChain.Config()
+	return a.blockChain().Config()
 }
 
 func (a *APIBackend) Engine() consensus.Engine {
-	return a.b.blockChain.Engine()
+	return a.blockChain().Engine()
 }
