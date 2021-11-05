@@ -132,8 +132,8 @@ func (tx *ArbitrumContractTx) isFake() bool                                 { re
 
 type ArbitrumRetryTx struct {
 	ArbitrumContractTx
-	TicketId   common.Hash
-	RefundTo   common.Address
+	TicketId common.Hash
+	RefundTo common.Address
 }
 
 func (tx *ArbitrumRetryTx) txType() byte { return ArbitrumRetryTxType }
@@ -182,33 +182,37 @@ func (tx *ArbitrumRetryTx) to() *common.Address    { return tx.ArbitrumContractT
 func (tx *ArbitrumRetryTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.ArbitrumContractTx.rawSignatureValues()
 }
-func (tx *ArbitrumRetryTx) setSignatureValues(chainID, v, r, s *big.Int) { tx.ArbitrumContractTx.setSignatureValues(chainID, v, r, s)}
-func (tx *ArbitrumRetryTx) isFake() bool                                 { return tx.ArbitrumContractTx.isFake() }
+func (tx *ArbitrumRetryTx) setSignatureValues(chainID, v, r, s *big.Int) {
+	tx.ArbitrumContractTx.setSignatureValues(chainID, v, r, s)
+}
+func (tx *ArbitrumRetryTx) isFake() bool { return tx.ArbitrumContractTx.isFake() }
 
 type ArbitrumSubmitRetryableTx struct {
 	ChainId   *big.Int
 	RequestId common.Hash
 	From      common.Address
 
-	GasPrice *big.Int        // wei per gas
-	Gas      uint64          // gas limit
-	To       *common.Address `rlp:"nil"` // nil means contract creation
-	Value    *big.Int        // wei amount
-	Data     []byte          // contract invocation input data
+	GasPrice    *big.Int        // wei per gas
+	Gas         uint64          // gas limit
+	To          *common.Address `rlp:"nil"` // nil means contract creation
+	Value       *big.Int        // wei amount
+	Beneficiary common.Address
+	Data        []byte // contract invocation input data
 }
 
 func (tx *ArbitrumSubmitRetryableTx) txType() byte { return ArbitrumSubmitRetryableTxType }
 
 func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 	cpy := &ArbitrumSubmitRetryableTx{
-		ChainId:   new(big.Int),
-		RequestId: tx.RequestId,
-		GasPrice:  new(big.Int),
-		Gas:       tx.Gas,
-		From:      tx.From,
-		To:        nil,
-		Value:     new(big.Int),
-		Data:      common.CopyBytes(tx.Data),
+		ChainId:     new(big.Int),
+		RequestId:   tx.RequestId,
+		GasPrice:    new(big.Int),
+		Gas:         tx.Gas,
+		From:        tx.From,
+		To:          nil,
+		Value:       new(big.Int),
+		Beneficiary: tx.Beneficiary,
+		Data:        common.CopyBytes(tx.Data),
 	}
 	if tx.ChainId != nil {
 		cpy.ChainId.Set(tx.ChainId)
