@@ -45,12 +45,12 @@ const (
 	LegacyTxType = iota
 	AccessListTxType
 	DynamicFeeTxType
-	ArbitrumDepositTxType  = 200
-	ArbitrumUnsignedTxType = 201
-	ArbitrumContractTxType = 202
-	ArbitrumWrappedTxType  = 203
-	ArbitrumRetryTxType    = 204
-	ArbitrumSubmitRetryableTxType = 205
+	ArbitrumDepositTxType  = 100
+	ArbitrumUnsignedTxType = 101
+	ArbitrumContractTxType = 102
+	ArbitrumWrappedTxType  = 103
+	ArbitrumRetryTxType    = 104
+	ArbitrumSubmitRetryableTxType = 105
 )
 
 // Transaction is an Ethereum transaction.
@@ -172,7 +172,7 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 		return nil
 	}
 	// It's an EIP2718 typed transaction envelope.
-	inner, err := tx.decodeTyped(b, false)
+	inner, err := tx.decodeTyped(b, true)
 	if err != nil {
 		return err
 	}

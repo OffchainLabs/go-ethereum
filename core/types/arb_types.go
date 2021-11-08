@@ -275,7 +275,7 @@ func (d *ArbitrumDepositTx) copy() TxData {
 func (d *ArbitrumDepositTx) chainID() *big.Int      { return d.ChainId }
 func (d *ArbitrumDepositTx) accessList() AccessList { return nil }
 func (d *ArbitrumDepositTx) data() []byte           { return nil }
-func (d ArbitrumDepositTx) gas() uint64             { return 0 }
+func (d *ArbitrumDepositTx) gas() uint64            { return 0 }
 func (d *ArbitrumDepositTx) gasPrice() *big.Int     { return bigZero }
 func (d *ArbitrumDepositTx) gasTipCap() *big.Int    { return bigZero }
 func (d *ArbitrumDepositTx) gasFeeCap() *big.Int    { return bigZero }

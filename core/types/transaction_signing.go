@@ -277,6 +277,18 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 		// AL txs are defined to use 0 and 1 as their recovery
 		// id, add 27 to become equivalent to unprotected Homestead signatures.
 		V = new(big.Int).Add(V, big.NewInt(27))
+	case ArbitrumDepositTxType:
+		return tx.inner.(*ArbitrumDepositTx).To, nil
+	case ArbitrumUnsignedTxType:
+		return tx.inner.(*ArbitrumUnsignedTx).From, nil
+	case ArbitrumContractTxType:
+		return tx.inner.(*ArbitrumContractTx).From, nil
+	case ArbitrumWrappedTxType:
+		return s.Sender(NewTx(tx.inner.(*ArbitrumWrappedTx).TxData))
+	case ArbitrumRetryTxType:
+		return tx.inner.(*ArbitrumRetryTx).From, nil
+	case ArbitrumSubmitRetryableTxType:
+		return tx.inner.(*ArbitrumSubmitRetryableTx).From, nil
 	default:
 		return common.Address{}, ErrTxTypeNotSupported
 	}
