@@ -102,7 +102,7 @@ func (a *APIBackend) SetHead(number uint64) {
 }
 
 func (a *APIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
-	if number == rpc.LatestBlockNumber {
+	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
 		return a.blockChain().CurrentBlock().Header(), nil
 	}
 	return a.blockChain().GetHeaderByNumber(uint64(number.Int64())), nil

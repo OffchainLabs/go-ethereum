@@ -21,14 +21,18 @@ import "github.com/ethereum/go-ethereum/core/types"
 
 func (bc *BlockChain) ReorgToOldBlock(newHead *types.Block) error {
 	bc.wg.Add(1)
-	bc.chainmu.Lock()
 	defer bc.wg.Done()
+	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 	oldHead := bc.CurrentBlock()
+	if oldHead.Hash() == newHead.Hash() {
+		return nil
+	}
 	bc.writeHeadBlockImpl(newHead, true)
 	err := bc.reorg(oldHead, newHead)
 	if err != nil {
 		return err
 	}
+	bc.chainHeadFeed.Send(ChainHeadEvent{Block: newHead})
 	return nil
 }
