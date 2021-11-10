@@ -320,7 +320,10 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	st.gas -= gas
 
 	if st.processingHook != nil {
-		st.processingHook.ExtraGasChargingHook(&st.gas, st.gp)
+		err = st.processingHook.ExtraGasChargingHook(&st.gas, st.gp)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Check clause 6
