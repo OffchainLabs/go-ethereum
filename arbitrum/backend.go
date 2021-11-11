@@ -70,14 +70,12 @@ func (b *Backend) Publisher() TransactionPublisher {
 	return b.publisher
 }
 
-//TODO: this is used when registering backend as lifecycle in stack
 func (b *Backend) Start() error {
-	return nil
+	return b.publisher.Start()
 }
 
 func (b *Backend) Stop() error {
-
 	b.scope.Close()
 
-	return nil
+	return b.publisher.Stop()
 }

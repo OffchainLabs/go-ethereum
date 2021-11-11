@@ -8,4 +8,6 @@ import (
 type TransactionPublisher interface {
 	PublishTransaction(tx *types.Transaction) error
 	BlockChain() *core.BlockChain
+	Start() error
+	Stop() error
 }
