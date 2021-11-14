@@ -73,7 +73,7 @@ func (a *APIBackend) FeeHistory(ctx context.Context, blockCount int, lastBlock r
 }
 
 func (a *APIBackend) ChainDb() ethdb.Database {
-	return a.b.ethDatabase
+	return a.b.chainDb
 }
 
 func (a *APIBackend) AccountManager() *accounts.Manager {
@@ -85,11 +85,11 @@ func (a *APIBackend) ExtRPCEnabled() bool {
 }
 
 func (a *APIBackend) RPCGasCap() uint64 {
-	return a.b.ethConfig.RPCGasCap
+	return a.b.config.RPCGasCap
 }
 
 func (a *APIBackend) RPCTxFeeCap() float64 {
-	return a.b.ethConfig.RPCTxFeeCap
+	return a.b.config.RPCTxFeeCap
 }
 
 func (a *APIBackend) UnprotectedAllowed() bool {
@@ -210,7 +210,7 @@ func (a *APIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) er
 }
 
 func (a *APIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
-	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(a.b.ethDatabase, txHash)
+	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(a.b.chainDb, txHash)
 	return tx, blockHash, blockNumber, index, nil
 }
 
