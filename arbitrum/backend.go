@@ -1,6 +1,8 @@
 package arbitrum
 
 import (
+	"context"
+
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -9,7 +11,7 @@ import (
 )
 
 type Backend struct {
-	publisher  TransactionPublisher
+	arb        ArbInterface
 	stack      *node.Node
 	apiBackend *APIBackend
 	config     *Config
@@ -37,9 +39,9 @@ var DefaultConfig = Config{
 	RPCTxFeeCap: 1, // 1 ether
 }
 
-func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, blockChain *core.BlockChain, publisher TransactionPublisher) (*Backend, error) {
+func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, blockChain *core.BlockChain, publisher ArbInterface) (*Backend, error) {
 	backend := &Backend{
-		publisher:    publisher,
+		arb:          publisher,
 		stack:        stack,
 		config:       config,
 		chainDb:      chainDb,
@@ -61,8 +63,8 @@ func (b *Backend) ChainDb() ethdb.Database {
 	return b.chainDb
 }
 
-func (b *Backend) EnqueueL2Message(tx *types.Transaction) error {
-	return b.publisher.PublishTransaction(tx)
+func (b *Backend) EnqueueL2Message(ctx context.Context, tx *types.Transaction) error {
+	return b.arb.PublishTransaction(ctx, tx)
 }
 
 func (b *Backend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
@@ -73,8 +75,8 @@ func (b *Backend) Stack() *node.Node {
 	return b.stack
 }
 
-func (b *Backend) Publisher() TransactionPublisher {
-	return b.publisher
+func (b *Backend) ArbInterface() ArbInterface {
+	return b.arb
 }
 
 //TODO: this is used when registering backend as lifecycle in stack

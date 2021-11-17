@@ -56,7 +56,7 @@ func (a *APIBackend) GetAPIs() []rpc.API {
 }
 
 func (a *APIBackend) blockChain() *core.BlockChain {
-	return a.b.publisher.BlockChain()
+	return a.b.arb.BlockChain()
 }
 
 // General Ethereum API
@@ -206,7 +206,7 @@ func (a *APIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) even
 
 // Transaction pool API
 func (a *APIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
-	return a.b.EnqueueL2Message(signedTx)
+	return a.b.EnqueueL2Message(ctx, signedTx)
 }
 
 func (a *APIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
