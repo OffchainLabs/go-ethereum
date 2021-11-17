@@ -1,11 +1,13 @@
 package arbitrum
 
 import (
+	"context"
+
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-type TransactionPublisher interface {
-	PublishTransaction(tx *types.Transaction) error
+type ArbInterface interface {
+	PublishTransaction(ctx context.Context, tx *types.Transaction) error
 	BlockChain() *core.BlockChain
 }
