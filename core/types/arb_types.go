@@ -188,16 +188,19 @@ func (tx *ArbitrumRetryTx) setSignatureValues(chainID, v, r, s *big.Int) {
 func (tx *ArbitrumRetryTx) isFake() bool { return tx.ArbitrumContractTx.isFake() }
 
 type ArbitrumSubmitRetryableTx struct {
-	ChainId   *big.Int
-	RequestId common.Hash
-	From      common.Address
+	ChainId       *big.Int
+	RequestId     common.Hash
+	From          common.Address
 
-	GasPrice    *big.Int        // wei per gas
-	Gas         uint64          // gas limit
-	To          *common.Address `rlp:"nil"` // nil means contract creation
-	Value       *big.Int        // wei amount
-	Beneficiary common.Address
-	Data        []byte // contract invocation input data
+	DepositValue  *big.Int
+	GasPrice      *big.Int        // wei per gas
+	Gas           uint64          // gas limit
+	To            *common.Address `rlp:"nil"` // nil means contract creation
+	Value         *big.Int        // wei amount
+	Beneficiary   common.Address
+	SubmissionFeePaid *big.Int
+	FeeRefundAddr common.Address
+	Data          []byte // contract invocation input data
 }
 
 func (tx *ArbitrumSubmitRetryableTx) txType() byte { return ArbitrumSubmitRetryableTxType }
@@ -206,16 +209,22 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 	cpy := &ArbitrumSubmitRetryableTx{
 		ChainId:     new(big.Int),
 		RequestId:   tx.RequestId,
-		GasPrice:    new(big.Int),
+		DepositValue: tx.DepositValue,
+		GasPrice:    tx.GasPrice,
 		Gas:         tx.Gas,
 		From:        tx.From,
-		To:          nil,
-		Value:       new(big.Int),
+		To:          tx.To,
+		Value:       tx.Value,
 		Beneficiary: tx.Beneficiary,
+		SubmissionFeePaid: tx.SubmissionFeePaid,
+		FeeRefundAddr: tx.FeeRefundAddr,
 		Data:        common.CopyBytes(tx.Data),
 	}
 	if tx.ChainId != nil {
 		cpy.ChainId.Set(tx.ChainId)
+	}
+	if tx.DepositValue != nil {
+		cpy.DepositValue.Set(tx.DepositValue)
 	}
 	if tx.GasPrice != nil {
 		cpy.GasPrice.Set(tx.GasPrice)
@@ -226,6 +235,9 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 	}
 	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
+	}
+	if tx.SubmissionFeePaid != nil {
+		cpy.SubmissionFeePaid.Set(tx.SubmissionFeePaid)
 	}
 	return cpy
 }
