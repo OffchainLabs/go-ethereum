@@ -185,7 +185,7 @@ func (tx *ArbitrumRetryTx) rawSignatureValues() (v, r, s *big.Int) {
 func (tx *ArbitrumRetryTx) setSignatureValues(chainID, v, r, s *big.Int) {
 	tx.ArbitrumContractTx.setSignatureValues(chainID, v, r, s)
 }
-func (tx *ArbitrumRetryTx) isFake() bool { return tx.ArbitrumContractTx.isFake() }
+func (tx *ArbitrumRetryTx) isFake() bool { return true }
 
 type ArbitrumSubmitRetryableTx struct {
 	ChainId       *big.Int
