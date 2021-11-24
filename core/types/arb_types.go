@@ -139,31 +139,8 @@ type ArbitrumRetryTx struct {
 func (tx *ArbitrumRetryTx) txType() byte { return ArbitrumRetryTxType }
 
 func (tx *ArbitrumRetryTx) copy() TxData {
-	contractTx := ArbitrumContractTx{
-		ChainId:   new(big.Int),
-		RequestId: tx.RequestId,
-		GasPrice:  new(big.Int),
-		Gas:       tx.Gas,
-		From:      tx.From,
-		To:        nil,
-		Value:     new(big.Int),
-		Data:      common.CopyBytes(tx.Data),
-	}
-	if tx.ChainId != nil {
-		contractTx.ChainId.Set(tx.ChainId)
-	}
-	if tx.GasPrice != nil {
-		contractTx.GasPrice.Set(tx.GasPrice)
-	}
-	if tx.To != nil {
-		tmp := *tx.To
-		contractTx.To = &tmp
-	}
-	if tx.Value != nil {
-		contractTx.Value.Set(tx.Value)
-	}
 	return &ArbitrumRetryTx{
-		contractTx,
+		*tx.ArbitrumContractTx.copy().(*ArbitrumContractTx),
 		tx.TicketId,
 		tx.RefundTo,
 	}
