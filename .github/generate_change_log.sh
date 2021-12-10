@@ -21,7 +21,7 @@ while read line; do
 done < ${change_log_file}
 LINUX_BIN_SUM="$(checksum ./linux/geth)"
 MAC_BIN_SUM="$(checksum ./macos/geth)"
-WINDOWS_BIN_SUM="$(checksum ./windows/geth.exe)"
+# WINDOWS_BIN_SUM="$(checksum ./windows/geth.exe)"
 OUTPUT=$(cat <<-END
 ## Changelog\n
 ${CHANGE_LOG}\n
@@ -30,8 +30,8 @@ ${CHANGE_LOG}\n
 | :-----------: |------------|\n
 | geth_linux | ${LINUX_BIN_SUM} |\n
 | geth_mac  | ${MAC_BIN_SUM} |\n
-| geth_windows  | ${WINDOWS_BIN_SUM} |\n
 END
+#| geth_windows  | ${WINDOWS_BIN_SUM} |\n
 )
 
 echo -e ${OUTPUT}

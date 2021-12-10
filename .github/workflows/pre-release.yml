@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         go-version: [1.17.x]
-        os: [ubuntu-18.04, macos-11, windows-2019]
+        os: [ubuntu-18.04, macos-11] # windows-2019
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout Code
@@ -52,12 +52,12 @@ jobs:
           name: macos
           path: ./build/bin/geth
 
-      - name: Upload Windows Build
-        uses: actions/upload-artifact@v2
-        if: matrix.os == 'windows-2019'
-        with:
-          name: windows
-          path: ./build/bin/geth.exe
+      # - name: Upload Windows Build
+      #   uses: actions/upload-artifact@v2
+      #   if: matrix.os == 'windows-2019'
+      #   with:
+      #     name: windows
+      #     path: ./build/bin/geth.exe
 
   release:
     name: Release
@@ -83,11 +83,11 @@ jobs:
           name: macos
           path: ./macos
 
-      - name: Download Artifacts
-        uses: actions/download-artifact@v2
-        with:
-          name: windows
-          path: ./windows
+      # - name: Download Artifacts
+      #   uses: actions/download-artifact@v2
+      #   with:
+      #     name: windows
+      #     path: ./windows
 
       - name: Create Release
         id: create_release
@@ -126,12 +126,12 @@ jobs:
           asset_name: geth_mac
           asset_content_type: application/octet-stream
 
-      - name: Upload Release Asset - Windows
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./windows/geth.exe
-          asset_name: geth_windows.exe
-          asset_content_type: application/octet-stream
+      # - name: Upload Release Asset - Windows
+      #   uses: actions/upload-release-asset@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   with:
+      #     upload_url: ${{ steps.create_release.outputs.upload_url }}
+      #     asset_path: ./windows/geth.exe
+      #     asset_name: geth_windows.exe
+      #     asset_content_type: application/octet-stream
