@@ -22,7 +22,7 @@ import "github.com/ethereum/go-ethereum/core/types"
 func (bc *BlockChain) ReorgToOldBlock(newHead *types.Block) error {
 	bc.wg.Add(1)
 	defer bc.wg.Done()
-	bc.chainmu.Lock()
+	bc.chainmu.MustLock()
 	defer bc.chainmu.Unlock()
 	oldHead := bc.CurrentBlock()
 	if oldHead.Hash() == newHead.Hash() {
