@@ -69,7 +69,7 @@ func (a *APIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 }
 
 func (a *APIBackend) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
-	panic("not implemented") // TODO: Implement
+	return nil, nil, nil, nil, errors.New("not implemented")
 }
 
 func (a *APIBackend) ChainDb() ethdb.Database {
