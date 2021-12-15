@@ -2,6 +2,7 @@ package arbitrum
 
 import (
 	"context"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -32,6 +33,9 @@ type Config struct {
 	// RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for
 	// send-transction variants. The unit is ether.
 	RPCTxFeeCap float64
+
+	// RPCEVMTimeout is the global timeout for eth-call.
+	RPCEVMTimeout time.Duration
 }
 
 var DefaultConfig = Config{

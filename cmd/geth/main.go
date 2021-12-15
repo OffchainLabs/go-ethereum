@@ -39,6 +39,11 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
+
+	// Force-load the tracer engines to trigger registration
+	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
+	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
+
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -66,7 +71,7 @@ var (
 		utils.NoUSBFlag,
 		utils.USBFlag,
 		utils.SmartCardDaemonPathFlag,
-		utils.OverrideLondonFlag,
+		utils.OverrideArrowGlacierFlag,
 		utils.EthashCacheDirFlag,
 		utils.EthashCachesInMemoryFlag,
 		utils.EthashCachesOnDiskFlag,
@@ -135,7 +140,9 @@ var (
 		utils.MainnetFlag,
 		utils.DeveloperFlag,
 		utils.DeveloperPeriodFlag,
+		utils.DeveloperGasLimitFlag,
 		utils.RopstenFlag,
+		utils.SepoliaFlag,
 		utils.RinkebyFlag,
 		utils.GoerliFlag,
 		utils.VMEnableDebugFlag,
@@ -173,6 +180,7 @@ var (
 		utils.IPCPathFlag,
 		utils.InsecureUnlockAllowedFlag,
 		utils.RPCGlobalGasCapFlag,
+		utils.RPCGlobalEVMTimeoutFlag,
 		utils.RPCGlobalTxFeeCapFlag,
 		utils.AllowUnprotectedTxs,
 	}
@@ -404,7 +412,7 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
 		}
 		ethBackend, ok := backend.(*eth.EthAPIBackend)
 		if !ok {
-			utils.Fatalf("Ethereum service not running: %v", err)
+			utils.Fatalf("Ethereum service not running")
 		}
 		// Set the gas price to the limits from the CLI and start mining
 		gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
