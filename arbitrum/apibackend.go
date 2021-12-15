@@ -92,6 +92,10 @@ func (a *APIBackend) RPCTxFeeCap() float64 {
 	return a.b.config.RPCTxFeeCap
 }
 
+func (a *APIBackend) RPCEVMTimeout() time.Duration {
+	return a.b.config.RPCEVMTimeout
+}
+
 func (a *APIBackend) UnprotectedAllowed() bool {
 	return true // TODO: is that true?
 }
@@ -179,7 +183,10 @@ func (a *APIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.R
 }
 
 func (a *APIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
-	return a.blockChain().GetTdByHash(hash)
+	if header := a.blockChain().GetHeaderByHash(hash); header != nil {
+		return a.blockChain().GetTd(hash, header.Number.Uint64())
+	}
+	return nil
 }
 
 func (a *APIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
