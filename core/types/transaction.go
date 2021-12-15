@@ -172,7 +172,7 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 		return nil
 	}
 	// It's an EIP2718 typed transaction envelope.
-	inner, err := tx.decodeTyped(b, true)
+	inner, err := tx.decodeTyped(b, false)
 	if err != nil {
 		return err
 	}
@@ -417,9 +417,9 @@ func (tx *Transaction) Hash() common.Hash {
 	if tx.Type() == LegacyTxType {
 		h = rlpHash(tx.inner)
 	} else if tx.Type() == ArbitrumSubmitRetryableTxType {
-		h = tx.inner.(*ArbitrumSubmitRetryableTx).RequestId
+		h = tx.inner.(*ArbitrumSubmitRetryableTx).RequestId // this is required by the retryables API
 	} else if tx.Type() == ArbitrumRetryTxType {
-		h = tx.inner.(*ArbitrumRetryTx).RequestId
+		h = tx.inner.(*ArbitrumRetryTx).RequestId // for this type, RequestId was initialized with the desired tx hash
 	} else {
 		h = prefixedRlpHash(tx.Type(), tx.inner)
 	}

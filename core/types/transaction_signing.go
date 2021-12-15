@@ -285,10 +285,6 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 		return tx.inner.(*ArbitrumContractTx).From, nil
 	case ArbitrumWrappedTxType:
 		return s.Sender(NewTx(tx.inner.(*ArbitrumWrappedTx).TxData))
-	case ArbitrumRetryTxType:
-		return tx.inner.(*ArbitrumRetryTx).From, nil
-	case ArbitrumSubmitRetryableTxType:
-		return tx.inner.(*ArbitrumSubmitRetryableTx).From, nil
 	default:
 		return common.Address{}, ErrTxTypeNotSupported
 	}

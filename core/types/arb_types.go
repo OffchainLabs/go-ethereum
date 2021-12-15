@@ -165,37 +165,37 @@ func (tx *ArbitrumRetryTx) setSignatureValues(chainID, v, r, s *big.Int) {
 func (tx *ArbitrumRetryTx) isFake() bool { return true }
 
 type ArbitrumSubmitRetryableTx struct {
-	ChainId       *big.Int
-	RequestId     common.Hash
-	From          common.Address
+	ChainId   *big.Int
+	RequestId common.Hash
+	From      common.Address
 
-	DepositValue  *big.Int
-	GasPrice      *big.Int        // wei per gas
-	Gas           uint64          // gas limit
-	To            *common.Address `rlp:"nil"` // nil means contract creation
-	Value         *big.Int        // wei amount
-	Beneficiary   common.Address
+	DepositValue      *big.Int
+	GasPrice          *big.Int        // wei per gas
+	Gas               uint64          // gas limit
+	To                *common.Address `rlp:"nil"` // nil means contract creation
+	Value             *big.Int        // wei amount
+	Beneficiary       common.Address
 	SubmissionFeePaid *big.Int
-	FeeRefundAddr common.Address
-	Data          []byte // contract invocation input data
+	FeeRefundAddr     common.Address
+	Data              []byte // contract invocation input data
 }
 
 func (tx *ArbitrumSubmitRetryableTx) txType() byte { return ArbitrumSubmitRetryableTxType }
 
 func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 	cpy := &ArbitrumSubmitRetryableTx{
-		ChainId:     new(big.Int),
-		RequestId:   tx.RequestId,
-		DepositValue: tx.DepositValue,
-		GasPrice:    tx.GasPrice,
-		Gas:         tx.Gas,
-		From:        tx.From,
-		To:          tx.To,
-		Value:       tx.Value,
-		Beneficiary: tx.Beneficiary,
-		SubmissionFeePaid: tx.SubmissionFeePaid,
-		FeeRefundAddr: tx.FeeRefundAddr,
-		Data:        common.CopyBytes(tx.Data),
+		ChainId:           new(big.Int),
+		RequestId:         tx.RequestId,
+		DepositValue:      new(big.Int),
+		GasPrice:          new(big.Int),
+		Gas:               tx.Gas,
+		From:              tx.From,
+		To:                tx.To,
+		Value:             new(big.Int),
+		Beneficiary:       tx.Beneficiary,
+		SubmissionFeePaid: new(big.Int),
+		FeeRefundAddr:     tx.FeeRefundAddr,
+		Data:              common.CopyBytes(tx.Data),
 	}
 	if tx.ChainId != nil {
 		cpy.ChainId.Set(tx.ChainId)
