@@ -33,8 +33,8 @@ import (
 var emptyCodeHash = crypto.Keccak256Hash(nil)
 
 type TxProcessingHook interface {
-	InterceptMessage() (*ExecutionResult, error)
-	ExtraGasChargingHook(gasRemaining *uint64) error
+	InterceptMessage() *ExecutionResult
+	GasChargingHook(gasRemaining *uint64, intrinsicGas uint64) error
 	EndTxHook(totalGasUsed uint64, success bool) error
 }
 
@@ -301,6 +301,11 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	// 5. there is no overflow when calculating intrinsic gas
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
 
+	// There are no tips in L2
+	if st.gasPrice.Cmp(st.evm.Context.BaseFee) == -1 {
+		st.gasPrice = st.evm.Context.BaseFee
+	}
+
 	// Check clauses 1-3, buy gas if everything is correct
 	if err := st.preCheck(); err != nil {
 		return nil, err
@@ -323,7 +328,7 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	st.gas -= gas
 
 	if st.processingHook != nil {
-		err = st.processingHook.ExtraGasChargingHook(&st.gas)
+		err = st.processingHook.GasChargingHook(&st.gas, gas)
 		if err != nil {
 			return nil, err
 		}
@@ -372,9 +377,9 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 
 func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if st.processingHook != nil {
-		res, err := st.processingHook.InterceptMessage()
-		if res != nil || err != nil {
-			return res, err
+		res := st.processingHook.InterceptMessage()
+		if res != nil {
+			return res, nil
 		}
 	}
 	res, err := st.transitionDbImpl()
