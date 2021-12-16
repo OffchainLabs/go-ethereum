@@ -34,7 +34,7 @@ var emptyCodeHash = crypto.Keccak256Hash(nil)
 
 type TxProcessingHook interface {
 	InterceptMessage() *ExecutionResult
-	GasChargingHook(gasRemaining *uint64, intrinsicGas uint64) error
+	GasChargingHook(gasRemaining *uint64) error
 	EndTxHook(totalGasUsed uint64, success bool) error
 }
 
@@ -328,7 +328,7 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	st.gas -= gas
 
 	if st.processingHook != nil {
-		err = st.processingHook.GasChargingHook(&st.gas, gas)
+		err = st.processingHook.GasChargingHook(&st.gas)
 		if err != nil {
 			return nil, err
 		}
