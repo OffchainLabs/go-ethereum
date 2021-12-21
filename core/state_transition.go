@@ -36,6 +36,7 @@ type TxProcessingHook interface {
 	InterceptMessage() *ExecutionResult
 	GasChargingHook(gasRemaining *uint64) error
 	EndTxHook(totalGasUsed uint64, success bool) error
+	NonrefundableGas() uint64
 }
 
 /*
@@ -399,8 +400,17 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 }
 
 func (st *StateTransition) refundGas(refundQuotient uint64) {
+
+	var nonrefundable uint64
+	if st.processingHook != nil {
+		nonrefundable = st.processingHook.NonrefundableGas()
+	}
+	if nonrefundable >= st.gasUsed() {
+		return
+	}
+
 	// Apply refund counter, capped to a refund quotient
-	refund := st.gasUsed() / refundQuotient
+	refund := (st.gasUsed() - nonrefundable) / refundQuotient
 	if refund > st.state.GetRefund() {
 		refund = st.state.GetRefund()
 	}
