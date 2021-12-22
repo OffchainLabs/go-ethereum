@@ -84,9 +84,9 @@ type BlockContext struct {
 // All fields can change between transactions.
 type TxContext struct {
 	// Message information
-	Origin   common.Address // Provides information for ORIGIN
-	GasPrice *big.Int       // Provides information for GASPRICE
-	OriginWasRemapped bool  // Arbitrum addition, provides information for ArbSys precopmile
+	Origin            common.Address // Provides information for ORIGIN
+	GasPrice          *big.Int       // Provides information for GASPRICE
+	OriginWasRemapped bool           // Arbitrum addition, provides information for ArbSys precopmile
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -124,18 +124,46 @@ type EVM struct {
 	// available gas is calculated in gasCall* according to the 63/64 rule and later
 	// applied in opCall*.
 	callGasTemp uint64
+
+	ProcessingHook TxProcessingHook
+}
+
+type TxProcessingHook interface {
+	InterceptMessage() bool
+	GasChargingHook(gasRemaining *uint64) error
+	EndTxHook(totalGasUsed uint64, success bool) error
+	NonrefundableGas() uint64
+}
+
+type DefaultTxProcessor struct{}
+
+func (p DefaultTxProcessor) InterceptMessage() bool {
+	return false
+}
+
+func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) error {
+	return nil
+}
+
+func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, success bool) error {
+	return nil
+}
+
+func (p DefaultTxProcessor) NonrefundableGas() uint64 {
+	return 0
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
 func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config) *EVM {
 	evm := &EVM{
-		Context:     blockCtx,
-		TxContext:   txCtx,
-		StateDB:     statedb,
-		Config:      config,
-		chainConfig: chainConfig,
-		chainRules:  chainConfig.Rules(blockCtx.BlockNumber),
+		Context:        blockCtx,
+		TxContext:      txCtx,
+		StateDB:        statedb,
+		Config:         config,
+		chainConfig:    chainConfig,
+		chainRules:     chainConfig.Rules(blockCtx.BlockNumber),
+		ProcessingHook: DefaultTxProcessor{},
 	}
 	evm.interpreter = NewEVMInterpreter(evm, config)
 	return evm
