@@ -32,13 +32,6 @@ import (
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
 
-type TxProcessingHook interface {
-	InterceptMessage() *ExecutionResult
-	GasChargingHook(gasRemaining *uint64) error
-	EndTxHook(totalGasUsed uint64, success bool) error
-	NonrefundableGas() uint64
-}
-
 /*
 The State Transitioning Model
 
@@ -57,8 +50,6 @@ The state transitioning model does all the necessary work to work out a valid ne
 6) Derive new state root
 */
 type StateTransition struct {
-	processingHook TxProcessingHook
-
 	gp         *GasPool
 	msg        Message
 	gas        uint64
@@ -166,17 +157,14 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 	return gas, nil
 }
 
-var CreateTxProcessingHook func(msg Message, evm *vm.EVM) TxProcessingHook
+var ReadyEVMForL2 func(evm *vm.EVM, msg Message)
 
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
-	var processingHook TxProcessingHook
-	if CreateTxProcessingHook != nil {
-		processingHook = CreateTxProcessingHook(msg, evm)
+	if ReadyEVMForL2 != nil {
+		ReadyEVMForL2(evm, msg)
 	}
 	return &StateTransition{
-		processingHook: processingHook,
-
 		gp:        gp,
 		evm:       evm,
 		msg:       msg,
@@ -328,11 +316,9 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	}
 	st.gas -= gas
 
-	if st.processingHook != nil {
-		err = st.processingHook.GasChargingHook(&st.gas)
-		if err != nil {
-			return nil, err
-		}
+	err = st.evm.ProcessingHook.GasChargingHook(&st.gas)
+	if err != nil {
+		return nil, err
 	}
 
 	// Check clause 6
@@ -377,12 +363,17 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 }
 
 func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
-	if st.processingHook != nil {
-		res := st.processingHook.InterceptMessage()
-		if res != nil {
-			return res, nil
+
+	isDeposit := st.evm.ProcessingHook.InterceptMessage()
+	if isDeposit {
+		res := &ExecutionResult{
+			UsedGas:    0,
+			Err:        nil,
+			ReturnData: nil,
 		}
+		return res, nil
 	}
+
 	res, err := st.transitionDbImpl()
 	if err != nil && !errors.Is(err, ErrNonceTooLow) && !errors.Is(err, ErrNonceTooHigh) {
 		res = &ExecutionResult{
@@ -393,18 +384,15 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		err = nil
 	}
 
-	if err == nil && st.processingHook != nil {
-		st.processingHook.EndTxHook(st.gas, res.Err == nil)
+	if err == nil {
+		st.evm.ProcessingHook.EndTxHook(st.gas, res.Err == nil)
 	}
 	return res, err
 }
 
 func (st *StateTransition) refundGas(refundQuotient uint64) {
 
-	var nonrefundable uint64
-	if st.processingHook != nil {
-		nonrefundable = st.processingHook.NonrefundableGas()
-	}
+	nonrefundable := st.evm.ProcessingHook.NonrefundableGas()
 	if nonrefundable >= st.gasUsed() {
 		return
 	}
