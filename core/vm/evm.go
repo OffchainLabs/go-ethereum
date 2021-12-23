@@ -128,31 +128,6 @@ type EVM struct {
 	ProcessingHook TxProcessingHook
 }
 
-type TxProcessingHook interface {
-	InterceptMessage() bool
-	GasChargingHook(gasRemaining *uint64) error
-	EndTxHook(totalGasUsed uint64, success bool) error
-	NonrefundableGas() uint64
-}
-
-type DefaultTxProcessor struct{}
-
-func (p DefaultTxProcessor) InterceptMessage() bool {
-	return false
-}
-
-func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) error {
-	return nil
-}
-
-func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, success bool) error {
-	return nil
-}
-
-func (p DefaultTxProcessor) NonrefundableGas() uint64 {
-	return 0
-}
-
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
 func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config) *EVM {
