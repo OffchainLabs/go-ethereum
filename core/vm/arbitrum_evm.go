@@ -19,7 +19,7 @@ package vm
 type TxProcessingHook interface {
 	StartTxHook() bool
 	GasChargingHook(gasRemaining *uint64) error
-	EndTxHook(totalGasUsed uint64, success bool) error
+	EndTxHook(totalGasUsed uint64, success bool)
 	NonrefundableGas() uint64
 }
 
@@ -33,8 +33,8 @@ func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) error {
 	return nil
 }
 
-func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, success bool) error {
-	return nil
+func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, success bool) {
+	return
 }
 
 func (p DefaultTxProcessor) NonrefundableGas() uint64 {
