@@ -178,13 +178,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		evm.dmContext.RecordCallParams("CALL", caller.Address(), addr, value, gas, input)
 	}
 
-	if evm.Config.NoRecursion && evm.depth > 0 {
-		if evm.dmContext.Enabled() {
-			evm.dmContext.EndFailedCall(gas, true, ErrDepth.Error())
-		}
-
-		return nil, gas, nil
-	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		if evm.dmContext.Enabled() {
@@ -310,13 +303,6 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		evm.dmContext.RecordCallParams("CALLCODE", caller.Address(), addr, value, gas, input)
 	}
 
-	if evm.Config.NoRecursion && evm.depth > 0 {
-		if evm.dmContext.Enabled() {
-			evm.dmContext.EndFailedCall(gas, true, ErrDepth.Error())
-		}
-
-		return nil, gas, nil
-	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		if evm.dmContext.Enabled() {
@@ -412,13 +398,6 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		evm.dmContext.RecordCallParams("DELEGATE", parent.CallerAddress, addr, parent.value, gas, input)
 	}
 
-	if evm.Config.NoRecursion && evm.depth > 0 {
-		if evm.dmContext.Enabled() {
-			evm.dmContext.EndFailedCall(gas, true, ErrDepth.Error())
-		}
-
-		return nil, gas, nil
-	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		if evm.dmContext.Enabled() {
@@ -485,13 +464,6 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		evm.dmContext.RecordCallParams("STATIC", caller.Address(), addr, deepmind.EmptyValue, gas, input)
 	}
 
-	if evm.Config.NoRecursion && evm.depth > 0 {
-		if evm.dmContext.Enabled() {
-			evm.dmContext.EndFailedCall(gas, true, ErrDepth.Error())
-		}
-
-		return nil, gas, nil
-	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		if evm.dmContext.Enabled() {
@@ -643,14 +615,6 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contract := NewContract(caller, AccountRef(address), value, gas, evm.dmContext)
 	contract.SetCodeOptionalHash(&address, codeAndHash)
 
-	if evm.Config.NoRecursion && evm.depth > 0 {
-		if evm.dmContext.Enabled() {
-			evm.dmContext.EndFailedCall(gas, true, ErrDepth.Error())
-		}
-
-		return nil, address, gas, nil
-	}
-
 	if evm.Config.Debug {
 		if evm.depth == 0 {
 			evm.Config.Tracer.CaptureStart(evm, caller.Address(), address, true, codeAndHash.code, gas, value)
@@ -728,7 +692,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 
 // Create2 creates a new contract using code as deployment code.
 //
-// The different between Create2 with Create is Create2 uses sha3(0xff ++ msg.sender ++ salt ++ sha3(init_code))[12:]
+// The different between Create2 with Create is Create2 uses keccak256(0xff ++ msg.sender ++ salt ++ keccak256(init_code))[12:]
 // instead of the usual sender-and-nonce-hash as the address where the contract is initialized at.
 func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	codeAndHash := &codeAndHash{code: code}

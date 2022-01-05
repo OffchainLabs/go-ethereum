@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/urfave/cli.v1"
@@ -108,7 +109,7 @@ func runCmd(ctx *cli.Context) error {
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
 	log.Root().SetHandler(glogger)
-	logconfig := &vm.LogConfig{
+	logconfig := &logger.Config{
 		EnableMemory:     !ctx.GlobalBool(DisableMemoryFlag.Name),
 		DisableStack:     ctx.GlobalBool(DisableStackFlag.Name),
 		DisableStorage:   ctx.GlobalBool(DisableStorageFlag.Name),
@@ -118,7 +119,7 @@ func runCmd(ctx *cli.Context) error {
 
 	var (
 		tracer        vm.EVMLogger
-		debugLogger   *vm.StructLogger
+		debugLogger   *logger.StructLogger
 		statedb       *state.StateDB
 		chainConfig   *params.ChainConfig
 		sender        = common.BytesToAddress([]byte("sender"))
@@ -126,12 +127,12 @@ func runCmd(ctx *cli.Context) error {
 		genesisConfig *core.Genesis
 	)
 	if ctx.GlobalBool(MachineFlag.Name) {
-		tracer = vm.NewJSONLogger(logconfig, os.Stdout)
+		tracer = logger.NewJSONLogger(logconfig, os.Stdout)
 	} else if ctx.GlobalBool(DebugFlag.Name) {
-		debugLogger = vm.NewStructLogger(logconfig)
+		debugLogger = logger.NewStructLogger(logconfig)
 		tracer = debugLogger
 	} else {
-		debugLogger = vm.NewStructLogger(logconfig)
+		debugLogger = logger.NewStructLogger(logconfig)
 	}
 	if ctx.GlobalString(GenesisFlag.Name) != "" {
 		gen := readGenesis(ctx.GlobalString(GenesisFlag.Name))
@@ -289,10 +290,10 @@ func runCmd(ctx *cli.Context) error {
 	if ctx.GlobalBool(DebugFlag.Name) {
 		if debugLogger != nil {
 			fmt.Fprintln(os.Stderr, "#### TRACE ####")
-			vm.WriteTrace(os.Stderr, debugLogger.StructLogs())
+			logger.WriteTrace(os.Stderr, debugLogger.StructLogs())
 		}
 		fmt.Fprintln(os.Stderr, "#### LOGS ####")
-		vm.WriteLogs(os.Stderr, statedb.Logs())
+		logger.WriteLogs(os.Stderr, statedb.Logs())
 	}
 
 	if bench || ctx.GlobalBool(StatDumpFlag.Name) {

@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/params"
 
 	// force-load js tracers to trigger registration
@@ -327,7 +328,7 @@ func TestBlockhash(t *testing.T) {
 }
 
 type stepCounter struct {
-	inner *vm.JSONLogger
+	inner *logger.JSONLogger
 	steps int
 }
 
@@ -494,7 +495,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 		byte(vm.JUMP),
 	}
 
-	//tracer := vm.NewJSONLogger(nil, os.Stdout)
+	//tracer := logger.NewJSONLogger(nil, os.Stdout)
 	//Execute(loopingCode, nil, &Config{
 	//	EVMConfig: vm.Config{
 	//		Debug:  true,
@@ -537,7 +538,7 @@ func TestEip2929Cases(t *testing.T) {
 		Execute(code, nil, &Config{
 			EVMConfig: vm.Config{
 				Debug:     true,
-				Tracer:    vm.NewMarkdownLogger(nil, os.Stdout),
+				Tracer:    logger.NewMarkdownLogger(nil, os.Stdout),
 				ExtraEips: []int{2929},
 			},
 		})
@@ -687,7 +688,7 @@ func TestColdAccountAccessCost(t *testing.T) {
 			want: 7600,
 		},
 	} {
-		tracer := vm.NewStructLogger(nil)
+		tracer := logger.NewStructLogger(nil)
 		Execute(tc.code, nil, &Config{
 			EVMConfig: vm.Config{
 				Debug:  true,
