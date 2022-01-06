@@ -51,7 +51,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	default:
 		signer = FrontierSigner{}
 	}
-	if config.IsArbitrum(blockNumber) {
+	if config.IsArbitrum() {
 		signer = NewArbitrumSigner(signer)
 	}
 	return signer
