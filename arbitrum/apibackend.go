@@ -65,7 +65,7 @@ func (a *APIBackend) SyncProgress() ethereum.SyncProgress {
 }
 
 func (a *APIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
-	return big.NewInt(1), nil // TODO: Implement
+	return big.NewInt(0), nil // there's no tips in L2
 }
 
 func (a *APIBackend) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {

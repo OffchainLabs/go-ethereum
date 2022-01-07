@@ -45,10 +45,12 @@ const (
 	LegacyTxType = iota
 	AccessListTxType
 	DynamicFeeTxType
-	ArbitrumDepositTxType  = 100
-	ArbitrumUnsignedTxType = 101
-	ArbitrumContractTxType = 102
-	ArbitrumWrappedTxType  = 103
+	ArbitrumDepositTxType         = 100
+	ArbitrumUnsignedTxType        = 101
+	ArbitrumContractTxType        = 102
+	ArbitrumWrappedTxType         = 103
+	ArbitrumRetryTxType           = 104
+	ArbitrumSubmitRetryableTxType = 105
 )
 
 // Transaction is an Ethereum transaction.
@@ -199,6 +201,14 @@ func (tx *Transaction) decodeTyped(b []byte, arbParsing bool) (TxData, error) {
 			return &inner, err
 		case ArbitrumWrappedTxType:
 			var inner ArbitrumWrappedTx
+			err := rlp.DecodeBytes(b[1:], &inner)
+			return &inner, err
+		case ArbitrumRetryTxType:
+			var inner ArbitrumRetryTx
+			err := rlp.DecodeBytes(b[1:], &inner)
+			return &inner, err
+		case ArbitrumSubmitRetryableTxType:
+			var inner ArbitrumSubmitRetryableTx
 			err := rlp.DecodeBytes(b[1:], &inner)
 			return &inner, err
 		}
@@ -406,6 +416,10 @@ func (tx *Transaction) Hash() common.Hash {
 	var h common.Hash
 	if tx.Type() == LegacyTxType {
 		h = rlpHash(tx.inner)
+	} else if tx.Type() == ArbitrumSubmitRetryableTxType {
+		h = tx.inner.(*ArbitrumSubmitRetryableTx).RequestId // this is required by the retryables API
+	} else if tx.Type() == ArbitrumRetryTxType {
+		h = tx.inner.(*ArbitrumRetryTx).RequestId // for this type, RequestId was initialized with the desired tx hash
 	} else {
 		h = prefixedRlpHash(tx.Type(), tx.inner)
 	}
