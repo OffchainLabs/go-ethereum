@@ -34,7 +34,6 @@ func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) error {
 }
 
 func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, success bool) {
-	return
 }
 
 func (p DefaultTxProcessor) NonrefundableGas() uint64 {
