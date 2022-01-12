@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
+	"math/big"
 )
 
 func opAdd(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
@@ -437,17 +438,11 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		num.Clear()
 		return nil, nil
 	}
-	var upper, lower uint64
-	upper = interpreter.evm.Context.BlockNumber.Uint64()
-	if upper < 257 {
-		lower = 0
-	} else {
-		lower = upper - 256
-	}
-	if num64 >= lower && num64 < upper {
-		num.SetBytes(interpreter.evm.Context.GetHash(num64).Bytes())
-	} else {
+	h, err := interpreter.evm.ProcessingHook.L1BlockHash(interpreter.evm.Context, num64)
+	if err != nil {
 		num.Clear()
+	} else {
+		num.SetBytes(h.Bytes())
 	}
 	return nil, nil
 }
@@ -464,7 +459,11 @@ func opTimestamp(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 }
 
 func opNumber(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	v, _ := uint256.FromBig(interpreter.evm.Context.BlockNumber)
+	bnum, err := interpreter.evm.ProcessingHook.L1BlockNumber(interpreter.evm.Context)
+	if err != nil {
+		return nil, err
+	}
+	v, _ := uint256.FromBig(new(big.Int).SetUint64(bnum))
 	scope.Stack.push(v)
 	return nil, nil
 }

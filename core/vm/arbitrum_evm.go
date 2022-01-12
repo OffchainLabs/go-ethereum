@@ -16,11 +16,18 @@
 
 package vm
 
+import (
+	"errors"
+	"github.com/ethereum/go-ethereum/common"
+)
+
 type TxProcessingHook interface {
 	StartTxHook() bool
 	GasChargingHook(gasRemaining *uint64) error
 	EndTxHook(totalGasUsed uint64, success bool)
 	NonrefundableGas() uint64
+	L1BlockNumber(blockCtx BlockContext) (uint64, error)
+	L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error)
 }
 
 type DefaultTxProcessor struct{}
@@ -39,4 +46,23 @@ func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, success bool) {
 
 func (p DefaultTxProcessor) NonrefundableGas() uint64 {
 	return 0
+}
+
+func (p DefaultTxProcessor) L1BlockNumber(blockCtx BlockContext) (uint64, error) {
+	return blockCtx.BlockNumber.Uint64(), nil
+}
+
+func (p DefaultTxProcessor) L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error) {
+	var upper, lower uint64
+	upper = blockCtx.BlockNumber.Uint64()
+	if upper < 257 {
+		lower = 0
+	} else {
+		lower = upper - 256
+	}
+	if l1BlocKNumber >= lower && l1BlocKNumber < upper {
+		return blockCtx.GetHash(l1BlocKNumber), nil
+	} else {
+		return common.Hash{}, errors.New("invalid block number in blockhash request")
+	}
 }
