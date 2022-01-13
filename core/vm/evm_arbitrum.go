@@ -16,7 +16,44 @@
 
 package vm
 
+import "github.com/ethereum/go-ethereum/common"
+
 // Depth returns the current depth
 func (evm *EVM) Depth() int {
 	return evm.depth
+}
+
+type TxProcessingHook interface {
+	StartTxHook() bool
+	GasChargingHook(gasRemaining *uint64) error
+	EndTxHook(totalGasUsed uint64, success bool)
+	NonrefundableGas() uint64
+	PushCaller(addr common.Address)
+	PopCaller()
+}
+
+type DefaultTxProcessor struct{}
+
+func (p DefaultTxProcessor) StartTxHook() bool {
+	return false
+}
+
+func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) error {
+	return nil
+}
+
+func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, success bool) {
+	return
+}
+
+func (p DefaultTxProcessor) NonrefundableGas() uint64 {
+	return 0
+}
+
+func (p DefaultTxProcessor) PushCaller(addr common.Address) {
+	return
+}
+
+func (p DefaultTxProcessor) PopCaller() {
+	return
 }
