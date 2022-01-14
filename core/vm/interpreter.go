@@ -119,7 +119,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
+	in.evm.ProcessingHook.PushCaller(contract.Caller())
 	defer func() { in.evm.depth-- }()
+	defer func() { in.evm.ProcessingHook.PopCaller() }()
 
 	// Make sure the readOnly is only set if we aren't in readOnly yet.
 	// This also makes sure that the readOnly flag isn't removed for child calls.
