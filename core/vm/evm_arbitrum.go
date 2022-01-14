@@ -16,7 +16,9 @@
 
 package vm
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"github.com/ethereum/go-ethereum/common"
+)
 
 // Depth returns the current depth
 func (evm *EVM) Depth() int {
@@ -30,6 +32,8 @@ type TxProcessingHook interface {
 	NonrefundableGas() uint64
 	PushCaller(addr common.Address)
 	PopCaller()
+	L1BlockNumber(blockCtx BlockContext) (uint64, error)
+	L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error)
 }
 
 type DefaultTxProcessor struct{}
@@ -56,4 +60,12 @@ func (p DefaultTxProcessor) PushCaller(addr common.Address) {
 
 func (p DefaultTxProcessor) PopCaller() {
 	return
+}
+
+func (p DefaultTxProcessor) L1BlockNumber(blockCtx BlockContext) (uint64, error) {
+	return blockCtx.BlockNumber.Uint64(), nil
+}
+
+func (p DefaultTxProcessor) L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error) {
+	return blockCtx.GetHash(l1BlocKNumber), nil
 }
