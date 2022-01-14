@@ -131,9 +131,9 @@ func (tx *ArbitrumContractTx) setSignatureValues(chainID, v, r, s *big.Int) {}
 func (tx *ArbitrumContractTx) isFake() bool                                 { return true }
 
 type ArbitrumRetryTx struct {
-	ChainId   *big.Int
-	RequestId common.Hash
-	From      common.Address
+	ChainId *big.Int
+	Nonce   uint64
+	From    common.Address
 
 	GasPrice *big.Int        // wei per gas
 	Gas      uint64          // gas limit
@@ -148,16 +148,16 @@ func (tx *ArbitrumRetryTx) txType() byte { return ArbitrumRetryTxType }
 
 func (tx *ArbitrumRetryTx) copy() TxData {
 	cpy := &ArbitrumRetryTx{
-		ChainId:   new(big.Int),
-		RequestId: tx.RequestId,
-		GasPrice:  new(big.Int),
-		Gas:       tx.Gas,
-		From:      tx.From,
-		To:        nil,
-		Value:     new(big.Int),
-		Data:      common.CopyBytes(tx.Data),
-		TicketId:  tx.TicketId,
-		RefundTo:  tx.RefundTo,
+		ChainId:  new(big.Int),
+		Nonce:    tx.Nonce,
+		GasPrice: new(big.Int),
+		Gas:      tx.Gas,
+		From:     tx.From,
+		To:       nil,
+		Value:    new(big.Int),
+		Data:     common.CopyBytes(tx.Data),
+		TicketId: tx.TicketId,
+		RefundTo: tx.RefundTo,
 	}
 	if tx.ChainId != nil {
 		cpy.ChainId.Set(tx.ChainId)
@@ -183,7 +183,7 @@ func (tx *ArbitrumRetryTx) gasPrice() *big.Int     { return tx.GasPrice }
 func (tx *ArbitrumRetryTx) gasTipCap() *big.Int    { return tx.GasPrice }
 func (tx *ArbitrumRetryTx) gasFeeCap() *big.Int    { return tx.GasPrice }
 func (tx *ArbitrumRetryTx) value() *big.Int        { return tx.Value }
-func (tx *ArbitrumRetryTx) nonce() uint64          { return 0 }
+func (tx *ArbitrumRetryTx) nonce() uint64          { return tx.Nonce }
 func (tx *ArbitrumRetryTx) to() *common.Address    { return tx.To }
 func (tx *ArbitrumRetryTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero
