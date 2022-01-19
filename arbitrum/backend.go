@@ -2,6 +2,7 @@ package arbitrum
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -39,8 +40,8 @@ type Config struct {
 }
 
 var DefaultConfig = Config{
-	RPCGasCap:   50000000,
-	RPCTxFeeCap: 1, // 1 ether
+	RPCGasCap:   math.MaxInt64, // no real limit, can cast to int
+	RPCTxFeeCap: 1,             // 1 ether
 }
 
 func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, blockChain *core.BlockChain, publisher ArbInterface) (*Backend, error) {

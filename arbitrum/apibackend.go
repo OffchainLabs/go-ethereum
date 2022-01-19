@@ -222,11 +222,13 @@ func (a *APIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*t
 }
 
 func (a *APIBackend) GetPoolTransactions() (types.Transactions, error) {
-	panic("not implemented") // TODO: Implement
+	// Arbitrum doesn't have a pool
+	return types.Transactions{}, nil
 }
 
 func (a *APIBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction {
-	panic("not implemented") // TODO: Implement
+	// Arbitrum doesn't have a pool
+	return nil
 }
 
 func (a *APIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
