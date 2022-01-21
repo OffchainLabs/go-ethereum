@@ -392,16 +392,14 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 func (st *StateTransition) refundGas(refundQuotient uint64) {
 
 	nonrefundable := st.evm.ProcessingHook.NonrefundableGas()
-	if nonrefundable >= st.gasUsed() {
-		return
+	if nonrefundable < st.gasUsed() {
+		// Apply refund counter, capped to a refund quotient
+		refund := (st.gasUsed() - nonrefundable) / refundQuotient
+		if refund > st.state.GetRefund() {
+			refund = st.state.GetRefund()
+		}
+		st.gas += refund
 	}
-
-	// Apply refund counter, capped to a refund quotient
-	refund := (st.gasUsed() - nonrefundable) / refundQuotient
-	if refund > st.state.GetRefund() {
-		refund = st.state.GetRefund()
-	}
-	st.gas += refund
 
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
