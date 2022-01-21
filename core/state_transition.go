@@ -291,7 +291,7 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
 
 	// There are no tips in L2
-	if st.evm.ChainConfig().IsArbitrum() && st.gasPrice.Cmp(st.evm.Context.BaseFee) == -1 {
+	if st.evm.ChainConfig().IsArbitrum() && st.gasPrice.Cmp(st.evm.Context.BaseFee) > 0 {
 		st.gasPrice = st.evm.Context.BaseFee
 	}
 
@@ -375,7 +375,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	res, err := st.transitionDbImpl()
-	if err != nil && !errors.Is(err, ErrNonceTooLow) && !errors.Is(err, ErrNonceTooHigh) {
+	if err != nil && !errors.Is(err, ErrNonceTooLow) && !errors.Is(err, ErrNonceTooHigh) && st.msg.UnderlyingTransaction() != nil {
 		res = &ExecutionResult{
 			UsedGas:    st.gasUsed(),
 			Err:        err,
