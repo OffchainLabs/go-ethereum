@@ -349,7 +349,7 @@ func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Ad
 	if err != nil {
 		return 0, err
 	}
-	// Adjust the estimate
+	// Arbitrum: adjust the estimate
 	adjustedLimit := gasLimit * (10000 + opts.GasMargin) / 10000
 	if adjustedLimit > gasLimit {
 		gasLimit = adjustedLimit
