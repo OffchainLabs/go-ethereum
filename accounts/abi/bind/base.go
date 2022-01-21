@@ -56,6 +56,7 @@ type TransactOpts struct {
 	GasFeeCap *big.Int // Gas fee cap to use for the 1559 transaction execution (nil = gas price oracle)
 	GasTipCap *big.Int // Gas priority fee cap to use for the 1559 transaction execution (nil = gas price oracle)
 	GasLimit  uint64   // Gas limit to set for the transaction execution (0 = estimate)
+	GasMargin uint64   // Arbitrum: adjusts gas estimate by this many basis points (0 = no adjustment)
 
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 
@@ -309,6 +310,11 @@ func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Addr
 		if err != nil {
 			return nil, err
 		}
+	}
+	// Adjust the estimate
+	adjustedLimit := gasLimit * (10000 + opts.GasMargin) / 10000
+	if adjustedLimit > gasLimit {
+		gasLimit = adjustedLimit
 	}
 	// create the transaction
 	nonce, err := c.getNonce(opts)
