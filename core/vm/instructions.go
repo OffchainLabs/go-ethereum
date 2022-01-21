@@ -438,11 +438,21 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		num.Clear()
 		return nil, nil
 	}
-	h, err := interpreter.evm.ProcessingHook.L1BlockHash(interpreter.evm.Context, num64)
-	if err != nil {
-		num.Clear()
+	var upper, lower uint64
+	upper = interpreter.evm.Context.BlockNumber.Uint64()
+	if upper < 257 {
+		lower = 0
 	} else {
+		lower = upper - 256
+	}
+	if num64 >= lower && num64 < upper {
+		h, err := interpreter.evm.ProcessingHook.L1BlockHash(interpreter.evm.Context, num64)
+		if err != nil {
+			return nil, err
+		}
 		num.SetBytes(h.Bytes())
+	} else {
+		num.Clear()
 	}
 	return nil, nil
 }

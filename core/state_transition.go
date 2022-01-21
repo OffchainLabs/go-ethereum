@@ -364,14 +364,13 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 
 func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
-	isDeposit := st.evm.ProcessingHook.StartTxHook()
-	if isDeposit {
-		res := &ExecutionResult{
-			UsedGas:    0,
-			Err:        nil,
-			ReturnData: nil,
-		}
-		return res, nil
+	endTxNow, usedGas, err, returnData := st.evm.ProcessingHook.StartTxHook()
+	if endTxNow {
+		return &ExecutionResult{
+			UsedGas:    usedGas,
+			Err:        err,
+			ReturnData: returnData,
+		}, nil
 	}
 
 	res, err := st.transitionDbImpl()
