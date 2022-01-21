@@ -311,11 +311,6 @@ func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Addr
 			return nil, err
 		}
 	}
-	// Adjust the estimate
-	adjustedLimit := gasLimit * (10000 + opts.GasMargin) / 10000
-	if adjustedLimit > gasLimit {
-		gasLimit = adjustedLimit
-	}
 	// create the transaction
 	nonce, err := c.getNonce(opts)
 	if err != nil {
@@ -350,7 +345,16 @@ func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Ad
 		Value:     value,
 		Data:      input,
 	}
-	return c.transactor.EstimateGas(ensureContext(opts.Context), msg)
+	gasLimit, err := c.transactor.EstimateGas(ensureContext(opts.Context), msg)
+	if err != nil {
+		return 0, err
+	}
+	// Adjust the estimate
+	adjustedLimit := gasLimit * (10000 + opts.GasMargin) / 10000
+	if adjustedLimit > gasLimit {
+		gasLimit = adjustedLimit
+	}
+	return gasLimit, nil
 }
 
 func (c *BoundContract) getNonce(opts *TransactOpts) (uint64, error) {
