@@ -6,7 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var arbAddress = common.HexToAddress("0xabc")
+var arbAddress = common.HexToAddress("0xa4b05")
 
 type arbitrumSigner struct{ Signer }
 
