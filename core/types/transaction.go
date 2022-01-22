@@ -423,8 +423,6 @@ func (tx *Transaction) Hash() common.Hash {
 		h = rlpHash(tx.inner)
 	} else if tx.Type() == ArbitrumSubmitRetryableTxType {
 		h = tx.inner.(*ArbitrumSubmitRetryableTx).RequestId // this is required by the retryables API
-	} else if tx.Type() == ArbitrumRetryTxType {
-		h = tx.inner.(*ArbitrumRetryTx).RequestId // for this type, RequestId was initialized with the desired tx hash
 	} else {
 		h = prefixedRlpHash(tx.Type(), tx.inner)
 	}
