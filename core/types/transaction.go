@@ -192,6 +192,10 @@ func (tx *Transaction) decodeTyped(b []byte, arbParsing bool) (TxData, error) {
 			var inner ArbitrumDepositTx
 			err := rlp.DecodeBytes(b[1:], &inner)
 			return &inner, err
+		case ArbitrumInternalTxType:
+			var inner ArbitrumInternalTx
+			err := rlp.DecodeBytes(b[1:], &inner)
+			return &inner, err
 		case ArbitrumUnsignedTxType:
 			var inner ArbitrumUnsignedTx
 			err := rlp.DecodeBytes(b[1:], &inner)
