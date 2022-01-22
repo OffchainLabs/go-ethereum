@@ -26,7 +26,7 @@ func (evm *EVM) Depth() int {
 }
 
 type TxProcessingHook interface {
-	StartTxHook() bool
+	StartTxHook() (bool, uint64, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
 	GasChargingHook(gasRemaining *uint64) error
 	EndTxHook(totalGasUsed uint64, success bool)
 	NonrefundableGas() uint64
@@ -38,8 +38,8 @@ type TxProcessingHook interface {
 
 type DefaultTxProcessor struct{}
 
-func (p DefaultTxProcessor) StartTxHook() bool {
-	return false
+func (p DefaultTxProcessor) StartTxHook() (bool, uint64, error, []byte) {
+	return false, 0, nil, nil
 }
 
 func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) error {
