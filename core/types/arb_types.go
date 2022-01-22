@@ -281,6 +281,41 @@ func (d *ArbitrumDepositTx) setSignatureValues(chainID, v, r, s *big.Int) {
 
 }
 
+type ArbitrumInternalTx struct {
+	ChainId *big.Int
+	Data    []byte
+}
+
+func (t *ArbitrumInternalTx) txType() byte {
+	return ArbitrumInternalTxType
+}
+
+func (t *ArbitrumInternalTx) copy() TxData {
+	return &ArbitrumInternalTx{
+		Data: common.CopyBytes(t.Data),
+	}
+}
+
+func (t *ArbitrumInternalTx) chainID() *big.Int      { return t.ChainId }
+func (t *ArbitrumInternalTx) accessList() AccessList { return nil }
+func (t *ArbitrumInternalTx) data() []byte           { return t.Data }
+func (t *ArbitrumInternalTx) gas() uint64            { return 0 }
+func (t *ArbitrumInternalTx) gasPrice() *big.Int     { return bigZero }
+func (t *ArbitrumInternalTx) gasTipCap() *big.Int    { return bigZero }
+func (t *ArbitrumInternalTx) gasFeeCap() *big.Int    { return bigZero }
+func (t *ArbitrumInternalTx) value() *big.Int        { return common.Big0 }
+func (t *ArbitrumInternalTx) nonce() uint64          { return 0 }
+func (t *ArbitrumInternalTx) to() *common.Address    { return &arbAddress }
+func (t *ArbitrumInternalTx) isFake() bool           { return true }
+
+func (d *ArbitrumInternalTx) rawSignatureValues() (v, r, s *big.Int) {
+	return bigZero, bigZero, bigZero
+}
+
+func (d *ArbitrumInternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
+
+}
+
 type ArbitrumWrappedTx struct {
 	l1Calldata uint64
 	TxData
