@@ -73,8 +73,9 @@ func NewEVMTxContext(msg Message) vm.TxContext {
 		originWasRemapped = txType == types.ArbitrumUnsignedTxType || txType == types.ArbitrumContractTxType
 	}
 	return vm.TxContext{
-		Origin:            msg.From(),
-		GasPrice:          new(big.Int).Set(msg.GasPrice()),
+		Origin:   msg.From(),
+		GasPrice: new(big.Int).Set(msg.GasPrice()),
+
 		OriginWasRemapped: originWasRemapped,
 	}
 }
