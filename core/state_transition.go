@@ -291,7 +291,7 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
 
 	// There are no tips in L2
-	if st.evm.ChainConfig().IsArbitrum() && st.gasPrice.Cmp(st.evm.Context.BaseFee) == -1 {
+	if st.evm.ChainConfig().IsArbitrum() && st.gasPrice.Cmp(st.evm.Context.BaseFee) > 0 {
 		st.gasPrice = st.evm.Context.BaseFee
 	}
 
@@ -364,18 +364,19 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 
 func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
-	isDeposit := st.evm.ProcessingHook.StartTxHook()
-	if isDeposit {
-		res := &ExecutionResult{
-			UsedGas:    0,
-			Err:        nil,
-			ReturnData: nil,
-		}
-		return res, nil
+	endTxNow, usedGas, err, returnData := st.evm.ProcessingHook.StartTxHook()
+	if endTxNow {
+		return &ExecutionResult{
+			UsedGas:    usedGas,
+			Err:        err,
+			ReturnData: returnData,
+		}, nil
 	}
 
 	res, err := st.transitionDbImpl()
-	if err != nil && !errors.Is(err, ErrNonceTooLow) && !errors.Is(err, ErrNonceTooHigh) {
+	transitionSuccess := true
+	if err != nil && !errors.Is(err, ErrNonceTooLow) && !errors.Is(err, ErrNonceTooHigh) && st.msg.UnderlyingTransaction() != nil {
+		transitionSuccess = false
 		res = &ExecutionResult{
 			UsedGas:    st.gasUsed(),
 			Err:        err,
@@ -385,7 +386,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	if err == nil {
-		st.evm.ProcessingHook.EndTxHook(st.gas, res.Err == nil)
+		st.evm.ProcessingHook.EndTxHook(st.gas, transitionSuccess, res.Err == nil)
 	}
 	return res, err
 }
@@ -393,16 +394,14 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 func (st *StateTransition) refundGas(refundQuotient uint64) {
 
 	nonrefundable := st.evm.ProcessingHook.NonrefundableGas()
-	if nonrefundable >= st.gasUsed() {
-		return
+	if nonrefundable < st.gasUsed() {
+		// Apply refund counter, capped to a refund quotient
+		refund := (st.gasUsed() - nonrefundable) / refundQuotient
+		if refund > st.state.GetRefund() {
+			refund = st.state.GetRefund()
+		}
+		st.gas += refund
 	}
-
-	// Apply refund counter, capped to a refund quotient
-	refund := (st.gasUsed() - nonrefundable) / refundQuotient
-	if refund > st.state.GetRefund() {
-		refund = st.state.GetRefund()
-	}
-	st.gas += refund
 
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)

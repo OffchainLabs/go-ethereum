@@ -16,7 +16,53 @@
 
 package vm
 
+import (
+	"github.com/ethereum/go-ethereum/common"
+)
+
 // Depth returns the current depth
 func (evm *EVM) Depth() int {
 	return evm.depth
+}
+
+type TxProcessingHook interface {
+	StartTxHook() (bool, uint64, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
+	GasChargingHook(gasRemaining *uint64) error
+	EndTxHook(totalGasUsed uint64, transitionSuccess bool, evmSuccess bool)
+	NonrefundableGas() uint64
+	PushCaller(addr common.Address)
+	PopCaller()
+	L1BlockNumber(blockCtx BlockContext) (uint64, error)
+	L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error)
+}
+
+type DefaultTxProcessor struct{}
+
+func (p DefaultTxProcessor) StartTxHook() (bool, uint64, error, []byte) {
+	return false, 0, nil, nil
+}
+
+func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) error {
+	return nil
+}
+
+func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, transitionSuccess bool, evmSuccess bool) {
+}
+
+func (p DefaultTxProcessor) NonrefundableGas() uint64 {
+	return 0
+}
+
+func (p DefaultTxProcessor) PushCaller(addr common.Address) {
+}
+
+func (p DefaultTxProcessor) PopCaller() {
+}
+
+func (p DefaultTxProcessor) L1BlockNumber(blockCtx BlockContext) (uint64, error) {
+	return blockCtx.BlockNumber.Uint64(), nil
+}
+
+func (p DefaultTxProcessor) L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error) {
+	return blockCtx.GetHash(l1BlocKNumber), nil
 }

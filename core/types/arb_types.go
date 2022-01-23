@@ -131,7 +131,15 @@ func (tx *ArbitrumContractTx) setSignatureValues(chainID, v, r, s *big.Int) {}
 func (tx *ArbitrumContractTx) isFake() bool                                 { return true }
 
 type ArbitrumRetryTx struct {
-	ArbitrumContractTx
+	ChainId *big.Int
+	Nonce   uint64
+	From    common.Address
+
+	GasPrice *big.Int        // wei per gas
+	Gas      uint64          // gas limit
+	To       *common.Address `rlp:"nil"` // nil means contract creation
+	Value    *big.Int        // wei amount
+	Data     []byte          // contract invocation input data
 	TicketId common.Hash
 	RefundTo common.Address
 }
@@ -139,30 +147,49 @@ type ArbitrumRetryTx struct {
 func (tx *ArbitrumRetryTx) txType() byte { return ArbitrumRetryTxType }
 
 func (tx *ArbitrumRetryTx) copy() TxData {
-	return &ArbitrumRetryTx{
-		*tx.ArbitrumContractTx.copy().(*ArbitrumContractTx),
-		tx.TicketId,
-		tx.RefundTo,
+	cpy := &ArbitrumRetryTx{
+		ChainId:  new(big.Int),
+		Nonce:    tx.Nonce,
+		GasPrice: new(big.Int),
+		Gas:      tx.Gas,
+		From:     tx.From,
+		To:       nil,
+		Value:    new(big.Int),
+		Data:     common.CopyBytes(tx.Data),
+		TicketId: tx.TicketId,
+		RefundTo: tx.RefundTo,
 	}
+	if tx.ChainId != nil {
+		cpy.ChainId.Set(tx.ChainId)
+	}
+	if tx.GasPrice != nil {
+		cpy.GasPrice.Set(tx.GasPrice)
+	}
+	if tx.To != nil {
+		tmp := *tx.To
+		cpy.To = &tmp
+	}
+	if tx.Value != nil {
+		cpy.Value.Set(tx.Value)
+	}
+	return cpy
 }
 
-func (tx *ArbitrumRetryTx) chainID() *big.Int      { return tx.ArbitrumContractTx.chainID() }
-func (tx *ArbitrumRetryTx) accessList() AccessList { return tx.ArbitrumContractTx.accessList() }
-func (tx *ArbitrumRetryTx) data() []byte           { return tx.ArbitrumContractTx.data() }
-func (tx *ArbitrumRetryTx) gas() uint64            { return tx.ArbitrumContractTx.gas() }
-func (tx *ArbitrumRetryTx) gasPrice() *big.Int     { return tx.ArbitrumContractTx.gasPrice() }
-func (tx *ArbitrumRetryTx) gasTipCap() *big.Int    { return tx.ArbitrumContractTx.gasTipCap() }
-func (tx *ArbitrumRetryTx) gasFeeCap() *big.Int    { return tx.ArbitrumContractTx.gasFeeCap() }
-func (tx *ArbitrumRetryTx) value() *big.Int        { return tx.ArbitrumContractTx.value() }
-func (tx *ArbitrumRetryTx) nonce() uint64          { return tx.ArbitrumContractTx.nonce() }
-func (tx *ArbitrumRetryTx) to() *common.Address    { return tx.ArbitrumContractTx.to() }
+func (tx *ArbitrumRetryTx) chainID() *big.Int      { return tx.ChainId }
+func (tx *ArbitrumRetryTx) accessList() AccessList { return nil }
+func (tx *ArbitrumRetryTx) data() []byte           { return tx.Data }
+func (tx *ArbitrumRetryTx) gas() uint64            { return tx.Gas }
+func (tx *ArbitrumRetryTx) gasPrice() *big.Int     { return tx.GasPrice }
+func (tx *ArbitrumRetryTx) gasTipCap() *big.Int    { return tx.GasPrice }
+func (tx *ArbitrumRetryTx) gasFeeCap() *big.Int    { return tx.GasPrice }
+func (tx *ArbitrumRetryTx) value() *big.Int        { return tx.Value }
+func (tx *ArbitrumRetryTx) nonce() uint64          { return tx.Nonce }
+func (tx *ArbitrumRetryTx) to() *common.Address    { return tx.To }
 func (tx *ArbitrumRetryTx) rawSignatureValues() (v, r, s *big.Int) {
-	return tx.ArbitrumContractTx.rawSignatureValues()
+	return bigZero, bigZero, bigZero
 }
-func (tx *ArbitrumRetryTx) setSignatureValues(chainID, v, r, s *big.Int) {
-	tx.ArbitrumContractTx.setSignatureValues(chainID, v, r, s)
-}
-func (tx *ArbitrumRetryTx) isFake() bool { return true }
+func (tx *ArbitrumRetryTx) setSignatureValues(chainID, v, r, s *big.Int) {}
+func (tx *ArbitrumRetryTx) isFake() bool                                 { return true }
 
 type ArbitrumSubmitRetryableTx struct {
 	ChainId   *big.Int
@@ -278,6 +305,46 @@ func (d *ArbitrumDepositTx) rawSignatureValues() (v, r, s *big.Int) {
 }
 
 func (d *ArbitrumDepositTx) setSignatureValues(chainID, v, r, s *big.Int) {
+
+}
+
+type ArbitrumInternalTx struct {
+	ChainId     *big.Int
+	Data        []byte
+	BlockNumber uint64
+	TxIndex     uint64
+}
+
+func (t *ArbitrumInternalTx) txType() byte {
+	return ArbitrumInternalTxType
+}
+
+func (t *ArbitrumInternalTx) copy() TxData {
+	return &ArbitrumInternalTx{
+		new(big.Int).Set(t.ChainId),
+		common.CopyBytes(t.Data),
+		t.BlockNumber,
+		t.TxIndex,
+	}
+}
+
+func (t *ArbitrumInternalTx) chainID() *big.Int      { return t.ChainId }
+func (t *ArbitrumInternalTx) accessList() AccessList { return nil }
+func (t *ArbitrumInternalTx) data() []byte           { return t.Data }
+func (t *ArbitrumInternalTx) gas() uint64            { return 0 }
+func (t *ArbitrumInternalTx) gasPrice() *big.Int     { return bigZero }
+func (t *ArbitrumInternalTx) gasTipCap() *big.Int    { return bigZero }
+func (t *ArbitrumInternalTx) gasFeeCap() *big.Int    { return bigZero }
+func (t *ArbitrumInternalTx) value() *big.Int        { return common.Big0 }
+func (t *ArbitrumInternalTx) nonce() uint64          { return 0 }
+func (t *ArbitrumInternalTx) to() *common.Address    { return &arbAddress }
+func (t *ArbitrumInternalTx) isFake() bool           { return true }
+
+func (d *ArbitrumInternalTx) rawSignatureValues() (v, r, s *big.Int) {
+	return bigZero, bigZero, bigZero
+}
+
+func (d *ArbitrumInternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
 
 }
 

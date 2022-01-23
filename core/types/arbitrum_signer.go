@@ -6,7 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var arbAddress = common.HexToAddress("0xabc")
+var arbAddress = common.HexToAddress("0xa4b05")
 
 type arbitrumSigner struct{ Signer }
 
@@ -21,6 +21,8 @@ func (s arbitrumSigner) Sender(tx *Transaction) (common.Address, error) {
 	case *ArbitrumContractTx:
 		return inner.From, nil
 	case *ArbitrumDepositTx:
+		return arbAddress, nil
+	case *ArbitrumInternalTx:
 		return arbAddress, nil
 	case *ArbitrumRetryTx:
 		return inner.From, nil
@@ -43,6 +45,8 @@ func (s arbitrumSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *b
 	case *ArbitrumContractTx:
 		return bigZero, bigZero, bigZero, nil
 	case *ArbitrumDepositTx:
+		return bigZero, bigZero, bigZero, nil
+	case *ArbitrumInternalTx:
 		return bigZero, bigZero, bigZero, nil
 	case *ArbitrumRetryTx:
 		return bigZero, bigZero, bigZero, nil
