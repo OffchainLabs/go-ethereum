@@ -374,7 +374,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	res, err := st.transitionDbImpl()
+	transitionSuccess := true
 	if err != nil && !errors.Is(err, ErrNonceTooLow) && !errors.Is(err, ErrNonceTooHigh) && st.msg.UnderlyingTransaction() != nil {
+		transitionSuccess = false
 		res = &ExecutionResult{
 			UsedGas:    st.gasUsed(),
 			Err:        err,
@@ -384,7 +386,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	if err == nil {
-		st.evm.ProcessingHook.EndTxHook(st.gas, res.Err == nil)
+		st.evm.ProcessingHook.EndTxHook(st.gas, transitionSuccess, res.Err == nil)
 	}
 	return res, err
 }

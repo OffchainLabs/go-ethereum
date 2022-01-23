@@ -38,6 +38,8 @@ import (
 type revision struct {
 	id           int
 	journalIndex int
+	// Arbitrum: track the total balance change across all accounts
+	totalBalanceDelta *big.Int
 }
 
 var (
@@ -62,6 +64,9 @@ func (n *proofList) Delete(key []byte) error {
 // * Contracts
 // * Accounts
 type StateDB struct {
+	// Arbitrum: track the total balance change across all accounts
+	totalBalanceDelta *big.Int
+
 	db           Database
 	prefetcher   *triePrefetcher
 	originalRoot common.Hash // The pre-state root, before any changes were made
@@ -131,6 +136,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		return nil, err
 	}
 	sdb := &StateDB{
+		totalBalanceDelta:   new(big.Int),
 		db:                  db,
 		trie:                tr,
 		originalRoot:        root,
@@ -378,6 +384,7 @@ func (s *StateDB) HasSuicided(addr common.Address) bool {
 func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
+		s.totalBalanceDelta.Add(s.totalBalanceDelta, amount)
 		stateObject.AddBalance(amount)
 	}
 }
@@ -386,6 +393,7 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
+		s.totalBalanceDelta.Sub(s.totalBalanceDelta, amount)
 		stateObject.SubBalance(amount)
 	}
 }
@@ -393,6 +401,10 @@ func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 func (s *StateDB) SetBalance(addr common.Address, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
+		prevBalance := stateObject.Balance()
+		s.totalBalanceDelta.Add(s.totalBalanceDelta, amount)
+		s.totalBalanceDelta.Sub(s.totalBalanceDelta, prevBalance)
+
 		stateObject.SetBalance(amount)
 	}
 }
@@ -443,6 +455,7 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 		prevbalance: new(big.Int).Set(stateObject.Balance()),
 	})
 	stateObject.markSuicided()
+	s.totalBalanceDelta.Sub(s.totalBalanceDelta, stateObject.data.Balance)
 	stateObject.data.Balance = new(big.Int)
 
 	return true
@@ -647,6 +660,7 @@ func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common
 func (s *StateDB) Copy() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
+		totalBalanceDelta:   new(big.Int).Set(s.totalBalanceDelta),
 		db:                  s.db,
 		trie:                s.db.CopyTrie(s.trie),
 		stateObjects:        make(map[common.Address]*stateObject, len(s.journal.dirties)),
@@ -746,7 +760,7 @@ func (s *StateDB) Copy() *StateDB {
 func (s *StateDB) Snapshot() int {
 	id := s.nextRevisionId
 	s.nextRevisionId++
-	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length()})
+	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length(), new(big.Int).Set(s.totalBalanceDelta)})
 	return id
 }
 
@@ -759,7 +773,9 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	if idx == len(s.validRevisions) || s.validRevisions[idx].id != revid {
 		panic(fmt.Errorf("revision id %v cannot be reverted", revid))
 	}
-	snapshot := s.validRevisions[idx].journalIndex
+	revision := s.validRevisions[idx]
+	snapshot := revision.journalIndex
+	s.totalBalanceDelta = new(big.Int).Set(revision.totalBalanceDelta)
 
 	// Replay the journal to undo changes and remove invalidated snapshots
 	s.journal.revert(s, snapshot)
@@ -769,6 +785,11 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 // GetRefund returns the current value of the refund counter.
 func (s *StateDB) GetRefund() uint64 {
 	return s.refund
+}
+
+// GetTotalBalanceDelta returns the total change in balances since the last commit to the database
+func (s *StateDB) GetTotalBalanceDelta() *big.Int {
+	return new(big.Int).Set(s.totalBalanceDelta)
 }
 
 // Finalise finalises the state by removing the s destructed objects and clears
@@ -981,6 +1002,9 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			}
 		}
 		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
+	}
+	if err == nil {
+		s.totalBalanceDelta.Set(new(big.Int))
 	}
 	return root, err
 }
