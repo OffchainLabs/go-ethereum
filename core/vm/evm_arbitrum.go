@@ -28,7 +28,7 @@ func (evm *EVM) Depth() int {
 type TxProcessingHook interface {
 	StartTxHook() (bool, uint64, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
 	GasChargingHook(gasRemaining *uint64) error
-	EndTxHook(totalGasUsed uint64, transitionSuccess bool, evmSuccess bool)
+	EndTxHook(totalGasUsed uint64, success bool)
 	NonrefundableGas() uint64
 	PushCaller(addr common.Address)
 	PopCaller()
@@ -46,7 +46,7 @@ func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) error {
 	return nil
 }
 
-func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, transitionSuccess bool, evmSuccess bool) {
+func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, success bool) {
 	return
 }
 
