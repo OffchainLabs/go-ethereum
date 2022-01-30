@@ -1057,15 +1057,37 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
 
-		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, gasCap)
+		primary, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, gasCap)
 		if err != nil {
 			if errors.Is(err, core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
 			}
 			return true, nil, err // Bail out
 		}
-		_ = result.ScheduledTxes
-		return result.Failed(), result, nil
+		if primary.Failed() {
+			return primary.Failed(), primary, nil
+		}
+
+		// Arbitrum: a tx can schedule another (see retryables)
+		scheduled := primary.ScheduledTxes
+		for len(scheduled) > 0 {
+			args, err := TransactArgsFromArbitrumTx(scheduled[0])
+			if err != nil {
+				return true, nil, err // Bail out
+			}
+			result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, gasCap)
+			if err != nil {
+				if errors.Is(err, core.ErrIntrinsicGas) {
+					return true, nil, nil // Special case, raise gas limit
+				}
+				return true, nil, err // Bail out
+			}
+			if result.Failed() {
+				return result.Failed(), result, nil
+			}
+			scheduled = append(scheduled[1:], result.ScheduledTxes...)
+		}
+		return false, primary, nil
 	}
 	// Execute the binary search and hone in on an executable gas limit
 	for lo+1 < hi {
