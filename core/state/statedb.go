@@ -409,6 +409,13 @@ func (s *StateDB) SetBalance(addr common.Address, amount *big.Int) {
 	}
 }
 
+func (s *StateDB) ExpectBalanceBurn(amount *big.Int) {
+	if amount.Sign() < 0 {
+		panic(fmt.Sprintf("ExpectBalanceBurn called with negative amount %v", amount))
+	}
+	s.totalBalanceDelta.Add(s.totalBalanceDelta, amount)
+}
+
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
