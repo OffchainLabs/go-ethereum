@@ -70,6 +70,9 @@ type Receipt struct {
 	BlockHash        common.Hash `json:"blockHash,omitempty"`
 	BlockNumber      *big.Int    `json:"blockNumber,omitempty"`
 	TransactionIndex uint        `json:"transactionIndex"`
+
+	// Arbitrum: a tx may yield others that need to run afterward (see retryables)
+	ScheduledTxes Transactions `json:"scheduledTxes,omitempty"`
 }
 
 type receiptMarshaling struct {
