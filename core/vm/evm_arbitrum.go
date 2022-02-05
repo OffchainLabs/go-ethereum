@@ -31,8 +31,9 @@ type TxProcessingHook interface {
 	GasChargingHook(gasRemaining *uint64) error
 	PushCaller(addr common.Address)
 	PopCaller()
+	ForceRefundGas() uint64
 	NonrefundableGas() uint64
-	EndTxHook(totalGasUsed uint64, transitionSuccess bool, evmSuccess bool)
+	EndTxHook(totalGasUsed uint64, evmSuccess bool)
 	ScheduledTxes() types.Transactions
 	L1BlockNumber(blockCtx BlockContext) (uint64, error)
 	L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error)
@@ -56,11 +57,15 @@ func (p DefaultTxProcessor) PopCaller() {
 	return
 }
 
+func (p DefaultTxProcessor) ForceRefundGas() uint64 {
+	return 0
+}
+
 func (p DefaultTxProcessor) NonrefundableGas() uint64 {
 	return 0
 }
 
-func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, transitionSuccess bool, evmSuccess bool) {
+func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, evmSuccess bool) {
 	return
 }
 
