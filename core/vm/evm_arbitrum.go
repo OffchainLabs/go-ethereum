@@ -30,6 +30,7 @@ type TxProcessingHook interface {
 	GasChargingHook(gasRemaining *uint64) error
 	EndTxHook(totalGasUsed uint64, success bool)
 	NonrefundableGas() uint64
+	ForceRefundGas() uint64
 	PushCaller(addr common.Address)
 	PopCaller()
 	L1BlockNumber(blockCtx BlockContext) (uint64, error)
@@ -51,6 +52,10 @@ func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, success bool) {
 }
 
 func (p DefaultTxProcessor) NonrefundableGas() uint64 {
+	return 0
+}
+
+func (p DefaultTxProcessor) ForceRefundGas() uint64 {
 	return 0
 }
 
