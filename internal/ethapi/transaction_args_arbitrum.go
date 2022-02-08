@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+// Assumes tx is an unsigned, Arbitrum-specific transaction. Use on other types is unsafe and erroneous
 func TransactArgsFromArbitrumTx(tx *types.Transaction) (TransactionArgs, error) {
 	msg, err := tx.AsMessage(types.NewArbitrumSigner(nil), tx.GasPrice())
 	if err != nil {
