@@ -86,6 +86,9 @@ type ExecutionResult struct {
 	UsedGas    uint64 // Total used gas but include the refunded gas
 	Err        error  // Any error encountered during the execution(listed in core/vm/errors.go)
 	ReturnData []byte // Returned data from evm(function result or data supplied with revert opcode)
+
+	// Arbitrum: a tx may yield others that need to run afterward (see retryables)
+	ScheduledTxes types.Transactions
 }
 
 // Unwrap returns the internal evm error which allows us for further
@@ -366,15 +369,17 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	endTxNow, usedGas, err, returnData := st.evm.ProcessingHook.StartTxHook()
 	if endTxNow {
 		return &ExecutionResult{
-			UsedGas:    usedGas,
-			Err:        err,
-			ReturnData: returnData,
+			UsedGas:       usedGas,
+			Err:           err,
+			ReturnData:    returnData,
+			ScheduledTxes: st.evm.ProcessingHook.ScheduledTxes(),
 		}, nil
 	}
 
 	res, err := st.transitionDbImpl()
 	if err == nil {
 		st.evm.ProcessingHook.EndTxHook(st.gas, res.Err == nil)
+		res.ScheduledTxes = st.evm.ProcessingHook.ScheduledTxes()
 	}
 	return res, err
 }

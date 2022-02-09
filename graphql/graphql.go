@@ -953,7 +953,7 @@ func (b *Block) Call(ctx context.Context, args struct {
 			return nil, err
 		}
 	}
-	result, err := ethapi.DoCall(ctx, b.backend, args.Data, *b.numberOrHash, nil, b.backend.RPCEVMTimeout(), b.backend.RPCGasCap())
+	result, err := ethapi.DoCall(ctx, b.backend, args.Data, *b.numberOrHash, nil, b.backend.RPCEVMTimeout(), b.backend.RPCGasCap(), false)
 	if err != nil {
 		return nil, err
 	}
@@ -1023,7 +1023,7 @@ func (p *Pending) Call(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (*CallResult, error) {
 	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
-	result, err := ethapi.DoCall(ctx, p.backend, args.Data, pendingBlockNr, nil, p.backend.RPCEVMTimeout(), p.backend.RPCGasCap())
+	result, err := ethapi.DoCall(ctx, p.backend, args.Data, pendingBlockNr, nil, p.backend.RPCEVMTimeout(), p.backend.RPCGasCap(), false)
 	if err != nil {
 		return nil, err
 	}

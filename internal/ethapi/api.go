@@ -880,7 +880,7 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 	return nil
 }
 
-func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
+func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64, runScheduledTxes bool) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
@@ -932,6 +932,38 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if err != nil {
 		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
 	}
+
+	// Arbitrum: a tx can schedule another (see retryables)
+	scheduled := result.ScheduledTxes
+	for runScheduledTxes && len(scheduled) > 0 {
+		// make a new EVM for the scheduled Tx (an EVM must never be reused)
+		evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
+		if err != nil {
+			return nil, err
+		}
+		go func() {
+			<-ctx.Done()
+			evm.Cancel()
+		}()
+
+		// This will panic if the scheduled tx is signed, but we only schedule unsigned ones
+		msg, err := scheduled[0].AsMessage(types.NewArbitrumSigner(nil), header.BaseFee)
+		if err != nil {
+			return nil, err
+		}
+		scheduledTxResult, err := core.ApplyMessage(evm, msg, gp)
+		if err != nil {
+			return nil, err // Bail out
+		}
+		if err := vmError(); err != nil {
+			return nil, err
+		}
+		if scheduledTxResult.Failed() {
+			return scheduledTxResult, nil
+		}
+		scheduled = append(scheduled[1:], scheduledTxResult.ScheduledTxes...)
+	}
+
 	return result, nil
 }
 
@@ -972,7 +1004,7 @@ func (e *revertError) ErrorData() interface{} {
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Bytes, error) {
-	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap())
+	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap(), false)
 	if err != nil {
 		return nil, err
 	}
@@ -1057,7 +1089,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
 
-		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, gasCap)
+		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, gasCap, true)
 		if err != nil {
 			if errors.Is(err, core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
