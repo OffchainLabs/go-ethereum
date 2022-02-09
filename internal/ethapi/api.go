@@ -941,6 +941,11 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 		if err != nil {
 			return nil, err
 		}
+		go func() {
+			<-ctx.Done()
+			evm.Cancel()
+		}()
+
 		// This will panic if the scheduled tx is signed, but we only schedule unsigned ones
 		msg, err := scheduled[0].AsMessage(types.NewArbitrumSigner(nil), header.BaseFee)
 		if err != nil {
