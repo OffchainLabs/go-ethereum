@@ -880,7 +880,7 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 	return nil
 }
 
-func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64, runScheduledTxes bool) (*core.ExecutionResult, error) {
+func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64, gasEstimation bool) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
@@ -909,11 +909,16 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	}
 
 	// Arbitrum: support NodeInterface.sol by swapping out the message if needed
-	if core.InterceptRPCMessage != nil && runScheduledTxes {
+	if core.InterceptRPCMessage != nil && gasEstimation {
 		msg, err = core.InterceptRPCMessage(msg)
 		if err != nil {
 			return nil, err
 		}
+	}
+	if gasEstimation {
+		msg.TxRunMode = types.MessageGasEstimationMode
+	} else {
+		msg.TxRunMode = types.MessageEthcallMode
 	}
 
 	evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
@@ -944,7 +949,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 
 	// Arbitrum: a tx can schedule another (see retryables)
 	scheduled := result.ScheduledTxes
-	for runScheduledTxes && len(scheduled) > 0 {
+	for gasEstimation && len(scheduled) > 0 {
 		// make a new EVM for the scheduled Tx (an EVM must never be reused)
 		evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
 		if err != nil {

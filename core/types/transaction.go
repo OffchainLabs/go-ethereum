@@ -626,7 +626,8 @@ func (t *TransactionsByPriceAndNonce) Pop() {
 //
 // NOTE: In a future PR this will be removed.
 type Message struct {
-	tx *Transaction
+	tx        *Transaction
+	TxRunMode MessageRunMode
 
 	to         *common.Address
 	from       common.Address
@@ -640,6 +641,14 @@ type Message struct {
 	accessList AccessList
 	isFake     bool
 }
+
+type MessageRunMode uint8
+
+const (
+	MessageCommitMode MessageRunMode = iota
+	MessageGasEstimationMode
+	MessageEthcallMode
+)
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isFake bool) Message {
 	return Message{
@@ -683,6 +692,7 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 }
 
 func (m Message) UnderlyingTransaction() *Transaction { return m.tx }
+func (m Message) RunMode() MessageRunMode             { return m.TxRunMode }
 
 func (m Message) From() common.Address   { return m.from }
 func (m Message) To() *common.Address    { return m.to }

@@ -65,6 +65,7 @@ type StateTransition struct {
 // Message represents a message sent to a contract.
 type Message interface {
 	UnderlyingTransaction() *types.Transaction
+	RunMode() types.MessageRunMode
 	From() common.Address
 	To() *common.Address
 
