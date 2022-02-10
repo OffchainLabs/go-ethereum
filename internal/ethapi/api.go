@@ -907,6 +907,15 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if err != nil {
 		return nil, err
 	}
+
+	// Arbitrum: support NodeInterface.sol by swapping out the message if needed
+	if core.InterceptRPCMessage != nil && runScheduledTxes {
+		msg, err = core.InterceptRPCMessage(msg)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
 	if err != nil {
 		return nil, err

@@ -160,6 +160,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 }
 
 var ReadyEVMForL2 func(evm *vm.EVM, msg Message)
+var InterceptRPCMessage func(msg types.Message) (types.Message, error)
 
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
