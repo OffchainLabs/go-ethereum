@@ -84,9 +84,10 @@ type BlockContext struct {
 // All fields can change between transactions.
 type TxContext struct {
 	// Message information
-	Origin            common.Address // Provides information for ORIGIN
-	GasPrice          *big.Int       // Provides information for GASPRICE
-	OriginWasRemapped bool           // Arbitrum addition, provides information for ArbSys precopmile
+	Origin   common.Address // Provides information for ORIGIN
+	GasPrice *big.Int       // Provides information for GASPRICE
+
+	OriginWasRemapped bool // Arbitrum addition, provides information for ArbSys precopmile
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -132,12 +133,13 @@ type EVM struct {
 // only ever be used *once*.
 func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config) *EVM {
 	evm := &EVM{
-		Context:        blockCtx,
-		TxContext:      txCtx,
-		StateDB:        statedb,
-		Config:         config,
-		chainConfig:    chainConfig,
-		chainRules:     chainConfig.Rules(blockCtx.BlockNumber),
+		Context:     blockCtx,
+		TxContext:   txCtx,
+		StateDB:     statedb,
+		Config:      config,
+		chainConfig: chainConfig,
+		chainRules:  chainConfig.Rules(blockCtx.BlockNumber),
+
 		ProcessingHook: DefaultTxProcessor{},
 	}
 	evm.interpreter = NewEVMInterpreter(evm, config)
