@@ -669,17 +669,18 @@ func (s *StateDB) Copy() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
 		unexpectedBalanceDelta: new(big.Int).Set(s.unexpectedBalanceDelta),
-		db:                     s.db,
-		trie:                   s.db.CopyTrie(s.trie),
-		stateObjects:           make(map[common.Address]*stateObject, len(s.journal.dirties)),
-		stateObjectsPending:    make(map[common.Address]struct{}, len(s.stateObjectsPending)),
-		stateObjectsDirty:      make(map[common.Address]struct{}, len(s.journal.dirties)),
-		refund:                 s.refund,
-		logs:                   make(map[common.Hash][]*types.Log, len(s.logs)),
-		logSize:                s.logSize,
-		preimages:              make(map[common.Hash][]byte, len(s.preimages)),
-		journal:                newJournal(),
-		hasher:                 crypto.NewKeccakState(),
+
+		db:                  s.db,
+		trie:                s.db.CopyTrie(s.trie),
+		stateObjects:        make(map[common.Address]*stateObject, len(s.journal.dirties)),
+		stateObjectsPending: make(map[common.Address]struct{}, len(s.stateObjectsPending)),
+		stateObjectsDirty:   make(map[common.Address]struct{}, len(s.journal.dirties)),
+		refund:              s.refund,
+		logs:                make(map[common.Hash][]*types.Log, len(s.logs)),
+		logSize:             s.logSize,
+		preimages:           make(map[common.Hash][]byte, len(s.preimages)),
+		journal:             newJournal(),
+		hasher:              crypto.NewKeccakState(),
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
