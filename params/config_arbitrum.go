@@ -109,3 +109,8 @@ func ArbitrumTestChainConfig() *ChainConfig {
 		},
 	}
 }
+
+const (
+	// Arbitrum blocks are usually smaller, so use more blocks per bloom section
+	ArbBloomBitsBlocks uint64 = BloomBitsBlocks * 16
+)

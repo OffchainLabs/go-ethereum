@@ -6,10 +6,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 type Backend struct {
@@ -21,6 +23,9 @@ type Backend struct {
 
 	txFeed event.Feed
 	scope  event.SubscriptionScope
+
+	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
+	bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
 
 	chanTxs      chan *types.Transaction
 	chanClose    chan struct{} //close coroutine
@@ -46,15 +51,21 @@ var DefaultConfig = Config{
 
 func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, blockChain *core.BlockChain, publisher ArbInterface) (*Backend, error) {
 	backend := &Backend{
-		arb:          publisher,
-		stack:        stack,
-		config:       config,
-		chainDb:      chainDb,
+		arb:     publisher,
+		stack:   stack,
+		config:  config,
+		chainDb: chainDb,
+
+		bloomRequests: make(chan chan *bloombits.Retrieval),
+		bloomIndexer:  core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
+
 		chanTxs:      make(chan *types.Transaction, 100),
-		chanClose:    make(chan struct{}, 1),
+		chanClose:    make(chan struct{}),
 		chanNewBlock: make(chan struct{}, 1),
 	}
 	stack.RegisterLifecycle(backend)
+
+	backend.bloomIndexer.Start(backend.arb.BlockChain())
 
 	createRegisterAPIBackend(backend)
 	return backend, nil
@@ -86,12 +97,14 @@ func (b *Backend) ArbInterface() ArbInterface {
 
 //TODO: this is used when registering backend as lifecycle in stack
 func (b *Backend) Start() error {
+	b.startBloomHandlers(params.ArbBloomBitsBlocks)
+
 	return nil
 }
 
 func (b *Backend) Stop() error {
-
 	b.scope.Close()
-
+	b.bloomIndexer.Close()
+	close(b.chanClose)
 	return nil
 }
