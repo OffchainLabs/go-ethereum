@@ -800,6 +800,7 @@ type callMsg struct {
 }
 
 func (m callMsg) UnderlyingTransaction() *types.Transaction { return nil }
+
 func (m callMsg) From() common.Address         { return m.CallMsg.From }
 func (m callMsg) Nonce() uint64                { return 0 }
 func (m callMsg) IsFake() bool                 { return true }

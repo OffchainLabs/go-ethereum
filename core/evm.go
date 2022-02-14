@@ -75,6 +75,7 @@ func NewEVMTxContext(msg Message) vm.TxContext {
 	return vm.TxContext{
 		Origin:   msg.From(),
 		GasPrice: new(big.Int).Set(msg.GasPrice()),
+
 		OriginWasRemapped: originWasRemapped,
 	}
 }
