@@ -50,11 +50,9 @@ func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) error {
 }
 
 func (p DefaultTxProcessor) PushCaller(addr common.Address) {
-	return
 }
 
 func (p DefaultTxProcessor) PopCaller() {
-	return
 }
 
 func (p DefaultTxProcessor) ForceRefundGas() uint64 {
@@ -66,7 +64,6 @@ func (p DefaultTxProcessor) NonrefundableGas() uint64 {
 }
 
 func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, evmSuccess bool) {
-	return
 }
 
 func (p DefaultTxProcessor) ScheduledTxes() types.Transactions {
