@@ -73,6 +73,7 @@ type StateDB interface {
 
 	AddLog(*types.Log)
 	AddPreimage(common.Hash, []byte)
+	GetCurrentTxLogs() []*types.Log
 
 	ForEachStorage(common.Address, func(common.Hash, common.Hash) bool) error
 }

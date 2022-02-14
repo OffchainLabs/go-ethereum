@@ -52,6 +52,7 @@ const (
 	ArbitrumRetryTxType           = 104
 	ArbitrumSubmitRetryableTxType = 105
 	ArbitrumInternalTxType        = 106
+	ArbitrumLegacyTxType          = 120
 )
 
 // Transaction is an Ethereum transaction.
@@ -225,6 +226,10 @@ func (tx *Transaction) decodeTyped(b []byte, arbParsing bool) (TxData, error) {
 		return &inner, err
 	case DynamicFeeTxType:
 		var inner DynamicFeeTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	case ArbitrumLegacyTxType:
+		var inner ArbitrumLegacyTxData
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
 	default:
@@ -423,6 +428,8 @@ func (tx *Transaction) Hash() common.Hash {
 		h = rlpHash(tx.inner)
 	} else if tx.Type() == ArbitrumSubmitRetryableTxType {
 		h = tx.inner.(*ArbitrumSubmitRetryableTx).RequestId // this is required by the retryables API
+	} else if tx.Type() == ArbitrumLegacyTxType {
+		h = tx.inner.(*ArbitrumLegacyTxData).Hash
 	} else {
 		h = prefixedRlpHash(tx.Type(), tx.inner)
 	}
@@ -619,7 +626,8 @@ func (t *TransactionsByPriceAndNonce) Pop() {
 //
 // NOTE: In a future PR this will be removed.
 type Message struct {
-	tx *Transaction
+	tx        *Transaction
+	TxRunMode MessageRunMode
 
 	to         *common.Address
 	from       common.Address
@@ -633,6 +641,14 @@ type Message struct {
 	accessList AccessList
 	isFake     bool
 }
+
+type MessageRunMode uint8
+
+const (
+	MessageCommitMode MessageRunMode = iota
+	MessageGasEstimationMode
+	MessageEthcallMode
+)
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isFake bool) Message {
 	return Message{
@@ -676,6 +692,7 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 }
 
 func (m Message) UnderlyingTransaction() *Transaction { return m.tx }
+func (m Message) RunMode() MessageRunMode             { return m.TxRunMode }
 
 func (m Message) From() common.Address   { return m.from }
 func (m Message) To() *common.Address    { return m.to }
