@@ -908,17 +908,22 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 		return nil, err
 	}
 
+	// Arbitrum: mark the reason for this call
+	var txRunMode types.MessageRunMode
+	if gasEstimation {
+		txRunMode = types.MessageGasEstimationMode
+	} else {
+		txRunMode = types.MessageEthcallMode
+	}
+	msg.TxRunMode = txRunMode
+
 	// Arbitrum: support NodeInterface.sol by swapping out the message if needed
-	if core.InterceptRPCMessage != nil && gasEstimation {
+	if core.InterceptRPCMessage != nil {
 		msg, err = core.InterceptRPCMessage(msg)
 		if err != nil {
 			return nil, err
 		}
-	}
-	if gasEstimation {
-		msg.TxRunMode = types.MessageGasEstimationMode
-	} else {
-		msg.TxRunMode = types.MessageEthcallMode
+		msg.TxRunMode = txRunMode
 	}
 
 	evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
