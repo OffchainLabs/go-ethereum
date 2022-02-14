@@ -52,6 +52,7 @@ const (
 	ArbitrumRetryTxType           = 104
 	ArbitrumSubmitRetryableTxType = 105
 	ArbitrumInternalTxType        = 106
+	ArbitrumLegacyTxType          = 120
 )
 
 // Transaction is an Ethereum transaction.
@@ -225,6 +226,10 @@ func (tx *Transaction) decodeTyped(b []byte, arbParsing bool) (TxData, error) {
 		return &inner, err
 	case DynamicFeeTxType:
 		var inner DynamicFeeTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	case ArbitrumLegacyTxType:
+		var inner ArbitrumLegacyTxData
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
 	default:
@@ -423,6 +428,8 @@ func (tx *Transaction) Hash() common.Hash {
 		h = rlpHash(tx.inner)
 	} else if tx.Type() == ArbitrumSubmitRetryableTxType {
 		h = tx.inner.(*ArbitrumSubmitRetryableTx).RequestId // this is required by the retryables API
+	} else if tx.Type() == ArbitrumLegacyTxType {
+		h = tx.inner.(*ArbitrumLegacyTxData).Hash
 	} else {
 		h = prefixedRlpHash(tx.Type(), tx.inner)
 	}

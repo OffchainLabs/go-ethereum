@@ -17,7 +17,6 @@
 package core
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -87,6 +86,9 @@ type ExecutionResult struct {
 	UsedGas    uint64 // Total used gas but include the refunded gas
 	Err        error  // Any error encountered during the execution(listed in core/vm/errors.go)
 	ReturnData []byte // Returned data from evm(function result or data supplied with revert opcode)
+
+	// Arbitrum: a tx may yield others that need to run afterward (see retryables)
+	ScheduledTxes types.Transactions
 }
 
 // Unwrap returns the internal evm error which allows us for further
@@ -367,31 +369,24 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	endTxNow, usedGas, err, returnData := st.evm.ProcessingHook.StartTxHook()
 	if endTxNow {
 		return &ExecutionResult{
-			UsedGas:    usedGas,
-			Err:        err,
-			ReturnData: returnData,
+			UsedGas:       usedGas,
+			Err:           err,
+			ReturnData:    returnData,
+			ScheduledTxes: st.evm.ProcessingHook.ScheduledTxes(),
 		}, nil
 	}
 
 	res, err := st.transitionDbImpl()
-	transitionSuccess := true
-	if err != nil && !errors.Is(err, ErrNonceTooLow) && !errors.Is(err, ErrNonceTooHigh) && st.msg.UnderlyingTransaction() != nil {
-		transitionSuccess = false
-		res = &ExecutionResult{
-			UsedGas:    st.gasUsed(),
-			Err:        err,
-			ReturnData: nil,
-		}
-		err = nil
-	}
-
 	if err == nil {
-		st.evm.ProcessingHook.EndTxHook(st.gas, transitionSuccess, res.Err == nil)
+		st.evm.ProcessingHook.EndTxHook(st.gas, res.Err == nil)
+		res.ScheduledTxes = st.evm.ProcessingHook.ScheduledTxes()
 	}
 	return res, err
 }
 
 func (st *StateTransition) refundGas(refundQuotient uint64) {
+
+	st.gas += st.evm.ProcessingHook.ForceRefundGas()
 
 	nonrefundable := st.evm.ProcessingHook.NonrefundableGas()
 	if nonrefundable < st.gasUsed() {
