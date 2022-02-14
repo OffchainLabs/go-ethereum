@@ -39,7 +39,7 @@ type revision struct {
 	id           int
 	journalIndex int
 	// Arbitrum: track the total balance change across all accounts
-	totalBalanceDelta *big.Int
+	unexpectedBalanceDelta *big.Int
 }
 
 var (
@@ -65,7 +65,7 @@ func (n *proofList) Delete(key []byte) error {
 // * Accounts
 type StateDB struct {
 	// Arbitrum: track the total balance change across all accounts
-	totalBalanceDelta *big.Int
+	unexpectedBalanceDelta *big.Int
 
 	db           Database
 	prefetcher   *triePrefetcher
@@ -136,7 +136,8 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		return nil, err
 	}
 	sdb := &StateDB{
-		totalBalanceDelta:   new(big.Int),
+		unexpectedBalanceDelta: new(big.Int),
+
 		db:                  db,
 		trie:                tr,
 		originalRoot:        root,
@@ -384,7 +385,7 @@ func (s *StateDB) HasSuicided(addr common.Address) bool {
 func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
-		s.totalBalanceDelta.Add(s.totalBalanceDelta, amount)
+		s.unexpectedBalanceDelta.Add(s.unexpectedBalanceDelta, amount)
 		stateObject.AddBalance(amount)
 	}
 }
@@ -393,7 +394,7 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
-		s.totalBalanceDelta.Sub(s.totalBalanceDelta, amount)
+		s.unexpectedBalanceDelta.Sub(s.unexpectedBalanceDelta, amount)
 		stateObject.SubBalance(amount)
 	}
 }
@@ -402,8 +403,8 @@ func (s *StateDB) SetBalance(addr common.Address, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		prevBalance := stateObject.Balance()
-		s.totalBalanceDelta.Add(s.totalBalanceDelta, amount)
-		s.totalBalanceDelta.Sub(s.totalBalanceDelta, prevBalance)
+		s.unexpectedBalanceDelta.Add(s.unexpectedBalanceDelta, amount)
+		s.unexpectedBalanceDelta.Sub(s.unexpectedBalanceDelta, prevBalance)
 
 		stateObject.SetBalance(amount)
 	}
@@ -413,7 +414,7 @@ func (s *StateDB) ExpectBalanceBurn(amount *big.Int) {
 	if amount.Sign() < 0 {
 		panic(fmt.Sprintf("ExpectBalanceBurn called with negative amount %v", amount))
 	}
-	s.totalBalanceDelta.Add(s.totalBalanceDelta, amount)
+	s.unexpectedBalanceDelta.Add(s.unexpectedBalanceDelta, amount)
 }
 
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
@@ -462,7 +463,7 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 		prevbalance: new(big.Int).Set(stateObject.Balance()),
 	})
 	stateObject.markSuicided()
-	s.totalBalanceDelta.Sub(s.totalBalanceDelta, stateObject.data.Balance)
+	s.unexpectedBalanceDelta.Sub(s.unexpectedBalanceDelta, stateObject.data.Balance)
 	stateObject.data.Balance = new(big.Int)
 
 	return true
@@ -667,18 +668,18 @@ func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common
 func (s *StateDB) Copy() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
-		totalBalanceDelta:   new(big.Int).Set(s.totalBalanceDelta),
-		db:                  s.db,
-		trie:                s.db.CopyTrie(s.trie),
-		stateObjects:        make(map[common.Address]*stateObject, len(s.journal.dirties)),
-		stateObjectsPending: make(map[common.Address]struct{}, len(s.stateObjectsPending)),
-		stateObjectsDirty:   make(map[common.Address]struct{}, len(s.journal.dirties)),
-		refund:              s.refund,
-		logs:                make(map[common.Hash][]*types.Log, len(s.logs)),
-		logSize:             s.logSize,
-		preimages:           make(map[common.Hash][]byte, len(s.preimages)),
-		journal:             newJournal(),
-		hasher:              crypto.NewKeccakState(),
+		unexpectedBalanceDelta: new(big.Int).Set(s.unexpectedBalanceDelta),
+		db:                     s.db,
+		trie:                   s.db.CopyTrie(s.trie),
+		stateObjects:           make(map[common.Address]*stateObject, len(s.journal.dirties)),
+		stateObjectsPending:    make(map[common.Address]struct{}, len(s.stateObjectsPending)),
+		stateObjectsDirty:      make(map[common.Address]struct{}, len(s.journal.dirties)),
+		refund:                 s.refund,
+		logs:                   make(map[common.Hash][]*types.Log, len(s.logs)),
+		logSize:                s.logSize,
+		preimages:              make(map[common.Hash][]byte, len(s.preimages)),
+		journal:                newJournal(),
+		hasher:                 crypto.NewKeccakState(),
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
@@ -767,7 +768,7 @@ func (s *StateDB) Copy() *StateDB {
 func (s *StateDB) Snapshot() int {
 	id := s.nextRevisionId
 	s.nextRevisionId++
-	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length(), new(big.Int).Set(s.totalBalanceDelta)})
+	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length(), new(big.Int).Set(s.unexpectedBalanceDelta)})
 	return id
 }
 
@@ -782,7 +783,7 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	}
 	revision := s.validRevisions[idx]
 	snapshot := revision.journalIndex
-	s.totalBalanceDelta = new(big.Int).Set(revision.totalBalanceDelta)
+	s.unexpectedBalanceDelta = new(big.Int).Set(revision.unexpectedBalanceDelta)
 
 	// Replay the journal to undo changes and remove invalidated snapshots
 	s.journal.revert(s, snapshot)
@@ -794,9 +795,9 @@ func (s *StateDB) GetRefund() uint64 {
 	return s.refund
 }
 
-// GetTotalBalanceDelta returns the total change in balances since the last commit to the database
-func (s *StateDB) GetTotalBalanceDelta() *big.Int {
-	return new(big.Int).Set(s.totalBalanceDelta)
+// GetUnexpectedBalanceDelta returns the total unexpected change in balances since the last commit to the database.
+func (s *StateDB) GetUnexpectedBalanceDelta() *big.Int {
+	return new(big.Int).Set(s.unexpectedBalanceDelta)
 }
 
 // Finalise finalises the state by removing the s destructed objects and clears
@@ -1011,7 +1012,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 	}
 	if err == nil {
-		s.totalBalanceDelta.Set(new(big.Int))
+		s.unexpectedBalanceDelta.Set(new(big.Int))
 	}
 	return root, err
 }
