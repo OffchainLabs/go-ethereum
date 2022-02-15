@@ -76,6 +76,7 @@ type BlockContext struct {
 	Time        *big.Int       // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
 	BaseFee     *big.Int       // Provides information for BASEFEE
+	Random      *common.Hash   // Provides information for RANDOM
 }
 
 // TxContext provides the EVM with information about a transaction.
@@ -138,7 +139,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		StateDB:     statedb,
 		Config:      config,
 		chainConfig: chainConfig,
-		chainRules:  chainConfig.Rules(blockCtx.BlockNumber),
+		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil),
 		dmContext:   dmContext,
 	}
 	evm.interpreter = NewEVMInterpreter(evm, config)
