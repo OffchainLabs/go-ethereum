@@ -134,14 +134,21 @@ func PrepareRecording(blockchain *core.BlockChain, lastBlockHeader *types.Header
 	rawTrie := blockchain.StateCache().TrieDB()
 	recordingKeyValue := NewRecordingKV(rawTrie)
 	recordingStateDatabase := state.NewDatabase(rawdb.NewDatabase(recordingKeyValue))
-	recordingStateDb, err := state.New(lastBlockHeader.Root, recordingStateDatabase, nil)
+	var prevRoot common.Hash
+	if lastBlockHeader != nil {
+		prevRoot = lastBlockHeader.Root
+	}
+	recordingStateDb, err := state.New(prevRoot, recordingStateDatabase, nil)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create recordingStateDb: %w", err)
 	}
-	if !lastBlockHeader.Number.IsUint64() {
-		return nil, nil, nil, errors.New("block number not uint64")
+	var recordingChainContext *RecordingChainContext
+	if lastBlockHeader != nil {
+		if !lastBlockHeader.Number.IsUint64() {
+			return nil, nil, nil, errors.New("block number not uint64")
+		}
+		recordingChainContext = NewRecordingChainContext(blockchain, lastBlockHeader.Number.Uint64())
 	}
-	recordingChainContext := NewRecordingChainContext(blockchain, lastBlockHeader.Number.Uint64())
 	return recordingStateDb, recordingChainContext, recordingKeyValue, nil
 }
 
