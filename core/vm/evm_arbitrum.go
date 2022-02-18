@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -28,7 +30,7 @@ func (evm *EVM) Depth() int {
 
 type TxProcessingHook interface {
 	StartTxHook() (bool, uint64, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
-	GasChargingHook(gasRemaining *uint64) error
+	GasChargingHook(gasRemaining *uint64, txGasPrice *big.Int) error
 	PushCaller(addr common.Address)
 	PopCaller()
 	ForceRefundGas() uint64
@@ -45,7 +47,7 @@ func (p DefaultTxProcessor) StartTxHook() (bool, uint64, error, []byte) {
 	return false, 0, nil, nil
 }
 
-func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) error {
+func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64, txGasPrice *big.Int) error {
 	return nil
 }
 

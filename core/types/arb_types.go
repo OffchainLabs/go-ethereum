@@ -349,16 +349,3 @@ func (d *ArbitrumInternalTx) rawSignatureValues() (v, r, s *big.Int) {
 func (d *ArbitrumInternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
 
 }
-
-type ArbitrumWrappedTx struct {
-	l1Calldata uint64
-	TxData
-}
-
-func (tx *ArbitrumWrappedTx) copy() TxData {
-	cpy := &ArbitrumWrappedTx{
-		l1Calldata: tx.l1Calldata,
-		TxData:     tx.TxData.copy(),
-	}
-	return cpy
-}

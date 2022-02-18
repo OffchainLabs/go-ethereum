@@ -48,7 +48,6 @@ const (
 	ArbitrumDepositTxType         = 100
 	ArbitrumUnsignedTxType        = 101
 	ArbitrumContractTxType        = 102
-	ArbitrumWrappedTxType         = 103
 	ArbitrumRetryTxType           = 104
 	ArbitrumSubmitRetryableTxType = 105
 	ArbitrumInternalTxType        = 106
@@ -99,7 +98,7 @@ type TxData interface {
 
 // EncodeRLP implements rlp.Encoder
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
-	if tx.realType() == LegacyTxType {
+	if tx.Type() == LegacyTxType {
 		return rlp.Encode(w, tx.inner)
 	}
 	// It's an EIP-2718 typed TX envelope.
@@ -114,7 +113,7 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 
 // encodeTyped writes the canonical encoding of a typed transaction to w.
 func (tx *Transaction) encodeTyped(w *bytes.Buffer) error {
-	w.WriteByte(tx.realType())
+	w.WriteByte(tx.Type())
 	return rlp.Encode(w, tx.inner)
 }
 
@@ -205,10 +204,6 @@ func (tx *Transaction) decodeTyped(b []byte, arbParsing bool) (TxData, error) {
 			var inner ArbitrumContractTx
 			err := rlp.DecodeBytes(b[1:], &inner)
 			return &inner, err
-		case ArbitrumWrappedTxType:
-			var inner ArbitrumWrappedTx
-			err := rlp.DecodeBytes(b[1:], &inner)
-			return &inner, err
 		case ArbitrumRetryTxType:
 			var inner ArbitrumRetryTx
 			err := rlp.DecodeBytes(b[1:], &inner)
@@ -294,15 +289,6 @@ func (tx *Transaction) Protected() bool {
 // Type returns the transaction type.
 func (tx *Transaction) Type() uint8 {
 	return tx.inner.txType()
-}
-
-func (tx *Transaction) realType() uint8 {
-	_, isArbWrapped := tx.inner.(*ArbitrumWrappedTx)
-	if isArbWrapped {
-		return ArbitrumWrappedTxType
-	} else {
-		return tx.Type()
-	}
 }
 
 func (tx *Transaction) GetInner() TxData {
