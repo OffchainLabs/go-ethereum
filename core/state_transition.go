@@ -294,12 +294,6 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	// 5. there is no overflow when calculating intrinsic gas
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
 
-	// In L2, ArbOS decides what to do with the tip. Most users shouldn't set one.
-	txGasPrice := st.gasPrice
-	if st.evm.ChainConfig().IsArbitrum() && st.gasPrice.Cmp(st.evm.Context.BaseFee) > 0 {
-		st.gasPrice = st.evm.Context.BaseFee
-	}
-
 	// Check clauses 1-3, buy gas if everything is correct
 	if err := st.preCheck(); err != nil {
 		return nil, err
@@ -321,7 +315,7 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	}
 	st.gas -= gas
 
-	err = st.evm.ProcessingHook.GasChargingHook(&st.gas, txGasPrice)
+	err = st.evm.ProcessingHook.GasChargingHook(&st.gas)
 	if err != nil {
 		return nil, err
 	}
