@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/arbitrum"
 	"math/big"
 	"strings"
 	"time"
@@ -1305,7 +1304,7 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 }
 
 func fillArbitrumHeaderInfo(header *types.Header, fields map[string]interface{}) {
-	info, err := arbitrum.DeserializeHeaderExtraInformation(header)
+	info, err := types.DeserializeHeaderExtraInformation(header)
 	if err != nil {
 		log.Error("Expected header to contain arbitrum data", "blockHash", header.Hash())
 	} else {
@@ -1411,7 +1410,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	}
 	if config.IsArbitrum() {
 		if header != nil {
-			info, err := arbitrum.DeserializeHeaderExtraInformation(header)
+			info, err := types.DeserializeHeaderExtraInformation(header)
 			if err != nil {
 				log.Error("Expected header to contain arbitrum data", "blockHash", blockHash)
 			} else {
