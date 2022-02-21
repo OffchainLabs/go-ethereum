@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/arbitrum"
 	"math/big"
 	"strings"
 	"time"
@@ -1296,7 +1297,22 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 	}
 	fields["uncles"] = uncleHashes
 
+	if config.IsArbitrum() {
+		fillArbitrumHeaderInfo(block.Header(), fields)
+	}
+
 	return fields, nil
+}
+
+func fillArbitrumHeaderInfo(header *types.Header, fields map[string]interface{}) {
+	info, err := arbitrum.DeserializeHeaderExtraInformation(header)
+	if err != nil {
+		log.Error("Expected header to contain arbitrum data", "blockHash", header.Hash())
+	} else {
+		fields["l1BlockNumber"] = hexutil.Uint64(info.L1BlockNumber)
+		fields["sendRoot"] = info.SendRoot
+		fields["sendCount"] = hexutil.Uint64(info.SendCount)
+	}
 }
 
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
@@ -1304,6 +1320,9 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 func (s *PublicBlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
 	fields := RPCMarshalHeader(header)
 	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
+	if s.b.ChainConfig().IsArbitrum() {
+		fillArbitrumHeaderInfo(header, fields)
+	}
 	return fields
 }
 
@@ -1341,11 +1360,13 @@ type RPCTransaction struct {
 	V                *hexutil.Big      `json:"v"`
 	R                *hexutil.Big      `json:"r"`
 	S                *hexutil.Big      `json:"s"`
+
+	L1BlockNumber *hexutil.Big `json:"l1BlockNumber"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
-func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, index uint64, baseFee *big.Int, config *params.ChainConfig) *RPCTransaction {
+func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, index uint64, baseFee *big.Int, config *params.ChainConfig, header *types.Header) *RPCTransaction {
 	signer := types.MakeSigner(config, big.NewInt(0).SetUint64(blockNumber))
 	from, _ := types.Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
@@ -1388,6 +1409,16 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
 	}
+	if config.IsArbitrum() {
+		if header != nil {
+			info, err := arbitrum.DeserializeHeaderExtraInformation(header)
+			if err != nil {
+				log.Error("Expected header to contain arbitrum data", "blockHash", blockHash)
+			} else {
+				result.L1BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(info.L1BlockNumber))
+			}
+		}
+	}
 	return result
 }
 
@@ -1399,7 +1430,7 @@ func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, conf
 		baseFee = misc.CalcBaseFee(config, current)
 		blockNumber = current.Number.Uint64()
 	}
-	return newRPCTransaction(tx, common.Hash{}, blockNumber, 0, baseFee, config)
+	return newRPCTransaction(tx, common.Hash{}, blockNumber, 0, baseFee, config, nil)
 }
 
 // newRPCTransactionFromBlockIndex returns a transaction that will serialize to the RPC representation.
@@ -1408,7 +1439,7 @@ func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, config *param
 	if index >= uint64(len(txs)) {
 		return nil
 	}
-	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), index, b.BaseFee(), config)
+	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), index, b.BaseFee(), config, b.Header())
 }
 
 // newRPCRawTransactionFromBlockIndex returns the bytes of a transaction given a block and a transaction index.
@@ -1627,7 +1658,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 		if err != nil {
 			return nil, err
 		}
-		return newRPCTransaction(tx, blockHash, blockNumber, index, header.BaseFee, s.b.ChainConfig()), nil
+		return newRPCTransaction(tx, blockHash, blockNumber, index, header.BaseFee, s.b.ChainConfig(), header), nil
 	}
 	// No finalized transaction, try to retrieve it from the pool
 	if tx := s.b.GetPoolTransaction(hash); tx != nil {
@@ -1712,6 +1743,9 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if receipt.ContractAddress != (common.Address{}) {
 		fields["contractAddress"] = receipt.ContractAddress
+	}
+	if s.b.ChainConfig().IsArbitrum() {
+		fields["l1GasUsed"] = hexutil.Uint64(receipt.L1GasUsed)
 	}
 	return fields, nil
 }
