@@ -52,7 +52,7 @@ func ArbitrumTestParams() ArbitrumChainParams {
 	}
 }
 
-func EthereumParams() ArbitrumChainParams {
+func DisableArbitrumParams() ArbitrumChainParams {
 	return ArbitrumChainParams{
 		EnableArbOS:               false,
 		AllowDebugPrecompiles:     false,

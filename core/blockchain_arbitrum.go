@@ -28,7 +28,7 @@ func (bc *BlockChain) ReorgToOldBlock(newHead *types.Block) error {
 	if oldHead.Hash() == newHead.Hash() {
 		return nil
 	}
-	bc.writeHeadBlockImpl(newHead, true)
+	bc.writeHeadBlock(newHead)
 	err := bc.reorg(oldHead, newHead)
 	if err != nil {
 		return err
