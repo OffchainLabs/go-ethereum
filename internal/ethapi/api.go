@@ -1359,13 +1359,11 @@ type RPCTransaction struct {
 	V                *hexutil.Big      `json:"v"`
 	R                *hexutil.Big      `json:"r"`
 	S                *hexutil.Big      `json:"s"`
-
-	L1BlockNumber *hexutil.Big `json:"l1BlockNumber,omitempty"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
-func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, index uint64, baseFee *big.Int, config *params.ChainConfig, header *types.Header) *RPCTransaction {
+func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, index uint64, baseFee *big.Int, config *params.ChainConfig) *RPCTransaction {
 	signer := types.MakeSigner(config, big.NewInt(0).SetUint64(blockNumber))
 	from, _ := types.Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
@@ -1408,16 +1406,6 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
 	}
-	if config.IsArbitrum() {
-		if header != nil {
-			info, err := types.DeserializeHeaderExtraInformation(header)
-			if err != nil {
-				log.Error("Expected header to contain arbitrum data", "blockHash", blockHash)
-			} else {
-				result.L1BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(info.L1BlockNumber))
-			}
-		}
-	}
 	return result
 }
 
@@ -1429,7 +1417,7 @@ func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, conf
 		baseFee = misc.CalcBaseFee(config, current)
 		blockNumber = current.Number.Uint64()
 	}
-	return newRPCTransaction(tx, common.Hash{}, blockNumber, 0, baseFee, config, nil)
+	return newRPCTransaction(tx, common.Hash{}, blockNumber, 0, baseFee, config)
 }
 
 // newRPCTransactionFromBlockIndex returns a transaction that will serialize to the RPC representation.
@@ -1438,7 +1426,7 @@ func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, config *param
 	if index >= uint64(len(txs)) {
 		return nil
 	}
-	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), index, b.BaseFee(), config, b.Header())
+	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), index, b.BaseFee(), config)
 }
 
 // newRPCRawTransactionFromBlockIndex returns the bytes of a transaction given a block and a transaction index.
@@ -1657,7 +1645,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 		if err != nil {
 			return nil, err
 		}
-		return newRPCTransaction(tx, blockHash, blockNumber, index, header.BaseFee, s.b.ChainConfig(), header), nil
+		return newRPCTransaction(tx, blockHash, blockNumber, index, header.BaseFee, s.b.ChainConfig()), nil
 	}
 	// No finalized transaction, try to retrieve it from the pool
 	if tx := s.b.GetPoolTransaction(hash); tx != nil {
@@ -1745,6 +1733,17 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	}
 	if s.b.ChainConfig().IsArbitrum() {
 		fields["l1GasUsed"] = hexutil.Uint64(receipt.L1GasUsed)
+
+		header, err := s.b.HeaderByHash(ctx, blockHash)
+		if err != nil {
+			return nil, err
+		}
+		info, err := types.DeserializeHeaderExtraInformation(header)
+		if err != nil {
+			log.Error("Expected header to contain arbitrum data", "blockHash", blockHash)
+		} else {
+			fields["l1BlockNumber"] = hexutil.Uint64(info.L1BlockNumber)
+		}
 	}
 	return fields, nil
 }
