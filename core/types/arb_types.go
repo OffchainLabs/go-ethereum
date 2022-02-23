@@ -16,32 +16,32 @@ type ArbitrumUnsignedTx struct {
 	ChainId *big.Int
 	From    common.Address
 
-	Nonce    uint64          // nonce of sender account
-	GasPrice *big.Int        // wei per gas
-	Gas      uint64          // gas limit
-	To       *common.Address `rlp:"nil"` // nil means contract creation
-	Value    *big.Int        // wei amount
-	Data     []byte          // contract invocation input data
+	Nonce     uint64          // nonce of sender account
+	GasFeeCap *big.Int        // wei per gas
+	Gas       uint64          // gas limit
+	To        *common.Address `rlp:"nil"` // nil means contract creation
+	Value     *big.Int        // wei amount
+	Data      []byte          // contract invocation input data
 }
 
 func (tx *ArbitrumUnsignedTx) txType() byte { return ArbitrumUnsignedTxType }
 
 func (tx *ArbitrumUnsignedTx) copy() TxData {
 	cpy := &ArbitrumUnsignedTx{
-		ChainId:  new(big.Int),
-		Nonce:    tx.Nonce,
-		GasPrice: new(big.Int),
-		Gas:      tx.Gas,
-		From:     tx.From,
-		To:       nil,
-		Value:    new(big.Int),
-		Data:     common.CopyBytes(tx.Data),
+		ChainId:   new(big.Int),
+		Nonce:     tx.Nonce,
+		GasFeeCap: new(big.Int),
+		Gas:       tx.Gas,
+		From:      tx.From,
+		To:        nil,
+		Value:     new(big.Int),
+		Data:      common.CopyBytes(tx.Data),
 	}
 	if tx.ChainId != nil {
 		cpy.ChainId.Set(tx.ChainId)
 	}
-	if tx.GasPrice != nil {
-		cpy.GasPrice.Set(tx.GasPrice)
+	if tx.GasFeeCap != nil {
+		cpy.GasFeeCap.Set(tx.GasFeeCap)
 	}
 	if tx.To != nil {
 		tmp := *tx.To
@@ -57,9 +57,9 @@ func (tx *ArbitrumUnsignedTx) chainID() *big.Int      { return tx.ChainId }
 func (tx *ArbitrumUnsignedTx) accessList() AccessList { return nil }
 func (tx *ArbitrumUnsignedTx) data() []byte           { return tx.Data }
 func (tx *ArbitrumUnsignedTx) gas() uint64            { return tx.Gas }
-func (tx *ArbitrumUnsignedTx) gasPrice() *big.Int     { return tx.GasPrice }
-func (tx *ArbitrumUnsignedTx) gasTipCap() *big.Int    { return tx.GasPrice }
-func (tx *ArbitrumUnsignedTx) gasFeeCap() *big.Int    { return tx.GasPrice }
+func (tx *ArbitrumUnsignedTx) gasPrice() *big.Int     { return tx.GasFeeCap }
+func (tx *ArbitrumUnsignedTx) gasTipCap() *big.Int    { return bigZero }
+func (tx *ArbitrumUnsignedTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
 func (tx *ArbitrumUnsignedTx) value() *big.Int        { return tx.Value }
 func (tx *ArbitrumUnsignedTx) nonce() uint64          { return tx.Nonce }
 func (tx *ArbitrumUnsignedTx) to() *common.Address    { return tx.To }
@@ -78,11 +78,11 @@ type ArbitrumContractTx struct {
 	RequestId common.Hash
 	From      common.Address
 
-	GasPrice *big.Int        // wei per gas
-	Gas      uint64          // gas limit
-	To       *common.Address `rlp:"nil"` // nil means contract creation
-	Value    *big.Int        // wei amount
-	Data     []byte          // contract invocation input data
+	GasFeeCap *big.Int        // wei per gas
+	Gas       uint64          // gas limit
+	To        *common.Address `rlp:"nil"` // nil means contract creation
+	Value     *big.Int        // wei amount
+	Data      []byte          // contract invocation input data
 }
 
 func (tx *ArbitrumContractTx) txType() byte { return ArbitrumContractTxType }
@@ -91,7 +91,7 @@ func (tx *ArbitrumContractTx) copy() TxData {
 	cpy := &ArbitrumContractTx{
 		ChainId:   new(big.Int),
 		RequestId: tx.RequestId,
-		GasPrice:  new(big.Int),
+		GasFeeCap: new(big.Int),
 		Gas:       tx.Gas,
 		From:      tx.From,
 		To:        nil,
@@ -101,8 +101,8 @@ func (tx *ArbitrumContractTx) copy() TxData {
 	if tx.ChainId != nil {
 		cpy.ChainId.Set(tx.ChainId)
 	}
-	if tx.GasPrice != nil {
-		cpy.GasPrice.Set(tx.GasPrice)
+	if tx.GasFeeCap != nil {
+		cpy.GasFeeCap.Set(tx.GasFeeCap)
 	}
 	if tx.To != nil {
 		tmp := *tx.To
@@ -118,9 +118,9 @@ func (tx *ArbitrumContractTx) chainID() *big.Int      { return tx.ChainId }
 func (tx *ArbitrumContractTx) accessList() AccessList { return nil }
 func (tx *ArbitrumContractTx) data() []byte           { return tx.Data }
 func (tx *ArbitrumContractTx) gas() uint64            { return tx.Gas }
-func (tx *ArbitrumContractTx) gasPrice() *big.Int     { return tx.GasPrice }
-func (tx *ArbitrumContractTx) gasTipCap() *big.Int    { return tx.GasPrice }
-func (tx *ArbitrumContractTx) gasFeeCap() *big.Int    { return tx.GasPrice }
+func (tx *ArbitrumContractTx) gasPrice() *big.Int     { return tx.GasFeeCap }
+func (tx *ArbitrumContractTx) gasTipCap() *big.Int    { return bigZero }
+func (tx *ArbitrumContractTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
 func (tx *ArbitrumContractTx) value() *big.Int        { return tx.Value }
 func (tx *ArbitrumContractTx) nonce() uint64          { return 0 }
 func (tx *ArbitrumContractTx) to() *common.Address    { return tx.To }
@@ -135,35 +135,35 @@ type ArbitrumRetryTx struct {
 	Nonce   uint64
 	From    common.Address
 
-	GasPrice *big.Int        // wei per gas
-	Gas      uint64          // gas limit
-	To       *common.Address `rlp:"nil"` // nil means contract creation
-	Value    *big.Int        // wei amount
-	Data     []byte          // contract invocation input data
-	TicketId common.Hash
-	RefundTo common.Address
+	GasFeeCap *big.Int        // wei per gas
+	Gas       uint64          // gas limit
+	To        *common.Address `rlp:"nil"` // nil means contract creation
+	Value     *big.Int        // wei amount
+	Data      []byte          // contract invocation input data
+	TicketId  common.Hash
+	RefundTo  common.Address
 }
 
 func (tx *ArbitrumRetryTx) txType() byte { return ArbitrumRetryTxType }
 
 func (tx *ArbitrumRetryTx) copy() TxData {
 	cpy := &ArbitrumRetryTx{
-		ChainId:  new(big.Int),
-		Nonce:    tx.Nonce,
-		GasPrice: new(big.Int),
-		Gas:      tx.Gas,
-		From:     tx.From,
-		To:       nil,
-		Value:    new(big.Int),
-		Data:     common.CopyBytes(tx.Data),
-		TicketId: tx.TicketId,
-		RefundTo: tx.RefundTo,
+		ChainId:   new(big.Int),
+		Nonce:     tx.Nonce,
+		GasFeeCap: new(big.Int),
+		Gas:       tx.Gas,
+		From:      tx.From,
+		To:        nil,
+		Value:     new(big.Int),
+		Data:      common.CopyBytes(tx.Data),
+		TicketId:  tx.TicketId,
+		RefundTo:  tx.RefundTo,
 	}
 	if tx.ChainId != nil {
 		cpy.ChainId.Set(tx.ChainId)
 	}
-	if tx.GasPrice != nil {
-		cpy.GasPrice.Set(tx.GasPrice)
+	if tx.GasFeeCap != nil {
+		cpy.GasFeeCap.Set(tx.GasFeeCap)
 	}
 	if tx.To != nil {
 		tmp := *tx.To
@@ -179,9 +179,9 @@ func (tx *ArbitrumRetryTx) chainID() *big.Int      { return tx.ChainId }
 func (tx *ArbitrumRetryTx) accessList() AccessList { return nil }
 func (tx *ArbitrumRetryTx) data() []byte           { return tx.Data }
 func (tx *ArbitrumRetryTx) gas() uint64            { return tx.Gas }
-func (tx *ArbitrumRetryTx) gasPrice() *big.Int     { return tx.GasPrice }
-func (tx *ArbitrumRetryTx) gasTipCap() *big.Int    { return tx.GasPrice }
-func (tx *ArbitrumRetryTx) gasFeeCap() *big.Int    { return tx.GasPrice }
+func (tx *ArbitrumRetryTx) gasPrice() *big.Int     { return tx.GasFeeCap }
+func (tx *ArbitrumRetryTx) gasTipCap() *big.Int    { return bigZero }
+func (tx *ArbitrumRetryTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
 func (tx *ArbitrumRetryTx) value() *big.Int        { return tx.Value }
 func (tx *ArbitrumRetryTx) nonce() uint64          { return tx.Nonce }
 func (tx *ArbitrumRetryTx) to() *common.Address    { return tx.To }
@@ -197,7 +197,7 @@ type ArbitrumSubmitRetryableTx struct {
 	From      common.Address
 
 	DepositValue      *big.Int
-	GasPrice          *big.Int        // wei per gas
+	GasFeeCap         *big.Int        // wei per gas
 	Gas               uint64          // gas limit
 	To                *common.Address `rlp:"nil"` // nil means contract creation
 	Value             *big.Int        // wei amount
@@ -214,7 +214,7 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 		ChainId:           new(big.Int),
 		RequestId:         tx.RequestId,
 		DepositValue:      new(big.Int),
-		GasPrice:          new(big.Int),
+		GasFeeCap:         new(big.Int),
 		Gas:               tx.Gas,
 		From:              tx.From,
 		To:                tx.To,
@@ -230,8 +230,8 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 	if tx.DepositValue != nil {
 		cpy.DepositValue.Set(tx.DepositValue)
 	}
-	if tx.GasPrice != nil {
-		cpy.GasPrice.Set(tx.GasPrice)
+	if tx.GasFeeCap != nil {
+		cpy.GasFeeCap.Set(tx.GasFeeCap)
 	}
 	if tx.To != nil {
 		tmp := *tx.To
@@ -250,9 +250,9 @@ func (tx *ArbitrumSubmitRetryableTx) chainID() *big.Int      { return tx.ChainId
 func (tx *ArbitrumSubmitRetryableTx) accessList() AccessList { return nil }
 func (tx *ArbitrumSubmitRetryableTx) data() []byte           { return tx.Data }
 func (tx *ArbitrumSubmitRetryableTx) gas() uint64            { return tx.Gas }
-func (tx *ArbitrumSubmitRetryableTx) gasPrice() *big.Int     { return tx.GasPrice }
-func (tx *ArbitrumSubmitRetryableTx) gasTipCap() *big.Int    { return tx.GasPrice }
-func (tx *ArbitrumSubmitRetryableTx) gasFeeCap() *big.Int    { return tx.GasPrice }
+func (tx *ArbitrumSubmitRetryableTx) gasPrice() *big.Int     { return tx.GasFeeCap }
+func (tx *ArbitrumSubmitRetryableTx) gasTipCap() *big.Int    { return big.NewInt(0) }
+func (tx *ArbitrumSubmitRetryableTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
 func (tx *ArbitrumSubmitRetryableTx) value() *big.Int        { return tx.Value }
 func (tx *ArbitrumSubmitRetryableTx) nonce() uint64          { return 0 }
 func (tx *ArbitrumSubmitRetryableTx) to() *common.Address    { return tx.To }
