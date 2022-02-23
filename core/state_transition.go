@@ -294,11 +294,6 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	// 5. there is no overflow when calculating intrinsic gas
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
 
-	// There are no tips in L2
-	if st.evm.ChainConfig().IsArbitrum() && st.gasPrice.Cmp(st.evm.Context.BaseFee) > 0 {
-		st.gasPrice = st.evm.Context.BaseFee
-	}
-
 	// Check clauses 1-3, buy gas if everything is correct
 	if err := st.preCheck(); err != nil {
 		return nil, err
@@ -320,7 +315,7 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	}
 	st.gas -= gas
 
-	err = st.evm.ProcessingHook.GasChargingHook(&st.gas)
+	tipRecipient, err := st.evm.ProcessingHook.GasChargingHook(&st.gas)
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +352,10 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	if london {
 		effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 	}
-	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+	if tipRecipient == nil {
+		tipRecipient = &st.evm.Context.Coinbase
+	}
+	st.state.AddBalance(*tipRecipient, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),
