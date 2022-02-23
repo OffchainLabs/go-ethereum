@@ -358,15 +358,20 @@ type HeaderInfo struct {
 	L1BlockNumber uint64
 }
 
-func (info HeaderInfo) Extra() []byte {
+func (info HeaderInfo) extra() []byte {
 	return info.SendRoot[:]
 }
 
-func (info HeaderInfo) MixDigest() [32]byte {
+func (info HeaderInfo) mixDigest() [32]byte {
 	mixDigest := common.Hash{}
 	binary.BigEndian.PutUint64(mixDigest[:8], info.SendCount)
 	binary.BigEndian.PutUint64(mixDigest[8:16], info.L1BlockNumber)
 	return mixDigest
+}
+
+func (info HeaderInfo) UpdateHeaderWithInfo(header *Header) {
+	header.MixDigest = info.mixDigest()
+	header.Extra = info.extra()
 }
 
 func DeserializeHeaderExtraInformation(header *Header) (HeaderInfo, error) {
