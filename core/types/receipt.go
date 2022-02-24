@@ -70,6 +70,9 @@ type Receipt struct {
 	BlockHash        common.Hash `json:"blockHash,omitempty"`
 	BlockNumber      *big.Int    `json:"blockNumber,omitempty"`
 	TransactionIndex uint        `json:"transactionIndex"`
+
+	// Arbitrum Implementation fields
+	L1GasUsed uint64 `json:"l1GasUsed"`
 }
 
 type receiptMarshaling struct {
@@ -94,6 +97,7 @@ type receiptRLP struct {
 type storedReceiptRLP struct {
 	PostStateOrStatus []byte
 	CumulativeGasUsed uint64
+	L1GasUsed         uint64
 	Logs              []*LogForStorage
 }
 
@@ -291,6 +295,7 @@ func (r *ReceiptForStorage) EncodeRLP(w io.Writer) error {
 	enc := &storedReceiptRLP{
 		PostStateOrStatus: (*Receipt)(r).statusEncoding(),
 		CumulativeGasUsed: r.CumulativeGasUsed,
+		L1GasUsed:         r.L1GasUsed,
 		Logs:              make([]*LogForStorage, len(r.Logs)),
 	}
 	for i, log := range r.Logs {
@@ -328,6 +333,7 @@ func decodeStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
 		return err
 	}
 	r.CumulativeGasUsed = stored.CumulativeGasUsed
+	r.L1GasUsed = stored.L1GasUsed
 	r.Logs = make([]*Log, len(stored.Logs))
 	for i, log := range stored.Logs {
 		r.Logs[i] = (*Log)(log)

@@ -134,6 +134,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	receipt.BlockHash = blockHash
 	receipt.BlockNumber = blockNumber
 	receipt.TransactionIndex = uint(statedb.TxIndex())
+	evm.ProcessingHook.FillReceiptInfo(receipt)
 	return receipt, result, err
 }
 

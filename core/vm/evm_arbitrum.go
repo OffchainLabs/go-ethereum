@@ -37,6 +37,7 @@ type TxProcessingHook interface {
 	ScheduledTxes() types.Transactions
 	L1BlockNumber(blockCtx BlockContext) (uint64, error)
 	L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error)
+	FillReceiptInfo(receipt *types.Receipt)
 }
 
 type DefaultTxProcessor struct{}
@@ -76,4 +77,7 @@ func (p DefaultTxProcessor) L1BlockNumber(blockCtx BlockContext) (uint64, error)
 
 func (p DefaultTxProcessor) L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error) {
 	return blockCtx.GetHash(l1BlocKNumber), nil
+}
+
+func (p DefaultTxProcessor) FillReceiptInfo(*types.Receipt) {
 }

@@ -1296,7 +1296,22 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 	}
 	fields["uncles"] = uncleHashes
 
+	if config.IsArbitrum() {
+		fillArbitrumHeaderInfo(block.Header(), fields)
+	}
+
 	return fields, nil
+}
+
+func fillArbitrumHeaderInfo(header *types.Header, fields map[string]interface{}) {
+	info, err := types.DeserializeHeaderExtraInformation(header)
+	if err != nil {
+		log.Error("Expected header to contain arbitrum data", "blockHash", header.Hash())
+	} else {
+		fields["l1BlockNumber"] = hexutil.Uint64(info.L1BlockNumber)
+		fields["sendRoot"] = info.SendRoot
+		fields["sendCount"] = hexutil.Uint64(info.SendCount)
+	}
 }
 
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
@@ -1304,6 +1319,9 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 func (s *PublicBlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
 	fields := RPCMarshalHeader(header)
 	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
+	if s.b.ChainConfig().IsArbitrum() {
+		fillArbitrumHeaderInfo(header, fields)
+	}
 	return fields
 }
 
@@ -1712,6 +1730,20 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if receipt.ContractAddress != (common.Address{}) {
 		fields["contractAddress"] = receipt.ContractAddress
+	}
+	if s.b.ChainConfig().IsArbitrum() {
+		fields["l1GasUsed"] = hexutil.Uint64(receipt.L1GasUsed)
+
+		header, err := s.b.HeaderByHash(ctx, blockHash)
+		if err != nil {
+			return nil, err
+		}
+		info, err := types.DeserializeHeaderExtraInformation(header)
+		if err != nil {
+			log.Error("Expected header to contain arbitrum data", "blockHash", blockHash)
+		} else {
+			fields["l1BlockNumber"] = hexutil.Uint64(info.L1BlockNumber)
+		}
 	}
 	return fields, nil
 }
