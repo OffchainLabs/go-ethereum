@@ -283,7 +283,17 @@ func (st *StateTransition) preCheck() error {
 //
 // However if any consensus issue encountered, return the error directly with
 // nil evm execution result.
-func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
+func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
+	endTxNow, startHookUsedGas, err, returnData := st.evm.ProcessingHook.StartTxHook()
+	if endTxNow {
+		return &ExecutionResult{
+			UsedGas:       startHookUsedGas,
+			Err:           err,
+			ReturnData:    returnData,
+			ScheduledTxes: st.evm.ProcessingHook.ScheduledTxes(),
+		}, nil
+	}
+
 	// First check this message satisfies all consensus rules before
 	// applying the message. The rules include these clauses
 	//
@@ -357,31 +367,14 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	}
 	st.state.AddBalance(*tipRecipient, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
 
+	st.evm.ProcessingHook.EndTxHook(st.gas, vmerr == nil)
+
 	return &ExecutionResult{
-		UsedGas:    st.gasUsed(),
-		Err:        vmerr,
-		ReturnData: ret,
+		UsedGas:       st.gasUsed(),
+		Err:           vmerr,
+		ReturnData:    ret,
+		ScheduledTxes: st.evm.ProcessingHook.ScheduledTxes(),
 	}, nil
-}
-
-func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
-
-	endTxNow, usedGas, err, returnData := st.evm.ProcessingHook.StartTxHook()
-	if endTxNow {
-		return &ExecutionResult{
-			UsedGas:       usedGas,
-			Err:           err,
-			ReturnData:    returnData,
-			ScheduledTxes: st.evm.ProcessingHook.ScheduledTxes(),
-		}, nil
-	}
-
-	res, err := st.transitionDbImpl()
-	if err == nil {
-		st.evm.ProcessingHook.EndTxHook(st.gas, res.Err == nil)
-		res.ScheduledTxes = st.evm.ProcessingHook.ScheduledTxes()
-	}
-	return res, err
 }
 
 func (st *StateTransition) refundGas(refundQuotient uint64) {
