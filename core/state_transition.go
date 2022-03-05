@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -162,6 +163,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 
 var ReadyEVMForL2 func(evm *vm.EVM, msg Message)
 var InterceptRPCMessage func(msg types.Message) (types.Message, error)
+var InterceptRPCGasCap func(gascap *uint64, msg types.Message, header *types.Header, statedb *state.StateDB)
 
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
