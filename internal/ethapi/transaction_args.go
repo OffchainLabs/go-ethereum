@@ -247,8 +247,10 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, header *types.Header
 
 	// Arbitrum: update the gas cap to ignore L1 costs so that it's compute-only
 	if core.InterceptRPCGasCap != nil && state != nil {
+		// ToMessage recurses once to allow ArbOS to intercept the result for all callers
+		// ArbOS uses this to modify globalGasCap so that the cap will ignore this tx's specific L1 data costs
 		core.InterceptRPCGasCap(&globalGasCap, msg, header, state)
-		return args.ToMessage(globalGasCap, header, nil)
+		return args.ToMessage(globalGasCap, header, nil) // we pass a nil to avoid another recursion
 	}
 	return msg, nil
 }
