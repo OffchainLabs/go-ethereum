@@ -26,6 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -175,7 +177,9 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 // ToMessage converts the transaction arguments to the Message type used by the
 // core evm. This method is used in calls and traces that do not require a real
 // live transaction.
-func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (types.Message, error) {
+func (args *TransactionArgs) ToMessage(globalGasCap uint64, header *types.Header, state *state.StateDB) (types.Message, error) {
+	baseFee := header.BaseFee
+
 	// Reject invalid combinations of pre- and post-1559 fee styles
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return types.Message{}, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
@@ -240,6 +244,14 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 		accessList = *args.AccessList
 	}
 	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, data, accessList, true)
+
+	// Arbitrum: update the gas cap to ignore L1 costs so that it's compute-only
+	if core.InterceptRPCGasCap != nil && state != nil {
+		// ToMessage recurses once to allow ArbOS to intercept the result for all callers
+		// ArbOS uses this to modify globalGasCap so that the cap will ignore this tx's specific L1 data costs
+		core.InterceptRPCGasCap(&globalGasCap, msg, header, state)
+		return args.ToMessage(globalGasCap, header, nil) // we pass a nil to avoid another recursion
+	}
 	return msg, nil
 }
 
