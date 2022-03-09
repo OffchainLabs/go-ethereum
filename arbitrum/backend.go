@@ -2,8 +2,6 @@ package arbitrum
 
 import (
 	"context"
-	"math"
-	"time"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -25,23 +23,6 @@ type Backend struct {
 	chanTxs      chan *types.Transaction
 	chanClose    chan struct{} //close coroutine
 	chanNewBlock chan struct{} //create new L2 block unless empty
-}
-
-type Config struct {
-	// RPCGasCap is the global gas cap for eth-call variants.
-	RPCGasCap uint64
-
-	// RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for
-	// send-transction variants. The unit is ether.
-	RPCTxFeeCap float64
-
-	// RPCEVMTimeout is the global timeout for eth-call.
-	RPCEVMTimeout time.Duration
-}
-
-var DefaultConfig = Config{
-	RPCGasCap:   math.MaxInt64, // no real limit, can cast to int
-	RPCTxFeeCap: 1,             // 1 ether
 }
 
 func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, blockChain *core.BlockChain, publisher ArbInterface) (*Backend, error) {
