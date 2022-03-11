@@ -1,8 +1,7 @@
 package arbitrum
 
 import (
-	"math"
-
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	flag "github.com/spf13/pflag"
 )
 import "time"
@@ -27,7 +26,7 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 }
 
 var DefaultConfig = Config{
-	RPCGasCap:     math.MaxInt64, // no real limit, can cast to int
-	RPCTxFeeCap:   1,             // 1 ether
-	RPCEVMTimeout: 0,             // disable timeout
+	RPCGasCap:     ethconfig.Defaults.RPCGasCap,     // 50,000,000
+	RPCTxFeeCap:   ethconfig.Defaults.RPCTxFeeCap,   // 1 ether
+	RPCEVMTimeout: ethconfig.Defaults.RPCEVMTimeout, // 5 seconds
 }
