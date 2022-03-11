@@ -8,7 +8,6 @@ import "time"
 
 type Config struct {
 	// RPCGasCap is the global gas cap for eth-call variants.
-	// Store as uint64, but default and value read from config as signed so that it can be cast to int.
 	RPCGasCap uint64 `koanf:"gas-cap"`
 
 	// RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for
@@ -20,9 +19,9 @@ type Config struct {
 }
 
 func ConfigAddOptions(prefix string, f *flag.FlagSet) {
-	f.Uint64(prefix+".gas-cap", DefaultConfig.RPCGasCap, "gas cap for eth-call variants")
-	f.Float64(prefix+".tx-fee-cap", DefaultConfig.RPCTxFeeCap, "transaction fee cap for send-transaction variants in ETH")
-	f.Duration(prefix+".evm-timeout", DefaultConfig.RPCEVMTimeout, "timeout for eth-call")
+	f.Uint64(prefix+".gas-cap", DefaultConfig.RPCGasCap, "cap on computation gas that can be used in eth_call/estimateGas (0=infinite)")
+	f.Float64(prefix+".tx-fee-cap", DefaultConfig.RPCTxFeeCap, "cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)")
+	f.Duration(prefix+".evm-timeout", DefaultConfig.RPCEVMTimeout, "timeout used for eth_call (0=infinite)")
 }
 
 var DefaultConfig = Config{
