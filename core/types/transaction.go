@@ -416,8 +416,6 @@ func (tx *Transaction) Hash() common.Hash {
 	var h common.Hash
 	if tx.Type() == LegacyTxType {
 		h = rlpHash(tx.inner)
-	} else if tx.Type() == ArbitrumSubmitRetryableTxType {
-		h = tx.inner.(*ArbitrumSubmitRetryableTx).RequestId // this is required by the retryables API
 	} else if tx.Type() == ArbitrumLegacyTxType {
 		h = tx.inner.(*ArbitrumLegacyTxData).Hash
 	} else {
