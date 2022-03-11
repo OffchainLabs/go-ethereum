@@ -162,7 +162,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 }
 
 var ReadyEVMForL2 func(evm *vm.EVM, msg Message)
-var InterceptRPCMessage func(msg types.Message) (types.Message, error)
+var InterceptRPCMessage func(msg types.Message, statedb *state.StateDB) (types.Message, error)
 var InterceptRPCGasCap func(gascap *uint64, msg types.Message, header *types.Header, statedb *state.StateDB)
 
 // NewStateTransition initialises and returns a new state transition object.

@@ -197,6 +197,7 @@ type ArbitrumSubmitRetryableTx struct {
 	ChainId   *big.Int
 	RequestId common.Hash
 	From      common.Address
+	L1BaseFee *big.Int
 
 	DepositValue      *big.Int
 	GasFeeCap         *big.Int        // wei per gas
