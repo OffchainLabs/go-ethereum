@@ -3,6 +3,8 @@ package arbitrum
 import (
 	"context"
 	"errors"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"math/big"
 	"time"
 
@@ -51,6 +53,8 @@ func (a *APIBackend) GetAPIs() []rpc.API {
 		Service:   NewPublicNetAPI(a.ChainConfig().ChainID.Uint64()),
 		Public:    true,
 	})
+
+	apis = append(apis, tracers.APIs(a)...)
 
 	return apis
 }
@@ -176,6 +180,16 @@ func (a *APIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.Bloc
 
 func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
 	return a.stateAndHeaderFromHeader(a.HeaderByNumberOrHash(ctx, blockNrOrHash))
+}
+
+func (a *APIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
+	// DEV: This assumes that `StateAtBlock` only accesses the blockchain and chainDb fields
+	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(block, reexec, base, checkLive, preferDisk)
+}
+
+func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
+	// DEV: This assumes that `StateAtTransaction` only accesses the blockchain and chainDb fields
+	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtTransaction(block, txIndex, reexec)
 }
 
 func (a *APIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
