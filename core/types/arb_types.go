@@ -217,6 +217,7 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 		ChainId:           new(big.Int),
 		RequestId:         tx.RequestId,
 		DepositValue:      new(big.Int),
+		L1BaseFee:         tx.L1BaseFee,
 		GasFeeCap:         new(big.Int),
 		Gas:               tx.Gas,
 		From:              tx.From,
