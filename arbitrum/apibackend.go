@@ -31,11 +31,11 @@ type APIBackend struct {
 	b *Backend
 }
 
-func createRegisterAPIBackend(backend *Backend) {
+func createRegisterAPIBackend(backend *Backend, apis []rpc.API) {
 	backend.apiBackend = &APIBackend{
 		b: backend,
 	}
-	backend.stack.RegisterAPIs(backend.apiBackend.GetAPIs())
+	backend.stack.RegisterAPIs(append(backend.apiBackend.GetAPIs(), apis...))
 }
 
 func (a *APIBackend) GetAPIs() []rpc.API {
