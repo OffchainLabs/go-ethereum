@@ -199,34 +199,34 @@ type ArbitrumSubmitRetryableTx struct {
 	From      common.Address
 	L1BaseFee *big.Int
 
-	DepositValue      *big.Int
-	GasFeeCap         *big.Int        // wei per gas
-	Gas               uint64          // gas limit
-	To                *common.Address `rlp:"nil"` // nil means contract creation
-	Value             *big.Int        // wei amount
-	Beneficiary       common.Address
-	SubmissionFeePaid *big.Int
-	FeeRefundAddr     common.Address
-	Data              []byte // contract invocation input data
+	DepositValue     *big.Int
+	GasFeeCap        *big.Int        // wei per gas
+	Gas              uint64          // gas limit
+	To               *common.Address `rlp:"nil"` // nil means contract creation
+	Value            *big.Int        // wei amount
+	Beneficiary      common.Address
+	MaxSubmissionFee *big.Int
+	FeeRefundAddr    common.Address
+	Data             []byte // contract invocation input data
 }
 
 func (tx *ArbitrumSubmitRetryableTx) txType() byte { return ArbitrumSubmitRetryableTxType }
 
 func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 	cpy := &ArbitrumSubmitRetryableTx{
-		ChainId:           new(big.Int),
-		RequestId:         tx.RequestId,
-		DepositValue:      new(big.Int),
-		L1BaseFee:         tx.L1BaseFee,
-		GasFeeCap:         new(big.Int),
-		Gas:               tx.Gas,
-		From:              tx.From,
-		To:                tx.To,
-		Value:             new(big.Int),
-		Beneficiary:       tx.Beneficiary,
-		SubmissionFeePaid: new(big.Int),
-		FeeRefundAddr:     tx.FeeRefundAddr,
-		Data:              common.CopyBytes(tx.Data),
+		ChainId:          new(big.Int),
+		RequestId:        tx.RequestId,
+		DepositValue:     new(big.Int),
+		L1BaseFee:        tx.L1BaseFee,
+		GasFeeCap:        new(big.Int),
+		Gas:              tx.Gas,
+		From:             tx.From,
+		To:               tx.To,
+		Value:            new(big.Int),
+		Beneficiary:      tx.Beneficiary,
+		MaxSubmissionFee: new(big.Int),
+		FeeRefundAddr:    tx.FeeRefundAddr,
+		Data:             common.CopyBytes(tx.Data),
 	}
 	if tx.ChainId != nil {
 		cpy.ChainId.Set(tx.ChainId)
@@ -244,8 +244,8 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
 	}
-	if tx.SubmissionFeePaid != nil {
-		cpy.SubmissionFeePaid.Set(tx.SubmissionFeePaid)
+	if tx.MaxSubmissionFee != nil {
+		cpy.MaxSubmissionFee.Set(tx.MaxSubmissionFee)
 	}
 	return cpy
 }
