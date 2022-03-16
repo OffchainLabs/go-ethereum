@@ -928,7 +928,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 
 	// Arbitrum: support NodeInterface.sol by swapping out the message if needed
 	if core.InterceptRPCMessage != nil {
-		msg, err = core.InterceptRPCMessage(msg)
+		msg, err = core.InterceptRPCMessage(msg, state)
 		if err != nil {
 			return nil, err
 		}
