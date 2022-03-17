@@ -3,10 +3,11 @@ package arbitrum
 import (
 	"context"
 	"errors"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"math/big"
 	"time"
+
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -51,6 +52,13 @@ func (a *APIBackend) GetAPIs() []rpc.API {
 		Namespace: "net",
 		Version:   "1.0",
 		Service:   NewPublicNetAPI(a.ChainConfig().ChainID.Uint64()),
+		Public:    true,
+	})
+
+	apis = append(apis, rpc.API{
+		Namespace: "txpool",
+		Version:   "1.0",
+		Service:   NewPublicTxPoolAPI(),
 		Public:    true,
 	})
 
