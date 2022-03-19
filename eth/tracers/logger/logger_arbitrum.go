@@ -29,3 +29,5 @@ func (*JSONLogger) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address
 }
 func (*StructLogger) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool) {
 }
+func (*mdLogger) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool) {
+}
