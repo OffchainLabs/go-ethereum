@@ -1001,6 +1001,11 @@ func newRevertError(result *core.ExecutionResult) *revertError {
 	if errUnpack == nil {
 		err = fmt.Errorf("execution reverted: %v", reason)
 	}
+	if core.RenderRPCError != nil {
+		if arbErr := core.RenderRPCError(result.Revert()); arbErr != nil {
+			err = arbErr
+		}
+	}
 	return &revertError{
 		error:  err,
 		reason: hexutil.Encode(result.Revert()),
