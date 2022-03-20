@@ -7,6 +7,7 @@ import (
 )
 
 var arbAddress = common.HexToAddress("0xa4b05")
+var ArbRetryableTxAddress = common.HexToAddress("0x6e")
 
 type arbitrumSigner struct{ Signer }
 
