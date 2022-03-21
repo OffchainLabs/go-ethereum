@@ -202,7 +202,7 @@ type ArbitrumSubmitRetryableTx struct {
 	DepositValue     *big.Int
 	GasFeeCap        *big.Int        // wei per gas
 	Gas              uint64          // gas limit
-	To               *common.Address `rlp:"nil"` // nil means contract creation
+	RetryTo          *common.Address `rlp:"nil"` // nil means contract creation
 	Value            *big.Int        // wei amount
 	Beneficiary      common.Address
 	MaxSubmissionFee *big.Int
@@ -221,7 +221,7 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 		GasFeeCap:        new(big.Int),
 		Gas:              tx.Gas,
 		From:             tx.From,
-		To:               tx.To,
+		RetryTo:          tx.RetryTo,
 		Value:            new(big.Int),
 		Beneficiary:      tx.Beneficiary,
 		MaxSubmissionFee: new(big.Int),
@@ -237,9 +237,9 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 	if tx.GasFeeCap != nil {
 		cpy.GasFeeCap.Set(tx.GasFeeCap)
 	}
-	if tx.To != nil {
-		tmp := *tx.To
-		cpy.To = &tmp
+	if tx.RetryTo != nil {
+		tmp := *tx.RetryTo
+		cpy.RetryTo = &tmp
 	}
 	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
@@ -259,7 +259,7 @@ func (tx *ArbitrumSubmitRetryableTx) gasTipCap() *big.Int    { return big.NewInt
 func (tx *ArbitrumSubmitRetryableTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
 func (tx *ArbitrumSubmitRetryableTx) value() *big.Int        { return tx.Value }
 func (tx *ArbitrumSubmitRetryableTx) nonce() uint64          { return 0 }
-func (tx *ArbitrumSubmitRetryableTx) to() *common.Address    { return tx.To }
+func (tx *ArbitrumSubmitRetryableTx) to() *common.Address    { return &ArbRetryableTxAddress }
 func (tx *ArbitrumSubmitRetryableTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero
 }
