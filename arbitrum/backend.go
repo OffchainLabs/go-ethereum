@@ -2,8 +2,6 @@ package arbitrum
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/rpc"
-
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -26,7 +24,7 @@ type Backend struct {
 	chanNewBlock chan struct{} //create new L2 block unless empty
 }
 
-func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publisher ArbInterface, apis []rpc.API) (*Backend, error) {
+func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publisher ArbInterface) (*Backend, error) {
 	backend := &Backend{
 		arb:          publisher,
 		stack:        stack,
@@ -38,7 +36,7 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 	}
 	stack.RegisterLifecycle(backend)
 
-	createRegisterAPIBackend(backend, apis)
+	createRegisterAPIBackend(backend)
 	return backend, nil
 }
 
