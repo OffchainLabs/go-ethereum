@@ -35,6 +35,7 @@ func createRegisterAPIBackend(backend *Backend) {
 	backend.apiBackend = &APIBackend{
 		b: backend,
 	}
+	backend.stack.RegisterAPIs(backend.apiBackend.GetAPIs())
 }
 
 func (a *APIBackend) GetAPIs() []rpc.API {
