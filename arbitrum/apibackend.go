@@ -118,26 +118,34 @@ func (a *APIBackend) SetHead(number uint64) {
 }
 
 func (a *APIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
-	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
-		return a.blockChain().CurrentBlock().Header(), nil
-	}
-	return a.blockChain().GetHeaderByNumber(uint64(number.Int64())), nil
+	return HeaderByNumber(a.blockChain(), number), nil
 }
 
 func (a *APIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
 	return a.blockChain().GetHeaderByHash(hash), nil
 }
 
-func (a *APIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
+func HeaderByNumber(blockchain *core.BlockChain, number rpc.BlockNumber) *types.Header {
+	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
+		return blockchain.CurrentBlock().Header()
+	}
+	return blockchain.GetHeaderByNumber(uint64(number.Int64()))
+}
+
+func HeaderByNumberOrHash(blockchain *core.BlockChain, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
 	number, isnum := blockNrOrHash.Number()
 	if isnum {
-		return a.HeaderByNumber(ctx, number)
+		return HeaderByNumber(blockchain, number), nil
 	}
 	hash, ishash := blockNrOrHash.Hash()
 	if ishash {
-		return a.HeaderByHash(ctx, hash)
+		return blockchain.GetHeaderByHash(hash), nil
 	}
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
+}
+
+func (a *APIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
+	return HeaderByNumberOrHash(a.blockChain(), blockNrOrHash)
 }
 
 func (a *APIBackend) CurrentHeader() *types.Header {
