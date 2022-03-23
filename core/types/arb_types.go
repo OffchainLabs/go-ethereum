@@ -343,7 +343,7 @@ func (t *ArbitrumInternalTx) gasTipCap() *big.Int    { return bigZero }
 func (t *ArbitrumInternalTx) gasFeeCap() *big.Int    { return bigZero }
 func (t *ArbitrumInternalTx) value() *big.Int        { return common.Big0 }
 func (t *ArbitrumInternalTx) nonce() uint64          { return 0 }
-func (t *ArbitrumInternalTx) to() *common.Address    { return &arbAddress }
+func (t *ArbitrumInternalTx) to() *common.Address    { return &ArbosAddress }
 func (t *ArbitrumInternalTx) isFake() bool           { return true }
 
 func (d *ArbitrumInternalTx) rawSignatureValues() (v, r, s *big.Int) {
