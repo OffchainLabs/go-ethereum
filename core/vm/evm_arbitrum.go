@@ -26,6 +26,14 @@ func (evm *EVM) Depth() int {
 	return evm.depth
 }
 
+func (evm *EVM) IncrementDepth() {
+	evm.depth += 1
+}
+
+func (evm *EVM) DecrementDepth() {
+	evm.depth += 1
+}
+
 type TxProcessingHook interface {
 	StartTxHook() (bool, uint64, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
 	GasChargingHook(gasRemaining *uint64) (*common.Address, error)
