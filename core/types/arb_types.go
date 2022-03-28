@@ -207,7 +207,8 @@ type ArbitrumSubmitRetryableTx struct {
 	Beneficiary      common.Address
 	MaxSubmissionFee *big.Int
 	FeeRefundAddr    common.Address
-	Data             []byte // contract invocation input data
+	RetryData        []byte // contract invocation input data
+	Data             []byte
 }
 
 func (tx *ArbitrumSubmitRetryableTx) txType() byte { return ArbitrumSubmitRetryableTxType }
@@ -226,7 +227,8 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 		Beneficiary:      tx.Beneficiary,
 		MaxSubmissionFee: new(big.Int),
 		FeeRefundAddr:    tx.FeeRefundAddr,
-		Data:             common.CopyBytes(tx.Data),
+		RetryData:        common.CopyBytes(tx.RetryData),
+		Data:             tx.Data,
 	}
 	if tx.ChainId != nil {
 		cpy.ChainId.Set(tx.ChainId)
