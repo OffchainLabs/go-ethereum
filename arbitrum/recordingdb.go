@@ -71,12 +71,25 @@ func (db *RecordingKV) NewBatch() ethdb.Batch {
 	return nil
 }
 
+func (db *RecordingKV) NewBatchWithSize(size int) ethdb.Batch {
+	if db.enableBypass {
+		return db.inner.DiskDB().NewBatchWithSize(size)
+	}
+	log.Error("recording KV: attempted to create batch when bypass not enabled")
+	return nil
+}
+
 func (db *RecordingKV) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 	if db.enableBypass {
 		return db.inner.DiskDB().NewIterator(prefix, start)
 	}
 	log.Error("recording KV: attempted to create iterator when bypass not enabled")
 	return nil
+}
+
+func (db *RecordingKV) NewSnapshot() (ethdb.Snapshot, error) {
+	// This is fine as RecordingKV doesn't support mutation
+	return db, nil
 }
 
 func (db *RecordingKV) Stat(property string) (string, error) {
@@ -89,6 +102,10 @@ func (db *RecordingKV) Compact(start []byte, limit []byte) error {
 
 func (db *RecordingKV) Close() error {
 	return nil
+}
+
+func (db *RecordingKV) Release() {
+	return
 }
 
 func (db *RecordingKV) GetRecordedEntries() map[common.Hash][]byte {
