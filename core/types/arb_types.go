@@ -207,7 +207,7 @@ type ArbitrumSubmitRetryableTx struct {
 	Beneficiary      common.Address
 	MaxSubmissionFee *big.Int
 	FeeRefundAddr    common.Address
-	Data             []byte // contract invocation input data
+	RetryData        []byte // contract invocation input data
 }
 
 func (tx *ArbitrumSubmitRetryableTx) txType() byte { return ArbitrumSubmitRetryableTxType }
@@ -226,7 +226,7 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 		Beneficiary:      tx.Beneficiary,
 		MaxSubmissionFee: new(big.Int),
 		FeeRefundAddr:    tx.FeeRefundAddr,
-		Data:             common.CopyBytes(tx.Data),
+		RetryData:        common.CopyBytes(tx.RetryData),
 	}
 	if tx.ChainId != nil {
 		cpy.ChainId.Set(tx.ChainId)
@@ -252,7 +252,6 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 
 func (tx *ArbitrumSubmitRetryableTx) chainID() *big.Int      { return tx.ChainId }
 func (tx *ArbitrumSubmitRetryableTx) accessList() AccessList { return nil }
-func (tx *ArbitrumSubmitRetryableTx) data() []byte           { return tx.Data }
 func (tx *ArbitrumSubmitRetryableTx) gas() uint64            { return tx.Gas }
 func (tx *ArbitrumSubmitRetryableTx) gasPrice() *big.Int     { return tx.GasFeeCap }
 func (tx *ArbitrumSubmitRetryableTx) gasTipCap() *big.Int    { return big.NewInt(0) }
@@ -265,6 +264,12 @@ func (tx *ArbitrumSubmitRetryableTx) rawSignatureValues() (v, r, s *big.Int) {
 }
 func (tx *ArbitrumSubmitRetryableTx) setSignatureValues(chainID, v, r, s *big.Int) {}
 func (tx *ArbitrumSubmitRetryableTx) isFake() bool                                 { return true }
+
+var ArbitrumSubmitRetryableTxDataHook func(*ArbitrumSubmitRetryableTx) []byte
+
+func (tx *ArbitrumSubmitRetryableTx) data() []byte {
+	return ArbitrumSubmitRetryableTxDataHook(tx)
+}
 
 type ArbitrumDepositTx struct {
 	ChainId     *big.Int
