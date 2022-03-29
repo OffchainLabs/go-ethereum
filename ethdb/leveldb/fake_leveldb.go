@@ -91,10 +91,18 @@ func (db *Database) NewBatch() ethdb.Batch {
 	panic("Method called on unconstructable leveldb database")
 }
 
+func (db *Database) NewBatchWithSize(size int) ethdb.Batch {
+	panic("Method called on unconstructable leveldb database")
+}
+
 // NewIterator creates a binary-alphabetical iterator over a subset
 // of database content with a particular key prefix, starting at a particular
 // initial key (or after, if it does not exist).
 func (db *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
+	panic("Method called on unconstructable leveldb database")
+}
+
+func (db *Database) NewSnapshot() (ethdb.Snapshot, error) {
 	panic("Method called on unconstructable leveldb database")
 }
 
