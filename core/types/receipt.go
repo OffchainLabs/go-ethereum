@@ -71,7 +71,7 @@ type Receipt struct {
 	TransactionIndex uint        `json:"transactionIndex"`
 
 	// Arbitrum Implementation fields
-	L1GasUsed uint64 `json:"l1GasUsed"`
+	GasForL1Cost uint64 `json:"gasForL1Cost"`
 }
 
 type receiptMarshaling struct {
@@ -282,7 +282,7 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 	outerList := w.List()
 	w.WriteBytes((*Receipt)(r).statusEncoding())
 	w.WriteUint64(r.CumulativeGasUsed)
-	w.WriteUint64(r.L1GasUsed)
+	w.WriteUint64(r.GasForL1Cost)
 	logList := w.List()
 	for _, log := range r.Logs {
 		if err := rlp.Encode(w, log); err != nil {
@@ -323,7 +323,7 @@ func decodeStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
 		return err
 	}
 	r.CumulativeGasUsed = stored.CumulativeGasUsed
-	r.L1GasUsed = stored.L1GasUsed
+	r.GasForL1Cost = stored.L1GasUsed
 	r.Logs = make([]*Log, len(stored.Logs))
 	for i, log := range stored.Logs {
 		r.Logs[i] = (*Log)(log)

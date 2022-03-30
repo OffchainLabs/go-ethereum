@@ -1737,7 +1737,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		fields["contractAddress"] = receipt.ContractAddress
 	}
 	if s.b.ChainConfig().IsArbitrum() {
-		fields["l1GasUsed"] = hexutil.Uint64(receipt.L1GasUsed)
+		fields["gasForL1Cost"] = hexutil.Uint64(receipt.GasForL1Cost)
 
 		header, err := s.b.HeaderByHash(ctx, blockHash)
 		if err != nil {
