@@ -1113,6 +1113,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
+	vanillaGasCap := gasCap
 	{
 		state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 		if state == nil || err != nil {
@@ -1135,7 +1136,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
 
-		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, gasCap, true)
+		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, vanillaGasCap, true)
 		if err != nil {
 			if errors.Is(err, core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
