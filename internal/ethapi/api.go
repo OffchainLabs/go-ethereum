@@ -1111,6 +1111,19 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 			hi = allowance.Uint64()
 		}
 	}
+
+	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
+	{
+		state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+		if state == nil || err != nil {
+			return 0, err
+		}
+		gasCap, err = args.L2OnlyGasCap(gasCap, header, state)
+		if err != nil {
+			return 0, err
+		}
+	}
+
 	// Recap the highest gas allowance with specified gascap.
 	if gasCap != 0 && hi > gasCap {
 		log.Warn("Caller gas above allowance, capping", "requested", hi, "cap", gasCap)
