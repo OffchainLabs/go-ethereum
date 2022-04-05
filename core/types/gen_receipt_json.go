@@ -16,6 +16,7 @@ var _ = (*receiptMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (r Receipt) MarshalJSON() ([]byte, error) {
 	type Receipt struct {
+		GasUsedForL1      hexutil.Uint64 `json:"gasUsedForL1"`
 		Type              hexutil.Uint64 `json:"type,omitempty"`
 		PostState         hexutil.Bytes  `json:"root"`
 		Status            hexutil.Uint64 `json:"status"`
@@ -28,9 +29,9 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 		BlockHash         common.Hash    `json:"blockHash,omitempty"`
 		BlockNumber       *hexutil.Big   `json:"blockNumber,omitempty"`
 		TransactionIndex  hexutil.Uint   `json:"transactionIndex"`
-		GasUsedForL1      hexutil.Uint64 `json:"gasUsedForL1"`
 	}
 	var enc Receipt
+	enc.GasUsedForL1 = hexutil.Uint64(r.GasUsedForL1)
 	enc.Type = hexutil.Uint64(r.Type)
 	enc.PostState = r.PostState
 	enc.Status = hexutil.Uint64(r.Status)
@@ -43,13 +44,13 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 	enc.BlockHash = r.BlockHash
 	enc.BlockNumber = (*hexutil.Big)(r.BlockNumber)
 	enc.TransactionIndex = hexutil.Uint(r.TransactionIndex)
-	enc.GasUsedForL1 = hexutil.Uint64(r.GasUsedForL1)
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
 func (r *Receipt) UnmarshalJSON(input []byte) error {
 	type Receipt struct {
+		GasUsedForL1      *hexutil.Uint64 `json:"gasUsedForL1"`
 		Type              *hexutil.Uint64 `json:"type,omitempty"`
 		PostState         *hexutil.Bytes  `json:"root"`
 		Status            *hexutil.Uint64 `json:"status"`
@@ -62,11 +63,13 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 		BlockHash         *common.Hash    `json:"blockHash,omitempty"`
 		BlockNumber       *hexutil.Big    `json:"blockNumber,omitempty"`
 		TransactionIndex  *hexutil.Uint   `json:"transactionIndex"`
-		GasUsedForL1      *hexutil.Uint64 `json:"gasUsedForL1"`
 	}
 	var dec Receipt
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
+	}
+	if dec.GasUsedForL1 != nil {
+		r.GasUsedForL1 = uint64(*dec.GasUsedForL1)
 	}
 	if dec.Type != nil {
 		r.Type = uint8(*dec.Type)
@@ -108,9 +111,6 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 	}
 	if dec.TransactionIndex != nil {
 		r.TransactionIndex = uint(*dec.TransactionIndex)
-	}
-	if dec.GasUsedForL1 != nil {
-		r.GasUsedForL1 = uint64(*dec.GasUsedForL1)
 	}
 	return nil
 }
