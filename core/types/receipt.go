@@ -50,6 +50,9 @@ const (
 
 // Receipt represents the results of a transaction.
 type Receipt struct {
+	// Arbitrum Implementation fields
+	GasUsedForL1 uint64 `json:"gasUsedForL1"`
+	
 	// Consensus fields: These fields are defined by the Yellow Paper
 	Type              uint8  `json:"type,omitempty"`
 	PostState         []byte `json:"root"`
@@ -69,12 +72,12 @@ type Receipt struct {
 	BlockHash        common.Hash `json:"blockHash,omitempty"`
 	BlockNumber      *big.Int    `json:"blockNumber,omitempty"`
 	TransactionIndex uint        `json:"transactionIndex"`
-
-	// Arbitrum Implementation fields
-	GasUsedForL1 uint64 `json:"gasUsedForL1"`
 }
 
 type receiptMarshaling struct {
+	// Arbitrum specific fields
+	GasUsedForL1 hexutil.Uint64
+
 	Type              hexutil.Uint64
 	PostState         hexutil.Bytes
 	Status            hexutil.Uint64
@@ -82,8 +85,6 @@ type receiptMarshaling struct {
 	GasUsed           hexutil.Uint64
 	BlockNumber       *hexutil.Big
 	TransactionIndex  hexutil.Uint
-
-	GasUsedForL1 hexutil.Uint64
 }
 
 // receiptRLP is the consensus encoding of a receipt.
