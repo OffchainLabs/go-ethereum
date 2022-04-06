@@ -4,7 +4,7 @@ on:
   push:
     # Publish `polygon-v1.2.3` tags as releases.
     tags:
-      - "*"
+      - "[a-z0-9]+-v*"
 
 jobs:
   build:
@@ -34,10 +34,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-
       - name: Build Binary for ${{matrix.os}}
         run: make geth
-
 
       - name: Upload Linux Build
         uses: actions/upload-artifact@v2
@@ -52,13 +50,6 @@ jobs:
         with:
           name: macos
           path: ./build/bin/geth
-
-      # - name: Upload Windows Build
-      #   uses: actions/upload-artifact@v2
-      #   if: matrix.os == 'windows-2019'
-      #   with:
-      #     name: windows
-      #     path: ./build/bin/geth.exe
 
   release:
     name: Release
