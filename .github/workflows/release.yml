@@ -5,6 +5,7 @@ on:
     # Publish `polygon-v1.2.3` tags as releases.
     tags:
       - "[a-z0-9]+-v*"
+      - "!**.docker"
 
 jobs:
   build:
