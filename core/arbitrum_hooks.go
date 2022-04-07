@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -38,7 +39,7 @@ var InterceptRPCMessage func(
 ) (types.Message, *ExecutionResult, error)
 
 // Allows ArbOS to update the gas cap so that it ignores the message's specific L1 poster costs.
-var InterceptRPCGasCap func(gascap *uint64, msg types.Message, header *types.Header, statedb *state.StateDB)
+var InterceptRPCGasCap func(gascap *uint64, msg types.Message, chainConfig *params.ChainConfig, header *types.Header, statedb *state.StateDB)
 
 // Renders a solidity error in human-readable form
 var RenderRPCError func(data []byte) error
