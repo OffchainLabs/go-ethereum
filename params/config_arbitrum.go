@@ -26,6 +26,7 @@ type ArbitrumChainParams struct {
 	EnableArbOS               bool
 	AllowDebugPrecompiles     bool
 	DataAvailabilityCommittee bool
+	InitialArbOSVersion       uint64
 	InitialChainOwner         common.Address
 }
 
@@ -43,7 +44,8 @@ func ArbitrumOneParams() ArbitrumChainParams {
 		AllowDebugPrecompiles:     false,
 		DataAvailabilityCommittee: false,
 		// Not used as arbitrum one has init data
-		InitialChainOwner: common.Address{},
+		InitialArbOSVersion: 1,
+		InitialChainOwner:   common.Address{},
 	}
 }
 
@@ -52,6 +54,7 @@ func ArbitrumTestnetParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     false,
 		DataAvailabilityCommittee: false,
+		InitialArbOSVersion:       1,
 		InitialChainOwner:         common.Address{}, // TODO
 	}
 }
@@ -61,6 +64,7 @@ func ArbitrumDevTestParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     true,
 		DataAvailabilityCommittee: false,
+		InitialArbOSVersion:       2,
 		InitialChainOwner:         common.Address{},
 	}
 }
@@ -70,6 +74,7 @@ func ArbitrumDevTestDASParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     true,
 		DataAvailabilityCommittee: true,
+		InitialArbOSVersion:       2,
 		InitialChainOwner:         common.Address{},
 	}
 }
@@ -79,6 +84,7 @@ func DisableArbitrumParams() ArbitrumChainParams {
 		EnableArbOS:               false,
 		AllowDebugPrecompiles:     false,
 		DataAvailabilityCommittee: false,
+		InitialArbOSVersion:       0,
 		InitialChainOwner:         common.Address{},
 	}
 }
