@@ -1,6 +1,7 @@
 package arbitrum
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -29,19 +30,23 @@ func NewRecordingKV(inner *trie.Database) *RecordingKV {
 }
 
 func (db *RecordingKV) Has(key []byte) (bool, error) {
-	if len(key) != 32 {
-		return false, nil
-	}
 	return false, errors.New("recording KV doesn't support Has")
 }
 
 func (db *RecordingKV) Get(key []byte) ([]byte, error) {
-	if len(key) != 32 {
-		return nil, fmt.Errorf("recording KV attempted to access non-hash key %v", hex.EncodeToString(key))
-	}
 	var hash common.Hash
-	copy(hash[:], key)
-	res, err := db.inner.Node(hash)
+	var res []byte
+	var err error
+	if len(key) == 32 {
+		copy(hash[:], key)
+		res, err = db.inner.Node(hash)
+	} else if len(key) == len(rawdb.CodePrefix)+32 && bytes.HasPrefix(key, rawdb.CodePrefix) {
+		// Retrieving code
+		copy(hash[:], key[len(rawdb.CodePrefix):])
+		res, err = db.inner.DiskDB().Get(key)
+	} else {
+		err = fmt.Errorf("recording KV attempted to access non-hash key %v", hex.EncodeToString(key))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -134,9 +139,6 @@ func (r *RecordingChainContext) Engine() consensus.Engine {
 }
 
 func (r *RecordingChainContext) GetHeader(hash common.Hash, num uint64) *types.Header {
-	if num == 0 {
-		return nil
-	}
 	if num < r.minBlockNumberAccessed {
 		r.minBlockNumberAccessed = num
 	}
