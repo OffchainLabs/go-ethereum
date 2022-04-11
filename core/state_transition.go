@@ -304,6 +304,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// Arbitrum: drop support for tips from upgrade 2 onward
 	if st.evm.ProcessingHook.DropTip() && st.gasPrice.Cmp(st.evm.Context.BaseFee) > 0 {
 		st.gasPrice = st.evm.Context.BaseFee
+		st.gasTipCap = common.Big0
 	}
 
 	// Check clauses 1-3, buy gas if everything is correct
