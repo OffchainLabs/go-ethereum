@@ -65,6 +65,7 @@ type StateTransition struct {
 // Message represents a message sent to a contract.
 type Message interface {
 	UnderlyingTransaction() *types.Transaction
+	RunMode() types.MessageRunMode
 	From() common.Address
 	To() *common.Address
 
@@ -158,8 +159,6 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 	}
 	return gas, nil
 }
-
-var ReadyEVMForL2 func(evm *vm.EVM, msg Message)
 
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
@@ -281,7 +280,17 @@ func (st *StateTransition) preCheck() error {
 //
 // However if any consensus issue encountered, return the error directly with
 // nil evm execution result.
-func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
+func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
+	endTxNow, startHookUsedGas, err, returnData := st.evm.ProcessingHook.StartTxHook()
+	if endTxNow {
+		return &ExecutionResult{
+			UsedGas:       startHookUsedGas,
+			Err:           err,
+			ReturnData:    returnData,
+			ScheduledTxes: st.evm.ProcessingHook.ScheduledTxes(),
+		}, nil
+	}
+
 	// First check this message satisfies all consensus rules before
 	// applying the message. The rules include these clauses
 	//
@@ -291,11 +300,6 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	// 4. the purchased gas is enough to cover intrinsic usage
 	// 5. there is no overflow when calculating intrinsic gas
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
-
-	// There are no tips in L2
-	if st.evm.ChainConfig().IsArbitrum() && st.gasPrice.Cmp(st.evm.Context.BaseFee) > 0 {
-		st.gasPrice = st.evm.Context.BaseFee
-	}
 
 	// Check clauses 1-3, buy gas if everything is correct
 	if err := st.preCheck(); err != nil {
@@ -318,7 +322,7 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	}
 	st.gas -= gas
 
-	err = st.evm.ProcessingHook.GasChargingHook(&st.gas)
+	tipRecipient, err := st.evm.ProcessingHook.GasChargingHook(&st.gas)
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +333,7 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	}
 
 	// Set up the initial access list.
-	if rules := st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber); rules.IsBerlin {
+	if rules := st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Random != nil); rules.IsBerlin {
 		st.state.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
 	}
 	var (
@@ -355,33 +359,19 @@ func (st *StateTransition) transitionDbImpl() (*ExecutionResult, error) {
 	if london {
 		effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 	}
-	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+	if tipRecipient == nil {
+		tipRecipient = &st.evm.Context.Coinbase
+	}
+	st.state.AddBalance(*tipRecipient, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+
+	st.evm.ProcessingHook.EndTxHook(st.gas, vmerr == nil)
 
 	return &ExecutionResult{
-		UsedGas:    st.gasUsed(),
-		Err:        vmerr,
-		ReturnData: ret,
+		UsedGas:       st.gasUsed(),
+		Err:           vmerr,
+		ReturnData:    ret,
+		ScheduledTxes: st.evm.ProcessingHook.ScheduledTxes(),
 	}, nil
-}
-
-func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
-
-	endTxNow, usedGas, err, returnData := st.evm.ProcessingHook.StartTxHook()
-	if endTxNow {
-		return &ExecutionResult{
-			UsedGas:       usedGas,
-			Err:           err,
-			ReturnData:    returnData,
-			ScheduledTxes: st.evm.ProcessingHook.ScheduledTxes(),
-		}, nil
-	}
-
-	res, err := st.transitionDbImpl()
-	if err == nil {
-		st.evm.ProcessingHook.EndTxHook(st.gas, res.Err == nil)
-		res.ScheduledTxes = st.evm.ProcessingHook.ScheduledTxes()
-	}
-	return res, err
 }
 
 func (st *StateTransition) refundGas(refundQuotient uint64) {

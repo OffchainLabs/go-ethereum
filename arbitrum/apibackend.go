@@ -6,6 +6,9 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/tracers"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -51,6 +54,15 @@ func (a *APIBackend) GetAPIs() []rpc.API {
 		Service:   NewPublicNetAPI(a.ChainConfig().ChainID.Uint64()),
 		Public:    true,
 	})
+
+	apis = append(apis, rpc.API{
+		Namespace: "txpool",
+		Version:   "1.0",
+		Service:   NewPublicTxPoolAPI(),
+		Public:    true,
+	})
+
+	apis = append(apis, tracers.APIs(a)...)
 
 	return apis
 }
@@ -106,26 +118,34 @@ func (a *APIBackend) SetHead(number uint64) {
 }
 
 func (a *APIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
-	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
-		return a.blockChain().CurrentBlock().Header(), nil
-	}
-	return a.blockChain().GetHeaderByNumber(uint64(number.Int64())), nil
+	return HeaderByNumber(a.blockChain(), number), nil
 }
 
 func (a *APIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
 	return a.blockChain().GetHeaderByHash(hash), nil
 }
 
-func (a *APIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
+func HeaderByNumber(blockchain *core.BlockChain, number rpc.BlockNumber) *types.Header {
+	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
+		return blockchain.CurrentBlock().Header()
+	}
+	return blockchain.GetHeaderByNumber(uint64(number.Int64()))
+}
+
+func HeaderByNumberOrHash(blockchain *core.BlockChain, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
 	number, isnum := blockNrOrHash.Number()
 	if isnum {
-		return a.HeaderByNumber(ctx, number)
+		return HeaderByNumber(blockchain, number), nil
 	}
 	hash, ishash := blockNrOrHash.Hash()
 	if ishash {
-		return a.HeaderByHash(ctx, hash)
+		return blockchain.GetHeaderByHash(hash), nil
 	}
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
+}
+
+func (a *APIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
+	return HeaderByNumberOrHash(a.blockChain(), blockNrOrHash)
 }
 
 func (a *APIBackend) CurrentHeader() *types.Header {
@@ -176,6 +196,16 @@ func (a *APIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.Bloc
 
 func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
 	return a.stateAndHeaderFromHeader(a.HeaderByNumberOrHash(ctx, blockNrOrHash))
+}
+
+func (a *APIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
+	// DEV: This assumes that `StateAtBlock` only accesses the blockchain and chainDb fields
+	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(block, reexec, base, checkLive, preferDisk)
+}
+
+func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
+	// DEV: This assumes that `StateAtTransaction` only accesses the blockchain and chainDb fields
+	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtTransaction(block, txIndex, reexec)
 }
 
 func (a *APIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {

@@ -26,6 +26,8 @@ type ArbitrumChainParams struct {
 	EnableArbOS               bool
 	AllowDebugPrecompiles     bool
 	DataAvailabilityCommittee bool
+	InitialArbOSVersion       uint64
+	InitialChainOwner         common.Address
 }
 
 func (c *ChainConfig) IsArbitrum() bool {
@@ -41,22 +43,49 @@ func ArbitrumOneParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     false,
 		DataAvailabilityCommittee: false,
+		// Not used as arbitrum one has init data
+		InitialArbOSVersion: 1,
+		InitialChainOwner:   common.Address{},
 	}
 }
 
-func ArbitrumTestParams() ArbitrumChainParams {
+func ArbitrumTestnetParams() ArbitrumChainParams {
+	return ArbitrumChainParams{
+		EnableArbOS:               true,
+		AllowDebugPrecompiles:     false,
+		DataAvailabilityCommittee: false,
+		InitialArbOSVersion:       1,
+		InitialChainOwner:         common.Address{}, // TODO
+	}
+}
+
+func ArbitrumDevTestParams() ArbitrumChainParams {
 	return ArbitrumChainParams{
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     true,
 		DataAvailabilityCommittee: false,
+		InitialArbOSVersion:       2,
+		InitialChainOwner:         common.Address{},
 	}
 }
 
-func EthereumParams() ArbitrumChainParams {
+func ArbitrumDevTestDASParams() ArbitrumChainParams {
+	return ArbitrumChainParams{
+		EnableArbOS:               true,
+		AllowDebugPrecompiles:     true,
+		DataAvailabilityCommittee: true,
+		InitialArbOSVersion:       2,
+		InitialChainOwner:         common.Address{},
+	}
+}
+
+func DisableArbitrumParams() ArbitrumChainParams {
 	return ArbitrumChainParams{
 		EnableArbOS:               false,
 		AllowDebugPrecompiles:     false,
 		DataAvailabilityCommittee: false,
+		InitialArbOSVersion:       0,
+		InitialChainOwner:         common.Address{},
 	}
 }
 
@@ -85,9 +114,9 @@ func ArbitrumOneChainConfig() *ChainConfig {
 	}
 }
 
-func ArbitrumTestChainConfig() *ChainConfig {
+func ArbitrumTestnetChainConfig() *ChainConfig {
 	return &ChainConfig{
-		ChainID:             big.NewInt(412345),
+		ChainID:             big.NewInt(421612),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -102,7 +131,57 @@ func ArbitrumTestChainConfig() *ChainConfig {
 		MuirGlacierBlock:    big.NewInt(0),
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
-		ArbitrumChainParams: ArbitrumTestParams(),
+		ArbitrumChainParams: ArbitrumTestnetParams(),
+		Clique: &CliqueConfig{
+			Period: 0,
+			Epoch:  0,
+		},
+	}
+}
+
+func ArbitrumDevTestChainConfig() *ChainConfig {
+	return &ChainConfig{
+		ChainID:             big.NewInt(412346),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.Hash{},
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(0),
+		ArbitrumChainParams: ArbitrumDevTestParams(),
+		Clique: &CliqueConfig{
+			Period: 0,
+			Epoch:  0,
+		},
+	}
+}
+
+func ArbitrumDevTestDASChainConfig() *ChainConfig {
+	return &ChainConfig{
+		ChainID:             big.NewInt(412347),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.Hash{},
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(0),
+		ArbitrumChainParams: ArbitrumDevTestDASParams(),
 		Clique: &CliqueConfig{
 			Period: 0,
 			Epoch:  0,
@@ -114,3 +193,10 @@ const (
 	// Arbitrum blocks are usually smaller, so use more blocks per bloom section
 	ArbBloomBitsBlocks uint64 = BloomBitsBlocks * 16
 )
+
+var ArbitrumSupportedChainConfigs = []*ChainConfig{
+	ArbitrumOneChainConfig(),
+	ArbitrumTestnetChainConfig(),
+	ArbitrumDevTestChainConfig(),
+	ArbitrumDevTestDASChainConfig(),
+}

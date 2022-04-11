@@ -37,7 +37,7 @@ var (
 	ErrInvalidTxType        = errors.New("transaction type not valid in this context")
 	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
 	ErrGasFeeCapTooLow      = errors.New("fee cap less than base fee")
-	errEmptyTypedTx         = errors.New("empty typed transaction bytes")
+	errShortTypedTx         = errors.New("typed transaction too short")
 )
 
 // Transaction types.
@@ -48,7 +48,6 @@ const (
 	ArbitrumDepositTxType         = 100
 	ArbitrumUnsignedTxType        = 101
 	ArbitrumContractTxType        = 102
-	ArbitrumWrappedTxType         = 103
 	ArbitrumRetryTxType           = 104
 	ArbitrumSubmitRetryableTxType = 105
 	ArbitrumInternalTxType        = 106
@@ -59,6 +58,10 @@ const (
 type Transaction struct {
 	inner TxData    // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)
+
+	// Arbitrum cache
+	PosterCost           *big.Int
+	PosterIsReimbursable bool
 
 	// caches
 	hash atomic.Value
@@ -99,7 +102,7 @@ type TxData interface {
 
 // EncodeRLP implements rlp.Encoder
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
-	if tx.realType() == LegacyTxType {
+	if tx.Type() == LegacyTxType {
 		return rlp.Encode(w, tx.inner)
 	}
 	// It's an EIP-2718 typed TX envelope.
@@ -114,7 +117,7 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 
 // encodeTyped writes the canonical encoding of a typed transaction to w.
 func (tx *Transaction) encodeTyped(w *bytes.Buffer) error {
-	w.WriteByte(tx.realType())
+	w.WriteByte(tx.Type())
 	return rlp.Encode(w, tx.inner)
 }
 
@@ -144,7 +147,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 			tx.setDecoded(&inner, int(rlp.ListSize(size)))
 		}
 		return err
-	case kind == rlp.String:
+	default:
 		// It's an EIP-2718 typed TX envelope.
 		var b []byte
 		if b, err = s.Bytes(); err != nil {
@@ -155,8 +158,6 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 			tx.setDecoded(inner, len(b))
 		}
 		return err
-	default:
-		return rlp.ErrExpectedList
 	}
 }
 
@@ -184,8 +185,8 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 
 // decodeTyped decodes a typed transaction from the canonical format.
 func (tx *Transaction) decodeTyped(b []byte, arbParsing bool) (TxData, error) {
-	if len(b) == 0 {
-		return nil, errEmptyTypedTx
+	if len(b) <= 1 {
+		return nil, errShortTypedTx
 	}
 	if arbParsing {
 		switch b[0] {
@@ -203,10 +204,6 @@ func (tx *Transaction) decodeTyped(b []byte, arbParsing bool) (TxData, error) {
 			return &inner, err
 		case ArbitrumContractTxType:
 			var inner ArbitrumContractTx
-			err := rlp.DecodeBytes(b[1:], &inner)
-			return &inner, err
-		case ArbitrumWrappedTxType:
-			var inner ArbitrumWrappedTx
 			err := rlp.DecodeBytes(b[1:], &inner)
 			return &inner, err
 		case ArbitrumRetryTxType:
@@ -294,15 +291,6 @@ func (tx *Transaction) Protected() bool {
 // Type returns the transaction type.
 func (tx *Transaction) Type() uint8 {
 	return tx.inner.txType()
-}
-
-func (tx *Transaction) realType() uint8 {
-	_, isArbWrapped := tx.inner.(*ArbitrumWrappedTx)
-	if isArbWrapped {
-		return ArbitrumWrappedTxType
-	} else {
-		return tx.Type()
-	}
 }
 
 func (tx *Transaction) GetInner() TxData {
@@ -426,8 +414,6 @@ func (tx *Transaction) Hash() common.Hash {
 	var h common.Hash
 	if tx.Type() == LegacyTxType {
 		h = rlpHash(tx.inner)
-	} else if tx.Type() == ArbitrumSubmitRetryableTxType {
-		h = tx.inner.(*ArbitrumSubmitRetryableTx).RequestId // this is required by the retryables API
 	} else if tx.Type() == ArbitrumLegacyTxType {
 		h = tx.inner.(*ArbitrumLegacyTxData).Hash
 	} else {
@@ -626,7 +612,8 @@ func (t *TransactionsByPriceAndNonce) Pop() {
 //
 // NOTE: In a future PR this will be removed.
 type Message struct {
-	tx *Transaction
+	tx        *Transaction
+	TxRunMode MessageRunMode
 
 	to         *common.Address
 	from       common.Address
@@ -640,6 +627,14 @@ type Message struct {
 	accessList AccessList
 	isFake     bool
 }
+
+type MessageRunMode uint8
+
+const (
+	MessageCommitMode MessageRunMode = iota
+	MessageGasEstimationMode
+	MessageEthcallMode
+)
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isFake bool) Message {
 	return Message{
@@ -683,6 +678,7 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 }
 
 func (m Message) UnderlyingTransaction() *Transaction { return m.tx }
+func (m Message) RunMode() MessageRunMode             { return m.TxRunMode }
 
 func (m Message) From() common.Address   { return m.from }
 func (m Message) To() *common.Address    { return m.to }
