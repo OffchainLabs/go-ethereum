@@ -10,4 +10,5 @@ import (
 type ArbInterface interface {
 	PublishTransaction(ctx context.Context, tx *types.Transaction) error
 	BlockChain() *core.BlockChain
+	ArbNode() interface{}
 }

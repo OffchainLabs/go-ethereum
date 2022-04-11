@@ -71,6 +71,10 @@ func (a *APIBackend) blockChain() *core.BlockChain {
 	return a.b.arb.BlockChain()
 }
 
+func (a *APIBackend) GetArbitrumNode() interface{} {
+	return a.b.arb.ArbNode()
+}
+
 // General Ethereum API
 func (a *APIBackend) SyncProgress() ethereum.SyncProgress {
 	panic("not implemented") // TODO: Implement
