@@ -46,6 +46,7 @@ type TxProcessingHook interface {
 	L1BlockNumber(blockCtx BlockContext) (uint64, error)
 	L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error)
 	FillReceiptInfo(receipt *types.Receipt)
+	DropTip() bool
 }
 
 type DefaultTxProcessor struct{}
@@ -58,8 +59,7 @@ func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) (*common.Addre
 	return nil, nil
 }
 
-func (p DefaultTxProcessor) PushCaller(addr common.Address) {
-}
+func (p DefaultTxProcessor) PushCaller(addr common.Address) {}
 
 func (p DefaultTxProcessor) PopCaller() {
 }
@@ -72,8 +72,7 @@ func (p DefaultTxProcessor) NonrefundableGas() uint64 {
 	return 0
 }
 
-func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, evmSuccess bool) {
-}
+func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, evmSuccess bool) {}
 
 func (p DefaultTxProcessor) ScheduledTxes() types.Transactions {
 	return types.Transactions{}
@@ -87,5 +86,8 @@ func (p DefaultTxProcessor) L1BlockHash(blockCtx BlockContext, l1BlocKNumber uin
 	return blockCtx.GetHash(l1BlocKNumber), nil
 }
 
-func (p DefaultTxProcessor) FillReceiptInfo(*types.Receipt) {
+func (p DefaultTxProcessor) FillReceiptInfo(*types.Receipt) {}
+
+func (p DefaultTxProcessor) DropTip() bool {
+	return false
 }
