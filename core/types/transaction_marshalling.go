@@ -75,6 +75,10 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 	// Arbitrum: set to 0 for compatibility
 	var zero uint64
 	enc.Nonce = (*hexutil.Uint64)(&zero)
+	enc.Gas = (*hexutil.Uint64)(&zero)
+	enc.GasPrice = (*hexutil.Big)(common.Big0)
+	enc.Value = (*hexutil.Big)(common.Big0)
+	enc.Data = (*hexutil.Bytes)(&[]byte{})
 	enc.V = (*hexutil.Big)(common.Big0)
 	enc.R = (*hexutil.Big)(common.Big0)
 	enc.S = (*hexutil.Big)(common.Big0)
