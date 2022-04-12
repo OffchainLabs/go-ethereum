@@ -1379,6 +1379,20 @@ type RPCTransaction struct {
 	V                *hexutil.Big      `json:"v"`
 	R                *hexutil.Big      `json:"r"`
 	S                *hexutil.Big      `json:"s"`
+
+	// Arbitrum fields:
+	SubType          *hexutil.Uint64 `json:"subType,omitempty"`          // Internal
+	L2BlockNumber    *hexutil.Uint64 `json:"l2BlockNumber,omitempty"`    // Internal
+	TxIndex          *hexutil.Uint64 `json:"txIndex,omitempty"`          // Internal
+	RequestId        *common.Hash    `json:"requestId,omitempty"`        // Contract SubmitRetryable Deposit
+	TicketId         *common.Hash    `json:"ticketId,omitempty"`         // Retry
+	RefundTo         *common.Address `json:"refundTo,omitempty"`         // SubmitRetryable Retry
+	L1BaseFee        *hexutil.Big    `json:"l1BaseFee,omitempty"`        // SubmitRetryable
+	DepositValue     *hexutil.Big    `json:"depositValue,omitempty"`     // SubmitRetryable
+	RetryTo          *common.Address `json:"retryTo,omitempty"`          // SubmitRetryable
+	RetryData        *hexutil.Bytes  `json:"retryData,omitempty"`        // SubmitRetryable
+	Beneficiary      *common.Address `json:"beneficiary,omitempty"`      // SubmitRetryable
+	MaxSubmissionFee *hexutil.Big    `json:"maxSubmissionFee,omitempty"` // SubmitRetryable
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -1425,6 +1439,39 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		} else {
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
+	}
+
+	// Arbitrum: support arbitrum-specific transaction types
+	switch inner := tx.GetInner().(type) {
+	case *types.ArbitrumInternalTx:
+		subType := uint64(inner.SubType)
+		result.SubType = (*hexutil.Uint64)(&subType)
+		result.L2BlockNumber = (*hexutil.Uint64)(&inner.L2BlockNumber)
+		result.TxIndex = (*hexutil.Uint64)(&inner.TxIndex)
+		result.ChainID = (*hexutil.Big)(inner.ChainId)
+	case *types.ArbitrumDepositTx:
+		result.RequestId = &inner.L1RequestId
+		result.ChainID = (*hexutil.Big)(inner.ChainId)
+	case *types.ArbitrumContractTx:
+		result.RequestId = &inner.RequestId
+		result.GasFeeCap = (*hexutil.Big)(inner.GasFeeCap)
+		result.ChainID = (*hexutil.Big)(inner.ChainId)
+	case *types.ArbitrumRetryTx:
+		result.TicketId = &inner.TicketId
+		result.RefundTo = &inner.RefundTo
+		result.GasFeeCap = (*hexutil.Big)(inner.GasFeeCap)
+		result.ChainID = (*hexutil.Big)(inner.ChainId)
+	case *types.ArbitrumSubmitRetryableTx:
+		result.RequestId = &inner.RequestId
+		result.L1BaseFee = (*hexutil.Big)(inner.L1BaseFee)
+		result.DepositValue = (*hexutil.Big)(inner.DepositValue)
+		result.RetryTo = inner.RetryTo
+		result.RetryData = (*hexutil.Bytes)(&inner.RetryData)
+		result.Beneficiary = &inner.Beneficiary
+		result.RefundTo = &inner.FeeRefundAddr
+		result.MaxSubmissionFee = (*hexutil.Big)(inner.MaxSubmissionFee)
+		result.GasFeeCap = (*hexutil.Big)(inner.GasFeeCap)
+		result.ChainID = (*hexutil.Big)(inner.ChainId)
 	}
 	return result
 }

@@ -41,9 +41,7 @@ type ArbitrumLegacyTxData struct {
 	Nonce    uint64
 	To       *common.Address `rlp:"nil"` // nil means contract creation
 	Value    *big.Int
-	V        *big.Int
-	R        *big.Int
-	S        *big.Int
+	V, R, S  *big.Int
 }
 
 func (tx *ArbitrumLegacyTxData) copy() TxData {
