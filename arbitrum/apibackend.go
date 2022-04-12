@@ -291,7 +291,8 @@ func (a *APIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subs
 
 // Filter API
 func (a *APIBackend) BloomStatus() (uint64, uint64) {
-	return params.BloomBitsBlocks, 0 // TODO: Implement second return value
+	sections, _, _ := a.b.bloomIndexer.Sections()
+	return a.b.config.BloomBitsBlocks, sections
 }
 
 func (a *APIBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {
@@ -307,7 +308,9 @@ func (a *APIBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*t
 }
 
 func (a *APIBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
-	panic("not implemented") // TODO: Implement
+	for i := 0; i < bloomFilterThreads; i++ {
+		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, a.b.bloomRequests)
+	}
 }
 
 func (a *APIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
