@@ -288,7 +288,7 @@ func (a *APIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subs
 // Filter API
 func (a *APIBackend) BloomStatus() (uint64, uint64) {
 	sections, _, _ := a.b.bloomIndexer.Sections()
-	return params.ArbBloomBitsBlocks, sections
+	return a.b.config.BloomBitsBlocks, sections
 }
 
 func (a *APIBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {

@@ -2,13 +2,13 @@ package arbitrum
 
 import (
 	"context"
+
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 type Backend struct {
@@ -37,7 +37,7 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 		chainDb: chainDb,
 
 		bloomRequests: make(chan chan *bloombits.Retrieval),
-		bloomIndexer:  core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
+		bloomIndexer:  core.NewBloomIndexer(chainDb, config.BloomBitsBlocks, config.BloomConfirms),
 
 		chanTxs:      make(chan *types.Transaction, 100),
 		chanClose:    make(chan struct{}),
@@ -76,7 +76,7 @@ func (b *Backend) ArbInterface() ArbInterface {
 
 //TODO: this is used when registering backend as lifecycle in stack
 func (b *Backend) Start() error {
-	b.startBloomHandlers(params.ArbBloomBitsBlocks)
+	b.startBloomHandlers(b.config.BloomBitsBlocks)
 
 	return nil
 }
