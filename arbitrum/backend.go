@@ -2,7 +2,9 @@ package arbitrum
 
 import (
 	"context"
+
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -19,6 +21,9 @@ type Backend struct {
 	txFeed event.Feed
 	scope  event.SubscriptionScope
 
+	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
+	bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
+
 	chanTxs      chan *types.Transaction
 	chanClose    chan struct{} //close coroutine
 	chanNewBlock chan struct{} //create new L2 block unless empty
@@ -26,15 +31,20 @@ type Backend struct {
 
 func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publisher ArbInterface) (*Backend, error) {
 	backend := &Backend{
-		arb:          publisher,
-		stack:        stack,
-		config:       config,
-		chainDb:      chainDb,
+		arb:     publisher,
+		stack:   stack,
+		config:  config,
+		chainDb: chainDb,
+
+		bloomRequests: make(chan chan *bloombits.Retrieval),
+		bloomIndexer:  core.NewBloomIndexer(chainDb, config.BloomBitsBlocks, config.BloomConfirms),
+
 		chanTxs:      make(chan *types.Transaction, 100),
-		chanClose:    make(chan struct{}, 1),
+		chanClose:    make(chan struct{}),
 		chanNewBlock: make(chan struct{}, 1),
 	}
-	stack.RegisterLifecycle(backend)
+
+	backend.bloomIndexer.Start(backend.arb.BlockChain())
 
 	createRegisterAPIBackend(backend)
 	return backend, nil
@@ -66,12 +76,14 @@ func (b *Backend) ArbInterface() ArbInterface {
 
 //TODO: this is used when registering backend as lifecycle in stack
 func (b *Backend) Start() error {
+	b.startBloomHandlers(b.config.BloomBitsBlocks)
+
 	return nil
 }
 
 func (b *Backend) Stop() error {
-
 	b.scope.Close()
-
+	b.bloomIndexer.Close()
+	close(b.chanClose)
 	return nil
 }
