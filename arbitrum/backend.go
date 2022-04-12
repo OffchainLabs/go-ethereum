@@ -43,7 +43,6 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 		chanClose:    make(chan struct{}),
 		chanNewBlock: make(chan struct{}, 1),
 	}
-	stack.RegisterLifecycle(backend)
 
 	backend.bloomIndexer.Start(backend.arb.BlockChain())
 
