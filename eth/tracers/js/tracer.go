@@ -529,6 +529,19 @@ func newJsTracer(code string, ctx *tracers2.Context) (tracers2.Tracer, error) {
 		ctx.PushBoolean(false)
 		return 1
 	})
+	tracer.vm.PushGlobalGoFunction("isPrecompiledArbOS", func(ctx *duktape.Context) int {
+		addr := common.BytesToAddress(popSlice(ctx))
+		for _, p := range tracer.activePrecompiles {
+			space := new(big.Int).SetUint64(0x65)
+			arbOS := p.Hash().Big().Cmp(space) >= 0
+			if p == addr && arbOS {
+				ctx.PushBoolean(true)
+				return 1
+			}
+		}
+		ctx.PushBoolean(false)
+		return 1
+	})
 	tracer.vm.PushGlobalGoFunction("slice", func(ctx *duktape.Context) int {
 		start, end := ctx.GetInt(-2), ctx.GetInt(-1)
 		ctx.Pop2()

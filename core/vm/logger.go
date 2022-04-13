@@ -38,4 +38,6 @@ type EVMLogger interface {
 
 	// Arbitrum: capture a transfer, mint, or burn that happens outside of EVM exectuion
 	CaptureArbitrumTransfer(env *EVM, from, to *common.Address, amount *big.Int, before bool)
+	CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)
+	CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)
 }

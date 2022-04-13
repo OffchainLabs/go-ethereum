@@ -29,3 +29,11 @@ func (*JSONLogger) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address
 }
 func (*StructLogger) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool) {
 }
+
+func (*AccessListTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {}
+func (*JSONLogger) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)       {}
+func (*StructLogger) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}
+
+func (*AccessListTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
+func (*JSONLogger) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)       {}
+func (*StructLogger) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)     {}

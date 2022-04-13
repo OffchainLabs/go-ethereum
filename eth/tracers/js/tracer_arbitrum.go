@@ -25,3 +25,6 @@ import (
 
 func (*jsTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool) {
 }
+
+func (*jsTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)        {}
+func (*jsTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
