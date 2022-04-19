@@ -22,6 +22,9 @@ type Config struct {
 	// Parameters for the bloom indexer
 	BloomBitsBlocks uint64 `koanf:"bloom-bits-blocks"`
 	BloomConfirms   uint64 `koanf:"bloom-confirms"`
+
+	// FeeHistoryMaxBlockCount limits the number of historical blocks a fee history request may cover
+	FeeHistoryMaxBlockCount uint64 `koanf:"feehistory-max-block-count"`
 }
 
 func ConfigAddOptions(prefix string, f *flag.FlagSet) {
@@ -29,13 +32,14 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.Float64(prefix+".tx-fee-cap", DefaultConfig.RPCTxFeeCap, "cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)")
 	f.Duration(prefix+".evm-timeout", DefaultConfig.RPCEVMTimeout, "timeout used for eth_call (0=infinite)")
 	f.Uint64(prefix+".bloom-bits-blocks", DefaultConfig.BloomBitsBlocks, "number of blocks a single bloom bit section vector holds")
-	f.Uint64(prefix+".bloom-confirms", DefaultConfig.BloomConfirms, "number of confirmations before indexing new bloom filters")
+	f.Uint64(prefix+".feehistory-max-block-count", DefaultConfig.FeeHistoryMaxBlockCount, "max number of blocks a fee history request may cover")
 }
 
 var DefaultConfig = Config{
-	RPCGasCap:       ethconfig.Defaults.RPCGasCap,     // 50,000,000
-	RPCTxFeeCap:     ethconfig.Defaults.RPCTxFeeCap,   // 1 ether
-	RPCEVMTimeout:   ethconfig.Defaults.RPCEVMTimeout, // 5 seconds
-	BloomBitsBlocks: params.BloomBitsBlocks * 4,       // we generally have smaller blocks
-	BloomConfirms:   params.BloomConfirms,
+	RPCGasCap:               ethconfig.Defaults.RPCGasCap,     // 50,000,000
+	RPCTxFeeCap:             ethconfig.Defaults.RPCTxFeeCap,   // 1 ether
+	RPCEVMTimeout:           ethconfig.Defaults.RPCEVMTimeout, // 5 seconds
+	BloomBitsBlocks:         params.BloomBitsBlocks * 4,       // we generally have smaller blocks
+	BloomConfirms:           params.BloomConfirms,
+	FeeHistoryMaxBlockCount: 1024,
 }

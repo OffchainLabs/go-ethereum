@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -84,8 +85,92 @@ func (a *APIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(0), nil // there's no tips in L2
 }
 
-func (a *APIBackend) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
-	return nil, nil, nil, nil, errors.New("not implemented")
+func (a *APIBackend) FeeHistory(
+	ctx context.Context,
+	blocks int,
+	newestBlock rpc.BlockNumber,
+	rewardPercentiles []float64,
+) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
+
+	if core.GetArbOSComputeRate == nil {
+		return nil, nil, nil, nil, errors.New("ArbOS not installed")
+	}
+
+	latestBlock := rpc.BlockNumber(a.CurrentBlock().NumberU64())
+	if newestBlock == rpc.LatestBlockNumber || newestBlock == rpc.PendingBlockNumber {
+		newestBlock = latestBlock
+	}
+	if newestBlock > latestBlock {
+		newestBlock = latestBlock
+	}
+
+	maxFeeHistory := int(a.b.config.FeeHistoryMaxBlockCount)
+	if blocks > maxFeeHistory {
+		log.Warn("Sanitizing fee history length", "requested", blocks, "truncated", maxFeeHistory)
+		blocks = maxFeeHistory
+	}
+	if blocks < 1 {
+		// returning with no data and no error means there are no retrievable blocks
+		return common.Big0, nil, nil, nil, nil
+	}
+
+	// don't attempt to include blocks before genesis
+	if rpc.BlockNumber(blocks) > newestBlock {
+		blocks = int(newestBlock + 1)
+	}
+	oldestBlock := int(newestBlock) + 1 - blocks
+
+	// inform that tipping has no effect on inclusion
+	rewards := make([][]*big.Int, blocks)
+	zeros := make([]*big.Int, len(rewardPercentiles))
+	for i := range zeros {
+		zeros[i] = common.Big0
+	}
+	for i := range rewards {
+		rewards[i] = zeros
+	}
+
+	gasUsed := make([]float64, blocks)
+	basefees := make([]*big.Int, blocks+1) // the RPC semantics are to predict the future value
+
+	// use the most recent average compute rate for all blocks
+	// note: while we could query this value for each block, it'd be prohibitively expensive
+	state, _, err := a.StateAndHeaderByNumber(ctx, rpc.BlockNumber(newestBlock))
+	if err != nil {
+		return common.Big0, nil, nil, nil, err
+	}
+	computeRate, err := core.GetArbOSComputeRate(state)
+	if err != nil {
+		return common.Big0, nil, nil, nil, err
+	}
+
+	// In vanilla geth, this RPC returns the gasUsed ratio so a client can infer how the basefee will change
+	// To emulate this, we translate the compute rate into something like that, centered at an analogous 0.5
+	fullnessAnalogue := computeRate / 2
+	if fullnessAnalogue > 1.0 {
+		fullnessAnalogue = 1.0
+	}
+	for i := range gasUsed {
+		gasUsed[i] = fullnessAnalogue
+	}
+
+	// collect the basefees
+	baseFeeLookup := newestBlock + 1
+	if newestBlock == latestBlock {
+		baseFeeLookup = newestBlock
+	}
+	for block := oldestBlock; block <= int(baseFeeLookup); block++ {
+		header, err := a.HeaderByNumber(ctx, rpc.BlockNumber(block))
+		if err != nil {
+			return common.Big0, nil, nil, nil, err
+		}
+		basefees[block-oldestBlock] = header.BaseFee
+	}
+	if newestBlock == latestBlock {
+		basefees[blocks] = basefees[blocks-1] // guess the basefee won't change
+	}
+
+	return big.NewInt(int64(oldestBlock)), rewards, basefees, gasUsed, nil
 }
 
 func (a *APIBackend) ChainDb() ethdb.Database {
