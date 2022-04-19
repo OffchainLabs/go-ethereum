@@ -129,6 +129,9 @@ func (a *APIBackend) FeeHistory(
 	for i := range rewards {
 		rewards[i] = zeros
 	}
+	if len(rewardPercentiles) == 0 {
+		rewards = nil
+	}
 
 	gasUsed := make([]float64, blocks)
 	basefees := make([]*big.Int, blocks+1) // the RPC semantics are to predict the future value
