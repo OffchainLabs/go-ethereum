@@ -940,6 +940,8 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 			msg.GasPrice(),
 			msg.Nonce(),
 			msg.Data(),
+			nil,
+			0,
 		)
 		dmContext.RecordTrxFrom(msg.From())
 	}

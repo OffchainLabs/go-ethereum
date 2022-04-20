@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/atomic"
 )
@@ -142,7 +143,7 @@ func (ctx *Context) EndBlock(block *types.Block, totalDifficulty *big.Int) {
 
 // Transaction methods
 
-func (ctx *Context) StartTransaction(tx *types.Transaction) {
+func (ctx *Context) StartTransaction(tx *types.Transaction, baseFee *big.Int) {
 	if ctx == nil {
 		return
 	}
@@ -158,10 +159,30 @@ func (ctx *Context) StartTransaction(tx *types.Transaction) {
 		r.Bytes(),
 		s.Bytes(),
 		tx.Gas(),
-		tx.GasPrice(),
+		gasPrice(tx, baseFee),
 		tx.Nonce(),
 		tx.Data(),
+		maxFeePerGas(tx),
+		tx.Type(),
 	)
+}
+
+func maxFeePerGas(tx *types.Transaction) *big.Int {
+	switch tx.Type() {
+	//case types.AccessListTxType:
+	//	return nil
+	case types.DynamicFeeTxType:
+		return tx.GasFeeCap()
+	default:
+		return nil
+	}
+
+}
+func gasPrice(tx *types.Transaction, baseFee *big.Int) *big.Int {
+	if baseFee == nil {
+		return tx.GasPrice()
+	}
+	return math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
 }
 
 func (ctx *Context) StartTransactionRaw(
@@ -173,6 +194,8 @@ func (ctx *Context) StartTransactionRaw(
 	gasPrice *big.Int,
 	nonce uint64,
 	data []byte,
+	maxFeePerGas *big.Int,
+	txType uint8,
 ) {
 	if ctx == nil {
 		return
@@ -186,6 +209,11 @@ func (ctx *Context) StartTransactionRaw(
 		toAsString = Addr(*to)
 	}
 
+	maxFeePerGasAsString := "."
+	if maxFeePerGas != nil {
+		maxFeePerGasAsString = Hex(maxFeePerGas.Bytes())
+	}
+
 	ctx.printer.Print("BEGIN_APPLY_TRX",
 		Hash(hash),
 		toAsString,
@@ -197,6 +225,8 @@ func (ctx *Context) StartTransactionRaw(
 		Hex(gasPrice.Bytes()),
 		Uint64(nonce),
 		Hex(data),
+		maxFeePerGasAsString,
+		Uint8(txType),
 	)
 }
 
