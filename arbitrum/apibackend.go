@@ -96,12 +96,16 @@ func (a *APIBackend) FeeHistory(
 		return nil, nil, nil, nil, errors.New("ArbOS not installed")
 	}
 
+	nitroGenesis := core.NitroGenesisBlock
 	latestBlock := rpc.BlockNumber(a.CurrentBlock().NumberU64())
 	if newestBlock == rpc.LatestBlockNumber || newestBlock == rpc.PendingBlockNumber {
 		newestBlock = latestBlock
 	}
 	if newestBlock > latestBlock {
 		newestBlock = latestBlock
+	}
+	if newestBlock < nitroGenesis {
+		newestBlock = nitroGenesis
 	}
 
 	maxFeeHistory := int(a.b.config.FeeHistoryMaxBlockCount)
@@ -115,8 +119,8 @@ func (a *APIBackend) FeeHistory(
 	}
 
 	// don't attempt to include blocks before genesis
-	if rpc.BlockNumber(blocks) > newestBlock {
-		blocks = int(newestBlock + 1)
+	if rpc.BlockNumber(blocks) > (newestBlock - nitroGenesis) {
+		blocks = int(newestBlock - nitroGenesis + 1)
 	}
 	oldestBlock := int(newestBlock) + 1 - blocks
 
