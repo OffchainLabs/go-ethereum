@@ -126,15 +126,16 @@ func (ctx *Context) ExitBlock() {
 	ctx.blockLogIndex = 0
 }
 
-func (ctx *Context) EndBlock(block *types.Block) {
+func (ctx *Context) EndBlock(block *types.Block, totalDifficulty *big.Int) {
 	ctx.ExitBlock()
 
 	ctx.printer.Print("END_BLOCK",
 		Uint64(block.NumberU64()),
 		Uint64(uint64(block.Size())),
 		JSON(map[string]interface{}{
-			"header": block.Header(),
-			"uncles": block.Body().Uncles,
+			"header":          block.Header(),
+			"uncles":          block.Body().Uncles,
+			"totalDifficulty": (*hexutil.Big)(totalDifficulty),
 		}),
 	)
 }
