@@ -50,15 +50,15 @@ func SyncContext() *Context {
 type Context struct {
 	printer Printer
 
-	blockLogIndex    uint64
-	activeCallIndex  string
-	nextCallIndex    uint64
+	blockLogIndex   uint64
+	activeCallIndex string
+	nextCallIndex   uint64
 	gasEventStack   *ExtendedStack
-	callIndexStack   *ExtendedStack
+	callIndexStack  *ExtendedStack
 
-	seenBlock                *atomic.Bool
-	inBlock                  *atomic.Bool
-	inTransaction            *atomic.Bool
+	seenBlock     *atomic.Bool
+	inBlock       *atomic.Bool
+	inTransaction *atomic.Bool
 }
 
 func NewContext(printer Printer) *Context {
@@ -77,6 +77,15 @@ func NewContext(printer Printer) *Context {
 	ctx.callIndexStack.Push(ctx.activeCallIndex)
 
 	return ctx
+}
+
+func (ctx *Context) InitVersion(nodeVersion, dmVersion, variant string) {
+	if ctx == nil {
+		return
+	}
+	ctx.printer.Print("INIT NODE_VERSION", nodeVersion)
+	ctx.printer.Print("INIT DM_VERSION", dmVersion)
+	ctx.printer.Print("INIT VARIANT", variant)
 }
 
 func NewSpeculativeExecutionContext() *Context {
@@ -476,7 +485,7 @@ func (ctx *Context) RecordBeforeCallGasEvent(gasValue uint64) {
 		return
 	}
 
-	forCallIndex := Uint64(ctx.nextCallIndex+1)
+	forCallIndex := Uint64(ctx.nextCallIndex + 1)
 	ctx.gasEventStack.Push(forCallIndex)
 
 	// The `ctx.nextCallIndex` has not been incremented yet, so we add +1 for the linked call index
@@ -508,7 +517,6 @@ func (ctx *Context) RecordTrxPool(eventType string, tx *types.Transaction, err e
 	if ctx == nil {
 		return
 	}
-
 
 	signer := types.NewEIP155Signer(tx.ChainId())
 
