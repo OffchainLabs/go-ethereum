@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console/prompt"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -39,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
@@ -262,7 +264,15 @@ func init() {
 			log.Error("deep mind failed to set sync mode to full", err)
 		}
 
-		return debug.Setup(ctx)
+		if err := debug.Setup(ctx); err != nil {
+			return err
+		}
+		deepmind.MaybeSyncContext().InitVersion(
+			params.VersionWithCommit(gitCommit, gitDate),
+			params.DeepmindVersion(),
+			params.Variant,
+		)
+		return nil
 	}
 	app.After = func(ctx *cli.Context) error {
 		debug.Exit()
