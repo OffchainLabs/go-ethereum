@@ -125,7 +125,7 @@ func (ctx *Context) StartBlock(block *types.Block) {
 func (ctx *Context) FinalizeBlock(block *types.Block) {
 	// We must not check if the finalize block is actually in the a block since
 	// when deep mind block progress only is enabled, it would hit a panic
-	ctx.printer.Print("FINALIZE_BLOCK", Uint64(block.NumberU64()), Uint64(ctx.totalOrderingCounter.Inc()))
+	ctx.printer.Print("FINALIZE_BLOCK", Uint64(block.NumberU64()))
 }
 
 // ExitBlock is used when an abnormal condition is encountered while processing
@@ -149,7 +149,6 @@ func (ctx *Context) EndBlock(block *types.Block, totalDifficulty *big.Int) {
 			"uncles":          block.Body().Uncles,
 			"totalDifficulty": (*hexutil.Big)(totalDifficulty),
 		}),
-		Uint64(ctx.totalOrderingCounter.Inc()),
 	)
 }
 
@@ -232,7 +231,6 @@ func (ctx *Context) RecordTrxFrom(from common.Address) {
 
 	ctx.printer.Print("TRX_FROM",
 		Addr(from),
-		Uint64(ctx.totalOrderingCounter.Inc()),
 	)
 }
 
@@ -274,8 +272,8 @@ func (ctx *Context) EndTransaction(receipt *types.Receipt) {
 		Hex(receipt.PostState),
 		Uint64(receipt.CumulativeGasUsed),
 		Hex(receipt.Bloom[:]),
-		JSON(logItems),
 		Uint64(ctx.totalOrderingCounter.Inc()),
+		JSON(logItems),
 	)
 
 	ctx.nextCallIndex = 0
@@ -330,7 +328,6 @@ func (ctx *Context) RecordCallParams(callType string, caller common.Address, cal
 		Hex(value.Bytes()),
 		Uint64(gasLimit),
 		Hex(input),
-		Uint64(ctx.totalOrderingCounter.Inc()),
 	)
 }
 
@@ -341,7 +338,6 @@ func (ctx *Context) RecordCallWithoutCode() {
 
 	ctx.printer.Print("ACCOUNT_WITHOUT_CODE",
 		ctx.callIndex(),
-		Uint64(ctx.totalOrderingCounter.Inc()),
 	)
 }
 
@@ -354,7 +350,6 @@ func (ctx *Context) RecordCallFailed(gasLeft uint64, reason string) {
 		ctx.callIndex(),
 		Uint64(gasLeft),
 		reason,
-		Uint64(ctx.totalOrderingCounter.Inc()),
 	)
 }
 
@@ -365,7 +360,6 @@ func (ctx *Context) RecordCallReverted() {
 
 	ctx.printer.Print("EVM_REVERTED",
 		ctx.callIndex(),
-		Uint64(ctx.totalOrderingCounter.Inc()),
 	)
 }
 
@@ -426,7 +420,6 @@ func (ctx *Context) RecordKeccak(hashOfdata common.Hash, data []byte) {
 		ctx.callIndex(),
 		Hash(hashOfdata),
 		Hex(data),
-		Uint64(ctx.totalOrderingCounter.Inc()),
 	)
 }
 
@@ -536,7 +529,6 @@ func (ctx *Context) RecordSuicide(addr common.Address, suicided bool, balanceBef
 		Addr(addr),
 		Bool(suicided),
 		BigInt(balanceBeforeSuicide),
-		Uint64(ctx.totalOrderingCounter.Inc()),
 	)
 
 	if balanceBeforeSuicide.Sign() != 0 {
