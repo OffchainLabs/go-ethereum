@@ -85,9 +85,7 @@ func (ctx *Context) InitVersion(nodeVersion, dmVersion, variant string) {
 	if ctx == nil {
 		return
 	}
-	ctx.printer.Print("INIT NODE_VERSION", nodeVersion)
-	ctx.printer.Print("INIT DM_VERSION", dmVersion)
-	ctx.printer.Print("INIT VARIANT", variant)
+	ctx.printer.Print("INIT", dmVersion, variant, nodeVersion)
 }
 
 func NewSpeculativeExecutionContext() *Context {
