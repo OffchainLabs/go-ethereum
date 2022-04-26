@@ -34,6 +34,7 @@ var InterceptRPCMessage func(
 	msg types.Message,
 	ctx context.Context,
 	statedb *state.StateDB,
+	header *types.Header,
 	backend NodeInterfaceBackendAPI,
 ) (types.Message, *ExecutionResult, error)
 
@@ -53,4 +54,5 @@ type NodeInterfaceBackendAPI interface {
 	CurrentBlock() *types.Block
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error)
+	GetEVM(ctx context.Context, msg Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error)
 }
