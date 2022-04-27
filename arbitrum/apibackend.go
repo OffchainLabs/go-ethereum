@@ -97,16 +97,7 @@ func (a *APIBackend) FeeHistory(
 	}
 
 	nitroGenesis := core.NitroGenesisBlock
-	latestBlock := rpc.BlockNumber(a.CurrentBlock().NumberU64())
-	if newestBlock == rpc.LatestBlockNumber || newestBlock == rpc.PendingBlockNumber {
-		newestBlock = latestBlock
-	}
-	if newestBlock > latestBlock {
-		newestBlock = latestBlock
-	}
-	if newestBlock < nitroGenesis {
-		newestBlock = nitroGenesis
-	}
+	newestBlock, latestBlock := ClipToPostNitroGenesis(a, newestBlock)
 
 	maxFeeHistory := int(a.b.config.FeeHistoryMaxBlockCount)
 	if blocks > maxFeeHistory {
@@ -424,4 +415,22 @@ func (a *APIBackend) ChainConfig() *params.ChainConfig {
 
 func (a *APIBackend) Engine() consensus.Engine {
 	return a.blockChain().Engine()
+}
+
+type GetsCurrentBlock interface {
+	CurrentBlock() *types.Block
+}
+
+func ClipToPostNitroGenesis(getter GetsCurrentBlock, blockNum rpc.BlockNumber) (rpc.BlockNumber, rpc.BlockNumber) {
+	currentBlock := rpc.BlockNumber(getter.CurrentBlock().NumberU64())
+	if blockNum == rpc.LatestBlockNumber || blockNum == rpc.PendingBlockNumber {
+		blockNum = currentBlock
+	}
+	if blockNum > currentBlock {
+		blockNum = currentBlock
+	}
+	if blockNum < core.NitroGenesisBlock {
+		blockNum = core.NitroGenesisBlock
+	}
+	return blockNum, currentBlock
 }
