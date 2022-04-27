@@ -1805,6 +1805,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		if err != nil {
 			return nil, err
 		}
+		fields["effectiveGasPrice"] = hexutil.Uint64(header.BaseFee.Uint64())
 		info, err := types.DeserializeHeaderExtraInformation(header)
 		if err != nil {
 			log.Error("Expected header to contain arbitrum data", "blockHash", blockHash)
