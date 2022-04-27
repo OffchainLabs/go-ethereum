@@ -171,6 +171,10 @@ func (ctx *Context) StartTransaction(tx *types.Transaction) {
 		tx.GasPrice(),
 		tx.Nonce(),
 		tx.Data(),
+		// London fork not active in this branch yet, so we pass `nil` for `maxFeePerGas`
+		nil,
+		// Transaction's type not active in this branch yet, us `tx.Type()` instead here if available and remove this comment if it's the case
+		0,
 	)
 }
 
@@ -183,6 +187,9 @@ func (ctx *Context) StartTransactionRaw(
 	gasPrice *big.Int,
 	nonce uint64,
 	data []byte,
+	maxFeePerGas *big.Int,
+	txType uint8,
+
 ) {
 	if ctx == nil {
 		return
@@ -196,6 +203,8 @@ func (ctx *Context) StartTransactionRaw(
 		toAsString = Addr(*to)
 	}
 
+	maxFeePerGasAsString := "."
+
 	ctx.printer.Print("BEGIN_APPLY_TRX",
 		Hash(hash),
 		toAsString,
@@ -207,6 +216,8 @@ func (ctx *Context) StartTransactionRaw(
 		Hex(gasPrice.Bytes()),
 		Uint64(nonce),
 		Hex(data),
+		maxFeePerGasAsString,
+		Uint8(txType),
 		Uint64(ctx.totalOrderingCounter.Inc()),
 	)
 }
