@@ -590,18 +590,6 @@ func (ctx *Context) RecordNonceChange(addr common.Address, oldNonce, newNonce ui
 	)
 }
 
-func (ctx *Context) RecordGasEvent(gasValue uint64) {
-	if ctx == nil {
-		return
-	}
-
-	ctx.printer.Print("GAS_EVENT",
-		ctx.callIndex(),
-		Uint64(gasValue),
-		Uint64(ctx.totalOrderingCounter.Inc()),
-	)
-}
-
 // Mempool methods
 
 func (ctx *Context) RecordTrxPool(eventType string, tx *types.Transaction, err error) {
