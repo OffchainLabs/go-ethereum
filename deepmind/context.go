@@ -56,9 +56,10 @@ type Context struct {
 	gasEventStack   *ExtendedStack
 	callIndexStack  *ExtendedStack
 
-	seenBlock     *atomic.Bool
-	inBlock       *atomic.Bool
-	inTransaction *atomic.Bool
+	seenBlock            *atomic.Bool
+	inBlock              *atomic.Bool
+	inTransaction        *atomic.Bool
+	totalOrderingCounter *atomic.Uint64
 }
 
 func NewContext(printer Printer) *Context {
@@ -69,14 +70,22 @@ func NewContext(printer Printer) *Context {
 		gasEventStack:   &ExtendedStack{},
 		callIndexStack:  &ExtendedStack{},
 
-		seenBlock:     atomic.NewBool(false),
-		inBlock:       atomic.NewBool(false),
-		inTransaction: atomic.NewBool(false),
+		seenBlock:            atomic.NewBool(false),
+		inBlock:              atomic.NewBool(false),
+		inTransaction:        atomic.NewBool(false),
+		totalOrderingCounter: atomic.NewUint64(0),
 	}
 
 	ctx.callIndexStack.Push(ctx.activeCallIndex)
 
 	return ctx
+}
+
+func (ctx *Context) InitVersion(nodeVersion, dmVersion, variant string) {
+	if ctx == nil {
+		return
+	}
+	ctx.printer.Print("INIT", dmVersion, variant, nodeVersion)
 }
 
 func NewSpeculativeExecutionContext() *Context {
@@ -107,6 +116,7 @@ func (ctx *Context) StartBlock(block *types.Block) {
 	}
 
 	ctx.seenBlock.Store(true)
+	ctx.totalOrderingCounter.Store(0)
 	ctx.printer.Print("BEGIN_BLOCK", Uint64(block.NumberU64()))
 }
 
@@ -126,15 +136,16 @@ func (ctx *Context) ExitBlock() {
 	ctx.blockLogIndex = 0
 }
 
-func (ctx *Context) EndBlock(block *types.Block) {
+func (ctx *Context) EndBlock(block *types.Block, totalDifficulty *big.Int) {
 	ctx.ExitBlock()
 
 	ctx.printer.Print("END_BLOCK",
 		Uint64(block.NumberU64()),
 		Uint64(uint64(block.Size())),
 		JSON(map[string]interface{}{
-			"header": block.Header(),
-			"uncles": block.Body().Uncles,
+			"header":          block.Header(),
+			"uncles":          block.Body().Uncles,
+			"totalDifficulty": (*hexutil.Big)(totalDifficulty),
 		}),
 	)
 }
@@ -160,6 +171,10 @@ func (ctx *Context) StartTransaction(tx *types.Transaction) {
 		tx.GasPrice(),
 		tx.Nonce(),
 		tx.Data(),
+		// London fork not active in this branch yet, so we pass `nil` for `maxFeePerGas`
+		nil,
+		// Transaction's type not active in this branch yet, us `tx.Type()` instead here if available and remove this comment if it's the case
+		0,
 	)
 }
 
@@ -172,6 +187,9 @@ func (ctx *Context) StartTransactionRaw(
 	gasPrice *big.Int,
 	nonce uint64,
 	data []byte,
+	maxFeePerGas *big.Int,
+	txType uint8,
+
 ) {
 	if ctx == nil {
 		return
@@ -185,6 +203,8 @@ func (ctx *Context) StartTransactionRaw(
 		toAsString = Addr(*to)
 	}
 
+	maxFeePerGasAsString := "."
+
 	ctx.printer.Print("BEGIN_APPLY_TRX",
 		Hash(hash),
 		toAsString,
@@ -196,6 +216,9 @@ func (ctx *Context) StartTransactionRaw(
 		Hex(gasPrice.Bytes()),
 		Uint64(nonce),
 		Hex(data),
+		maxFeePerGasAsString,
+		Uint8(txType),
+		Uint64(ctx.totalOrderingCounter.Inc()),
 	)
 }
 
@@ -215,7 +238,9 @@ func (ctx *Context) RecordTrxFrom(from common.Address) {
 		panic("the RecordTrxFrom should have been call within a transaction, something is deeply wrong")
 	}
 
-	ctx.printer.Print("TRX_FROM", Addr(from))
+	ctx.printer.Print("TRX_FROM",
+		Addr(from),
+	)
 }
 
 func (ctx *Context) RecordFailedTransaction(err error) {
@@ -223,7 +248,10 @@ func (ctx *Context) RecordFailedTransaction(err error) {
 		return
 	}
 
-	ctx.printer.Print("FAILED_APPLY_TRX", err.Error())
+	ctx.printer.Print("FAILED_APPLY_TRX",
+		err.Error(),
+		Uint64(ctx.totalOrderingCounter.Inc()),
+	)
 	if !ctx.inTransaction.CAS(true, false) {
 		panic("exiting a transaction while not already within a transaction scope")
 	}
@@ -253,6 +281,7 @@ func (ctx *Context) EndTransaction(receipt *types.Receipt) {
 		Hex(receipt.PostState),
 		Uint64(receipt.CumulativeGasUsed),
 		Hex(receipt.Bloom[:]),
+		Uint64(ctx.totalOrderingCounter.Inc()),
 		JSON(logItems),
 	)
 
@@ -269,7 +298,12 @@ func (ctx *Context) StartCall(callType string) {
 		return
 	}
 
-	ctx.printer.Print("EVM_RUN_CALL", callType, ctx.openCall())
+	ctx.printer.Print("EVM_RUN_CALL",
+		callType,
+		ctx.openCall(),
+		Uint64(ctx.totalOrderingCounter.Inc()),
+	)
+
 }
 
 func (ctx *Context) openCall() string {
@@ -295,7 +329,15 @@ func (ctx *Context) RecordCallParams(callType string, caller common.Address, cal
 		return
 	}
 
-	ctx.printer.Print("EVM_PARAM", callType, ctx.callIndex(), Addr(caller), Addr(callee), Hex(value.Bytes()), Uint64(gasLimit), Hex(input))
+	ctx.printer.Print("EVM_PARAM",
+		callType,
+		ctx.callIndex(),
+		Addr(caller),
+		Addr(callee),
+		Hex(value.Bytes()),
+		Uint64(gasLimit),
+		Hex(input),
+	)
 }
 
 func (ctx *Context) RecordCallWithoutCode() {
@@ -303,7 +345,9 @@ func (ctx *Context) RecordCallWithoutCode() {
 		return
 	}
 
-	ctx.printer.Print("ACCOUNT_WITHOUT_CODE", ctx.callIndex())
+	ctx.printer.Print("ACCOUNT_WITHOUT_CODE",
+		ctx.callIndex(),
+	)
 }
 
 func (ctx *Context) RecordCallFailed(gasLeft uint64, reason string) {
@@ -311,7 +355,11 @@ func (ctx *Context) RecordCallFailed(gasLeft uint64, reason string) {
 		return
 	}
 
-	ctx.printer.Print("EVM_CALL_FAILED", ctx.callIndex(), Uint64(gasLeft), reason)
+	ctx.printer.Print("EVM_CALL_FAILED",
+		ctx.callIndex(),
+		Uint64(gasLeft),
+		reason,
+	)
 }
 
 func (ctx *Context) RecordCallReverted() {
@@ -319,7 +367,9 @@ func (ctx *Context) RecordCallReverted() {
 		return
 	}
 
-	ctx.printer.Print("EVM_REVERTED", ctx.callIndex())
+	ctx.printer.Print("EVM_REVERTED",
+		ctx.callIndex(),
+	)
 }
 
 func (ctx *Context) closeCall() string {
@@ -334,7 +384,12 @@ func (ctx *Context) EndCall(gasLeft uint64, returnValue []byte) {
 		return
 	}
 
-	ctx.printer.Print("EVM_END_CALL", ctx.closeCall(), Uint64(gasLeft), Hex(returnValue))
+	ctx.printer.Print("EVM_END_CALL",
+		ctx.closeCall(),
+		Uint64(gasLeft),
+		Hex(returnValue),
+		Uint64(ctx.totalOrderingCounter.Inc()),
+	)
 }
 
 // EndFailedCall is works similarly to EndCall but actualy also prints extra required line
@@ -355,7 +410,12 @@ func (ctx *Context) EndFailedCall(gasLeft uint64, reverted bool, reason string) 
 		gasLeft = 0
 	}
 
-	ctx.printer.Print("EVM_END_CALL", ctx.closeCall(), Uint64(gasLeft), Hex(nil))
+	ctx.printer.Print("EVM_END_CALL",
+		ctx.closeCall(),
+		Uint64(gasLeft),
+		Hex(nil),
+		Uint64(ctx.totalOrderingCounter.Inc()),
+	)
 }
 
 // In-call methods
@@ -365,7 +425,11 @@ func (ctx *Context) RecordKeccak(hashOfdata common.Hash, data []byte) {
 		return
 	}
 
-	ctx.printer.Print("EVM_KECCAK", ctx.callIndex(), Hash(hashOfdata), Hex(data))
+	ctx.printer.Print("EVM_KECCAK",
+		ctx.callIndex(),
+		Hash(hashOfdata),
+		Hex(data),
+	)
 }
 
 func (ctx *Context) RecordGasRefund(gasOld, gasRefund uint64) {
@@ -374,7 +438,13 @@ func (ctx *Context) RecordGasRefund(gasOld, gasRefund uint64) {
 	}
 
 	if gasRefund != 0 {
-		ctx.printer.Print("GAS_CHANGE", ctx.callIndex(), Uint64(gasOld), Uint64(gasOld+gasRefund), string(RefundAfterExecutionGasChangeReason))
+		ctx.printer.Print("GAS_CHANGE",
+			ctx.callIndex(),
+			Uint64(gasOld),
+			Uint64(gasOld+gasRefund),
+			string(RefundAfterExecutionGasChangeReason),
+			Uint64(ctx.totalOrderingCounter.Inc()),
+		)
 	}
 }
 
@@ -384,7 +454,13 @@ func (ctx *Context) RecordGasConsume(gasOld, gasConsumed uint64, reason GasChang
 	}
 
 	if gasConsumed != 0 && reason != IgnoredGasChangeReason {
-		ctx.printer.Print("GAS_CHANGE", ctx.callIndex(), Uint64(gasOld), Uint64(gasOld-gasConsumed), string(reason))
+		ctx.printer.Print("GAS_CHANGE",
+			ctx.callIndex(),
+			Uint64(gasOld),
+			Uint64(gasOld-gasConsumed),
+			string(reason),
+			Uint64(ctx.totalOrderingCounter.Inc()),
+		)
 	}
 }
 
@@ -393,7 +469,14 @@ func (ctx *Context) RecordStorageChange(addr common.Address, key, oldData, newDa
 		return
 	}
 
-	ctx.printer.Print("STORAGE_CHANGE", ctx.callIndex(), Addr(addr), Hash(key), Hash(oldData), Hash(newData))
+	ctx.printer.Print("STORAGE_CHANGE",
+		ctx.callIndex(),
+		Addr(addr),
+		Hash(key),
+		Hash(oldData),
+		Hash(newData),
+		Uint64(ctx.totalOrderingCounter.Inc()),
+	)
 }
 
 func (ctx *Context) RecordBalanceChange(addr common.Address, oldBalance, newBalance *big.Int, reason BalanceChangeReason) {
@@ -407,7 +490,14 @@ func (ctx *Context) RecordBalanceChange(addr common.Address, oldBalance, newBala
 		//           reduce a lot the storage space at the expense of CPU time to compute the delta and recomputed
 		//           the new balance in place where it's required. This would need to be computed (the space
 		//           savings) to see if it make sense to apply it or not.
-		ctx.printer.Print("BALANCE_CHANGE", ctx.callIndex(), Addr(addr), BigInt(oldBalance), BigInt(newBalance), string(reason))
+		ctx.printer.Print("BALANCE_CHANGE",
+			ctx.callIndex(),
+			Addr(addr),
+			BigInt(oldBalance),
+			BigInt(newBalance),
+			string(reason),
+			Uint64(ctx.totalOrderingCounter.Inc()),
+		)
 	}
 }
 
@@ -421,7 +511,14 @@ func (ctx *Context) RecordLog(log *types.Log) {
 		strtopics[idx] = Hash(topic)
 	}
 
-	ctx.printer.Print("ADD_LOG", ctx.callIndex(), ctx.logIndexInBlock(), Addr(log.Address), strings.Join(strtopics, ","), Hex(log.Data))
+	ctx.printer.Print("ADD_LOG",
+		ctx.callIndex(),
+		ctx.logIndexInBlock(),
+		Addr(log.Address),
+		strings.Join(strtopics, ","),
+		Hex(log.Data),
+		Uint64(ctx.totalOrderingCounter.Inc()),
+	)
 }
 
 func (ctx *Context) logIndexInBlock() string {
@@ -436,7 +533,12 @@ func (ctx *Context) RecordSuicide(addr common.Address, suicided bool, balanceBef
 	}
 
 	// This infers a balance change, a reduction from this account. In the `opSuicide` op code, the corresponding AddBalance is emitted.
-	ctx.printer.Print("SUICIDE_CHANGE", ctx.callIndex(), Addr(addr), Bool(suicided), BigInt(balanceBeforeSuicide))
+	ctx.printer.Print("SUICIDE_CHANGE",
+		ctx.callIndex(),
+		Addr(addr),
+		Bool(suicided),
+		BigInt(balanceBeforeSuicide),
+	)
 
 	if balanceBeforeSuicide.Sign() != 0 {
 		// We need to explicit add a balance change removing the suicided contract balance since
@@ -451,7 +553,11 @@ func (ctx *Context) RecordNewAccount(addr common.Address) {
 		return
 	}
 
-	ctx.printer.Print("CREATED_ACCOUNT", ctx.callIndex(), Addr(addr))
+	ctx.printer.Print("CREATED_ACCOUNT",
+		ctx.callIndex(),
+		Addr(addr),
+		Uint64(ctx.totalOrderingCounter.Inc()),
+	)
 }
 
 func (ctx *Context) RecordCodeChange(addr common.Address, inputHash, prevCode []byte, codeHash common.Hash, code []byte) {
@@ -459,7 +565,15 @@ func (ctx *Context) RecordCodeChange(addr common.Address, inputHash, prevCode []
 		return
 	}
 
-	ctx.printer.Print("CODE_CHANGE", ctx.callIndex(), Addr(addr), Hex(inputHash), Hex(prevCode), Hash(codeHash), Hex(code))
+	ctx.printer.Print("CODE_CHANGE",
+		ctx.callIndex(),
+		Addr(addr),
+		Hex(inputHash),
+		Hex(prevCode),
+		Hash(codeHash),
+		Hex(code),
+		Uint64(ctx.totalOrderingCounter.Inc()),
+	)
 }
 
 func (ctx *Context) RecordNonceChange(addr common.Address, oldNonce, newNonce uint64) {
@@ -467,37 +581,24 @@ func (ctx *Context) RecordNonceChange(addr common.Address, oldNonce, newNonce ui
 		return
 	}
 
-	ctx.printer.Print("NONCE_CHANGE", ctx.callIndex(), Addr(addr), Uint64(oldNonce), Uint64(newNonce))
-}
-
-func (ctx *Context) RecordBeforeCallGasEvent(gasValue uint64) {
-	if ctx == nil {
-		return
-	}
-
-	forCallIndex := Uint64(ctx.nextCallIndex + 1)
-	ctx.gasEventStack.Push(forCallIndex)
-
-	// The `ctx.nextCallIndex` has not been incremented yet, so we add +1 for the linked call index
-	ctx.printer.Print("GAS_EVENT",
+	ctx.printer.Print("NONCE_CHANGE",
 		ctx.callIndex(),
-		forCallIndex,
-		string(BeforeCallGasEventID),
-		Uint64(gasValue),
+		Addr(addr),
+		Uint64(oldNonce),
+		Uint64(newNonce),
+		Uint64(ctx.totalOrderingCounter.Inc()),
 	)
 }
 
-func (ctx *Context) RecordAfterCallGasEvent(gasValue uint64) {
+func (ctx *Context) RecordGasEvent(gasValue uint64) {
 	if ctx == nil {
 		return
 	}
 
-	// The `ctx.nextCallIndex` is already pointing to previous call index, so we simply use it for the linked call index
 	ctx.printer.Print("GAS_EVENT",
 		ctx.callIndex(),
-		ctx.gasEventStack.MustPop(),
-		string(AfterCallGasEventID),
 		Uint64(gasValue),
+		Uint64(ctx.totalOrderingCounter.Inc()),
 	)
 }
 
@@ -508,10 +609,7 @@ func (ctx *Context) RecordTrxPool(eventType string, tx *types.Transaction, err e
 		return
 	}
 
-	var signer types.Signer = types.FrontierSigner{}
-	if tx.Protected() {
-		signer = types.NewEIP155Signer(tx.ChainId())
-	}
+	signer := types.LatestSignerForChainID(tx.ChainId())
 
 	fromAsString := "."
 	from, err := types.Sender(signer, tx)

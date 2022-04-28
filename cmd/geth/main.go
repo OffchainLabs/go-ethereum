@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console/prompt"
+	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -41,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 	gopsutil "github.com/shirou/gopsutil/mem"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -248,12 +250,16 @@ func init() {
 	app.Flags = append(app.Flags, metricsFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
-		// Force sync mode to `full` for deep mind code (whatever the value flag!)
-		if err := ctx.GlobalSet(utils.SyncModeFlag.Name, "full"); err != nil {
-			log.Error("deep mind failed to set sync mode to full", err)
+		if err := debug.Setup(ctx); err != nil {
+			return err
 		}
 
-		return debug.Setup(ctx)
+		deepmind.MaybeSyncContext().InitVersion(
+			params.VersionWithCommit(gitCommit, gitDate),
+			params.DeepmindVersion(),
+			params.Variant,
+		)
+		return nil
 	}
 	app.After = func(ctx *cli.Context) error {
 		debug.Exit()
