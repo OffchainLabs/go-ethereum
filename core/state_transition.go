@@ -172,7 +172,7 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool, dmContext *deepmi
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
 func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool) (*ExecutionResult, error) {
-	return NewStateTransition(evm, msg, gp, evm.DeepmindPrinter()).TransitionDb()
+	return NewStateTransition(evm, msg, gp, evm.DeepmindContext()).TransitionDb()
 }
 
 // to returns the recipient of the message.

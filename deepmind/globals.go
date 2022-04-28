@@ -38,3 +38,10 @@ var BlockProgressEnabled = false
 // causes compaction to happen as well as disabling some code path inside
 // Geth where manual compaction can be triggered.
 var CompactionDisabled = false
+
+// ArchiveBlocksToKeep defines how many blocks our node should keep up prior
+// pruning the state. This is actually used to override `core/blockchain.go` `TriesInMemory`
+// variable.
+//
+// A value of 0 means use the Geth default value.
+var ArchiveBlocksToKeep = uint64(0)

@@ -78,7 +78,7 @@ Remove blockchain and state databases`,
 		Action: dbCompact,
 		Name:   "compact",
 		Usage:  "Compact leveldb database. WARNING: May take a very long time",
-		Description: `This command performs a database compaction. 
+		Description: `This command performs a database compaction.
 WARNING: This operation may take a very long time to finish, and may cause database
 corruption if it is aborted during execution'!`,
 	}
@@ -94,7 +94,7 @@ corruption if it is aborted during execution'!`,
 		Name:      "delete",
 		Usage:     "Delete a database key (WARNING: may corrupt your database)",
 		ArgsUsage: "<hex-encoded key>",
-		Description: `This command deletes the specified database key from the database. 
+		Description: `This command deletes the specified database key from the database.
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
 	dbPutCmd = cli.Command{
@@ -102,7 +102,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		Name:      "put",
 		Usage:     "Set the value of a database key (WARNING: may corrupt your database)",
 		ArgsUsage: "<hex-encoded key> <hex-encoded value>",
-		Description: `This command sets a given database key to the given value. 
+		Description: `This command sets a given database key to the given value.
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
 )
@@ -215,7 +215,7 @@ func dbStats(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 	path := stack.ResolvePath("chaindata")
-	db, err := leveldb.NewCustom(path, "", func(options *opt.Options) {
+	db, err := leveldb.NewCustom(path, "", false, func(options *opt.Options) {
 		options.ReadOnly = true
 	})
 	if err != nil {
@@ -234,7 +234,7 @@ func dbCompact(ctx *cli.Context) error {
 	defer stack.Close()
 	path := stack.ResolvePath("chaindata")
 	cache := ctx.GlobalInt(utils.CacheFlag.Name) * ctx.GlobalInt(utils.CacheDatabaseFlag.Name) / 100
-	db, err := leveldb.NewCustom(path, "", func(options *opt.Options) {
+	db, err := leveldb.NewCustom(path, "", false, func(options *opt.Options) {
 		options.OpenFilesCacheCapacity = utils.MakeDatabaseHandles()
 		options.BlockCacheCapacity = cache / 2 * opt.MiB
 		options.WriteBuffer = cache / 4 * opt.MiB // Two of these are used internally
@@ -266,7 +266,7 @@ func dbGet(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 	path := stack.ResolvePath("chaindata")
-	db, err := leveldb.NewCustom(path, "", func(options *opt.Options) {
+	db, err := leveldb.NewCustom(path, "", false, func(options *opt.Options) {
 		options.ReadOnly = true
 	})
 	if err != nil {
