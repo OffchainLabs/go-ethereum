@@ -235,6 +235,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 		// Static portion of gas
 		cost = operation.constantGas // For tracing
+
 		// Deep mind we ignore constant cost because below, we perform a single GAS_CHANGE for both constant + dynamic to aggregate the 2 gas change events
 		if !contract.UseGas(operation.constantGas, deepmind.IgnoredGasChangeReason) {
 			return nil, ErrOutOfGas

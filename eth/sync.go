@@ -181,18 +181,24 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		// Fast sync was explicitly requested, and explicitly granted
 		mode = downloader.FastSync
 	}
+
+	if deepmind.Enabled {
+		// If deepmind is enabled, we force the mode to be a FullSync mode to ensure we correctly
+		// process all transactions. It should probably be adapter so that speculative execution
+		// node could use fast sync which is not the case here.
+		if mode != downloader.FullSync {
+			log.Warn("Firehose changed syncing mode to 'full', it is required for proper extraction of the data when enabling Firehose instrumentation through --firehose-deep-mind-enabled", "old", mode, "new", downloader.FullSync)
+		}
+
+		mode = downloader.FullSync
+		atomic.StoreUint32(&pm.fastSync, 0)
+	}
+
 	if mode == downloader.FastSync {
 		// Make sure the peer's total difficulty we are synchronizing is higher.
 		if pm.blockchain.GetTdByHash(pm.blockchain.CurrentFastBlock().Hash()).Cmp(pTd) >= 0 {
 			return
 		}
-	}
-	if deepmind.Enabled {
-		// If deepmind is enabled, we force the mode to be a FullSync mode to ensure we correctly
-		// process all transactions. It should probably be adapter so that speculative execution
-		// node could use fast sync which is not the case here.
-		mode = downloader.FullSync
-		atomic.StoreUint32(&pm.fastSync, 0)
 	}
 
 	// Run the sync cycle, and disable fast sync if we've went past the pivot block
