@@ -182,7 +182,12 @@ func (ctx *Context) StartTransaction(tx *types.Transaction, baseFee *big.Int) {
 }
 
 func gasPrice(tx *types.Transaction) *big.Int {
-	return tx.GasPrice()
+	switch tx.Type() {
+	case types.LegacyTxType, types.AccessListTxType:
+		return tx.GasPrice()
+	}
+
+	panic(fmt.Errorf("unhandled transaction type's %d for deepmind.gasPrice()", tx.Type()))
 }
 
 type AccessList types.AccessList
