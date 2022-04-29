@@ -308,7 +308,7 @@ func (h *handler) doSync(op *chainSyncOp) error {
 		// process all transactions. It should probably be adapter so that speculative execution
 		// node could use fast sync which is not the case here.
 		if op.mode != downloader.FullSync {
-			log.Warn("Firehose changed syncing mode to 'full', it is required for proper extraction of the data when enabling Firehose instrumentation through --firehose-deep-mind-enabled", "old", mode, "new", downloader.FullSync)
+			log.Warn("Firehose changed syncing mode to 'full', it is required for proper extraction of the data when enabling Firehose instrumentation through --firehose-deep-mind-enabled", "old", op.mode, "new", downloader.FullSync)
 		}
 
 		op.mode = downloader.FullSync
