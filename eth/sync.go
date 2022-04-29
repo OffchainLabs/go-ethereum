@@ -235,9 +235,13 @@ func (cs *chainSyncer) startSync(op *chainSyncOp) {
 // doSync synchronizes the local blockchain with a remote peer.
 func (h *handler) doSync(op *chainSyncOp) error {
 	if deepmind.Enabled {
-		// We want to override the feature up here that bases its fast sync decision on
-		// CurrentFastBlock.
-		// Our goal is to process everything at the slow speed, to extract all computations.
+		// If deepmind is enabled, we force the mode to be a FullSync mode to ensure we correctly
+		// process all transactions. It should probably be adapter so that speculative execution
+		// node could use fast sync which is not the case here.
+		if op.mode != downloader.FullSync {
+			log.Warn("Firehose changed syncing mode to 'full', it is required for proper extraction of the data when enabling Firehose instrumentation through --firehose-deep-mind-enabled", "old", op.mode, "new", downloader.FullSync)
+		}
+
 		op.mode = downloader.FullSync
 		atomic.StoreUint32(&h.snapSync, 0)
 	}
