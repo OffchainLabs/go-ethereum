@@ -80,7 +80,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		if dmContext.Enabled() {
-			// London fork not active here, replace `nil` by `header.BaseFee` here when it's the case
+			// London fork not active in this branch yet, replace by `header.BaseFee` instead of `nil` when it's the case (and remove this comment)
 			dmContext.StartTransaction(tx, nil)
 		}
 
