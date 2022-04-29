@@ -244,6 +244,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// Deepmind keeps contract gas at this point, used later just before executing the call to record the gas before event
 		dmBeforeCallGasEvent := contract.Gas
 
+		// Deep mind we ignore constant cost because below, we perform a single GAS_CHANGE for both constant + dynamic to aggregate the 2 gas change events
 		if !contract.UseGas(operation.constantGas, deepmind.IgnoredGasChangeReason) {
 			return nil, ErrOutOfGas
 		}
