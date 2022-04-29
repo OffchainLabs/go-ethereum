@@ -189,9 +189,13 @@ func gasPrice(tx *types.Transaction, baseFee *big.Int) *big.Int {
 	switch tx.Type() {
 	case types.LegacyTxType, types.AccessListTxType:
 		return tx.GasPrice()
-	default:
-		panic(fmt.Errorf("unhandled transaction type's %d, carefully review the patch, if this new transaction type add new fields, think about adding them to Firehose Block format, when you see this message, it means something changed in the chain model and great care and thinking most be put here to properly understand the changes and the consequences they bring for the instrumentation", tx.Type()))
 	}
+
+	panic(errUnhandledTransactionType("gasPrice", tx.Type()))
+}
+
+func errUnhandledTransactionType(tag string, value uint8) error {
+	return fmt.Errorf("unhandled transaction type's %d for deepmind.%s(), carefully review the patch, if this new transaction type add new fields, think about adding them to Firehose Block format, when you see this message, it means something changed in the chain model and great care and thinking most be put here to properly understand the changes and the consequences they bring for the instrumentation", value, tag)
 }
 
 func (ctx *Context) StartTransactionRaw(
