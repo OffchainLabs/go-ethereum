@@ -80,7 +80,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
 
 		if dmContext.Enabled() {
-			// London fork not active here, replace `nil` by `header.BaseFee` here when it's the case
+			// London fork not active in this branch yet, replace by `header.BaseFee` instead of `nil` when it's the case (and remove this comment)
 			dmContext.StartTransaction(tx, nil)
 		}
 

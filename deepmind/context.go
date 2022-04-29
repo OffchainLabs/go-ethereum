@@ -169,29 +169,15 @@ func (ctx *Context) StartTransaction(tx *types.Transaction, baseFee *big.Int) {
 		tx.GasPrice(),
 		tx.Nonce(),
 		tx.Data(),
-		// Berlin fork not active in this branch, replace by `AccessList(tx.AccessList())` when it's the case
+		// Berlin fork not active in this branch, replace by `AccessList(tx.AccessList())` when it's the case (and remove this comment)
 		nil,
-		// London fork not active in this branch yet, so we pass `nil` for `maxFeePerGas`
+		// London fork not active in this branch yet, replace by `tx.GasFeeCap()` when it's the case (and remove this comment)
 		nil,
-		// London fork not active in this branch yet, so we pass `nil` for `maxPriorityFeePerGas`
+		// London fork not active in this branch yet, replace by `tx.GasTipCap()` when it's the case (and remove this comment)
 		nil,
-		// Transaction's type not active in this branch yet, us `tx.Type()` instead here if available and remove this comment if it's the case
+		// Berlin fork not active in this branch, transaction's type not active, replace by `tx.Type()` when it's the case (and remove this comment)
 		0,
 	)
-}
-
-// Berlin fork not active in this branch, replace by `type AccessList types.AccessList` when it's the case
-type AccessList []interface{}
-
-// marshal in a binary format that will be printed as hex in deep mind and read on the console reader
-// in a binary format.
-//
-// An access list format will be, varint for the length of the list, followed by each tuple
-// being serialized as 20 bytes for the address, varint for the storage keys length followed by
-// each storage key as 32 bytes.
-func (l AccessList) marshal() (out []byte) {
-	// Berlin fork not active in this branch, return 0 length for the list
-	return []byte{0x00}
 }
 
 func (ctx *Context) StartTransactionRaw(
@@ -220,7 +206,9 @@ func (ctx *Context) StartTransactionRaw(
 		toAsString = Addr(*to)
 	}
 
+	// London fork not active in this branch yet, add proper handling here when it's the case (and remove this comment)
 	maxFeePerGasAsString := "."
+	// London fork not active in this branch yet, add proper handling here when it's the case (and remove this comment)
 	maxPriorityFeePerGasAsString := "."
 
 	ctx.printer.Print("BEGIN_APPLY_TRX",
@@ -647,4 +635,18 @@ func (ctx *Context) RecordTrxPool(eventType string, tx *types.Transaction, err e
 		Uint64(tx.Nonce()),
 		Hex(tx.Data()),
 	)
+}
+
+// Berlin fork not active in this branch, replace by `type AccessList types.AccessList` when it's the case
+type AccessList []interface{}
+
+// marshal in a binary format that will be printed as hex in deep mind and read on the console reader
+// in a binary format.
+//
+// An access list format will be, varint for the length of the list, followed by each tuple
+// being serialized as 20 bytes for the address, varint for the storage keys length followed by
+// each storage key as 32 bytes.
+func (l AccessList) marshal() (out []byte) {
+	// Berlin fork not active in this branch, return 0 length for the list
+	return []byte{0x00}
 }
