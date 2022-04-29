@@ -82,7 +82,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		if dmContext.Enabled() {
-			dmContext.StartTransaction(tx, block.BaseFee())
+			dmContext.StartTransaction(tx, header.BaseFee)
 		}
 
 		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number), header.BaseFee)

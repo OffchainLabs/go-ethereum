@@ -133,10 +133,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 	// Don't bother with the execution if there's no code.
 	if len(contract.Code) == 0 {
-		if in.evm.dmContext.Enabled() {
-			in.evm.dmContext.RecordCallWithoutCode()
-		}
-
 		return nil, nil
 	}
 
@@ -200,9 +196,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
 
-		// Deepmind keeps contract gas at this point, used later just before executing the call to record the gas before event
-		dmBeforeCallGasEvent := contract.Gas
-
 		if !contract.UseGas(cost, deepmind.IgnoredGasChangeReason) {
 			return nil, ErrOutOfGas
 		}
@@ -228,8 +221,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			// cost is explicitly set so that the capture state defer method can get the proper cost
 			var dynamicCost uint64
 			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
-			cost += dynamicCost // for tracing
 			// Deep mind we ignore dynamic cost because later below, we perform a single GAS_CHANGE for both constant + dynamic to aggregate the 2 gas change events
+			cost += dynamicCost // for tracing
 			if err != nil || !contract.UseGas(dynamicCost, deepmind.IgnoredGasChangeReason) {
 				return nil, ErrOutOfGas
 			}
@@ -239,11 +232,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 
 		if in.evm.dmContext.Enabled() {
-			if ShouldRecordCallGasEventForOpCode(op) {
-				// Deep mind record before call event last here since operation is about to be executed, 100% sure
-				in.evm.dmContext.RecordGasEvent(dmBeforeCallGasEvent)
-			}
-
 			if cost != 0 {
 				gasChangeReason := OpCodeToGasChangeReason(op)
 				if gasChangeReason != deepmind.IgnoredGasChangeReason {
@@ -265,10 +253,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 		// execute the operation
 		res, err = operation.execute(&pc, in, callContext)
-		if in.evm.dmContext.Enabled() && ShouldRecordCallGasEventForOpCode(op) {
-			// Deep mind records after call event last here since operation has been executed
-			in.evm.dmContext.RecordGasEvent(contract.Gas)
-		}
 		if err != nil {
 			break
 		}

@@ -578,13 +578,3 @@ func OpCodeToGasChangeReason(op OpCode) deepmind.GasChangeReason {
 
 	return deepmind.IgnoredGasChangeReason
 }
-
-// List of opcodes for which we will add a BeforeCall and AfterCall gas events pair
-func ShouldRecordCallGasEventForOpCode(op OpCode) bool {
-	return op == CREATE ||
-		op == CREATE2 ||
-		op == CALL ||
-		op == STATICCALL ||
-		op == CALLCODE ||
-		op == DELEGATECALL
-}

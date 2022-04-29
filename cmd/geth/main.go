@@ -259,14 +259,10 @@ func init() {
 	app.Flags = append(app.Flags, metricsFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
-		// Force sync mode to `full` for deep mind code (whatever the value flag!)
-		if err := ctx.GlobalSet(utils.SyncModeFlag.Name, "full"); err != nil {
-			log.Error("deep mind failed to set sync mode to full", err)
-		}
-
 		if err := debug.Setup(ctx); err != nil {
 			return err
 		}
+
 		deepmind.MaybeSyncContext().InitVersion(
 			params.VersionWithCommit(gitCommit, gitDate),
 			params.DeepmindVersion(),

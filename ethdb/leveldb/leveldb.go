@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -80,13 +79,15 @@ type Database struct {
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
 
+	deepmindCompactionDisabled bool
+
 	log log.Logger // Contextual logger tracking the database path
 }
 
 // New returns a wrapped LevelDB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string, readonly bool) (*Database, error) {
-	return NewCustom(file, namespace, func(options *opt.Options) {
+func New(file string, cache int, handles int, namespace string, readonly bool, deepmindCompactionDisabled bool) (*Database, error) {
+	return NewCustom(file, namespace, deepmindCompactionDisabled, func(options *opt.Options) {
 		// Ensure we have some minimal caching and file guarantees
 		if cache < minCache {
 			cache = minCache
@@ -107,7 +108,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 // NewCustom returns a wrapped LevelDB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
 // The customize function allows the caller to modify the leveldb options.
-func NewCustom(file string, namespace string, customize func(options *opt.Options)) (*Database, error) {
+func NewCustom(file string, namespace string, deepmindCompactionDisabled bool, customize func(options *opt.Options)) (*Database, error) {
 	options := configureOptions(customize)
 	logger := log.New("database", file)
 	usedCache := options.GetBlockCacheCapacity() + options.GetWriteBuffer()*2
@@ -117,7 +118,7 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 	}
 	logger.Info("Allocated cache and file handles", logCtx...)
 
-	if deepmind.CompactionDisabled {
+	if deepmindCompactionDisabled {
 		logger.Info("Disabling database compaction by setting L0 Compaction + Write triggers threshold to MAX_INT")
 		// By setting those values really high, we disable compaction of the database completely
 		maxInt := int(^uint(0) >> 1)
@@ -137,10 +138,11 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 	}
 	// Assemble the wrapper with all the registered metrics
 	ldb := &Database{
-		fn:       file,
-		db:       db,
-		log:      logger,
-		quitChan: make(chan chan error),
+		fn:                         file,
+		db:                         db,
+		log:                        logger,
+		quitChan:                   make(chan chan error),
+		deepmindCompactionDisabled: deepmindCompactionDisabled,
 	}
 	ldb.compTimeMeter = metrics.NewRegisteredMeter(namespace+"compact/time", nil)
 	ldb.compReadMeter = metrics.NewRegisteredMeter(namespace+"compact/input", nil)
@@ -265,7 +267,7 @@ func (db *Database) Stat(property string) (string, error) {
 // is treated as a key after all keys in the data store. If both is nil then it
 // will compact entire data store.
 func (db *Database) Compact(start []byte, limit []byte) error {
-	if deepmind.CompactionDisabled {
+	if db.deepmindCompactionDisabled {
 		db.log.Info("Database compaction is disabled through --firehose-deep-mind-compaction-disabled")
 		return nil
 	}

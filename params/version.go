@@ -21,10 +21,10 @@ import (
 )
 
 const (
-	VersionMajor = 1           // Major version component of the current release
-	VersionMinor = 10          // Minor version component of the current release
-	VersionPatch = 17          // Patch version component of the current release
-	VersionMeta  = "dm-stable" // Version metadata to append to the version string
+	VersionMajor = 1     // Major version component of the current release
+	VersionMinor = 10    // Minor version component of the current release
+	VersionPatch = 17    // Patch version component of the current release
+	VersionMeta  = "fh2" // Version metadata to append to the version string
 
 	DeepmindVersionMajor = 2
 	DeepmindVersionMinor = 0

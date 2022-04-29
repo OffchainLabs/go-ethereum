@@ -1,6 +1,9 @@
 package deepmind
 
 import (
+	"encoding/binary"
+	"fmt"
+	"math"
 	"math/big"
 	"os"
 	"runtime/debug"
@@ -9,7 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
+	ethmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/atomic"
 )
@@ -54,7 +57,6 @@ type Context struct {
 	blockLogIndex   uint64
 	activeCallIndex string
 	nextCallIndex   uint64
-	gasEventStack   *ExtendedStack
 	callIndexStack  *ExtendedStack
 
 	seenBlock            *atomic.Bool
@@ -68,7 +70,6 @@ func NewContext(printer Printer) *Context {
 		printer: printer,
 
 		activeCallIndex: "0",
-		gasEventStack:   &ExtendedStack{},
 		callIndexStack:  &ExtendedStack{},
 
 		seenBlock:            atomic.NewBool(false),
@@ -172,27 +173,50 @@ func (ctx *Context) StartTransaction(tx *types.Transaction, baseFee *big.Int) {
 		gasPrice(tx, baseFee),
 		tx.Nonce(),
 		tx.Data(),
+		AccessList(tx.AccessList()),
 		maxFeePerGas(tx),
+		maxPriorityFeePerGas(tx),
 		tx.Type(),
 	)
 }
 
 func maxFeePerGas(tx *types.Transaction) *big.Int {
 	switch tx.Type() {
-	//case types.AccessListTxType:
-	//	return nil
+	case types.LegacyTxType, types.AccessListTxType:
+		return nil
+
 	case types.DynamicFeeTxType:
 		return tx.GasFeeCap()
-	default:
-		return nil
 	}
 
+	panic(fmt.Errorf("unhandled transaction type's %d for deepmind.maxFeePerGas()", tx.Type()))
 }
-func gasPrice(tx *types.Transaction, baseFee *big.Int) *big.Int {
-	if baseFee == nil {
-		return tx.GasPrice()
+
+func maxPriorityFeePerGas(tx *types.Transaction) *big.Int {
+	switch tx.Type() {
+	case types.LegacyTxType, types.AccessListTxType:
+		return nil
+
+	case types.DynamicFeeTxType:
+		return tx.GasTipCap()
 	}
-	return math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
+
+	panic(fmt.Errorf("unhandled transaction type's %d for deepmind.maxPriorityFeePerGas()", tx.Type()))
+}
+
+func gasPrice(tx *types.Transaction, baseFee *big.Int) *big.Int {
+	switch tx.Type() {
+	case types.LegacyTxType, types.AccessListTxType:
+		return tx.GasPrice()
+	case types.DynamicFeeTxType:
+		if baseFee == nil {
+			return tx.GasPrice()
+		}
+
+		return ethmath.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
+	}
+
+	panic(fmt.Errorf("unhandled transaction type's %d for deepmind.gasPrice()", tx.Type()))
 }
 
 func (ctx *Context) StartTransactionRaw(
@@ -204,7 +228,9 @@ func (ctx *Context) StartTransactionRaw(
 	gasPrice *big.Int,
 	nonce uint64,
 	data []byte,
+	accessList AccessList,
 	maxFeePerGas *big.Int,
+	maxPriorityFeePerGas *big.Int,
 	txType uint8,
 ) {
 	if ctx == nil {
@@ -224,6 +250,11 @@ func (ctx *Context) StartTransactionRaw(
 		maxFeePerGasAsString = Hex(maxFeePerGas.Bytes())
 	}
 
+	maxPriorityFeePerGasAsString := "."
+	if maxPriorityFeePerGas != nil {
+		maxPriorityFeePerGasAsString = Hex(maxPriorityFeePerGas.Bytes())
+	}
+
 	ctx.printer.Print("BEGIN_APPLY_TRX",
 		Hash(hash),
 		toAsString,
@@ -235,7 +266,9 @@ func (ctx *Context) StartTransactionRaw(
 		Hex(gasPrice.Bytes()),
 		Uint64(nonce),
 		Hex(data),
+		Hex(accessList.marshal()),
 		maxFeePerGasAsString,
+		maxPriorityFeePerGasAsString,
 		Uint8(txType),
 		Uint64(ctx.totalOrderingCounter.Inc()),
 	)
@@ -609,18 +642,6 @@ func (ctx *Context) RecordNonceChange(addr common.Address, oldNonce, newNonce ui
 	)
 }
 
-func (ctx *Context) RecordGasEvent(gasValue uint64) {
-	if ctx == nil {
-		return
-	}
-
-	ctx.printer.Print("GAS_EVENT",
-		ctx.callIndex(),
-		Uint64(gasValue),
-		Uint64(ctx.totalOrderingCounter.Inc()),
-	)
-}
-
 // Mempool methods
 
 func (ctx *Context) RecordTrxPool(eventType string, tx *types.Transaction, err error) {
@@ -658,4 +679,50 @@ func (ctx *Context) RecordTrxPool(eventType string, tx *types.Transaction, err e
 		Uint64(tx.Nonce()),
 		Hex(tx.Data()),
 	)
+}
+
+type AccessList types.AccessList
+
+// marshal in a binary format that will be printed as hex in deep mind and read on the console reader
+// in a binary format.
+//
+// An access list format will be, varint for the length of the list, followed by each tuple
+// being serialized as 20 bytes for the address, varint for the storage keys length followed by
+// each storage key as 32 bytes.
+func (l AccessList) marshal() (out []byte) {
+	if len(l) == 0 {
+		// Returns right away when there is not element in the access list
+		return []byte{0x00}
+	}
+
+	// There is no need for full precision of the 64 bits, so we restrict it to 32 bits max
+	if len(l) > math.MaxUint32 {
+		panic(fmt.Errorf("access list length is bigger than 32 bits, refusing to do it"))
+	}
+
+	// Compute max varuint (length of access list) + N * (contract address + max varuint (length of storage keys) + 32 * K)
+	maxByteCount := binary.MaxVarintLen32
+	for _, tuple := range l {
+		maxByteCount += 20 + binary.MaxVarintLen32 + len(tuple.StorageKeys)*32
+	}
+
+	out = make([]byte, maxByteCount)
+
+	offset := 0
+	offset += binary.PutUvarint(out[offset:], uint64(len(l)))
+
+	for _, tuple := range l {
+		// There is no need for full precision of the 64 bits, so we restrict it to 32 bits max
+		if len(tuple.StorageKeys) > math.MaxUint32 {
+			panic(fmt.Errorf("access list length is bigger than 32 bits, refusing to do it"))
+		}
+
+		offset += copy(out[offset:], tuple.Address[:])
+		offset += binary.PutUvarint(out[offset:], uint64(len(tuple.StorageKeys)))
+		for _, key := range tuple.StorageKeys {
+			offset += copy(out[offset:], key[:])
+		}
+	}
+
+	return out[0:offset]
 }

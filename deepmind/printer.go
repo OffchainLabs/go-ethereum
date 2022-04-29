@@ -104,12 +104,12 @@ func Uint(in uint) string {
 	return strconv.FormatUint(uint64(in), 10)
 }
 
-func Uint64(in uint64) string {
-	return strconv.FormatUint(in, 10)
-}
-
 func Uint8(in uint8) string {
 	return strconv.FormatUint(uint64(in), 10)
+}
+
+func Uint64(in uint64) string {
+	return strconv.FormatUint(in, 10)
 }
 
 func JSON(in interface{}) string {
