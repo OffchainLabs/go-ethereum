@@ -80,7 +80,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
 
 		if dmContext.Enabled() {
-			dmContext.StartTransaction(tx)
+			// London fork not active here, replace `nil` by `header.BaseFee` here when it's the case
+			dmContext.StartTransaction(tx, nil)
 		}
 
 		receipt, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg, dmContext)

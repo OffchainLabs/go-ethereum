@@ -53,7 +53,6 @@ type Context struct {
 	blockLogIndex   uint64
 	activeCallIndex string
 	nextCallIndex   uint64
-	gasEventStack   *ExtendedStack
 	callIndexStack  *ExtendedStack
 
 	seenBlock            *atomic.Bool
@@ -67,7 +66,6 @@ func NewContext(printer Printer) *Context {
 		printer: printer,
 
 		activeCallIndex: "0",
-		gasEventStack:   &ExtendedStack{},
 		callIndexStack:  &ExtendedStack{},
 
 		seenBlock:            atomic.NewBool(false),
@@ -152,7 +150,7 @@ func (ctx *Context) EndBlock(block *types.Block, totalDifficulty *big.Int) {
 
 // Transaction methods
 
-func (ctx *Context) StartTransaction(tx *types.Transaction) {
+func (ctx *Context) StartTransaction(tx *types.Transaction, baseFee *big.Int) {
 	if ctx == nil {
 		return
 	}
@@ -171,11 +169,29 @@ func (ctx *Context) StartTransaction(tx *types.Transaction) {
 		tx.GasPrice(),
 		tx.Nonce(),
 		tx.Data(),
+		// Berlin fork not active in this branch, replace by `AccessList(tx.AccessList())` when it's the case
+		nil,
 		// London fork not active in this branch yet, so we pass `nil` for `maxFeePerGas`
+		nil,
+		// London fork not active in this branch yet, so we pass `nil` for `maxPriorityFeePerGas`
 		nil,
 		// Transaction's type not active in this branch yet, us `tx.Type()` instead here if available and remove this comment if it's the case
 		0,
 	)
+}
+
+// Berlin fork not active in this branch, replace by `type AccessList types.AccessList` when it's the case
+type AccessList []interface{}
+
+// marshal in a binary format that will be printed as hex in deep mind and read on the console reader
+// in a binary format.
+//
+// An access list format will be, varint for the length of the list, followed by each tuple
+// being serialized as 20 bytes for the address, varint for the storage keys length followed by
+// each storage key as 32 bytes.
+func (l AccessList) marshal() (out []byte) {
+	// Berlin fork not active in this branch, return 0 length for the list
+	return []byte{0x00}
 }
 
 func (ctx *Context) StartTransactionRaw(
@@ -187,9 +203,10 @@ func (ctx *Context) StartTransactionRaw(
 	gasPrice *big.Int,
 	nonce uint64,
 	data []byte,
+	accessList AccessList,
 	maxFeePerGas *big.Int,
+	maxPriorityFeePerGas *big.Int,
 	txType uint8,
-
 ) {
 	if ctx == nil {
 		return
@@ -204,6 +221,7 @@ func (ctx *Context) StartTransactionRaw(
 	}
 
 	maxFeePerGasAsString := "."
+	maxPriorityFeePerGasAsString := "."
 
 	ctx.printer.Print("BEGIN_APPLY_TRX",
 		Hash(hash),
@@ -216,7 +234,9 @@ func (ctx *Context) StartTransactionRaw(
 		Hex(gasPrice.Bytes()),
 		Uint64(nonce),
 		Hex(data),
+		Hex(accessList.marshal()),
 		maxFeePerGasAsString,
+		maxPriorityFeePerGasAsString,
 		Uint8(txType),
 		Uint64(ctx.totalOrderingCounter.Inc()),
 	)
