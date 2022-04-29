@@ -10,6 +10,8 @@ versions we currently supported:
 - Version 1 using the `firehose-v1` branch and `fh1` tag(s) suffix
 - Version 2 using the `firehose-v2` branch and `fh2` tag(s) suffix
 
+Read [Branches & Workflow](#branches-&-workflow) section for more details about how we handle branching model and versions.
+
 ### Initialization
 
 The tooling and other instructions expect the following project
@@ -22,6 +24,10 @@ git clone --branch="firehose-v1" git@github.com:streamingfast/go-ethereum.git
 cd go-ethereum
 
 git remote rename origin sf
+
+git checkout firehose-v2
+git checkout firehose-v1-v1.10.1
+git checkout firehose-v2-v1.10.1
 
 git remote add origin https://github.com/ethereum/go-ethereum.git
 git remote add polygon https://github.com/maticnetwork/bor.git
@@ -75,12 +81,24 @@ perform our work with newer code, the problem that will arise is that this new
 firehose work will not be mergeable into forks or older release that we still
 support!
 
+`firehose-v1` should always be merged right away on `firehose-v2` that produces Ethereum
+block version 2.
+
+We also support and intermediate branch for version v1.10.1 of Geth. The reason for this
+is that this version added refactoring to support multiple transactions types which needs to be
+properly handled (1.10.0 more specifically did the refactoring, but 1.10.1 was added almost at
+the same moment as 1.10.0).
+
+`firehose-v1` should be merged always in `firehose-v1-v1.10.1` and `firehose-v2` in `firehose-v2-v1.10.1`.
+Then those branch should be the
+
 We then create `release/<identifier>` branch that tracks the version of interest
 for us, versions that we will manages and deploy.
 
 Currently supported forks & version and the release branch
 
 - `firehose-v1` - Default branch with all Firehose commits in it, based on Geth `1.9.10`.
+- `firehose-v2` - Default branch with all Firehose commits in it, based on Geth `1.9.10` (Ethereum Block Version 2).
 - [release/geth-1.10.x-fh1](https://github.com/streamingfast/go-ethereum/tree/release/geth-1.10.x-fh1) - Ethereum Geth, latest update for this branch is `1.10.7` ([https://github.com/ethereum/go-ethereum](https://github.com/ethereum/go-ethereum)).
 - [release/polygon-0.2.x-fh1](https://github.com/streamingfast/go-ethereum/tree/release/polygon-0.2.x-fh1) - Polygon fork (a.k.a Matic), based on Geth `1.10.3`, latest update for this branch is `v0.2.6` ([https://github.com/maticnetwork/bor](https://github.com/maticnetwork/bor)).
 - [release/bsc-1.1.x-fh1](https://github.com/streamingfast/go-ethereum/tree/release/bsc-1.1.x-fh1) - BSC fork (Binance), based on Geth `1.10.3`, latest update for this branch is `v1.1.1` ([https://github.com/binance-chain/bsc](https://github.com/binance-chain/bsc)).
@@ -92,24 +110,27 @@ Currently supported forks & version and the release branch
 
 #### Making New Firehose Changes
 
-Making new changes should be performed on the `firehose-v1` branch. When happy
-with the changes, simply merge the `firehose-v1` branch in all the release branches we track
+Making new changes should be performed on the `firehose-v1-v1.10.1` branch. When happy
+with the changes, simply merge the `firehose-v1-v1.10.1` branch in all the release branches we track
 and support.
 
-    git checkout firehose-v1
+    git checkout firehose-v1-v1.10.1
     git pull -p
 
     # Perform necessary changes, tests and commit(s)
 
     git checkout release/geth-1.10.x-fh1
     git pull -p
-    git merge firehose-v1
+    git merge firehose-v1-v1.10.1
 
     git checkout release/polygon-0.2.x-fh1
     git pull -p
-    git merge firehose-v1
+    git merge firehose-v1-v1.10.1
 
-    git push sf firehose-v1 release/geth-1.10.x-fh1 release/polygon-0.2.x-fh1
+    git push sf firehose-v1-v1.10.1 release/geth-1.10.x-fh1 release/polygon-0.2.x-fh1
+
+**Note** On newer fork, you must merge the right version, for example if the fork never merged 1.10.1 from the upstream Geth, you must **not** use
+`firehose-v1-v1.10.1` but instead use `firehose-v1` which is based on 1.9.10.
 
 ### Update to New Upstream Version
 

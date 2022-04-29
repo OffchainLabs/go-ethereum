@@ -169,7 +169,8 @@ func (ctx *Context) StartTransaction(tx *types.Transaction, baseFee *big.Int) {
 		r.Bytes(),
 		s.Bytes(),
 		tx.Gas(),
-		gasPrice(tx),
+		// Once London is active in the patch set, this `nil` value should become
+		gasPrice(tx, nil),
 		tx.Nonce(),
 		tx.Data(),
 		AccessList(tx.AccessList()),
@@ -181,13 +182,16 @@ func (ctx *Context) StartTransaction(tx *types.Transaction, baseFee *big.Int) {
 	)
 }
 
-func gasPrice(tx *types.Transaction) *big.Int {
+func gasPrice(tx *types.Transaction, baseFee *big.Int) *big.Int {
+	// Once London is active in the patch set, this will not be necessary because DynamicTx should be handled properly
+	_ = baseFee
+
 	switch tx.Type() {
 	case types.LegacyTxType, types.AccessListTxType:
 		return tx.GasPrice()
+	default:
+		panic(fmt.Errorf("unhandled transaction type's %d, carefully review the patch, if this new transaction type add new fields, think about adding them to Firehose Block format, when you see this message, it means something changed in the chain model and great care and thinking most be put here to properly understand the changes and the consequences they bring for the instrumentation", tx.Type()))
 	}
-
-	panic(fmt.Errorf("unhandled transaction type's %d for deepmind.gasPrice()", tx.Type()))
 }
 
 func (ctx *Context) StartTransactionRaw(
