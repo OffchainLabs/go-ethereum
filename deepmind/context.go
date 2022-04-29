@@ -1,6 +1,9 @@
 package deepmind
 
 import (
+	"encoding/binary"
+	"fmt"
+	"math"
 	"math/big"
 	"os"
 	"runtime/debug"
@@ -166,22 +169,23 @@ func (ctx *Context) StartTransaction(tx *types.Transaction, baseFee *big.Int) {
 		r.Bytes(),
 		s.Bytes(),
 		tx.Gas(),
-		tx.GasPrice(),
+		gasPrice(tx),
 		tx.Nonce(),
 		tx.Data(),
-		// Berlin fork not active in this branch, replace by `AccessList(tx.AccessList())` when it's the case
-		nil,
+		AccessList(tx.AccessList()),
 		// London fork not active in this branch yet, so we pass `nil` for `maxFeePerGas`
 		nil,
 		// London fork not active in this branch yet, so we pass `nil` for `maxPriorityFeePerGas`
 		nil,
-		// Transaction's type not active in this branch yet, us `tx.Type()` instead here if available and remove this comment if it's the case
-		0,
+		tx.Type(),
 	)
 }
 
-// Berlin fork not active in this branch, replace by `type AccessList types.AccessList` when it's the case
-type AccessList []interface{}
+func gasPrice(tx *types.Transaction) *big.Int {
+	return tx.GasPrice()
+}
+
+type AccessList types.AccessList
 
 // marshal in a binary format that will be printed as hex in deep mind and read on the console reader
 // in a binary format.
@@ -190,8 +194,41 @@ type AccessList []interface{}
 // being serialized as 20 bytes for the address, varint for the storage keys length followed by
 // each storage key as 32 bytes.
 func (l AccessList) marshal() (out []byte) {
-	// Berlin fork not active in this branch, return 0 length for the list
-	return []byte{0x00}
+	if len(l) == 0 {
+		// Returns right away when there is not element in the access list
+		return []byte{0x00}
+	}
+
+	// There is no need for full precision of the 64 bits, so we restrict it to 32 bits max
+	if len(l) > math.MaxUint32 {
+		panic(fmt.Errorf("access list length is bigger than 32 bits, refusing to do it"))
+	}
+
+	// Compute max varuint (length of access list) + N * (contract address + max varuint (length of storage keys) + 32 * K)
+	maxByteCount := binary.MaxVarintLen32
+	for _, tuple := range l {
+		maxByteCount += 20 + binary.MaxVarintLen32 + len(tuple.StorageKeys)*32
+	}
+
+	out = make([]byte, maxByteCount)
+
+	offset := 0
+	offset += binary.PutUvarint(out[offset:], uint64(len(l)))
+
+	for _, tuple := range l {
+		// There is no need for full precision of the 64 bits, so we restrict it to 32 bits max
+		if len(tuple.StorageKeys) > math.MaxUint32 {
+			panic(fmt.Errorf("access list length is bigger than 32 bits, refusing to do it"))
+		}
+
+		offset += copy(out[offset:], tuple.Address[:])
+		offset += binary.PutUvarint(out[offset:], uint64(len(tuple.StorageKeys)))
+		for _, key := range tuple.StorageKeys {
+			offset += copy(out[offset:], key[:])
+		}
+	}
+
+	return out[0:offset]
 }
 
 func (ctx *Context) StartTransactionRaw(
