@@ -416,7 +416,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		// the genesis config computed matched Geth savec genesis block.
 		recomputedGenesisBlock := genesis.ToBlock(nil)
 		if bc.genesisBlock.Hash() != recomputedGenesisBlock.Hash() {
-			return nil, fmt.Errorf("invalid Firehose genesis block and actual chain's stored genesis block, the actual genesis block's hash field extracted from Geth's database does not fit with hash of genesis block generated from Firehose determined genesis config, you might need to provide the correct 'genesis.json' file via --firehose-deep-mind-genesis")
+			panic(fmt.Errorf("invalid Firehose genesis block and actual chain's stored genesis block, the actual genesis block's hash field extracted from Geth's database does not fit with hash of genesis block generated from Firehose determined genesis config, you might need to provide the correct 'genesis.json' file via --firehose-deep-mind-genesis"))
 		}
 
 		deepmind.MaybeSyncContext().RecordGenesisBlock(bc.genesisBlock, func(ctx *deepmind.Context) {
