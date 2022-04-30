@@ -18,6 +18,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -410,13 +411,29 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			panic(fmt.Errorf("The genesis config is not set, there is something weird as all code path should generate the correct genesis config"))
 		}
 
-		recomputeBlock := genesis.ToBlock(nil)
-		if bc.genesisBlock.Root() != recomputeBlock.Root() {
-			return nil, fmt.Errorf("invalid Firehose genesis and actual chain's genesis, the actual genesis block state root field extracted from Geth's database does not fit with state root field of genesis block generated from Firehose determined genesis, you might need to provide the correct 'genesis.json' file via --firehose-deep-mind-genesis")
+		// As far as I can tell, the block's hash comes from the keccak hash of the rlp encoding
+		// of the block's header which includes all fields. So we can check the hash to ensure
+		// the genesis config computed matched Geth savec genesis block.
+		recomputedGenesisBlock := genesis.ToBlock(nil)
+		if bc.genesisBlock.Hash() != recomputedGenesisBlock.Hash() {
+			return nil, fmt.Errorf("invalid Firehose genesis block and actual chain's stored genesis block, the actual genesis block's hash field extracted from Geth's database does not fit with hash of genesis block generated from Firehose determined genesis config, you might need to provide the correct 'genesis.json' file via --firehose-deep-mind-genesis")
 		}
 
 		deepmind.MaybeSyncContext().RecordGenesisBlock(bc.genesisBlock, func(ctx *deepmind.Context) {
-			for addr, account := range genesis.Alloc {
+			sortedAddrs := make([]common.Address, len(genesis.Alloc))
+			i := 0
+			for addr := range genesis.Alloc {
+				sortedAddrs[i] = addr
+				i++
+			}
+
+			sort.Slice(sortedAddrs, func(i, j int) bool {
+				return bytes.Compare(sortedAddrs[i][:], sortedAddrs[j][:]) <= -1
+			})
+
+			for _, addr := range sortedAddrs {
+				account := genesis.Alloc[addr]
+
 				ctx.RecordNewAccount(addr)
 
 				ctx.RecordBalanceChange(addr, common.Big0, account.Balance, deepmind.BalanceChangeReason("genesis_balance"))
