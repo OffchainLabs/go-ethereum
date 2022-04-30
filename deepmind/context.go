@@ -111,6 +111,27 @@ func (ctx *Context) DeepMindLog() []byte {
 
 // Block methods
 
+func (ctx *Context) RecordGenesisBlock(block *types.Block, recordGenesisAlloc func(ctx *Context)) {
+	if ctx == nil {
+		return
+	}
+
+	if ctx.inBlock.Load() == true {
+		panic("trying to record genesis block while in block context")
+	}
+
+	zero := common.Address{}
+	root := block.Root()
+
+	ctx.StartBlock(block)
+	ctx.StartTransactionRaw(common.Hash{}, &zero, &big.Int{}, nil, nil, nil, 0, &big.Int{}, 0, nil, nil, nil, nil, 0)
+	ctx.RecordTrxFrom(zero)
+	recordGenesisAlloc(ctx)
+	ctx.EndTransaction(&types.Receipt{PostState: root[:]})
+	ctx.FinalizeBlock(block)
+	ctx.EndBlock(block, block.Difficulty())
+}
+
 func (ctx *Context) StartBlock(block *types.Block) {
 	if !ctx.inBlock.CAS(false, true) {
 		panic("entering a block while already in a block scope")
@@ -586,7 +607,7 @@ func (ctx *Context) RecordNewAccount(addr common.Address) {
 	)
 }
 
-func (ctx *Context) RecordCodeChange(addr common.Address, inputHash, prevCode []byte, codeHash common.Hash, code []byte) {
+func (ctx *Context) RecordCodeChange(addr common.Address, oldCodeHash, oldCode []byte, newCodeHash common.Hash, newCode []byte) {
 	if ctx == nil {
 		return
 	}
@@ -594,10 +615,10 @@ func (ctx *Context) RecordCodeChange(addr common.Address, inputHash, prevCode []
 	ctx.printer.Print("CODE_CHANGE",
 		ctx.callIndex(),
 		Addr(addr),
-		Hex(inputHash),
-		Hex(prevCode),
-		Hash(codeHash),
-		Hex(code),
+		Hex(oldCodeHash),
+		Hex(oldCode),
+		Hash(newCodeHash),
+		Hex(newCode),
 		Uint64(ctx.totalOrderingCounter.Inc()),
 	)
 }

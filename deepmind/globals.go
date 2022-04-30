@@ -45,3 +45,13 @@ var CompactionDisabled = false
 //
 // A value of 0 means use the Geth default value.
 var ArchiveBlocksToKeep = uint64(0)
+
+// GenesisConfig keeps globally for the process the genesis config of the chain.
+// The genesis config extracted from the initialization code of Geth, otherwise
+// the operator will need to set the flag `--firehose-deep-mind-genesis` pointing
+// it to correct genesis.json file for the chain.
+//
+// **Note** We use `interface{}` here instead of `*core.Genesis` because we otherwise
+// have a compilation cycle because `core` package already uses `deepmind` package.
+// Consumer of this library make the cast back to the correct types when needed.
+var GenesisConfig interface{}
