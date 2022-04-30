@@ -257,18 +257,16 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 // ToBlock creates the genesis block and writes state of a genesis specification
 // to the given database (or discards it if nil).
 func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
-	dmContext := deepmind.MaybeSyncContext()
-
 	if db == nil {
 		db = rawdb.NewMemoryDatabase()
 	}
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
 	for addr, account := range g.Alloc {
-		statedb.AddBalance(addr, account.Balance, false, dmContext, deepmind.BalanceChangeReason("genesis_balance"))
-		statedb.SetCode(addr, account.Code, dmContext)
-		statedb.SetNonce(addr, account.Nonce, dmContext)
+		statedb.AddBalance(addr, account.Balance, false, deepmind.NoOpContext, deepmind.BalanceChangeReason("genesis_balance"))
+		statedb.SetCode(addr, account.Code, deepmind.NoOpContext)
+		statedb.SetNonce(addr, account.Nonce, deepmind.NoOpContext)
 		for key, value := range account.Storage {
-			statedb.SetState(addr, key, value, dmContext)
+			statedb.SetState(addr, key, value, deepmind.NoOpContext)
 		}
 	}
 	root := statedb.IntermediateRoot(false)
@@ -421,5 +419,6 @@ func decodePrealloc(data string) GenesisAlloc {
 	for _, account := range p {
 		ga[common.BigToAddress(account.Addr)] = GenesisAccount{Balance: account.Balance}
 	}
+
 	return ga
 }

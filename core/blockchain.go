@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -312,6 +313,46 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			}
 		}
 	}
+
+	if deepmind.Enabled && bc.CurrentBlock().NumberU64() == 0 {
+		if bc.genesisBlock == nil {
+			panic(fmt.Errorf("expected to have genesis block here"))
+		}
+
+		if deepmind.GenesisConfig == nil {
+			panic(fmt.Errorf("The genesis config is not set, there is something weird as all code path should generate the correct genesis config"))
+		}
+
+		genesis := deepmind.GenesisConfig.(*Genesis)
+		if genesis == nil {
+			panic(fmt.Errorf("The genesis config is not set, there is something weird as all code path should generate the correct genesis config"))
+		}
+
+		recomputeBlock := genesis.ToBlock(nil)
+		if bc.genesisBlock.Root() != recomputeBlock.Root() {
+			return nil, fmt.Errorf("invalid Firehose genesis and actual chain's genesis, the actual genesis block state root field extracted from Geth's database does not fit with state root field of genesis block generated from Firehose determined genesis, you might need to provide the correct 'genesis.json' file via --firehose-deep-mind-genesis")
+		}
+
+		deepmind.MaybeSyncContext().RecordGenesisBlock(bc.genesisBlock, func(ctx *deepmind.Context) {
+			for addr, account := range genesis.Alloc {
+				ctx.RecordNewAccount(addr)
+
+				ctx.RecordBalanceChange(addr, common.Big0, account.Balance, deepmind.BalanceChangeReason("genesis_balance"))
+				if len(account.Code) > 0 {
+					ctx.RecordCodeChange(addr, nil, nil, crypto.Keccak256Hash(account.Code), account.Code)
+				}
+
+				if account.Nonce > 0 {
+					ctx.RecordNonceChange(addr, 0, account.Nonce)
+				}
+
+				for key, value := range account.Storage {
+					ctx.RecordStorageChange(addr, key, common.Hash{}, value)
+				}
+			}
+		})
+	}
+
 	// Take ownership of this particular state
 	go bc.update()
 	return bc, nil

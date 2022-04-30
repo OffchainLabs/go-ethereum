@@ -236,14 +236,16 @@ func init() {
 	app.Flags = append(app.Flags, metricsFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
-		if err := debug.Setup(ctx, ""); err != nil {
+		if err := debug.Setup(ctx, "", utils.MakeGenesis(ctx)); err != nil {
 			return err
 		}
+
 		deepmind.MaybeSyncContext().InitVersion(
 			params.VersionWithCommit(gitCommit, gitDate),
 			params.DeepmindVersion(),
 			params.Variant,
 		)
+
 		return nil
 	}
 	app.After = func(ctx *cli.Context) error {
