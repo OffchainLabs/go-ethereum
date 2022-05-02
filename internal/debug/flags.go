@@ -17,6 +17,7 @@
 package debug
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,6 +25,7 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -118,6 +120,11 @@ var (
 		Usage: "Controls how many archive blocks the node should keep, this tweaks the core/blockchain.go constant value TriesInMemory, the default value of 0 can be used to use Geth default value instead which is 128",
 		Value: deepmind.ArchiveBlocksToKeep,
 	}
+	deepMindGenesisFileFlag = cli.StringFlag{
+		Name:  "firehose-deep-mind-genesis",
+		Usage: "On private chains where the genesis config is not known to Geth, you **must** provide the 'genesis.json' file path for proper instrumentation of genesis block",
+		Value: "",
+	}
 )
 
 // Flags holds all command-line flags required for debugging.
@@ -139,7 +146,7 @@ var Flags = []cli.Flag{
 // DeepMindFlags holds all dfuse Deep Mind related command-line flags.
 var DeepMindFlags = []cli.Flag{
 	deepMindFlag, deepMindSyncInstrumentationFlag, deepMindMiningEnabledFlag, deepMindBlockProgressFlag,
-	deepMindCompactionDisabledFlag, deepMindArchiveBlocksToKeepFlag,
+	deepMindCompactionDisabledFlag, deepMindArchiveBlocksToKeepFlag, deepMindGenesisFileFlag,
 }
 
 var glogger *log.GlogHandler
@@ -152,7 +159,7 @@ func init() {
 
 // Setup initializes profiling and logging based on the CLI flags.
 // It should be called as early as possible in the program.
-func Setup(ctx *cli.Context) error {
+func Setup(ctx *cli.Context, genesis *core.Genesis) error {
 	var ostream log.Handler
 	output := io.Writer(os.Stderr)
 	if ctx.GlobalBool(logjsonFlag.Name) {
@@ -225,6 +232,32 @@ func Setup(ctx *cli.Context) error {
 	deepmind.CompactionDisabled = ctx.GlobalBool(deepMindCompactionDisabledFlag.Name)
 	deepmind.ArchiveBlocksToKeep = ctx.GlobalUint64(deepMindArchiveBlocksToKeepFlag.Name)
 
+	genesisProvenance := "unset"
+
+	if genesis != nil {
+		deepmind.GenesisConfig = genesis
+		genesisProvenance = "Geth Specific Flag"
+	} else {
+		if genesisFilePath := ctx.GlobalString(deepMindGenesisFileFlag.Name); genesisFilePath != "" {
+			file, err := os.Open(genesisFilePath)
+			if err != nil {
+				return fmt.Errorf("firehose open genesis file: %w", err)
+			}
+			defer file.Close()
+
+			genesis := &core.Genesis{}
+			if err := json.NewDecoder(file).Decode(genesis); err != nil {
+				return fmt.Errorf("decode genesis file %q: %w", genesisFilePath, err)
+			}
+
+			deepmind.GenesisConfig = genesis
+			genesisProvenance = "Flag " + deepMindGenesisFileFlag.Name
+		} else {
+			deepmind.GenesisConfig = core.DefaultGenesisBlock()
+			genesisProvenance = "Geth Default"
+		}
+	}
+
 	log.Info("Deep mind initialized",
 		"enabled", deepmind.Enabled,
 		"sync_instrumentation_enabled", deepmind.SyncInstrumentationEnabled,
@@ -232,6 +265,7 @@ func Setup(ctx *cli.Context) error {
 		"block_progress_enabled", deepmind.BlockProgressEnabled,
 		"compaction_disabled", deepmind.CompactionDisabled,
 		"archive_blocks_to_keep", deepmind.ArchiveBlocksToKeep,
+		"genesis_provenance", genesisProvenance,
 	)
 
 	return nil

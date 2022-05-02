@@ -18,6 +18,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -36,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -90,7 +92,6 @@ const (
 	txLookupCacheLimit  = 1024
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
-	badBlockLimit       = 10
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -396,6 +397,61 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			recover = true
 		}
 		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover)
+	}
+
+	if deepmind.Enabled && bc.CurrentBlock().NumberU64() == 0 {
+		if bc.genesisBlock == nil {
+			panic(fmt.Errorf("expected to have genesis block here"))
+		}
+
+		if deepmind.GenesisConfig == nil {
+			panic(fmt.Errorf("The genesis config is not set, there is something weird as all code path should generate the correct genesis config"))
+		}
+
+		genesis := deepmind.GenesisConfig.(*Genesis)
+		if genesis == nil {
+			panic(fmt.Errorf("The genesis config is not set, there is something weird as all code path should generate the correct genesis config"))
+		}
+
+		// As far as I can tell, the block's hash comes from the keccak hash of the rlp encoding
+		// of the block's header which includes all fields. So we can check the hash to ensure
+		// the genesis config computed matched Geth savec genesis block.
+		recomputedGenesisBlock := genesis.ToBlock(nil)
+		if bc.genesisBlock.Hash() != recomputedGenesisBlock.Hash() {
+			panic(fmt.Errorf("invalid Firehose genesis block and actual chain's stored genesis block, the actual genesis block's hash field extracted from Geth's database does not fit with hash of genesis block generated from Firehose determined genesis config, you might need to provide the correct 'genesis.json' file via --firehose-deep-mind-genesis"))
+		}
+
+		deepmind.MaybeSyncContext().RecordGenesisBlock(bc.genesisBlock, func(ctx *deepmind.Context) {
+			sortedAddrs := make([]common.Address, len(genesis.Alloc))
+			i := 0
+			for addr := range genesis.Alloc {
+				sortedAddrs[i] = addr
+				i++
+			}
+
+			sort.Slice(sortedAddrs, func(i, j int) bool {
+				return bytes.Compare(sortedAddrs[i][:], sortedAddrs[j][:]) <= -1
+			})
+
+			for _, addr := range sortedAddrs {
+				account := genesis.Alloc[addr]
+
+				ctx.RecordNewAccount(addr)
+
+				ctx.RecordBalanceChange(addr, common.Big0, account.Balance, deepmind.BalanceChangeReason("genesis_balance"))
+				if len(account.Code) > 0 {
+					ctx.RecordCodeChange(addr, nil, nil, crypto.Keccak256Hash(account.Code), account.Code)
+				}
+
+				if account.Nonce > 0 {
+					ctx.RecordNonceChange(addr, 0, account.Nonce)
+				}
+
+				for key, value := range account.Storage {
+					ctx.RecordStorageChange(addr, key, common.Hash{}, value)
+				}
+			}
+		})
 	}
 
 	// Start future block processor.
@@ -1259,7 +1315,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				// diff sidechain. Suspend committing until this operation is completed.
 				header := bc.GetHeaderByNumber(chosen)
 				if header == nil {
-					log.Warn("Reorg in progress or TriesInMemory value has been increased, trie commit postponed", "number", chosen, "default_tries_in_memory", DefaultTriesInMemory, "tries_in_memory", TriesInMemory)
+					log.Warn("Reorg in progress, trie commit postponed", "number", chosen)
 				} else {
 					// If we're exceeding limits but haven't reached a large enough memory gap,
 					// warn the user that the system is becoming unstable.
