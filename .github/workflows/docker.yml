@@ -52,7 +52,7 @@ jobs:
           # 2 docker tags: `{geth|bsc|...}-latest` and `{git-tag}`
           tags: |
             type=ref,event=tag,priority=1000
-            type=match,pattern=^(.*)-v,group=1,suffix=-latest-fh1
+            type=match,pattern=^(.*)-v,group=1,suffix=-latest-fh2
           flavor: |
             latest=false
 
