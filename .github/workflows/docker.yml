@@ -23,7 +23,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.17.x
+          go-version: 1.18.x
 
       - uses: actions/cache@v2
         with:
@@ -52,7 +52,7 @@ jobs:
           # 2 docker tags: `{geth|bsc|...}-latest` and `{git-tag}`
           tags: |
             type=ref,event=tag,priority=1000
-            type=match,pattern=^(.*)-v,group=1,suffix=-latest
+            type=match,pattern=^(.*)-v,group=1,suffix=-latest-fh1
           flavor: |
             latest=false
 
@@ -60,7 +60,7 @@ jobs:
         uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
         with:
           context: ./build/bin
-          file: ./Dockerfile.dm
+          file: ./Dockerfile.fh
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           # org.opencontainers.image.version will match the tag name

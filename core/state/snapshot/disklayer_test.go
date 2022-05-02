@@ -524,7 +524,7 @@ func TestDiskSeek(t *testing.T) {
 		t.Fatal(err)
 	} else {
 		defer os.RemoveAll(dir)
-		diskdb, err := leveldb.New(dir, 256, 0, "", false)
+		diskdb, err := leveldb.New(dir, 256, 0, "", false, false)
 		if err != nil {
 			t.Fatal(err)
 		}

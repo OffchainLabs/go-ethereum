@@ -217,7 +217,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 			return nil, gas, nil
 		}
-
 		evm.StateDB.CreateAccount(addr, evm.dmContext)
 	}
 	evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value, evm.dmContext)
@@ -248,6 +247,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			if evm.dmContext.Enabled() {
 				evm.dmContext.RecordCallWithoutCode()
 			}
+
 			ret, err = nil, nil // gas is unchanged
 		} else {
 			addrCopy := addr
@@ -303,7 +303,6 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		evm.dmContext.StartCall("CALLCODE")
 		evm.dmContext.RecordCallParams("CALLCODE", caller.Address(), addr, value, gas, input)
 	}
-
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		if evm.dmContext.Enabled() {
@@ -398,7 +397,6 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		parent := caller.(*Contract)
 		evm.dmContext.RecordCallParams("DELEGATE", parent.CallerAddress, addr, parent.value, gas, input)
 	}
-
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		if evm.dmContext.Enabled() {
@@ -439,7 +437,6 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 			if evm.dmContext.Enabled() {
 				evm.dmContext.RecordGasConsume(gas, gas, deepmind.FailedExecutionGasChangeReason)
 			}
-
 			gas = 0
 		} else {
 			if evm.dmContext.Enabled() {
@@ -464,7 +461,6 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		evm.dmContext.StartCall("STATIC")
 		evm.dmContext.RecordCallParams("STATIC", caller.Address(), addr, deepmind.EmptyValue, gas, input)
 	}
-
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		if evm.dmContext.Enabled() {
@@ -473,7 +469,6 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 
 		return nil, gas, ErrDepth
 	}
-
 	// We take a snapshot here. This is a bit counter-intuitive, and could probably be skipped.
 	// However, even a staticcall is considered a 'touch'. On mainnet, static calls were introduced
 	// after all empty accounts were deleted, so this is not required. However, if we omit this,
@@ -509,7 +504,6 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(addrCopy), new(big.Int), gas, evm.dmContext)
 		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
-
 		// When an error was returned by the EVM or when setting the creation code
 		// above we revert to the snapshot and consume any gas remaining. Additionally
 		// when we're in Homestead this also counts for code storage gas errors.
@@ -580,6 +574,10 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	nonce := evm.StateDB.GetNonce(caller.Address())
 	if nonce+1 < nonce {
+		if evm.dmContext.Enabled() {
+			evm.dmContext.EndFailedCall(gas, true, ErrNonceUintOverflow.Error())
+		}
+
 		return nil, common.Address{}, gas, ErrNonceUintOverflow
 	}
 	evm.StateDB.SetNonce(caller.Address(), nonce+1, evm.dmContext)

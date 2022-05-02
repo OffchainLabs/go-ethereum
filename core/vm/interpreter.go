@@ -133,10 +133,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 	// Don't bother with the execution if there's no code.
 	if len(contract.Code) == 0 {
-		if in.evm.dmContext.Enabled() {
-			in.evm.dmContext.RecordCallWithoutCode()
-		}
-
 		return nil, nil
 	}
 
@@ -203,6 +199,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// Deepmind keeps contract gas at this point, used later just before executing the call to record the gas before event
 		dmBeforeCallGasEvent := contract.Gas
 
+		// Deep mind we ignore constant cost because below, we perform a single GAS_CHANGE for both constant + dynamic to aggregate the 2 gas change events
 		if !contract.UseGas(cost, deepmind.IgnoredGasChangeReason) {
 			return nil, ErrOutOfGas
 		}
@@ -229,6 +226,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			var dynamicCost uint64
 			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
 			cost += dynamicCost // for tracing
+
 			// Deep mind we ignore dynamic cost because later below, we perform a single GAS_CHANGE for both constant + dynamic to aggregate the 2 gas change events
 			if err != nil || !contract.UseGas(dynamicCost, deepmind.IgnoredGasChangeReason) {
 				return nil, ErrOutOfGas
