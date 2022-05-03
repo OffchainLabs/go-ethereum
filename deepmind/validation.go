@@ -11,7 +11,7 @@ import (
 )
 
 var errFirehoseUnknownType = errors.New("firehose unknown tx type")
-var sanitizeRegexp = regexp.MustCompile(`[\t\n(\s){2,}]+`)
+var sanitizeRegexp = regexp.MustCompile(`[\t( ){2,}]+`)
 
 func init() {
 	firehoseKnownTxTypes := map[byte]bool{types.LegacyTxType: true, types.AccessListTxType: true}
@@ -29,18 +29,22 @@ func init() {
 				transaction's receipt and check proper handling.
 
 				This panic means that a transaction that Firehose don't know about has most probably
-				be added and you must take great care to instrument it. One of the most important place
+				been added and you must take **great care** to instrument it. One of the most important place
 				to look is in 'deepmind.StartTransaction' where it should be properly handled. Think
 				carefully, read the EIP and ensure that any new "semantic" the transactions type's is
-				bringing is handled and instrumented.
+				bringing is handled and instrumented (it might affect Block and other execution units also).
 
-				For example, when London fork appeared, semantic of 'GasPrice' change and it required
-				a different computation for 'GasPrice' and 'DynamicFeeTx' transaction were added.
+				For example, when London fork appeared, semantic of 'GasPrice' changed and it required
+				a different computation for 'GasPrice' when 'DynamicFeeTx' transaction were added. If you determined
+				it was indeed a new transaction's type, fix 'firehoseKnownTxTypes' variable above to include it
+				as a known Firehose type (after proper instrumentation of course).
 
-				It's also possible the test itself here is now flaky, we do 'types.Receipt{Type: <type>}'
-				then encode it through RLP and then decode it. This should catch potential new transaction
-				types but could be now generate false positive.
-			`, " ")))
+				It's also possible the test itself is now flaky, we do 'receipt := types.Receipt{Type: <type>}'
+				then 'buffer := receipt.EncodeRLP(...)' and then 'receipt.DecodeRLP(buffer)'. This should catch
+				new transaction types but could be now generate false positive.
+
+				Received error: %w
+			`, " "), err))
 		}
 	}
 }
