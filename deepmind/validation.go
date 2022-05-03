@@ -14,7 +14,7 @@ var errFirehoseUnknownType = errors.New("firehose unknown tx type")
 var sanitizeRegexp = regexp.MustCompile(`[\t( ){2,}]+`)
 
 func init() {
-	firehoseKnownTxTypes := map[byte]bool{types.LegacyTxType: true, types.AccessListTxType: true}
+	firehoseKnownTxTypes := map[byte]bool{types.LegacyTxType: true, types.AccessListTxType: true, types.DynamicFeeTxType: true}
 
 	for txType := byte(0); txType < 255; txType++ {
 		err := validateFirehoseKnownTransactionType(txType, firehoseKnownTxTypes[txType])
