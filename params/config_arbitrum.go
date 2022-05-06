@@ -54,7 +54,7 @@ func ArbitrumTestnetParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     false,
 		DataAvailabilityCommittee: false,
-		InitialArbOSVersion:       4,
+		InitialArbOSVersion:       1,
 		InitialChainOwner:         common.Address{}, // TODO
 	}
 }
