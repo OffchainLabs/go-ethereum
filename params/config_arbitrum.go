@@ -64,7 +64,7 @@ func ArbitrumDevTestParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     true,
 		DataAvailabilityCommittee: false,
-		InitialArbOSVersion:       3,
+		InitialArbOSVersion:       4,
 		InitialChainOwner:         common.Address{},
 	}
 }
@@ -74,7 +74,7 @@ func ArbitrumDevTestDASParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     true,
 		DataAvailabilityCommittee: true,
-		InitialArbOSVersion:       3,
+		InitialArbOSVersion:       4,
 		InitialChainOwner:         common.Address{},
 	}
 }
