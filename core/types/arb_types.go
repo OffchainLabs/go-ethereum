@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -265,10 +268,35 @@ func (tx *ArbitrumSubmitRetryableTx) rawSignatureValues() (v, r, s *big.Int) {
 func (tx *ArbitrumSubmitRetryableTx) setSignatureValues(chainID, v, r, s *big.Int) {}
 func (tx *ArbitrumSubmitRetryableTx) isFake() bool                                 { return true }
 
-var ArbitrumSubmitRetryableTxDataHook func(*ArbitrumSubmitRetryableTx) []byte
-
 func (tx *ArbitrumSubmitRetryableTx) data() []byte {
-	return ArbitrumSubmitRetryableTxDataHook(tx)
+	var retryTo common.Address
+	if tx.RetryTo != nil {
+		retryTo = *tx.RetryTo
+	}
+	data := make([]byte, 0)
+	data = append(data, tx.RequestId.Bytes()...)
+	data = append(data, math.U256Bytes(tx.L1BaseFee)...)
+	data = append(data, math.U256Bytes(tx.DepositValue)...)
+	data = append(data, math.U256Bytes(tx.Value)...)
+	data = append(data, math.U256Bytes(tx.GasFeeCap)...)
+	data = append(data, math.U256Bytes(new(big.Int).SetUint64(tx.Gas))...)
+	data = append(data, math.U256Bytes(tx.MaxSubmissionFee)...)
+	data = append(data, make([]byte, 12)...)
+	data = append(data, tx.FeeRefundAddr.Bytes()...)
+	data = append(data, make([]byte, 12)...)
+	data = append(data, tx.Beneficiary.Bytes()...)
+	data = append(data, make([]byte, 12)...)
+	data = append(data, retryTo.Bytes()...)
+	offset := len(data) + 32
+	data = append(data, math.U256Bytes(big.NewInt(int64(offset)))...)
+	data = append(data, math.U256Bytes(big.NewInt(int64(len(tx.RetryData))))...)
+	data = append(data, tx.RetryData...)
+	extra := len(tx.RetryData) % 32
+	if extra > 0 {
+		data = append(data, make([]byte, 32-extra)...)
+	}
+	data = append(hexutil.MustDecode("0xc9f95d32"), data...)
+	return data
 }
 
 type ArbitrumDepositTx struct {
