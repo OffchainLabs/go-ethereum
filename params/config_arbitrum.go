@@ -79,6 +79,16 @@ func ArbitrumDevTestDASParams() ArbitrumChainParams {
 	}
 }
 
+func ArbitrumDevnetDASParams() ArbitrumChainParams {
+	return ArbitrumChainParams{
+		EnableArbOS:               true,
+		AllowDebugPrecompiles:     false,
+		DataAvailabilityCommittee: true,
+		InitialArbOSVersion:       3,
+		InitialChainOwner:         common.HexToAddress("0x186B56023d42B2B4E7616589a5C62EEf5FCa21DD"),
+	}
+}
+
 func DisableArbitrumParams() ArbitrumChainParams {
 	return ArbitrumChainParams{
 		EnableArbOS:               false,
@@ -189,9 +199,35 @@ func ArbitrumDevTestDASChainConfig() *ChainConfig {
 	}
 }
 
+func ArbitrumDevnetDASChainConfig() *ChainConfig {
+	return &ChainConfig{
+		ChainID:             big.NewInt(421702),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.Hash{},
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(0),
+		ArbitrumChainParams: ArbitrumDevnetDASParams(),
+		Clique: &CliqueConfig{
+			Period: 0,
+			Epoch:  0,
+		},
+	}
+}
+
 var ArbitrumSupportedChainConfigs = []*ChainConfig{
 	ArbitrumOneChainConfig(),
 	ArbitrumTestnetChainConfig(),
 	ArbitrumDevTestChainConfig(),
 	ArbitrumDevTestDASChainConfig(),
+	ArbitrumDevnetDASChainConfig(),
 }
