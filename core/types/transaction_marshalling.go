@@ -61,8 +61,8 @@ type txJSON struct {
 	Beneficiary      *common.Address `json:"beneficiary,omitempty"`      // SubmitRetryable
 	MaxSubmissionFee *hexutil.Big    `json:"maxSubmissionFee,omitempty"` // SubmitRetryable
 	BatchPosterAddr  *common.Address `json:"batchPosterAddr,omitempty"`  // BatchPosterReport
-	BatchNum         *hexutil.Big    `json:"batchNum,omitempty"`         // BatchPosterReport
 	BatchTimestamp   *hexutil.Big    `json:"batchTimestamp,omitempty"`   // BatchPosterReport
+	WeiSpent         *hexutil.Big    `json:"weiSpent,omitempty"`         // BatchPosterReport
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
@@ -194,9 +194,8 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 	case *ArbitrumBatchPostingReportTx:
 		enc.ChainID = (*hexutil.Big)(tx.ChainId)
 		enc.BatchPosterAddr = &tx.BatchPosterAddr
-		enc.BatchNum = (*hexutil.Big)(tx.BatchNum)
 		enc.BatchTimestamp = (*hexutil.Big)(tx.BatchTimestamp)
-		enc.L1BaseFee = (*hexutil.Big)(tx.L1BaseFee)
+		enc.WeiSpent = (*hexutil.Big)(tx.WeiSpent)
 	}
 	return json.Marshal(&enc)
 }
@@ -618,21 +617,17 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.BatchPosterAddr == nil {
 			return errors.New("missing required field 'batchPosterAddr' in transaction")
 		}
-		if dec.BatchNum == nil {
-			return errors.New("missing required field 'batchNum' in transaction")
-		}
 		if dec.BatchTimestamp == nil {
 			return errors.New("missing required field 'batchTimestamp' in transaction")
 		}
-		if dec.L1BaseFee == nil {
-			return errors.New("missing required field 'l1BaseFee' in transaction")
+		if dec.WeiSpent == nil {
+			return errors.New("missing required field 'weiSpent' in transaction")
 		}
 		inner = &ArbitrumBatchPostingReportTx{
 			ChainId:         (*big.Int)(dec.ChainID),
 			BatchPosterAddr: *dec.BatchPosterAddr,
-			BatchNum:        (*big.Int)(dec.BatchNum),
 			BatchTimestamp:  (*big.Int)(dec.BatchTimestamp),
-			L1BaseFee:       (*big.Int)(dec.L1BaseFee),
+			WeiSpent:        (*big.Int)(dec.WeiSpent),
 		}
 
 	default:

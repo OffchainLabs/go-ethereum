@@ -319,9 +319,8 @@ func (d *ArbitrumDepositTx) setSignatureValues(chainID, v, r, s *big.Int) {
 type ArbitrumBatchPostingReportTx struct {
 	ChainId         *big.Int
 	BatchPosterAddr common.Address
-	BatchNum        *big.Int
 	BatchTimestamp  *big.Int
-	L1BaseFee       *big.Int
+	WeiSpent        *big.Int
 }
 
 func (d *ArbitrumBatchPostingReportTx) txType() byte {
@@ -332,21 +331,17 @@ func (d *ArbitrumBatchPostingReportTx) copy() TxData {
 	tx := &ArbitrumBatchPostingReportTx{
 		ChainId:         new(big.Int),
 		BatchPosterAddr: d.BatchPosterAddr,
-		BatchNum:        new(big.Int),
 		BatchTimestamp:  new(big.Int),
-		L1BaseFee:       new(big.Int),
+		WeiSpent:        new(big.Int),
 	}
 	if d.ChainId != nil {
 		tx.ChainId.Set(d.ChainId)
 	}
-	if d.BatchNum != nil {
-		tx.BatchNum.Set(d.BatchNum)
-	}
 	if d.BatchTimestamp != nil {
 		tx.BatchTimestamp.Set(d.BatchTimestamp)
 	}
-	if d.L1BaseFee != nil {
-		tx.L1BaseFee.Set(d.L1BaseFee)
+	if d.WeiSpent != nil {
+		tx.WeiSpent.Set(d.WeiSpent)
 	}
 	return tx
 }
