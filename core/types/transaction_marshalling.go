@@ -54,12 +54,14 @@ type txJSON struct {
 	RequestId        *common.Hash    `json:"requestId,omitempty"`        // Contract SubmitRetryable Deposit
 	TicketId         *common.Hash    `json:"ticketId,omitempty"`         // Retry
 	RefundTo         *common.Address `json:"refundTo,omitempty"`         // SubmitRetryable Retry
-	L1BaseFee        *hexutil.Big    `json:"l1BaseFee,omitempty"`        // SubmitRetryable
+	L1BaseFee        *hexutil.Big    `json:"l1BaseFee,omitempty"`        // SubmitRetryable BatchPosterReport
 	DepositValue     *hexutil.Big    `json:"depositValue,omitempty"`     // SubmitRetryable
 	RetryTo          *common.Address `json:"retryTo,omitempty"`          // SubmitRetryable
 	RetryData        *hexutil.Bytes  `json:"retryData,omitempty"`        // SubmitRetryable
 	Beneficiary      *common.Address `json:"beneficiary,omitempty"`      // SubmitRetryable
 	MaxSubmissionFee *hexutil.Big    `json:"maxSubmissionFee,omitempty"` // SubmitRetryable
+	BatchPosterAddr  *common.Address `json:"batchPosterAddr,omitempty"`  // BatchPosterReport
+	BatchNum         *hexutil.Big    `json:"batchNum,omitempty"          // BatchPosterReport`
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
@@ -188,6 +190,11 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		data := tx.data()
 		enc.Data = (*hexutil.Bytes)(&data)
 		enc.To = t.To()
+	case *ArbitrumBatchPostingReportTx:
+		enc.ChainID = (*hexutil.Big)(tx.ChainId)
+		enc.BatchPosterAddr = &tx.BatchPosterAddr
+		enc.BatchNum = (*hexutil.Big)(tx.BatchNum)
+		enc.L1BaseFee = (*hexutil.Big)(tx.L1BaseFee)
 	}
 	return json.Marshal(&enc)
 }
@@ -600,6 +607,26 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			MaxSubmissionFee: (*big.Int)(dec.MaxSubmissionFee),
 			FeeRefundAddr:    *dec.RefundTo,
 			RetryData:        *dec.RetryData,
+		}
+
+	case ArbitrumBatchPostingReportTxType:
+		if dec.ChainID == nil {
+			return errors.New("missing required field 'chainId' in transaction")
+		}
+		if dec.BatchPosterAddr == nil {
+			return errors.New("missing required field 'batchPosterAddr' in transaction")
+		}
+		if dec.BatchNum == nil {
+			return errors.New("missing required field 'batchNum' in transaction")
+		}
+		if dec.L1BaseFee == nil {
+			return errors.New("missing required field 'l1BaseFee' in transaction")
+		}
+		inner = &ArbitrumBatchPostingReportTx{
+			ChainId:         (*big.Int)(dec.ChainID),
+			BatchPosterAddr: *dec.BatchPosterAddr,
+			BatchNum:        (*big.Int)(dec.BatchNum),
+			L1BaseFee:       (*big.Int)(dec.L1BaseFee),
 		}
 
 	default:

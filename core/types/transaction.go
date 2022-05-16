@@ -45,13 +45,14 @@ const (
 	LegacyTxType = iota
 	AccessListTxType
 	DynamicFeeTxType
-	ArbitrumDepositTxType         = 100
-	ArbitrumUnsignedTxType        = 101
-	ArbitrumContractTxType        = 102
-	ArbitrumRetryTxType           = 104
-	ArbitrumSubmitRetryableTxType = 105
-	ArbitrumInternalTxType        = 106
-	ArbitrumLegacyTxType          = 120
+	ArbitrumDepositTxType            = 100
+	ArbitrumUnsignedTxType           = 101
+	ArbitrumContractTxType           = 102
+	ArbitrumRetryTxType              = 104
+	ArbitrumSubmitRetryableTxType    = 105
+	ArbitrumInternalTxType           = 106
+	ArbitrumBatchPostingReportTxType = 107
+	ArbitrumLegacyTxType             = 120
 )
 
 // Transaction is an Ethereum transaction.
@@ -212,6 +213,10 @@ func (tx *Transaction) decodeTyped(b []byte, arbParsing bool) (TxData, error) {
 			return &inner, err
 		case ArbitrumSubmitRetryableTxType:
 			var inner ArbitrumSubmitRetryableTx
+			err := rlp.DecodeBytes(b[1:], &inner)
+			return &inner, err
+		case ArbitrumBatchPostingReportTxType:
+			var inner ArbitrumBatchPostingReportTx
 			err := rlp.DecodeBytes(b[1:], &inner)
 			return &inner, err
 		}

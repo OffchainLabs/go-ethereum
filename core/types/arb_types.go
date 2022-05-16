@@ -314,7 +314,55 @@ func (d *ArbitrumDepositTx) rawSignatureValues() (v, r, s *big.Int) {
 }
 
 func (d *ArbitrumDepositTx) setSignatureValues(chainID, v, r, s *big.Int) {
+}
 
+type ArbitrumBatchPostingReportTx struct {
+	ChainId         *big.Int
+	BatchPosterAddr common.Address
+	BatchNum        *big.Int
+	L1BaseFee       *big.Int
+}
+
+func (d *ArbitrumBatchPostingReportTx) txType() byte {
+	return ArbitrumBatchPostingReportTxType
+}
+
+func (d *ArbitrumBatchPostingReportTx) copy() TxData {
+	tx := &ArbitrumBatchPostingReportTx{
+		ChainId:         new(big.Int),
+		BatchPosterAddr: d.BatchPosterAddr,
+		BatchNum:        new(big.Int),
+		L1BaseFee:       new(big.Int),
+	}
+	if d.ChainId != nil {
+		tx.ChainId.Set(d.ChainId)
+	}
+	if d.BatchNum != nil {
+		tx.ChainId.Set(d.BatchNum)
+	}
+	if d.L1BaseFee != nil {
+		tx.L1BaseFee.Set(d.L1BaseFee)
+	}
+	return tx
+}
+
+func (d *ArbitrumBatchPostingReportTx) chainID() *big.Int      { return d.ChainId }
+func (d *ArbitrumBatchPostingReportTx) accessList() AccessList { return nil }
+func (d *ArbitrumBatchPostingReportTx) data() []byte           { return nil }
+func (d *ArbitrumBatchPostingReportTx) gas() uint64            { return 0 }
+func (d *ArbitrumBatchPostingReportTx) gasPrice() *big.Int     { return bigZero }
+func (d *ArbitrumBatchPostingReportTx) gasTipCap() *big.Int    { return bigZero }
+func (d *ArbitrumBatchPostingReportTx) gasFeeCap() *big.Int    { return bigZero }
+func (d *ArbitrumBatchPostingReportTx) value() *big.Int        { return bigZero }
+func (d *ArbitrumBatchPostingReportTx) nonce() uint64          { return 0 }
+func (d *ArbitrumBatchPostingReportTx) to() *common.Address    { return &d.BatchPosterAddr }
+func (d *ArbitrumBatchPostingReportTx) isFake() bool           { return true }
+
+func (d *ArbitrumBatchPostingReportTx) rawSignatureValues() (v, r, s *big.Int) {
+	return bigZero, bigZero, bigZero
+}
+
+func (d *ArbitrumBatchPostingReportTx) setSignatureValues(chainID, v, r, s *big.Int) {
 }
 
 type ArbitrumInternalTx struct {
