@@ -320,6 +320,7 @@ type ArbitrumBatchPostingReportTx struct {
 	ChainId         *big.Int
 	BatchPosterAddr common.Address
 	BatchNum        *big.Int
+	BatchTimestamp  *big.Int
 	L1BaseFee       *big.Int
 }
 
@@ -332,13 +333,17 @@ func (d *ArbitrumBatchPostingReportTx) copy() TxData {
 		ChainId:         new(big.Int),
 		BatchPosterAddr: d.BatchPosterAddr,
 		BatchNum:        new(big.Int),
+		BatchTimestamp:  new(big.Int),
 		L1BaseFee:       new(big.Int),
 	}
 	if d.ChainId != nil {
 		tx.ChainId.Set(d.ChainId)
 	}
 	if d.BatchNum != nil {
-		tx.ChainId.Set(d.BatchNum)
+		tx.BatchNum.Set(d.BatchNum)
+	}
+	if d.BatchTimestamp != nil {
+		tx.BatchTimestamp.Set(d.BatchTimestamp)
 	}
 	if d.L1BaseFee != nil {
 		tx.L1BaseFee.Set(d.L1BaseFee)
