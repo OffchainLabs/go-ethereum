@@ -312,9 +312,10 @@ func (d *ArbitrumDepositTx) txType() byte {
 
 func (d *ArbitrumDepositTx) copy() TxData {
 	tx := &ArbitrumDepositTx{
-		ChainId: new(big.Int),
-		To:      d.To,
-		Value:   new(big.Int),
+		ChainId:     new(big.Int),
+		L1RequestId: d.L1RequestId,
+		To:          d.To,
+		Value:       new(big.Int),
 	}
 	if d.ChainId != nil {
 		tx.ChainId.Set(d.ChainId)
