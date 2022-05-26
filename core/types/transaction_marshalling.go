@@ -358,41 +358,51 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		}
 
 	case ArbitrumLegacyTxType:
-		if dec.Gas == nil {
-			return errors.New("missing required field 'gas' in txdata")
-		}
-		if dec.GasPrice == nil {
-			return errors.New("missing required field 'gasPrice' in txdata")
-		}
-		if dec.Data == nil {
-			return errors.New("missing required field 'input' in transaction")
+		var itx LegacyTx
+		if dec.To != nil {
+			itx.To = dec.To
 		}
 		if dec.Nonce == nil {
 			return errors.New("missing required field 'nonce' in transaction")
 		}
+		itx.Nonce = uint64(*dec.Nonce)
+		if dec.GasPrice == nil {
+			return errors.New("missing required field 'gasPrice' in transaction")
+		}
+		itx.GasPrice = (*big.Int)(dec.GasPrice)
+		if dec.Gas == nil {
+			return errors.New("missing required field 'gas' in transaction")
+		}
+		itx.Gas = uint64(*dec.Gas)
 		if dec.Value == nil {
 			return errors.New("missing required field 'value' in transaction")
 		}
+		itx.Value = (*big.Int)(dec.Value)
+		if dec.Data == nil {
+			return errors.New("missing required field 'input' in transaction")
+		}
+		itx.Data = *dec.Data
 		if dec.V == nil {
 			return errors.New("missing required field 'v' in transaction")
 		}
+		itx.V = (*big.Int)(dec.V)
 		if dec.R == nil {
 			return errors.New("missing required field 'r' in transaction")
 		}
+		itx.R = (*big.Int)(dec.R)
 		if dec.S == nil {
 			return errors.New("missing required field 's' in transaction")
 		}
+		itx.S = (*big.Int)(dec.S)
+		withSignature := itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0
+		if withSignature {
+			if err := sanityCheckSignature(itx.V, itx.R, itx.S, true); err != nil {
+				return err
+			}
+		}
 		inner = &ArbitrumLegacyTxData{
-			Gas:      uint64(*dec.Gas),
-			GasPrice: (*big.Int)(dec.GasPrice),
-			Hash:     dec.Hash,
-			Data:     *dec.Data,
-			Nonce:    uint64(*dec.Nonce),
-			To:       dec.To,
-			Value:    (*big.Int)(dec.Value),
-			V:        (*big.Int)(dec.V),
-			R:        (*big.Int)(dec.R),
-			S:        (*big.Int)(dec.S),
+			LegacyTx:     itx,
+			HashOverride: dec.Hash,
 		}
 
 	case ArbitrumInternalTxType:
