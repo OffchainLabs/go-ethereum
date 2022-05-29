@@ -1382,8 +1382,6 @@ type RPCTransaction struct {
 
 	// Arbitrum fields:
 	SubType          *hexutil.Uint64 `json:"subType,omitempty"`          // Internal
-	L2BlockNumber    *hexutil.Uint64 `json:"l2BlockNumber,omitempty"`    // Internal
-	TxIndex          *hexutil.Uint64 `json:"txIndex,omitempty"`          // Internal
 	RequestId        *common.Hash    `json:"requestId,omitempty"`        // Contract SubmitRetryable Deposit
 	TicketId         *common.Hash    `json:"ticketId,omitempty"`         // Retry
 	RefundTo         *common.Address `json:"refundTo,omitempty"`         // SubmitRetryable Retry
@@ -1446,8 +1444,6 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	case *types.ArbitrumInternalTx:
 		subType := uint64(inner.SubType)
 		result.SubType = (*hexutil.Uint64)(&subType)
-		result.L2BlockNumber = (*hexutil.Uint64)(&inner.L2BlockNumber)
-		result.TxIndex = (*hexutil.Uint64)(&inner.TxIndex)
 		result.ChainID = (*hexutil.Big)(inner.ChainId)
 	case *types.ArbitrumDepositTx:
 		result.RequestId = &inner.L1RequestId

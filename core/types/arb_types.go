@@ -347,11 +347,9 @@ func (d *ArbitrumDepositTx) setSignatureValues(chainID, v, r, s *big.Int) {
 }
 
 type ArbitrumInternalTx struct {
-	ChainId       *big.Int
-	SubType       uint8
-	Data          []byte
-	L2BlockNumber uint64
-	TxIndex       uint64
+	ChainId *big.Int
+	SubType uint8
+	Data    []byte
 }
 
 func (t *ArbitrumInternalTx) txType() byte {
@@ -363,8 +361,6 @@ func (t *ArbitrumInternalTx) copy() TxData {
 		new(big.Int).Set(t.ChainId),
 		t.SubType,
 		common.CopyBytes(t.Data),
-		t.L2BlockNumber,
-		t.TxIndex,
 	}
 }
 
