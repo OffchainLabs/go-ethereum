@@ -605,7 +605,7 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	if isForkIncompatible(c.MergeForkBlock, newcfg.MergeForkBlock, head) {
 		return newCompatError("Merge Start fork block", c.MergeForkBlock, newcfg.MergeForkBlock)
 	}
-	return nil
+	return c.checkArbitrumCompatible(newcfg, head)
 }
 
 // isForkIncompatible returns true if a fork scheduled at s1 cannot be rescheduled to
