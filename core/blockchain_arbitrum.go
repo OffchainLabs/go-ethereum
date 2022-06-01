@@ -17,7 +17,10 @@
 // Package core implements the Ethereum consensus protocol.
 package core
 
-import "github.com/ethereum/go-ethereum/core/types"
+import (
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rpc"
+)
 
 func (bc *BlockChain) ReorgToOldBlock(newHead *types.Block) error {
 	bc.wg.Add(1)
@@ -35,4 +38,23 @@ func (bc *BlockChain) ReorgToOldBlock(newHead *types.Block) error {
 	}
 	bc.chainHeadFeed.Send(ChainHeadEvent{Block: newHead})
 	return nil
+}
+
+type GetsCurrentBlock interface {
+	CurrentBlock() *types.Block
+}
+
+func (bc *BlockChain) ClipToPostNitroGenesis(getter GetsCurrentBlock, blockNum rpc.BlockNumber) (rpc.BlockNumber, rpc.BlockNumber) {
+	currentBlock := rpc.BlockNumber(getter.CurrentBlock().NumberU64())
+	nitroGenesis := rpc.BlockNumber(bc.Config().ArbitrumChainParams.GenesisBlockNum)
+	if blockNum == rpc.LatestBlockNumber || blockNum == rpc.PendingBlockNumber {
+		blockNum = currentBlock
+	}
+	if blockNum > currentBlock {
+		blockNum = currentBlock
+	}
+	if blockNum < nitroGenesis {
+		blockNum = nitroGenesis
+	}
+	return blockNum, currentBlock
 }
