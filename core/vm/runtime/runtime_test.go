@@ -753,7 +753,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 				byte(vm.CREATE),
 				byte(vm.POP),
 			},
-			results: []string{`"1,1,4294935775,6,12"`, `"1,1,4294935775,6,0"`},
+			results: []string{`"1,1,952855,6,12"`, `"1,1,952855,6,0"`},
 		},
 		{
 			// CREATE2
@@ -769,7 +769,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 				byte(vm.CREATE2),
 				byte(vm.POP),
 			},
-			results: []string{`"1,1,4294935766,6,13"`, `"1,1,4294935766,6,0"`},
+			results: []string{`"1,1,952846,6,13"`, `"1,1,952846,6,0"`},
 		},
 		{
 			// CALL
@@ -782,7 +782,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 				byte(vm.CALL),
 				byte(vm.POP),
 			},
-			results: []string{`"1,1,4294964716,6,13"`, `"1,1,4294964716,6,0"`},
+			results: []string{`"1,1,981796,6,13"`, `"1,1,981796,6,0"`},
 		},
 		{
 			// CALLCODE
@@ -795,7 +795,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 				byte(vm.CALLCODE),
 				byte(vm.POP),
 			},
-			results: []string{`"1,1,4294964716,6,13"`, `"1,1,4294964716,6,0"`},
+			results: []string{`"1,1,981796,6,13"`, `"1,1,981796,6,0"`},
 		},
 		{
 			// STATICCALL
@@ -807,7 +807,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 				byte(vm.STATICCALL),
 				byte(vm.POP),
 			},
-			results: []string{`"1,1,4294964719,6,12"`, `"1,1,4294964719,6,0"`},
+			results: []string{`"1,1,981799,6,12"`, `"1,1,981799,6,0"`},
 		},
 		{
 			// DELEGATECALL
@@ -819,7 +819,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 				byte(vm.DELEGATECALL),
 				byte(vm.POP),
 			},
-			results: []string{`"1,1,4294964719,6,12"`, `"1,1,4294964719,6,0"`},
+			results: []string{`"1,1,981799,6,12"`, `"1,1,981799,6,0"`},
 		},
 		{
 			// CALL self-destructing contract
@@ -860,7 +860,8 @@ func TestRuntimeJSTracer(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, _, err = Call(main, nil, &Config{
-				State: statedb,
+				GasLimit: 1000000,
+				State:    statedb,
 				EVMConfig: vm.Config{
 					Debug:  true,
 					Tracer: tracer,
