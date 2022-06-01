@@ -147,6 +147,7 @@ type ArbitrumRetryTx struct {
 	Data      []byte          // contract invocation input data
 	TicketId  common.Hash
 	RefundTo  common.Address
+	MaxRefund *big.Int // the maximum refund sent to RefundTo (the rest goes to From)
 }
 
 func (tx *ArbitrumRetryTx) txType() byte { return ArbitrumRetryTxType }
@@ -163,6 +164,7 @@ func (tx *ArbitrumRetryTx) copy() TxData {
 		Data:      common.CopyBytes(tx.Data),
 		TicketId:  tx.TicketId,
 		RefundTo:  tx.RefundTo,
+		MaxRefund: new(big.Int),
 	}
 	if tx.ChainId != nil {
 		cpy.ChainId.Set(tx.ChainId)
@@ -176,6 +178,9 @@ func (tx *ArbitrumRetryTx) copy() TxData {
 	}
 	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
+	}
+	if tx.MaxRefund != nil {
+		cpy.MaxRefund.Set(tx.MaxRefund)
 	}
 	return cpy
 }
