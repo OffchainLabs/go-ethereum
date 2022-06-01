@@ -97,7 +97,7 @@ func (a *APIBackend) FeeHistory(
 	}
 
 	nitroGenesis := rpc.BlockNumber(a.ChainConfig().ArbitrumChainParams.GenesisBlockNum)
-	newestBlock, latestBlock := a.blockChain().ClipToPostNitroGenesis(a, newestBlock)
+	newestBlock, latestBlock := a.blockChain().ClipToPostNitroGenesis(newestBlock)
 
 	maxFeeHistory := int(a.b.config.FeeHistoryMaxBlockCount)
 	if blocks > maxFeeHistory {
