@@ -40,10 +40,6 @@ func (bc *BlockChain) ReorgToOldBlock(newHead *types.Block) error {
 	return nil
 }
 
-type GetsCurrentBlock interface {
-	CurrentBlock() *types.Block
-}
-
 func (bc *BlockChain) ClipToPostNitroGenesis(blockNum rpc.BlockNumber) (rpc.BlockNumber, rpc.BlockNumber) {
 	currentBlock := rpc.BlockNumber(bc.CurrentBlock().NumberU64())
 	nitroGenesis := rpc.BlockNumber(bc.Config().ArbitrumChainParams.GenesisBlockNum)
