@@ -10,17 +10,21 @@ import (
 
 type ArbitrumLegacyTxData struct {
 	LegacyTx
-	HashOverride common.Hash // Hash cannot be locally computed from other fields
+	HashOverride      common.Hash // Hash cannot be locally computed from other fields
+	EffectiveGasPrice uint64
+	L1BlockNumber     uint64
 }
 
-func NewArbitrumLegacyTx(origTx *Transaction, hashOverride common.Hash) (*Transaction, error) {
+func NewArbitrumLegacyTx(origTx *Transaction, hashOverride common.Hash, effectiveGas uint64, l1Block uint64) (*Transaction, error) {
 	if origTx.Type() != LegacyTxType {
 		return nil, errors.New("attempt to arbitrum-wrap non-legacy transaction")
 	}
-	legacyCopy := origTx.GetInner().(*LegacyTx)
+	legacyPtr := origTx.GetInner().(*LegacyTx)
 	inner := ArbitrumLegacyTxData{
-		LegacyTx:     *legacyCopy,
-		HashOverride: hashOverride,
+		LegacyTx:          *legacyPtr,
+		HashOverride:      hashOverride,
+		EffectiveGasPrice: effectiveGas,
+		L1BlockNumber:     l1Block,
 	}
 	return NewTx(&inner), nil
 }
@@ -28,8 +32,10 @@ func NewArbitrumLegacyTx(origTx *Transaction, hashOverride common.Hash) (*Transa
 func (tx *ArbitrumLegacyTxData) copy() TxData {
 	legacyCopy := tx.LegacyTx.copy().(*LegacyTx)
 	return &ArbitrumLegacyTxData{
-		LegacyTx:     *legacyCopy,
-		HashOverride: tx.HashOverride,
+		LegacyTx:          *legacyCopy,
+		HashOverride:      tx.HashOverride,
+		EffectiveGasPrice: tx.EffectiveGasPrice,
+		L1BlockNumber:     tx.L1BlockNumber,
 	}
 }
 
