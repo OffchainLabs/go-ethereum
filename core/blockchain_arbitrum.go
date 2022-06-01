@@ -44,8 +44,8 @@ type GetsCurrentBlock interface {
 	CurrentBlock() *types.Block
 }
 
-func (bc *BlockChain) ClipToPostNitroGenesis(getter GetsCurrentBlock, blockNum rpc.BlockNumber) (rpc.BlockNumber, rpc.BlockNumber) {
-	currentBlock := rpc.BlockNumber(getter.CurrentBlock().NumberU64())
+func (bc *BlockChain) ClipToPostNitroGenesis(blockNum rpc.BlockNumber) (rpc.BlockNumber, rpc.BlockNumber) {
+	currentBlock := rpc.BlockNumber(bc.CurrentBlock().NumberU64())
 	nitroGenesis := rpc.BlockNumber(bc.Config().ArbitrumChainParams.GenesisBlockNum)
 	if blockNum == rpc.LatestBlockNumber || blockNum == rpc.PendingBlockNumber {
 		blockNum = currentBlock
