@@ -23,7 +23,22 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-func (*jsTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool) {
+func (jst *jsTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool) {
+
+	obj := jst.vm.PushObject()
+	if from != nil {
+		jst.addToObj(obj, "from", from.Hex())
+	}
+	if to != nil {
+		jst.addToObj(obj, "to", to.Hex())
+	}
+	jst.addToObj(obj, "amount", amount)
+	jst.addToObj(obj, "before", before)
+	jst.vm.PutPropString(jst.stateObject, "transfer")
+
+	if _, err := jst.call(true, "captureArbitrumTransfer", "transfer"); err != nil {
+		jst.err = wrapError("captureArbitrumTransfer", err)
+	}
 }
 
 func (*jsTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)        {}

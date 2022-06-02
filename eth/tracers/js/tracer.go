@@ -868,6 +868,8 @@ func (jst *jsTracer) addToObj(obj int, key string, val interface{}) {
 
 func pushValue(ctx *duktape.Context, val interface{}) {
 	switch val := val.(type) {
+	case bool:
+		ctx.PushBoolean(val)
 	case uint64:
 		ctx.PushUint(uint(val))
 	case string:
