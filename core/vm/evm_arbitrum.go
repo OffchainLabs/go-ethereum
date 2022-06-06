@@ -31,7 +31,7 @@ func (evm *EVM) IncrementDepth() {
 }
 
 func (evm *EVM) DecrementDepth() {
-	evm.depth += 1
+	evm.depth -= 1
 }
 
 type TxProcessingHook interface {
