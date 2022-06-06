@@ -61,6 +61,7 @@ type Transaction struct {
 
 	// Arbitrum cache
 	PosterCost           *big.Int
+	CalldataUnits        uint64
 	PosterIsReimbursable bool
 
 	// caches
