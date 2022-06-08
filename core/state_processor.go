@@ -72,6 +72,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 	if dmContext.Enabled() {
 		dmContext.StartBlock(block)
+		finalizedBlock := p.bc.CurrentFinalizedBlock()
 	}
 
 	// Mutate the block and state according to any hard-fork specs
@@ -134,7 +135,11 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if dmContext.Enabled() {
 		// Calculate the total difficulty of the block
 		ptd := p.bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-		td := new(big.Int).Add(block.Difficulty(), ptd)
+
+		var td *big.Int
+		if ptd == nil {
+			td = new(big.Int).Add(block.Difficulty(), ptd)
+		}
 
 		if deepmind.DebugTheMerge {
 			finalizedBlock := p.bc.CurrentFinalizedBlock()

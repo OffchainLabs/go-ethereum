@@ -205,6 +205,10 @@ func peerToSyncOp(mode downloader.SyncMode, p *eth.Peer) *chainSyncOp {
 }
 
 func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
+	if deepmind.Enabled {
+
+	}
+
 	// If we're in snap sync mode, return that directly
 	if atomic.LoadUint32(&cs.handler.snapSync) == 1 {
 		block := cs.handler.chain.CurrentFastBlock()
