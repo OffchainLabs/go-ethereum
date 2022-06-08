@@ -132,8 +132,12 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), dmContext)
 
 	if dmContext.Enabled() {
-		finalizedBlock := p.bc.CurrentFinalizedBlock()
-		log.Info("Finalized block at firehose end block", "hash", finalizedBlock.Hash(), "number", finalizedBlock.Header().Number)
+		if deepmind.DebugTheMerge {
+			finalizedBlock := p.bc.CurrentFinalizedBlock()
+			if finalizedBlock != nil {
+				log.Info("Finalized block at firehose end block", "hash", finalizedBlock.Hash(), "number", finalizedBlock.Header().Number)
+			}
+		}
 
 		dmContext.EndBlock(block)
 	}
