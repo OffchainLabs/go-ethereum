@@ -174,6 +174,9 @@ func gasPrice(tx *types.Transaction, baseFee *big.Int) *big.Int {
 		return tx.GasPrice()
 	case types.LegacyTxType:
 		return tx.GasPrice()
+	case types.DynamicFeeTxType:
+		// Even though London is active in there, we continue to have the "bug" where the gas price is not good
+		return tx.GasPrice()
 	default:
 		panic(fmt.Errorf("unhandled transaction type's %d, carefully review the patch, if this new transaction type add new fields, think about adding them to Firehose Block format, when you see this message, it means something changed in the chain model and great care and thinking most be put here to properly understand the changes and the consequences they bring for the instrumentation", tx.Type()))
 	}
