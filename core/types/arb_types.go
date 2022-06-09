@@ -350,7 +350,6 @@ type ArbitrumInternalTx struct {
 	ChainId       *big.Int
 	L2BlockNumber *big.Int
 	TxIndex       uint64
-	SubType       uint8
 	Data          []byte
 }
 
@@ -363,7 +362,6 @@ func (t *ArbitrumInternalTx) copy() TxData {
 		new(big.Int).Set(t.ChainId),
 		new(big.Int).Set(t.L2BlockNumber),
 		t.TxIndex,
-		t.SubType,
 		common.CopyBytes(t.Data),
 	}
 }

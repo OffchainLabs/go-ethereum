@@ -131,8 +131,6 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
 	case *ArbitrumInternalTx:
-		subType := uint64(tx.SubType)
-		enc.SubType = (*hexutil.Uint64)(&subType)
 		enc.ChainID = (*hexutil.Big)(tx.ChainId)
 		enc.L2BlockNumber = (*hexutil.Big)(tx.L2BlockNumber)
 		enc.TxIndex = (*hexutil.Uint64)(&tx.TxIndex)
@@ -413,7 +411,6 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		}
 		inner = &ArbitrumInternalTx{
 			ChainId:       (*big.Int)(dec.ChainID),
-			SubType:       uint8(*dec.SubType),
 			L2BlockNumber: (*big.Int)(dec.L2BlockNumber),
 			TxIndex:       uint64(*dec.TxIndex),
 			Data:          *dec.Data,
