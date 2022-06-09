@@ -36,7 +36,7 @@ func (evm *EVM) DecrementDepth() {
 
 type TxProcessingHook interface {
 	StartTxHook() (bool, uint64, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
-	GasChargingHook(gasRemaining *uint64) (*common.Address, error)
+	GasChargingHook(gasRemaining *uint64) error
 	PushCaller(addr common.Address)
 	PopCaller()
 	ForceRefundGas() uint64
@@ -46,7 +46,6 @@ type TxProcessingHook interface {
 	L1BlockNumber(blockCtx BlockContext) (uint64, error)
 	L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error)
 	FillReceiptInfo(receipt *types.Receipt)
-	DropTip() bool
 }
 
 type DefaultTxProcessor struct{}
@@ -55,8 +54,8 @@ func (p DefaultTxProcessor) StartTxHook() (bool, uint64, error, []byte) {
 	return false, 0, nil, nil
 }
 
-func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) (*common.Address, error) {
-	return nil, nil
+func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) error {
+	return nil
 }
 
 func (p DefaultTxProcessor) PushCaller(addr common.Address) {}
@@ -87,7 +86,3 @@ func (p DefaultTxProcessor) L1BlockHash(blockCtx BlockContext, l1BlocKNumber uin
 }
 
 func (p DefaultTxProcessor) FillReceiptInfo(*types.Receipt) {}
-
-func (p DefaultTxProcessor) DropTip() bool {
-	return false
-}
