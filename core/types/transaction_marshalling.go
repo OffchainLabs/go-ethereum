@@ -47,7 +47,6 @@ type txJSON struct {
 	AccessList *AccessList  `json:"accessList,omitempty"`
 
 	// Arbitrum fields:
-	SubType          *hexutil.Uint64 `json:"subType,omitempty"`          // Internal
 	L2BlockNumber    *hexutil.Big    `json:"l2BlockNumber,omitempty"`    // Internal
 	TxIndex          *hexutil.Uint64 `json:"txIndex,omitempty"`          // Internal
 	From             *common.Address `json:"from,omitempty"`             // Contract SubmitRetryable Unsigned Retry
@@ -396,9 +395,6 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 	case ArbitrumInternalTxType:
 		if dec.ChainID == nil {
 			return errors.New("missing required field 'chainId' in transaction")
-		}
-		if dec.SubType == nil {
-			return errors.New("missing required field 'subType' in transaction")
 		}
 		if dec.L2BlockNumber == nil {
 			return errors.New("missing required field `l2BlockNumber` in transaction")
