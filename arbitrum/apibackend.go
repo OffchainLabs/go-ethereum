@@ -92,7 +92,7 @@ func (a *APIBackend) FeeHistory(
 	rewardPercentiles []float64,
 ) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
 
-	if core.GetArbOSComputeRate == nil {
+	if core.GetArbOSSpeedLimitPerSecond == nil {
 		return nil, nil, nil, nil, errors.New("ArbOS not installed")
 	}
 
@@ -128,34 +128,32 @@ func (a *APIBackend) FeeHistory(
 		rewards = nil
 	}
 
-	gasUsed := make([]float64, blocks)
-	basefees := make([]*big.Int, blocks+1) // the RPC semantics are to predict the future value
-
 	// use the most recent average compute rate for all blocks
 	// note: while we could query this value for each block, it'd be prohibitively expensive
 	state, _, err := a.StateAndHeaderByNumber(ctx, rpc.BlockNumber(newestBlock))
 	if err != nil {
 		return common.Big0, nil, nil, nil, err
 	}
-	computeRate, err := core.GetArbOSComputeRate(state)
+	speedLimit, err := core.GetArbOSSpeedLimitPerSecond(state)
 	if err != nil {
 		return common.Big0, nil, nil, nil, err
 	}
 
-	// In vanilla geth, this RPC returns the gasUsed ratio so a client can infer how the basefee will change
-	// To emulate this, we translate the compute rate into something like that, centered at an analogous 0.5
-	fullnessAnalogue := computeRate / 2
-	if fullnessAnalogue > 1.0 {
-		fullnessAnalogue = 1.0
-	}
-	for i := range gasUsed {
-		gasUsed[i] = fullnessAnalogue
-	}
+	gasUsed := make([]float64, blocks)
+	basefees := make([]*big.Int, blocks+1) // the RPC semantics are to predict the future value
 
 	// collect the basefees
 	baseFeeLookup := newestBlock + 1
 	if newestBlock == latestBlock {
 		baseFeeLookup = newestBlock
+	}
+	var prevTimestamp uint64
+	if rpc.BlockNumber(oldestBlock) > nitroGenesis {
+		header, err := a.HeaderByNumber(ctx, rpc.BlockNumber(oldestBlock-1))
+		if err != nil {
+			return common.Big0, nil, nil, nil, err
+		}
+		prevTimestamp = header.Time
 	}
 	for block := oldestBlock; block <= int(baseFeeLookup); block++ {
 		header, err := a.HeaderByNumber(ctx, rpc.BlockNumber(block))
@@ -163,6 +161,26 @@ func (a *APIBackend) FeeHistory(
 			return common.Big0, nil, nil, nil, err
 		}
 		basefees[block-oldestBlock] = header.BaseFee
+
+		var blockGasUsed uint64
+		receipts := a.blockChain().GetReceiptsByHash(header.ReceiptHash)
+		for _, receipt := range receipts {
+			if receipt.GasUsed > receipt.GasUsedForL1 {
+				blockGasUsed += receipt.GasUsed - receipt.GasUsedForL1
+			}
+		}
+
+		timeSinceLastBlock := header.Time - prevTimestamp
+		prevTimestamp = header.Time
+
+		// In vanilla geth, this RPC returns the gasUsed ratio so a client can infer how the basefee will change
+		// To emulate this, we translate the compute rate into something like that, centered at an analogous 0.5
+		fullnessAnalogue := float64(blockGasUsed) / float64(speedLimit) / float64(timeSinceLastBlock) / 2.0
+		if fullnessAnalogue > 1.0 {
+			fullnessAnalogue = 1.0
+		}
+		gasUsed[block-oldestBlock] = fullnessAnalogue
+
 	}
 	if newestBlock == latestBlock {
 		basefees[blocks] = basefees[blocks-1] // guess the basefee won't change
