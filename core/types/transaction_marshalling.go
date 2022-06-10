@@ -47,8 +47,6 @@ type txJSON struct {
 	AccessList *AccessList  `json:"accessList,omitempty"`
 
 	// Arbitrum fields:
-	L2BlockNumber    *hexutil.Big    `json:"l2BlockNumber,omitempty"`    // Internal
-	TxIndex          *hexutil.Uint64 `json:"txIndex,omitempty"`          // Internal
 	From             *common.Address `json:"from,omitempty"`             // Contract SubmitRetryable Unsigned Retry
 	RequestId        *common.Hash    `json:"requestId,omitempty"`        // Contract SubmitRetryable Deposit
 	TicketId         *common.Hash    `json:"ticketId,omitempty"`         // Retry
@@ -131,8 +129,6 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.S = (*hexutil.Big)(tx.S)
 	case *ArbitrumInternalTx:
 		enc.ChainID = (*hexutil.Big)(tx.ChainId)
-		enc.L2BlockNumber = (*hexutil.Big)(tx.L2BlockNumber)
-		enc.TxIndex = (*hexutil.Uint64)(&tx.TxIndex)
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
 	case *ArbitrumDepositTx:
 		enc.RequestId = &tx.L1RequestId
@@ -396,20 +392,12 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.ChainID == nil {
 			return errors.New("missing required field 'chainId' in transaction")
 		}
-		if dec.L2BlockNumber == nil {
-			return errors.New("missing required field `l2BlockNumber` in transaction")
-		}
-		if dec.TxIndex == nil {
-			return errors.New("missing required field `txIndex` in transaction")
-		}
 		if dec.Data == nil {
 			return errors.New("missing required field 'input' in transaction")
 		}
 		inner = &ArbitrumInternalTx{
-			ChainId:       (*big.Int)(dec.ChainID),
-			L2BlockNumber: (*big.Int)(dec.L2BlockNumber),
-			TxIndex:       uint64(*dec.TxIndex),
-			Data:          *dec.Data,
+			ChainId: (*big.Int)(dec.ChainID),
+			Data:    *dec.Data,
 		}
 
 	case ArbitrumDepositTxType:
