@@ -472,6 +472,9 @@ func (c *ChainConfig) IsBerlin(num *big.Int) bool {
 
 // IsLondon returns whether num is either equal to the London fork block or greater.
 func (c *ChainConfig) IsLondon(num *big.Int) bool {
+	if c.IsArbitrum() {
+		return isForked(new(big.Int).SetUint64(c.ArbitrumChainParams.GenesisBlockNum), num)
+	}
 	return isForked(c.LondonBlock, num)
 }
 
