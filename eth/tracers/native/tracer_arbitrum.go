@@ -24,10 +24,10 @@ import (
 )
 
 type arbitrumTransfer struct {
-	Purpose string `json:"purpose"`
-	From    string `json:"from,omitempty"`
-	To      string `json:"to,omitempty"`
-	Value   string `json:"value"`
+	Purpose string  `json:"purpose"`
+	From    *string `json:"from"`
+	To      *string `json:"to"`
+	Value   string  `json:"value"`
 }
 
 func (t *callTracer) CaptureArbitrumTransfer(
@@ -38,10 +38,12 @@ func (t *callTracer) CaptureArbitrumTransfer(
 		Value:   bigToHex(value),
 	}
 	if from != nil {
-		transfer.From = from.String()
+		from := from.String()
+		transfer.From = &from
 	}
 	if to != nil {
-		transfer.To = to.String()
+		to := to.String()
+		transfer.To = &to
 	}
 	if before {
 		t.beforeEVMTransfers = append(t.beforeEVMTransfers, transfer)
