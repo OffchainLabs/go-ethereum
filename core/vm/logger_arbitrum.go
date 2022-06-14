@@ -14,4 +14,18 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package logger
+package vm
+
+type ArbTransferPurpose uint64
+
+const (
+	ArbTransferFeePayment ArbTransferPurpose = iota
+	ArbTransferFeeCollection
+	ArbTransferDeposit
+	ArbTransferEscrow
+	ArbTransferPrepaid
+	ArbTransferRefund
+	ArbTransferL1Send
+	ArbTransferDuringEvmExecution
+	ArbTransferIgnore
+)
