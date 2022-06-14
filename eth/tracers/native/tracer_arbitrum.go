@@ -23,13 +23,34 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-func (*callTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose string) {
+type arbitrumTransfer struct {
+	Purpose string `json:"purpose"`
+	From    string `json:"from,omitempty"`
+	To      string `json:"to,omitempty"`
+	Value   string `json:"value"`
 }
-func (*fourByteTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose string) {
+
+func (t *callTracer) CaptureArbitrumTransfer(
+	env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string,
+) {
+	transfer := arbitrumTransfer{
+		Purpose: purpose,
+		From:    from.String(),
+		To:      to.String(),
+		Value:   bigToHex(value),
+	}
+	if before {
+		t.beforeEVMTransfers = append(t.beforeEVMTransfers, transfer)
+	} else {
+		t.afterEVMTransfers = append(t.afterEVMTransfers, transfer)
+	}
 }
-func (*noopTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose string) {
+
+func (*fourByteTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
 }
-func (*prestateTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose string) {
+func (*noopTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
+}
+func (*prestateTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
 }
 
 func (*callTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}
