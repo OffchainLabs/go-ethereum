@@ -24,7 +24,7 @@ import (
 )
 
 func (jst *jsTracer) CaptureArbitrumTransfer(
-	env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose vm.ArbTransferPurpose,
+	env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string,
 ) {
 
 	obj := jst.vm.PushObject()
@@ -36,7 +36,7 @@ func (jst *jsTracer) CaptureArbitrumTransfer(
 	}
 	jst.addToObj(obj, "value", value)
 	jst.addToObj(obj, "before", before)
-	jst.addToObj(obj, "purpose", uint64(purpose))
+	jst.addToObj(obj, "purpose", purpose)
 	jst.vm.PutPropString(jst.stateObject, "transfer")
 
 	if _, err := jst.call(true, "captureArbitrumTransfer", "transfer"); err != nil {

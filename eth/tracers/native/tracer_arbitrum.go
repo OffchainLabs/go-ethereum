@@ -23,13 +23,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-func (*callTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose vm.ArbTransferPurpose) {
+func (*callTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose string) {
 }
-func (*fourByteTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose vm.ArbTransferPurpose) {
+func (*fourByteTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose string) {
 }
-func (*noopTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose vm.ArbTransferPurpose) {
+func (*noopTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose string) {
 }
-func (*prestateTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose vm.ArbTransferPurpose) {
+func (*prestateTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose string) {
 }
 
 func (*callTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}

@@ -23,11 +23,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-func (*AccessListTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose vm.ArbTransferPurpose) {
+func (*AccessListTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose string) {
 }
-func (*JSONLogger) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose vm.ArbTransferPurpose) {
+func (*JSONLogger) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose string) {
 }
-func (*StructLogger) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose vm.ArbTransferPurpose) {
+func (*StructLogger) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose string) {
 }
 
 func (*AccessListTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {}
