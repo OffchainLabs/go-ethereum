@@ -26,6 +26,11 @@ import (
 func (jst *jsTracer) CaptureArbitrumTransfer(
 	env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string,
 ) {
+	traceTransfers := jst.vm.GetPropString(jst.tracerObject, "captureArbitrumTransfer")
+	jst.vm.Pop()
+	if !traceTransfers {
+		return
+	}
 
 	obj := jst.vm.PushObject()
 	if from != nil {
