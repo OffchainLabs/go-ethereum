@@ -34,10 +34,10 @@ func (jst *jsTracer) CaptureArbitrumTransfer(
 
 	obj := jst.vm.PushObject()
 	if from != nil {
-		jst.addToObj(obj, "from", from.Hex())
+		jst.addToObj(obj, "from", from.String())
 	}
 	if to != nil {
-		jst.addToObj(obj, "to", to.Hex())
+		jst.addToObj(obj, "to", to.String())
 	}
 	jst.addToObj(obj, "value", value)
 	jst.addToObj(obj, "before", before)

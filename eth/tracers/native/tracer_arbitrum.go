@@ -35,9 +35,13 @@ func (t *callTracer) CaptureArbitrumTransfer(
 ) {
 	transfer := arbitrumTransfer{
 		Purpose: purpose,
-		From:    from.String(),
-		To:      to.String(),
 		Value:   bigToHex(value),
+	}
+	if from != nil {
+		transfer.From = from.String()
+	}
+	if to != nil {
+		transfer.To = to.String()
 	}
 	if before {
 		t.beforeEVMTransfers = append(t.beforeEVMTransfers, transfer)
