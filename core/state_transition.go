@@ -302,7 +302,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
 
 	// Arbitrum: drop support for tips from upgrade 2 onward
-	if st.evm.ProcessingHook.DropTip() && st.gasPrice.Cmp(st.evm.Context.BaseFee) > 0 {
+	if st.gasPrice.Cmp(st.evm.Context.BaseFee) > 0 {
 		st.gasPrice = st.evm.Context.BaseFee
 		st.gasTipCap = common.Big0
 	}
@@ -328,8 +328,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	st.gas -= gas
 
-	tipRecipient, err := st.evm.ProcessingHook.GasChargingHook(&st.gas)
-	if err != nil {
+	if err := st.evm.ProcessingHook.GasChargingHook(&st.gas); err != nil {
 		return nil, err
 	}
 
@@ -365,10 +364,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if london {
 		effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 	}
-	if tipRecipient == nil {
-		tipRecipient = &st.evm.Context.Coinbase
-	}
-	st.state.AddBalance(*tipRecipient, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
 
 	st.evm.ProcessingHook.EndTxHook(st.gas, vmerr == nil)
 
