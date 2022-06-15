@@ -71,7 +71,7 @@ var (
 		utils.NoUSBFlag,
 		utils.USBFlag,
 		utils.SmartCardDaemonPathFlag,
-		utils.OverrideArrowGlacierFlag,
+		utils.OverrideGrayGlacierFlag,
 		utils.OverrideTerminalTotalDifficulty,
 		utils.EthashCacheDirFlag,
 		utils.EthashCachesInMemoryFlag,
@@ -153,6 +153,7 @@ var (
 		utils.GpoMaxGasPriceFlag,
 		utils.GpoIgnoreGasPriceFlag,
 		utils.MinerNotifyFullFlag,
+		utils.IgnoreLegacyReceiptsFlag,
 		configFileFlag,
 	}, utils.NetworkFlags, utils.DatabasePathFlags)
 
