@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -43,6 +43,7 @@ func (jst *jsTracer) CaptureArbitrumTransfer(
 	} else {
 		jst.addNull(obj, "to")
 	}
+
 	jst.addToObj(obj, "value", value)
 	jst.addToObj(obj, "before", before)
 	jst.addToObj(obj, "purpose", purpose)
@@ -56,7 +57,7 @@ func (jst *jsTracer) CaptureArbitrumTransfer(
 func (*jsTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)        {}
 func (*jsTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
 
-// addToObj pushes a null field to a JS object.
+// addNull pushes a null field to a JS object.
 func (jst *jsTracer) addNull(obj int, key string) {
 	jst.vm.PushNull()
 	jst.vm.PutPropString(obj, key)
