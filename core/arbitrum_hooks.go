@@ -41,9 +41,6 @@ var InterceptRPCMessage func(
 // Gets ArbOS's approximation of how quickly compute gas is being burnt relative to the speed limit.
 var GetArbOSComputeRate func(statedb *state.StateDB) (float64, error)
 
-// The Nitro genesis block. All blocks before this were imported.
-var NitroGenesisBlock rpc.BlockNumber
-
 // Allows ArbOS to update the gas cap so that it ignores the message's specific L1 poster costs.
 var InterceptRPCGasCap func(gascap *uint64, msg types.Message, header *types.Header, statedb *state.StateDB)
 
