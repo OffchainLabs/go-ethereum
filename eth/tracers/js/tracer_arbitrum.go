@@ -35,9 +35,13 @@ func (jst *jsTracer) CaptureArbitrumTransfer(
 	obj := jst.vm.PushObject()
 	if from != nil {
 		jst.addToObj(obj, "from", from.String())
+	} else {
+		jst.addNull(obj, "from")
 	}
 	if to != nil {
 		jst.addToObj(obj, "to", to.String())
+	} else {
+		jst.addNull(obj, "to")
 	}
 	jst.addToObj(obj, "value", value)
 	jst.addToObj(obj, "before", before)
@@ -51,3 +55,9 @@ func (jst *jsTracer) CaptureArbitrumTransfer(
 
 func (*jsTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)        {}
 func (*jsTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
+
+// addToObj pushes a null field to a JS object.
+func (jst *jsTracer) addNull(obj int, key string) {
+	jst.vm.PushNull()
+	jst.vm.PutPropString(obj, key)
+}
