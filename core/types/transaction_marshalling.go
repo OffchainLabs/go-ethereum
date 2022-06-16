@@ -47,21 +47,23 @@ type txJSON struct {
 	AccessList *AccessList  `json:"accessList,omitempty"`
 
 	// Arbitrum fields:
-	SubType          *hexutil.Uint64 `json:"subType,omitempty"`          // Internal
-	L2BlockNumber    *hexutil.Uint64 `json:"l2BlockNumber,omitempty"`    // Internal
-	TxIndex          *hexutil.Uint64 `json:"txIndex,omitempty"`          // Internal
-	From             *common.Address `json:"from,omitempty"`             // Contract SubmitRetryable Unsigned Retry
-	RequestId        *common.Hash    `json:"requestId,omitempty"`        // Contract SubmitRetryable Deposit
-	TicketId         *common.Hash    `json:"ticketId,omitempty"`         // Retry
-	RefundTo         *common.Address `json:"refundTo,omitempty"`         // SubmitRetryable Retry
-	L1BaseFee        *hexutil.Big    `json:"l1BaseFee,omitempty"`        // SubmitRetryable
-	DepositValue     *hexutil.Big    `json:"depositValue,omitempty"`     // SubmitRetryable
-	RetryTo          *common.Address `json:"retryTo,omitempty"`          // SubmitRetryable
-	RetryData        *hexutil.Bytes  `json:"retryData,omitempty"`        // SubmitRetryable
-	Beneficiary      *common.Address `json:"beneficiary,omitempty"`      // SubmitRetryable
-	MaxSubmissionFee *hexutil.Big    `json:"maxSubmissionFee,omitempty"` // SubmitRetryable
+	SubType           *hexutil.Uint64 `json:"subType,omitempty"`           // Internal
+	L2BlockNumber     *hexutil.Uint64 `json:"l2BlockNumber,omitempty"`     // Internal
+	TxIndex           *hexutil.Uint64 `json:"txIndex,omitempty"`           // Internal
+	From              *common.Address `json:"from,omitempty"`              // Contract SubmitRetryable Unsigned Retry
+	RequestId         *common.Hash    `json:"requestId,omitempty"`         // Contract SubmitRetryable Deposit
+	TicketId          *common.Hash    `json:"ticketId,omitempty"`          // Retry
+	RefundTo          *common.Address `json:"refundTo,omitempty"`          // SubmitRetryable Retry
+	L1BaseFee         *hexutil.Big    `json:"l1BaseFee,omitempty"`         // SubmitRetryable
+	DepositValue      *hexutil.Big    `json:"depositValue,omitempty"`      // SubmitRetryable
+	RetryTo           *common.Address `json:"retryTo,omitempty"`           // SubmitRetryable
+	RetryData         *hexutil.Bytes  `json:"retryData,omitempty"`         // SubmitRetryable
+	Beneficiary       *common.Address `json:"beneficiary,omitempty"`       // SubmitRetryable
+	MaxSubmissionFee  *hexutil.Big    `json:"maxSubmissionFee,omitempty"`  // SubmitRetryable
+	EffectiveGasPrice *hexutil.Uint64 `json:"effectiveGasPrice,omitempty"` // ArbLegacy
+	L1BlockNumber     *hexutil.Uint64 `json:"l1BlockNumber,omitempty"`     // ArbLegacy
 
-	// Only used for encoding:
+	// Only used for encoding - and for ArbLegacy
 	Hash common.Hash `json:"hash"`
 }
 
@@ -130,6 +132,8 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
+		enc.EffectiveGasPrice = (*hexutil.Uint64)(&tx.EffectiveGasPrice)
+		enc.L1BlockNumber = (*hexutil.Uint64)(&tx.L1BlockNumber)
 	case *ArbitrumInternalTx:
 		subType := uint64(tx.SubType)
 		enc.SubType = (*hexutil.Uint64)(&subType)
@@ -400,9 +404,17 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 				return err
 			}
 		}
+		if dec.EffectiveGasPrice == nil {
+			return errors.New("missing required field 'EffectiveGasPrice' in transaction")
+		}
+		if dec.L1BlockNumber == nil {
+			return errors.New("missing required field 'L1BlockNumber' in transaction")
+		}
 		inner = &ArbitrumLegacyTxData{
-			LegacyTx:     itx,
-			HashOverride: dec.Hash,
+			LegacyTx:          itx,
+			HashOverride:      dec.Hash,
+			EffectiveGasPrice: uint64(*dec.EffectiveGasPrice),
+			L1BlockNumber:     uint64(*dec.L1BlockNumber),
 		}
 
 	case ArbitrumInternalTxType:
