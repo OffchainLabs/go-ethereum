@@ -60,8 +60,7 @@ type Transaction struct {
 	time  time.Time // Time first seen locally (spam avoidance)
 
 	// Arbitrum cache
-	PosterCost           *big.Int
-	PosterIsReimbursable bool
+	PosterCost *big.Int
 
 	// caches
 	hash atomic.Value
