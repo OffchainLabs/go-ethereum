@@ -110,6 +110,7 @@ type arbLegacyStoredReceiptRLP struct {
 	GasUsed           uint64
 	L1GasUsed         uint64
 	Status            uint64
+	ContractAddress   common.Address
 	Logs              []*LogForStorage
 }
 
@@ -299,6 +300,7 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 		w.WriteUint64(r.GasUsed)
 		w.WriteUint64(r.GasUsedForL1)
 		w.WriteUint64(r.Status)
+		rlp.Encode(w, r.ContractAddress)
 	} else {
 		w.WriteBytes((*Receipt)(r).statusEncoding())
 		w.WriteUint64(r.CumulativeGasUsed)
@@ -352,6 +354,7 @@ func decodeArbitrumLegacyStoredReceiptRLP(r *ReceiptForStorage, blob []byte) err
 	r.CumulativeGasUsed = stored.CumulativeGasUsed
 	r.GasUsed = stored.GasUsed
 	r.GasUsedForL1 = stored.L1GasUsed
+	r.ContractAddress = stored.ContractAddress
 	r.Logs = make([]*Log, len(stored.Logs))
 	for i, log := range stored.Logs {
 		r.Logs[i] = (*Log)(log)
@@ -459,18 +462,13 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 		rs[i].BlockNumber = new(big.Int).SetUint64(number)
 		rs[i].TransactionIndex = uint(i)
 
-		// The contract address can be derived from the transaction itself
-		if txs[i].To() == nil {
-			// Deriving the signer is expensive, only do if it's actually needed
-			from, _ := Sender(signer, txs[i])
-			rs[i].ContractAddress = crypto.CreateAddress(from, txs[i].Nonce())
-			if rs[i].Type == ArbitrumLegacyTxType {
-				if rs[i].Status == ReceiptStatusFailed {
-					rs[i].ContractAddress = common.Address{}
-				}
-			}
-		}
 		if rs[i].Type != ArbitrumLegacyTxType {
+			// The contract address can be derived from the transaction itself
+			if txs[i].To() == nil {
+				// Deriving the signer is expensive, only do if it's actually needed
+				from, _ := Sender(signer, txs[i])
+				rs[i].ContractAddress = crypto.CreateAddress(from, txs[i].Nonce())
+			}
 			// The used gas can be calculated based on previous r
 			if i == 0 {
 				rs[i].GasUsed = rs[i].CumulativeGasUsed
