@@ -464,6 +464,11 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 			// Deriving the signer is expensive, only do if it's actually needed
 			from, _ := Sender(signer, txs[i])
 			rs[i].ContractAddress = crypto.CreateAddress(from, txs[i].Nonce())
+			if rs[i].Type == ArbitrumLegacyTxType {
+				if rs[i].Status == ReceiptStatusFailed {
+					rs[i].ContractAddress = common.Address{}
+				}
+			}
 		}
 		if rs[i].Type != ArbitrumLegacyTxType {
 			// The used gas can be calculated based on previous r
