@@ -28,6 +28,7 @@ type ArbitrumChainParams struct {
 	DataAvailabilityCommittee bool
 	InitialArbOSVersion       uint64
 	InitialChainOwner         common.Address
+	GenesisBlockNum           uint64
 }
 
 func (c *ChainConfig) IsArbitrum() bool {
@@ -36,6 +37,28 @@ func (c *ChainConfig) IsArbitrum() bool {
 
 func (c *ChainConfig) DebugMode() bool {
 	return c.ArbitrumChainParams.AllowDebugPrecompiles
+}
+
+func (c *ChainConfig) checkArbitrumCompatible(newcfg *ChainConfig, head *big.Int) *ConfigCompatError {
+	boolToBig := func(b bool) *big.Int {
+		if b {
+			return common.Big1
+		}
+		return common.Big0
+	}
+
+	if c.IsArbitrum() != newcfg.IsArbitrum() {
+		return newCompatError("isArbitrum", boolToBig(c.IsArbitrum()), boolToBig(newcfg.IsArbitrum()))
+	}
+	if !c.IsArbitrum() {
+		return nil
+	}
+	cArb := &c.ArbitrumChainParams
+	newArb := &newcfg.ArbitrumChainParams
+	if cArb.GenesisBlockNum != newArb.GenesisBlockNum {
+		return newCompatError("genesisblocknum", new(big.Int).SetUint64(cArb.GenesisBlockNum), new(big.Int).SetUint64(newArb.GenesisBlockNum))
+	}
+	return nil
 }
 
 func ArbitrumOneParams() ArbitrumChainParams {
@@ -49,13 +72,13 @@ func ArbitrumOneParams() ArbitrumChainParams {
 	}
 }
 
-func ArbitrumTestnetParams() ArbitrumChainParams {
+func ArbitrumDevnetParams() ArbitrumChainParams {
 	return ArbitrumChainParams{
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     false,
 		DataAvailabilityCommittee: false,
 		InitialArbOSVersion:       1,
-		InitialChainOwner:         common.Address{}, // TODO
+		InitialChainOwner:         common.HexToAddress("0x186B56023d42B2B4E7616589a5C62EEf5FCa21DD"),
 	}
 }
 
@@ -64,7 +87,7 @@ func ArbitrumDevTestParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     true,
 		DataAvailabilityCommittee: false,
-		InitialArbOSVersion:       4,
+		InitialArbOSVersion:       1,
 		InitialChainOwner:         common.Address{},
 	}
 }
@@ -74,7 +97,7 @@ func ArbitrumDevTestDASParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     true,
 		DataAvailabilityCommittee: true,
-		InitialArbOSVersion:       4,
+		InitialArbOSVersion:       1,
 		InitialChainOwner:         common.Address{},
 	}
 }
@@ -84,7 +107,7 @@ func ArbitrumDevnetDASParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     false,
 		DataAvailabilityCommittee: true,
-		InitialArbOSVersion:       3,
+		InitialArbOSVersion:       1,
 		InitialChainOwner:         common.HexToAddress("0x186B56023d42B2B4E7616589a5C62EEf5FCa21DD"),
 	}
 }
@@ -124,9 +147,9 @@ func ArbitrumOneChainConfig() *ChainConfig {
 	}
 }
 
-func ArbitrumTestnetChainConfig() *ChainConfig {
+func ArbitrumDevnetChainConfig() *ChainConfig {
 	return &ChainConfig{
-		ChainID:             big.NewInt(421612),
+		ChainID:             big.NewInt(421613),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -141,7 +164,7 @@ func ArbitrumTestnetChainConfig() *ChainConfig {
 		MuirGlacierBlock:    big.NewInt(0),
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
-		ArbitrumChainParams: ArbitrumTestnetParams(),
+		ArbitrumChainParams: ArbitrumDevnetParams(),
 		Clique: &CliqueConfig{
 			Period: 0,
 			Epoch:  0,
@@ -201,7 +224,7 @@ func ArbitrumDevTestDASChainConfig() *ChainConfig {
 
 func ArbitrumDevnetDASChainConfig() *ChainConfig {
 	return &ChainConfig{
-		ChainID:             big.NewInt(421702),
+		ChainID:             big.NewInt(421703),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -226,7 +249,7 @@ func ArbitrumDevnetDASChainConfig() *ChainConfig {
 
 var ArbitrumSupportedChainConfigs = []*ChainConfig{
 	ArbitrumOneChainConfig(),
-	ArbitrumTestnetChainConfig(),
+	ArbitrumDevnetChainConfig(),
 	ArbitrumDevTestChainConfig(),
 	ArbitrumDevTestDASChainConfig(),
 	ArbitrumDevnetDASChainConfig(),
