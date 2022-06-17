@@ -800,6 +800,20 @@ func (s *StateDB) GetUnexpectedBalanceDelta() *big.Int {
 	return new(big.Int).Set(s.unexpectedBalanceDelta)
 }
 
+func (s *StateDB) GetSuicides() []common.Address {
+	suicides := []common.Address{}
+	for addr := range s.journal.dirties {
+		obj, exist := s.stateObjects[addr]
+		if !exist {
+			continue
+		}
+		if obj.suicided {
+			suicides = append(suicides, addr)
+		}
+	}
+	return suicides
+}
+
 // Finalise finalises the state by removing the s destructed objects and clears
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
