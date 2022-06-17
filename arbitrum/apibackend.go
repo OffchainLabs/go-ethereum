@@ -96,8 +96,8 @@ func (a *APIBackend) FeeHistory(
 		return nil, nil, nil, nil, errors.New("ArbOS not installed")
 	}
 
-	nitroGenesis := core.NitroGenesisBlock
-	newestBlock, latestBlock := ClipToPostNitroGenesis(a, newestBlock)
+	nitroGenesis := rpc.BlockNumber(a.ChainConfig().ArbitrumChainParams.GenesisBlockNum)
+	newestBlock, latestBlock := a.blockChain().ClipToPostNitroGenesis(newestBlock)
 
 	maxFeeHistory := int(a.b.config.FeeHistoryMaxBlockCount)
 	if blocks > maxFeeHistory {
@@ -444,22 +444,4 @@ func (a *APIBackend) ChainConfig() *params.ChainConfig {
 
 func (a *APIBackend) Engine() consensus.Engine {
 	return a.blockChain().Engine()
-}
-
-type GetsCurrentBlock interface {
-	CurrentBlock() *types.Block
-}
-
-func ClipToPostNitroGenesis(getter GetsCurrentBlock, blockNum rpc.BlockNumber) (rpc.BlockNumber, rpc.BlockNumber) {
-	currentBlock := rpc.BlockNumber(getter.CurrentBlock().NumberU64())
-	if blockNum == rpc.LatestBlockNumber || blockNum == rpc.PendingBlockNumber {
-		blockNum = currentBlock
-	}
-	if blockNum > currentBlock {
-		blockNum = currentBlock
-	}
-	if blockNum < core.NitroGenesisBlock {
-		blockNum = core.NitroGenesisBlock
-	}
-	return blockNum, currentBlock
 }
