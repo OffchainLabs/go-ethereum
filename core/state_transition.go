@@ -309,7 +309,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
 
 	// Arbitrum: drop support for tips from upgrade 2 onward
-	if st.gasPrice.Cmp(st.evm.Context.BaseFee) > 0 {
+	if st.evm.ChainConfig().IsArbitrum() && st.gasPrice.Cmp(st.evm.Context.BaseFee) > 0 {
 		st.gasPrice = st.evm.Context.BaseFee
 		st.gasTipCap = common.Big0
 	}
@@ -375,7 +375,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	// Arbitrum: record the tip if nonzero (this should never happen in L2)
 	if st.evm.Config.Debug && effectiveTip.Sign() != 0 {
-		st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, nil, tipRecipient, effectiveTip, false, "tip")
+		st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, nil, &st.evm.Context.Coinbase, effectiveTip, false, "tip")
 	}
 
 	st.evm.ProcessingHook.EndTxHook(st.gas, vmerr == nil)
