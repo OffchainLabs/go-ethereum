@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -23,8 +23,42 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-func (*jsTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool) {
+func (jst *jsTracer) CaptureArbitrumTransfer(
+	env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string,
+) {
+	traceTransfers := jst.vm.GetPropString(jst.tracerObject, "captureArbitrumTransfer")
+	jst.vm.Pop()
+	if !traceTransfers {
+		return
+	}
+
+	obj := jst.vm.PushObject()
+	if from != nil {
+		jst.addToObj(obj, "from", from.String())
+	} else {
+		jst.addNull(obj, "from")
+	}
+	if to != nil {
+		jst.addToObj(obj, "to", to.String())
+	} else {
+		jst.addNull(obj, "to")
+	}
+
+	jst.addToObj(obj, "value", value)
+	jst.addToObj(obj, "before", before)
+	jst.addToObj(obj, "purpose", purpose)
+	jst.vm.PutPropString(jst.stateObject, "transfer")
+
+	if _, err := jst.call(true, "captureArbitrumTransfer", "transfer"); err != nil {
+		jst.err = wrapError("captureArbitrumTransfer", err)
+	}
 }
 
 func (*jsTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)        {}
 func (*jsTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
+
+// addNull pushes a null field to a JS object.
+func (jst *jsTracer) addNull(obj int, key string) {
+	jst.vm.PushNull()
+	jst.vm.PutPropString(obj, key)
+}

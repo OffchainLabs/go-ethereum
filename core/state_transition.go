@@ -216,6 +216,13 @@ func (st *StateTransition) buyGas() error {
 
 	st.initialGas = st.msg.Gas()
 	st.state.SubBalance(st.msg.From(), mgval)
+
+	// Arbitrum: record fee payment
+	if st.evm.Config.Debug {
+		from := st.msg.From()
+		st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, &from, nil, mgval, true, "feePayment")
+	}
+
 	return nil
 }
 
@@ -302,7 +309,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
 
 	// Arbitrum: drop support for tips from upgrade 2 onward
-	if st.evm.ProcessingHook.DropTip() && st.gasPrice.Cmp(st.evm.Context.BaseFee) > 0 {
+	if st.evm.ChainConfig().IsArbitrum() && st.gasPrice.Cmp(st.evm.Context.BaseFee) > 0 {
 		st.gasPrice = st.evm.Context.BaseFee
 		st.gasTipCap = common.Big0
 	}
@@ -328,8 +335,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	st.gas -= gas
 
-	tipRecipient, err := st.evm.ProcessingHook.GasChargingHook(&st.gas)
-	if err != nil {
+	if err := st.evm.ProcessingHook.GasChargingHook(&st.gas); err != nil {
 		return nil, err
 	}
 
@@ -365,12 +371,22 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if london {
 		effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 	}
-	if tipRecipient == nil {
-		tipRecipient = &st.evm.Context.Coinbase
+	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+
+	// Arbitrum: record the tip if nonzero (this should never happen in L2)
+	if st.evm.Config.Debug && effectiveTip.Sign() != 0 {
+		st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, nil, &st.evm.Context.Coinbase, effectiveTip, false, "tip")
 	}
-	st.state.AddBalance(*tipRecipient, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
 
 	st.evm.ProcessingHook.EndTxHook(st.gas, vmerr == nil)
+
+	// Arbitrum: record self destructs
+	if st.evm.Config.Debug {
+		for _, address := range st.evm.StateDB.GetSuicides() {
+			balance := st.evm.StateDB.GetBalance(address)
+			st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, &address, nil, balance, false, "selfDestruct")
+		}
+	}
 
 	return &ExecutionResult{
 		UsedGas:       st.gasUsed(),
@@ -397,6 +413,12 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
 	st.state.AddBalance(st.msg.From(), remaining)
+
+	// Arbitrum: record the gas refund
+	if st.evm.Config.Debug {
+		from := st.msg.From()
+		st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, nil, &from, remaining, false, "gasRefund")
+	}
 
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.

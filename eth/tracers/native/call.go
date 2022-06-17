@@ -35,6 +35,10 @@ func init() {
 }
 
 type callFrame struct {
+	// Arbitrum: we add these here due to the tracer returning the top frame
+	BeforeEVMTransfers *[]arbitrumTransfer `json:"beforeEVMTransfers,omitempty"`
+	AfterEVMTransfers  *[]arbitrumTransfer `json:"afterEVMTransfers,omitempty"`
+
 	Type    string      `json:"type"`
 	From    string      `json:"from"`
 	To      string      `json:"to,omitempty"`
@@ -48,6 +52,10 @@ type callFrame struct {
 }
 
 type callTracer struct {
+	// Arbitrum: capture transfers occuring outside of evm execution
+	beforeEVMTransfers []arbitrumTransfer
+	afterEVMTransfers  []arbitrumTransfer
+
 	env       *vm.EVM
 	callstack []callFrame
 	interrupt uint32 // Atomic flag to signal execution interruption
@@ -59,7 +67,11 @@ type callTracer struct {
 func newCallTracer() tracers.Tracer {
 	// First callframe contains tx context info
 	// and is populated on start and end.
-	return &callTracer{callstack: make([]callFrame, 1)}
+	return &callTracer{
+		callstack:          make([]callFrame, 1),
+		beforeEVMTransfers: []arbitrumTransfer{},
+		afterEVMTransfers:  []arbitrumTransfer{},
+	}
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
@@ -148,7 +160,13 @@ func (t *callTracer) GetResult() (json.RawMessage, error) {
 	if len(t.callstack) != 1 {
 		return nil, errors.New("incorrect number of top-level calls")
 	}
-	res, err := json.Marshal(t.callstack[0])
+
+	// Arbitrum: populate the top-level call with additional info
+	call := t.callstack[0]
+	call.BeforeEVMTransfers = &t.beforeEVMTransfers
+	call.AfterEVMTransfers = &t.afterEVMTransfers
+
+	res, err := json.Marshal(call)
 	if err != nil {
 		return nil, err
 	}
