@@ -375,7 +375,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	// Arbitrum: record the tip if nonzero (this should never happen in L2)
 	if st.evm.Config.Debug && effectiveTip.Sign() != 0 {
-		st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, nil, tipRecipient, effectiveTip, false, "tip")
+		st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, nil, &st.evm.Context.Coinbase, effectiveTip, false, "tip")
 	}
 
 	st.evm.ProcessingHook.EndTxHook(st.gas, vmerr == nil)
