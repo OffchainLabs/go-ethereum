@@ -38,7 +38,7 @@ var InterceptRPCMessage func(
 	backend NodeInterfaceBackendAPI,
 ) (types.Message, *ExecutionResult, error)
 
-// Gets ArbOS's maximum gas per second
+// Gets ArbOS's maximum intended gas per second
 var GetArbOSSpeedLimitPerSecond func(statedb *state.StateDB) (uint64, error)
 
 // The Nitro genesis block. All blocks before this were imported.

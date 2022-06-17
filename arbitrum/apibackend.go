@@ -148,6 +148,8 @@ func (a *APIBackend) FeeHistory(
 		baseFeeLookup = newestBlock
 	}
 	var prevTimestamp uint64
+	var timeSinceLastTimeChange uint64
+	var currentTimestampGasUsed uint64
 	if rpc.BlockNumber(oldestBlock) > nitroGenesis {
 		header, err := a.HeaderByNumber(ctx, rpc.BlockNumber(oldestBlock-1))
 		if err != nil {
@@ -162,21 +164,30 @@ func (a *APIBackend) FeeHistory(
 		}
 		basefees[block-oldestBlock] = header.BaseFee
 
-		var blockGasUsed uint64
+		if header.Time > prevTimestamp {
+			timeSinceLastTimeChange = header.Time - prevTimestamp
+			currentTimestampGasUsed = 0
+		}
+
 		receipts := a.blockChain().GetReceiptsByHash(header.ReceiptHash)
 		for _, receipt := range receipts {
 			if receipt.GasUsed > receipt.GasUsedForL1 {
-				blockGasUsed += receipt.GasUsed - receipt.GasUsedForL1
+				currentTimestampGasUsed += receipt.GasUsed - receipt.GasUsedForL1
 			}
 		}
 
-		timeSinceLastBlock := header.Time - prevTimestamp
 		prevTimestamp = header.Time
 
 		// In vanilla geth, this RPC returns the gasUsed ratio so a client can infer how the basefee will change
 		// To emulate this, we translate the compute rate into something like that, centered at an analogous 0.5
-		fullnessAnalogue := float64(blockGasUsed) / float64(speedLimit) / float64(timeSinceLastBlock) / 2.0
-		if fullnessAnalogue > 1.0 {
+		var fullnessAnalogue float64
+		if timeSinceLastTimeChange > 0 {
+			fullnessAnalogue = float64(currentTimestampGasUsed) / float64(speedLimit) / float64(timeSinceLastTimeChange) / 2.0
+			if fullnessAnalogue > 1.0 {
+				fullnessAnalogue = 1.0
+			}
+		} else {
+			// We haven't looked far enough back to know the last timestamp change, so treat this block as full.
 			fullnessAnalogue = 1.0
 		}
 		gasUsed[block-oldestBlock] = fullnessAnalogue
