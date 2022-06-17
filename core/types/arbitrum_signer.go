@@ -25,7 +25,7 @@ func (s arbitrumSigner) Sender(tx *Transaction) (common.Address, error) {
 	case *ArbitrumContractTx:
 		return inner.From, nil
 	case *ArbitrumDepositTx:
-		return inner.From, nil
+		return ArbosAddress, nil
 	case *ArbitrumInternalTx:
 		return ArbosAddress, nil
 	case *ArbitrumRetryTx:
