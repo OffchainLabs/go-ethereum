@@ -388,7 +388,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if st.evm.Config.Debug {
 		for _, address := range st.evm.StateDB.GetSuicides() {
 			balance := st.evm.StateDB.GetBalance(address)
-			st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, &address, nil, balance, false, "destroy")
+			st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, &address, nil, balance, false, "selfDestruct")
 		}
 	}
 
