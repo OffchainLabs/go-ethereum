@@ -60,7 +60,8 @@ type Transaction struct {
 	time  time.Time // Time first seen locally (spam avoidance)
 
 	// Arbitrum cache
-	PosterCost *big.Int
+	PosterCost    *big.Int
+	CalldataUnits uint64
 
 	// caches
 	hash atomic.Value
