@@ -47,9 +47,6 @@ type txJSON struct {
 	AccessList *AccessList  `json:"accessList,omitempty"`
 
 	// Arbitrum fields:
-	SubType          *hexutil.Uint64 `json:"subType,omitempty"`          // Internal
-	L2BlockNumber    *hexutil.Uint64 `json:"l2BlockNumber,omitempty"`    // Internal
-	TxIndex          *hexutil.Uint64 `json:"txIndex,omitempty"`          // Internal
 	From             *common.Address `json:"from,omitempty"`             // Contract SubmitRetryable Unsigned Retry
 	RequestId        *common.Hash    `json:"requestId,omitempty"`        // Contract SubmitRetryable Deposit
 	TicketId         *common.Hash    `json:"ticketId,omitempty"`         // Retry
@@ -131,10 +128,6 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
 	case *ArbitrumInternalTx:
-		subType := uint64(tx.SubType)
-		enc.SubType = (*hexutil.Uint64)(&subType)
-		enc.L2BlockNumber = (*hexutil.Uint64)(&tx.L2BlockNumber)
-		enc.TxIndex = (*hexutil.Uint64)(&tx.TxIndex)
 		enc.ChainID = (*hexutil.Big)(tx.ChainId)
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
 	case *ArbitrumDepositTx:
@@ -399,24 +392,12 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.ChainID == nil {
 			return errors.New("missing required field 'chainId' in transaction")
 		}
-		if dec.SubType == nil {
-			return errors.New("missing required field 'subType' in transaction")
-		}
 		if dec.Data == nil {
 			return errors.New("missing required field 'input' in transaction")
 		}
-		if dec.L2BlockNumber == nil {
-			return errors.New("missing required field 'l2BlockNumber' in transaction")
-		}
-		if dec.TxIndex == nil {
-			return errors.New("missing required field 'txIndex' in transaction")
-		}
 		inner = &ArbitrumInternalTx{
-			ChainId:       (*big.Int)(dec.ChainID),
-			SubType:       uint8(*dec.SubType),
-			Data:          *dec.Data,
-			L2BlockNumber: uint64(*dec.L2BlockNumber),
-			TxIndex:       uint64(*dec.TxIndex),
+			ChainId: (*big.Int)(dec.ChainID),
+			Data:    *dec.Data,
 		}
 
 	case ArbitrumDepositTxType:
