@@ -59,9 +59,9 @@ type Transaction struct {
 	inner TxData    // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)
 
-	// Arbitrum cache
-	PosterCost           *big.Int
-	PosterIsReimbursable bool
+	// Arbitrum cache: must be atomically accessed
+	PosterCost           atomic.Value
+	PosterIsReimbursable int32 // 0 or 1
 
 	// caches
 	hash atomic.Value
