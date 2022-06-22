@@ -302,6 +302,7 @@ func (tx *ArbitrumSubmitRetryableTx) data() []byte {
 type ArbitrumDepositTx struct {
 	ChainId     *big.Int
 	L1RequestId common.Hash
+	From        common.Address
 	To          common.Address
 	Value       *big.Int
 }
@@ -314,6 +315,7 @@ func (d *ArbitrumDepositTx) copy() TxData {
 	tx := &ArbitrumDepositTx{
 		ChainId:     new(big.Int),
 		L1RequestId: d.L1RequestId,
+		From:        d.From,
 		To:          d.To,
 		Value:       new(big.Int),
 	}
