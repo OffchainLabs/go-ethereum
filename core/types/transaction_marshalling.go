@@ -47,16 +47,18 @@ type txJSON struct {
 	AccessList *AccessList  `json:"accessList,omitempty"`
 
 	// Arbitrum fields:
-	From             *common.Address `json:"from,omitempty"`             // Contract SubmitRetryable Unsigned Retry
-	RequestId        *common.Hash    `json:"requestId,omitempty"`        // Contract SubmitRetryable Deposit
-	TicketId         *common.Hash    `json:"ticketId,omitempty"`         // Retry
-	RefundTo         *common.Address `json:"refundTo,omitempty"`         // SubmitRetryable Retry
-	L1BaseFee        *hexutil.Big    `json:"l1BaseFee,omitempty"`        // SubmitRetryable
-	DepositValue     *hexutil.Big    `json:"depositValue,omitempty"`     // SubmitRetryable
-	RetryTo          *common.Address `json:"retryTo,omitempty"`          // SubmitRetryable
-	RetryData        *hexutil.Bytes  `json:"retryData,omitempty"`        // SubmitRetryable
-	Beneficiary      *common.Address `json:"beneficiary,omitempty"`      // SubmitRetryable
-	MaxSubmissionFee *hexutil.Big    `json:"maxSubmissionFee,omitempty"` // SubmitRetryable
+	From                *common.Address `json:"from,omitempty"`                // Contract SubmitRetryable Unsigned Retry
+	RequestId           *common.Hash    `json:"requestId,omitempty"`           // Contract SubmitRetryable Deposit
+	TicketId            *common.Hash    `json:"ticketId,omitempty"`            // Retry
+	MaxRefund           *hexutil.Big    `json:"maxRefund,omitempty"`           // Retry
+	SubmissionFeeRefund *hexutil.Big    `json:"submissionFeeRefund,omitempty"` // Retry
+	RefundTo            *common.Address `json:"refundTo,omitempty"`            // SubmitRetryable Retry
+	L1BaseFee           *hexutil.Big    `json:"l1BaseFee,omitempty"`           // SubmitRetryable
+	DepositValue        *hexutil.Big    `json:"depositValue,omitempty"`        // SubmitRetryable
+	RetryTo             *common.Address `json:"retryTo,omitempty"`             // SubmitRetryable
+	RetryData           *hexutil.Bytes  `json:"retryData,omitempty"`           // SubmitRetryable
+	Beneficiary         *common.Address `json:"beneficiary,omitempty"`         // SubmitRetryable
+	MaxSubmissionFee    *hexutil.Big    `json:"maxSubmissionFee,omitempty"`    // SubmitRetryable
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
@@ -163,6 +165,8 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
 		enc.Value = (*hexutil.Big)(tx.Value)
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
+		enc.MaxRefund = (*hexutil.Big)(tx.MaxRefund)
+		enc.SubmissionFeeRefund = (*hexutil.Big)(tx.SubmissionFeeRefund)
 		enc.To = t.To()
 	case *ArbitrumSubmitRetryableTx:
 		enc.RequestId = &tx.RequestId
@@ -514,17 +518,25 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.RefundTo == nil {
 			return errors.New("missing required field 'refundTo' in transaction")
 		}
+		if dec.MaxRefund == nil {
+			return errors.New("missing required field 'maxRefund' in transaction")
+		}
+		if dec.SubmissionFeeRefund == nil {
+			return errors.New("missing required field 'submissionFeeRefund' in transaction")
+		}
 		inner = &ArbitrumRetryTx{
-			ChainId:   (*big.Int)(dec.ChainID),
-			Nonce:     uint64(*dec.Nonce),
-			From:      *dec.From,
-			GasFeeCap: (*big.Int)(dec.MaxFeePerGas),
-			Gas:       uint64(*dec.Gas),
-			To:        dec.To,
-			Value:     (*big.Int)(dec.Value),
-			Data:      *dec.Data,
-			TicketId:  *dec.TicketId,
-			RefundTo:  *dec.RefundTo,
+			ChainId:             (*big.Int)(dec.ChainID),
+			Nonce:               uint64(*dec.Nonce),
+			From:                *dec.From,
+			GasFeeCap:           (*big.Int)(dec.MaxFeePerGas),
+			Gas:                 uint64(*dec.Gas),
+			To:                  dec.To,
+			Value:               (*big.Int)(dec.Value),
+			Data:                *dec.Data,
+			TicketId:            *dec.TicketId,
+			RefundTo:            *dec.RefundTo,
+			MaxRefund:           (*big.Int)(dec.MaxRefund),
+			SubmissionFeeRefund: (*big.Int)(dec.SubmissionFeeRefund),
 		}
 
 	case ArbitrumSubmitRetryableTxType:
