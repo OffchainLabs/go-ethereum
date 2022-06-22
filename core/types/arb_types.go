@@ -140,31 +140,33 @@ type ArbitrumRetryTx struct {
 	Nonce   uint64
 	From    common.Address
 
-	GasFeeCap *big.Int        // wei per gas
-	Gas       uint64          // gas limit
-	To        *common.Address `rlp:"nil"` // nil means contract creation
-	Value     *big.Int        // wei amount
-	Data      []byte          // contract invocation input data
-	TicketId  common.Hash
-	RefundTo  common.Address
-	MaxRefund *big.Int // the maximum refund sent to RefundTo (the rest goes to From)
+	GasFeeCap           *big.Int        // wei per gas
+	Gas                 uint64          // gas limit
+	To                  *common.Address `rlp:"nil"` // nil means contract creation
+	Value               *big.Int        // wei amount
+	Data                []byte          // contract invocation input data
+	TicketId            common.Hash
+	RefundTo            common.Address
+	MaxRefund           *big.Int // the maximum refund sent to RefundTo (the rest goes to From)
+	SubmissionFeeRefund *big.Int // the submission fee to refund if successful (capped by MaxRefund)
 }
 
 func (tx *ArbitrumRetryTx) txType() byte { return ArbitrumRetryTxType }
 
 func (tx *ArbitrumRetryTx) copy() TxData {
 	cpy := &ArbitrumRetryTx{
-		ChainId:   new(big.Int),
-		Nonce:     tx.Nonce,
-		GasFeeCap: new(big.Int),
-		Gas:       tx.Gas,
-		From:      tx.From,
-		To:        nil,
-		Value:     new(big.Int),
-		Data:      common.CopyBytes(tx.Data),
-		TicketId:  tx.TicketId,
-		RefundTo:  tx.RefundTo,
-		MaxRefund: new(big.Int),
+		ChainId:             new(big.Int),
+		Nonce:               tx.Nonce,
+		GasFeeCap:           new(big.Int),
+		Gas:                 tx.Gas,
+		From:                tx.From,
+		To:                  nil,
+		Value:               new(big.Int),
+		Data:                common.CopyBytes(tx.Data),
+		TicketId:            tx.TicketId,
+		RefundTo:            tx.RefundTo,
+		MaxRefund:           new(big.Int),
+		SubmissionFeeRefund: new(big.Int),
 	}
 	if tx.ChainId != nil {
 		cpy.ChainId.Set(tx.ChainId)
@@ -181,6 +183,9 @@ func (tx *ArbitrumRetryTx) copy() TxData {
 	}
 	if tx.MaxRefund != nil {
 		cpy.MaxRefund.Set(tx.MaxRefund)
+	}
+	if tx.SubmissionFeeRefund != nil {
+		cpy.SubmissionFeeRefund.Set(tx.SubmissionFeeRefund)
 	}
 	return cpy
 }
