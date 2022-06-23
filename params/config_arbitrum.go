@@ -78,7 +78,7 @@ func ArbitrumAnytrustTBDParams() ArbitrumChainParams {
 		AllowDebugPrecompiles:     false,
 		DataAvailabilityCommittee: true,
 		InitialArbOSVersion:       1,
-		InitialChainOwner:         common.Address{},
+		InitialChainOwner:         common.HexToAddress("0x9C040726F2A657226Ed95712245DeE84b650A1b5"),
 	}
 }
 
