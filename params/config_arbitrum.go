@@ -72,6 +72,16 @@ func ArbitrumOneParams() ArbitrumChainParams {
 	}
 }
 
+func ArbitrumAnytrustTBDParams() ArbitrumChainParams {
+	return ArbitrumChainParams{
+		EnableArbOS:               true,
+		AllowDebugPrecompiles:     false,
+		DataAvailabilityCommittee: true,
+		InitialArbOSVersion:       1,
+		InitialChainOwner:         common.Address{},
+	}
+}
+
 func ArbitrumDevnetParams() ArbitrumChainParams {
 	return ArbitrumChainParams{
 		EnableArbOS:               true,
@@ -124,7 +134,7 @@ func DisableArbitrumParams() ArbitrumChainParams {
 
 func ArbitrumOneChainConfig() *ChainConfig {
 	return &ChainConfig{
-		ChainID:             big.NewInt(412345),
+		ChainID:             big.NewInt(42161),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -140,6 +150,31 @@ func ArbitrumOneChainConfig() *ChainConfig {
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
 		ArbitrumChainParams: ArbitrumOneParams(),
+		Clique: &CliqueConfig{
+			Period: 0,
+			Epoch:  0,
+		},
+	}
+}
+
+func ArbitrumAnytrustTBDChainConfig() *ChainConfig {
+	return &ChainConfig{
+		ChainID:             big.NewInt(42170),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.Hash{},
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(0),
+		ArbitrumChainParams: ArbitrumAnytrustTBDParams(),
 		Clique: &CliqueConfig{
 			Period: 0,
 			Epoch:  0,
@@ -249,6 +284,7 @@ func ArbitrumDevnetDASChainConfig() *ChainConfig {
 
 var ArbitrumSupportedChainConfigs = []*ChainConfig{
 	ArbitrumOneChainConfig(),
+	ArbitrumAnytrustTBDChainConfig(),
 	ArbitrumDevnetChainConfig(),
 	ArbitrumDevTestChainConfig(),
 	ArbitrumDevTestDASChainConfig(),
