@@ -1381,15 +1381,17 @@ type RPCTransaction struct {
 	S                *hexutil.Big      `json:"s"`
 
 	// Arbitrum fields:
-	RequestId        *common.Hash    `json:"requestId,omitempty"`        // Contract SubmitRetryable Deposit
-	TicketId         *common.Hash    `json:"ticketId,omitempty"`         // Retry
-	RefundTo         *common.Address `json:"refundTo,omitempty"`         // SubmitRetryable Retry
-	L1BaseFee        *hexutil.Big    `json:"l1BaseFee,omitempty"`        // SubmitRetryable
-	DepositValue     *hexutil.Big    `json:"depositValue,omitempty"`     // SubmitRetryable
-	RetryTo          *common.Address `json:"retryTo,omitempty"`          // SubmitRetryable
-	RetryData        *hexutil.Bytes  `json:"retryData,omitempty"`        // SubmitRetryable
-	Beneficiary      *common.Address `json:"beneficiary,omitempty"`      // SubmitRetryable
-	MaxSubmissionFee *hexutil.Big    `json:"maxSubmissionFee,omitempty"` // SubmitRetryable
+	RequestId           *common.Hash    `json:"requestId,omitempty"`           // Contract SubmitRetryable Deposit
+	TicketId            *common.Hash    `json:"ticketId,omitempty"`            // Retry
+	MaxRefund           *hexutil.Big    `json:"maxRefund,omitempty"`           // Retry
+	SubmissionFeeRefund *hexutil.Big    `json:"submissionFeeRefund,omitempty"` // Retry
+	RefundTo            *common.Address `json:"refundTo,omitempty"`            // SubmitRetryable Retry
+	L1BaseFee           *hexutil.Big    `json:"l1BaseFee,omitempty"`           // SubmitRetryable
+	DepositValue        *hexutil.Big    `json:"depositValue,omitempty"`        // SubmitRetryable
+	RetryTo             *common.Address `json:"retryTo,omitempty"`             // SubmitRetryable
+	RetryData           *hexutil.Bytes  `json:"retryData,omitempty"`           // SubmitRetryable
+	Beneficiary         *common.Address `json:"beneficiary,omitempty"`         // SubmitRetryable
+	MaxSubmissionFee    *hexutil.Big    `json:"maxSubmissionFee,omitempty"`    // SubmitRetryable
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -1454,6 +1456,8 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.RefundTo = &inner.RefundTo
 		result.GasFeeCap = (*hexutil.Big)(inner.GasFeeCap)
 		result.ChainID = (*hexutil.Big)(inner.ChainId)
+		result.MaxRefund = (*hexutil.Big)(inner.MaxRefund)
+		result.SubmissionFeeRefund = (*hexutil.Big)(inner.SubmissionFeeRefund)
 	case *types.ArbitrumSubmitRetryableTx:
 		result.RequestId = &inner.RequestId
 		result.L1BaseFee = (*hexutil.Big)(inner.L1BaseFee)
