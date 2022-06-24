@@ -230,7 +230,7 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 		ChainId:          new(big.Int),
 		RequestId:        tx.RequestId,
 		DepositValue:     new(big.Int),
-		L1BaseFee:        tx.L1BaseFee,
+		L1BaseFee:        new(big.Int),
 		GasFeeCap:        new(big.Int),
 		Gas:              tx.Gas,
 		From:             tx.From,
@@ -246,6 +246,9 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 	}
 	if tx.DepositValue != nil {
 		cpy.DepositValue.Set(tx.DepositValue)
+	}
+	if tx.L1BaseFee != nil {
+		cpy.L1BaseFee.Set(tx.L1BaseFee)
 	}
 	if tx.GasFeeCap != nil {
 		cpy.GasFeeCap.Set(tx.GasFeeCap)
