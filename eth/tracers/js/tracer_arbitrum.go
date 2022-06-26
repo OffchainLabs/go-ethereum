@@ -19,6 +19,7 @@ package js
 import (
 	"math/big"
 
+	"github.com/dop251/goja"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
@@ -26,39 +27,31 @@ import (
 func (jst *jsTracer) CaptureArbitrumTransfer(
 	env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string,
 ) {
-	traceTransfers := jst.vm.GetPropString(jst.tracerObject, "captureArbitrumTransfer")
-	jst.vm.Pop()
-	if !traceTransfers {
+	traceTransfer, ok := goja.AssertFunction(jst.obj.Get("captureArbitrumTransfer"))
+	if !ok {
 		return
 	}
 
-	obj := jst.vm.PushObject()
+	transfer := jst.vm.NewObject()
 	if from != nil {
-		jst.addToObj(obj, "from", from.String())
+		transfer.Set("from", from.String())
 	} else {
-		jst.addNull(obj, "from")
+		transfer.Set("from", nil)
 	}
 	if to != nil {
-		jst.addToObj(obj, "to", to.String())
+		transfer.Set("to", to.String())
 	} else {
-		jst.addNull(obj, "to")
+		transfer.Set("to", nil)
 	}
 
-	jst.addToObj(obj, "value", value)
-	jst.addToObj(obj, "before", before)
-	jst.addToObj(obj, "purpose", purpose)
-	jst.vm.PutPropString(jst.stateObject, "transfer")
+	transfer.Set("value", value)
+	transfer.Set("before", before)
+	transfer.Set("purpose", purpose)
 
-	if _, err := jst.call(true, "captureArbitrumTransfer", "transfer"); err != nil {
+	if _, err := traceTransfer(transfer); err != nil {
 		jst.err = wrapError("captureArbitrumTransfer", err)
 	}
 }
 
 func (*jsTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)        {}
 func (*jsTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
-
-// addNull pushes a null field to a JS object.
-func (jst *jsTracer) addNull(obj int, key string) {
-	jst.vm.PushNull()
-	jst.vm.PutPropString(obj, key)
-}

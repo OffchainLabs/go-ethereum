@@ -445,3 +445,7 @@ func (a *APIBackend) ChainConfig() *params.ChainConfig {
 func (a *APIBackend) Engine() consensus.Engine {
 	return a.blockChain().Engine()
 }
+
+func (b *APIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+	return nil, nil
+}
