@@ -131,7 +131,7 @@ var Flags = []cli.Flag{
 // DeepMindFlags holds all dfuse Deep Mind related command-line flags.
 var DeepMindFlags = []cli.Flag{
 	deepMindFlag, deepMindSyncInstrumentationFlag, deepMindMiningEnabledFlag, deepMindBlockProgressFlag,
-	deepMindCompactionDisabledFlag, deepMindArchiveBlocksToKeepFlag,
+	deepMindCompactionDisabledFlag, deepMindArchiveBlocksToKeepFlag, deepMindGenesisFileFlag,
 }
 
 var (
@@ -200,7 +200,8 @@ func Setup(ctx *cli.Context, logdir string) error {
 	deepmind.ArchiveBlocksToKeep = ctx.GlobalUint64(deepMindArchiveBlocksToKeepFlag.Name)
 
 	if ctx.GlobalString(deepMindGenesisFileFlag.Name) != "" {
-		return fmt.Errorf("invalid flag for Firehose 'fh1' versions, if you provided this flag (maybe implicitely through sf-ethereum), you are using the wrong tagged version, uses 'fh2' versions instead")
+		log.Error("invalid flag for Firehose 'fh1' versions, if you provided this flag (maybe implicitely through sf-ethereum), you are using the wrong tagged version, uses 'fh2' versions instead")
+		os.Exit(1)
 	}
 
 	log.Info("Deep mind initialized",
