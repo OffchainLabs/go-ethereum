@@ -118,6 +118,11 @@ var (
 		Usage: "Controls how many archive blocks the node should keep, this tweaks the core/blockchain.go constant value TriesInMemory, the default value of 0 can be used to use Geth default value instead which is 128",
 		Value: deepmind.ArchiveBlocksToKeep,
 	}
+	deepMindGenesisFileFlag = cli.StringFlag{
+		Name:  "firehose-deep-mind-genesis",
+		Usage: "Invalid flag for Firehose 'fh1' versions, if you provided this flag (maybe implicitely through sf-ethereum), you are using the wrong tagged version, uses 'fh2' versions instead",
+		Value: "",
+	}
 )
 
 // Flags holds all command-line flags required for debugging.
@@ -224,6 +229,10 @@ func Setup(ctx *cli.Context) error {
 	deepmind.BlockProgressEnabled = ctx.GlobalBool(deepMindBlockProgressFlag.Name)
 	deepmind.CompactionDisabled = ctx.GlobalBool(deepMindCompactionDisabledFlag.Name)
 	deepmind.ArchiveBlocksToKeep = ctx.GlobalUint64(deepMindArchiveBlocksToKeepFlag.Name)
+
+	if ctx.GlobalString(deepMindGenesisFileFlag.Name) != "" {
+		return fmt.Errorf("invalid flag for Firehose 'fh1' versions, if you provided this flag (maybe implicitely through sf-ethereum), you are using the wrong tagged version, uses 'fh2' versions instead")
+	}
 
 	log.Info("Deep mind initialized",
 		"enabled", deepmind.Enabled,
