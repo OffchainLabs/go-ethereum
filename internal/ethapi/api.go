@@ -1390,6 +1390,7 @@ type RPCTransaction struct {
 	L1BaseFee        *hexutil.Big    `json:"l1BaseFee,omitempty"`        // SubmitRetryable
 	DepositValue     *hexutil.Big    `json:"depositValue,omitempty"`     // SubmitRetryable
 	RetryTo          *common.Address `json:"retryTo,omitempty"`          // SubmitRetryable
+	RetryValue       *hexutil.Big    `json:"retryValue,omitempty"`       // SubmitRetryable
 	RetryData        *hexutil.Bytes  `json:"retryData,omitempty"`        // SubmitRetryable
 	Beneficiary      *common.Address `json:"beneficiary,omitempty"`      // SubmitRetryable
 	MaxSubmissionFee *hexutil.Big    `json:"maxSubmissionFee,omitempty"` // SubmitRetryable
@@ -1466,6 +1467,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.L1BaseFee = (*hexutil.Big)(inner.L1BaseFee)
 		result.DepositValue = (*hexutil.Big)(inner.DepositValue)
 		result.RetryTo = inner.RetryTo
+		result.RetryValue = (*hexutil.Big)(inner.RetryValue)
 		result.RetryData = (*hexutil.Bytes)(&inner.RetryData)
 		result.Beneficiary = &inner.Beneficiary
 		result.RefundTo = &inner.FeeRefundAddr

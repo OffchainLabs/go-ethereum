@@ -206,7 +206,7 @@ type ArbitrumSubmitRetryableTx struct {
 	GasFeeCap        *big.Int        // wei per gas
 	Gas              uint64          // gas limit
 	RetryTo          *common.Address `rlp:"nil"` // nil means contract creation
-	Value            *big.Int        // wei amount
+	RetryValue       *big.Int        // wei amount
 	Beneficiary      common.Address
 	MaxSubmissionFee *big.Int
 	FeeRefundAddr    common.Address
@@ -225,7 +225,7 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 		Gas:              tx.Gas,
 		From:             tx.From,
 		RetryTo:          tx.RetryTo,
-		Value:            new(big.Int),
+		RetryValue:       new(big.Int),
 		Beneficiary:      tx.Beneficiary,
 		MaxSubmissionFee: new(big.Int),
 		FeeRefundAddr:    tx.FeeRefundAddr,
@@ -244,8 +244,8 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 		tmp := *tx.RetryTo
 		cpy.RetryTo = &tmp
 	}
-	if tx.Value != nil {
-		cpy.Value.Set(tx.Value)
+	if tx.RetryValue != nil {
+		cpy.RetryValue.Set(tx.RetryValue)
 	}
 	if tx.MaxSubmissionFee != nil {
 		cpy.MaxSubmissionFee.Set(tx.MaxSubmissionFee)
@@ -259,7 +259,7 @@ func (tx *ArbitrumSubmitRetryableTx) gas() uint64            { return tx.Gas }
 func (tx *ArbitrumSubmitRetryableTx) gasPrice() *big.Int     { return tx.GasFeeCap }
 func (tx *ArbitrumSubmitRetryableTx) gasTipCap() *big.Int    { return big.NewInt(0) }
 func (tx *ArbitrumSubmitRetryableTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
-func (tx *ArbitrumSubmitRetryableTx) value() *big.Int        { return tx.Value }
+func (tx *ArbitrumSubmitRetryableTx) value() *big.Int        { return common.Big0 }
 func (tx *ArbitrumSubmitRetryableTx) nonce() uint64          { return 0 }
 func (tx *ArbitrumSubmitRetryableTx) to() *common.Address    { return &ArbRetryableTxAddress }
 func (tx *ArbitrumSubmitRetryableTx) rawSignatureValues() (v, r, s *big.Int) {
@@ -277,7 +277,7 @@ func (tx *ArbitrumSubmitRetryableTx) data() []byte {
 	data = append(data, tx.RequestId.Bytes()...)
 	data = append(data, math.U256Bytes(tx.L1BaseFee)...)
 	data = append(data, math.U256Bytes(tx.DepositValue)...)
-	data = append(data, math.U256Bytes(tx.Value)...)
+	data = append(data, math.U256Bytes(tx.RetryValue)...)
 	data = append(data, math.U256Bytes(tx.GasFeeCap)...)
 	data = append(data, math.U256Bytes(new(big.Int).SetUint64(tx.Gas))...)
 	data = append(data, math.U256Bytes(tx.MaxSubmissionFee)...)
