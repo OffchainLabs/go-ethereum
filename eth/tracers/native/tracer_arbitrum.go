@@ -23,11 +23,48 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-func (*callTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool) {
+type arbitrumTransfer struct {
+	Purpose string  `json:"purpose"`
+	From    *string `json:"from"`
+	To      *string `json:"to"`
+	Value   string  `json:"value"`
 }
-func (*fourByteTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool) {
+
+func (t *callTracer) CaptureArbitrumTransfer(
+	env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string,
+) {
+	transfer := arbitrumTransfer{
+		Purpose: purpose,
+		Value:   bigToHex(value),
+	}
+	if from != nil {
+		from := from.String()
+		transfer.From = &from
+	}
+	if to != nil {
+		to := to.String()
+		transfer.To = &to
+	}
+	if before {
+		t.beforeEVMTransfers = append(t.beforeEVMTransfers, transfer)
+	} else {
+		t.afterEVMTransfers = append(t.afterEVMTransfers, transfer)
+	}
 }
-func (*noopTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool) {
+
+func (*fourByteTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
 }
-func (*prestateTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool) {
+func (*noopTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
 }
+func (*prestateTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
+}
+
+func (*callTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}
+func (*fourByteTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {}
+func (*noopTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}
+func (*prestateTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {}
+
+func (*callTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)     {}
+func (*fourByteTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
+func (*noopTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)     {}
+func (*prestateTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -71,6 +72,10 @@ func (a *APIBackend) blockChain() *core.BlockChain {
 	return a.b.arb.BlockChain()
 }
 
+func (a *APIBackend) GetArbitrumNode() interface{} {
+	return a.b.arb.ArbNode()
+}
+
 // General Ethereum API
 func (a *APIBackend) SyncProgress() ethereum.SyncProgress {
 	panic("not implemented") // TODO: Implement
@@ -80,8 +85,119 @@ func (a *APIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(0), nil // there's no tips in L2
 }
 
-func (a *APIBackend) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
-	return nil, nil, nil, nil, errors.New("not implemented")
+func (a *APIBackend) FeeHistory(
+	ctx context.Context,
+	blocks int,
+	newestBlock rpc.BlockNumber,
+	rewardPercentiles []float64,
+) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
+
+	if core.GetArbOSSpeedLimitPerSecond == nil {
+		return nil, nil, nil, nil, errors.New("ArbOS not installed")
+	}
+
+	nitroGenesis := rpc.BlockNumber(a.ChainConfig().ArbitrumChainParams.GenesisBlockNum)
+	newestBlock, latestBlock := a.blockChain().ClipToPostNitroGenesis(newestBlock)
+
+	maxFeeHistory := int(a.b.config.FeeHistoryMaxBlockCount)
+	if blocks > maxFeeHistory {
+		log.Warn("Sanitizing fee history length", "requested", blocks, "truncated", maxFeeHistory)
+		blocks = maxFeeHistory
+	}
+	if blocks < 1 {
+		// returning with no data and no error means there are no retrievable blocks
+		return common.Big0, nil, nil, nil, nil
+	}
+
+	// don't attempt to include blocks before genesis
+	if rpc.BlockNumber(blocks) > (newestBlock - nitroGenesis) {
+		blocks = int(newestBlock - nitroGenesis + 1)
+	}
+	oldestBlock := int(newestBlock) + 1 - blocks
+
+	// inform that tipping has no effect on inclusion
+	rewards := make([][]*big.Int, blocks)
+	zeros := make([]*big.Int, len(rewardPercentiles))
+	for i := range zeros {
+		zeros[i] = common.Big0
+	}
+	for i := range rewards {
+		rewards[i] = zeros
+	}
+	if len(rewardPercentiles) == 0 {
+		rewards = nil
+	}
+
+	// use the most recent average compute rate for all blocks
+	// note: while we could query this value for each block, it'd be prohibitively expensive
+	state, _, err := a.StateAndHeaderByNumber(ctx, rpc.BlockNumber(newestBlock))
+	if err != nil {
+		return common.Big0, nil, nil, nil, err
+	}
+	speedLimit, err := core.GetArbOSSpeedLimitPerSecond(state)
+	if err != nil {
+		return common.Big0, nil, nil, nil, err
+	}
+
+	gasUsed := make([]float64, blocks)
+	basefees := make([]*big.Int, blocks+1) // the RPC semantics are to predict the future value
+
+	// collect the basefees
+	baseFeeLookup := newestBlock + 1
+	if newestBlock == latestBlock {
+		baseFeeLookup = newestBlock
+	}
+	var prevTimestamp uint64
+	var timeSinceLastTimeChange uint64
+	var currentTimestampGasUsed uint64
+	if rpc.BlockNumber(oldestBlock) > nitroGenesis {
+		header, err := a.HeaderByNumber(ctx, rpc.BlockNumber(oldestBlock-1))
+		if err != nil {
+			return common.Big0, nil, nil, nil, err
+		}
+		prevTimestamp = header.Time
+	}
+	for block := oldestBlock; block <= int(baseFeeLookup); block++ {
+		header, err := a.HeaderByNumber(ctx, rpc.BlockNumber(block))
+		if err != nil {
+			return common.Big0, nil, nil, nil, err
+		}
+		basefees[block-oldestBlock] = header.BaseFee
+
+		if header.Time > prevTimestamp {
+			timeSinceLastTimeChange = header.Time - prevTimestamp
+			currentTimestampGasUsed = 0
+		}
+
+		receipts := a.blockChain().GetReceiptsByHash(header.ReceiptHash)
+		for _, receipt := range receipts {
+			if receipt.GasUsed > receipt.GasUsedForL1 {
+				currentTimestampGasUsed += receipt.GasUsed - receipt.GasUsedForL1
+			}
+		}
+
+		prevTimestamp = header.Time
+
+		// In vanilla geth, this RPC returns the gasUsed ratio so a client can infer how the basefee will change
+		// To emulate this, we translate the compute rate into something like that, centered at an analogous 0.5
+		var fullnessAnalogue float64
+		if timeSinceLastTimeChange > 0 {
+			fullnessAnalogue = float64(currentTimestampGasUsed) / float64(speedLimit) / float64(timeSinceLastTimeChange) / 2.0
+			if fullnessAnalogue > 1.0 {
+				fullnessAnalogue = 1.0
+			}
+		} else {
+			// We haven't looked far enough back to know the last timestamp change, so treat this block as full.
+			fullnessAnalogue = 1.0
+		}
+		gasUsed[block-oldestBlock] = fullnessAnalogue
+
+	}
+	if newestBlock == latestBlock {
+		basefees[blocks] = basefees[blocks-1] // guess the basefee won't change
+	}
+
+	return big.NewInt(int64(oldestBlock)), rewards, basefees, gasUsed, nil
 }
 
 func (a *APIBackend) ChainDb() ethdb.Database {
@@ -118,26 +234,34 @@ func (a *APIBackend) SetHead(number uint64) {
 }
 
 func (a *APIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
-	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
-		return a.blockChain().CurrentBlock().Header(), nil
-	}
-	return a.blockChain().GetHeaderByNumber(uint64(number.Int64())), nil
+	return HeaderByNumber(a.blockChain(), number), nil
 }
 
 func (a *APIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
 	return a.blockChain().GetHeaderByHash(hash), nil
 }
 
-func (a *APIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
+func HeaderByNumber(blockchain *core.BlockChain, number rpc.BlockNumber) *types.Header {
+	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
+		return blockchain.CurrentBlock().Header()
+	}
+	return blockchain.GetHeaderByNumber(uint64(number.Int64()))
+}
+
+func HeaderByNumberOrHash(blockchain *core.BlockChain, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
 	number, isnum := blockNrOrHash.Number()
 	if isnum {
-		return a.HeaderByNumber(ctx, number)
+		return HeaderByNumber(blockchain, number), nil
 	}
 	hash, ishash := blockNrOrHash.Hash()
 	if ishash {
-		return a.HeaderByHash(ctx, hash)
+		return blockchain.GetHeaderByHash(hash), nil
 	}
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
+}
+
+func (a *APIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
+	return HeaderByNumberOrHash(a.blockChain(), blockNrOrHash)
 }
 
 func (a *APIBackend) CurrentHeader() *types.Header {
@@ -279,7 +403,8 @@ func (a *APIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subs
 
 // Filter API
 func (a *APIBackend) BloomStatus() (uint64, uint64) {
-	return params.BloomBitsBlocks, 0 // TODO: Implement second return value
+	sections, _, _ := a.b.bloomIndexer.Sections()
+	return a.b.config.BloomBitsBlocks, sections
 }
 
 func (a *APIBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {
@@ -295,7 +420,9 @@ func (a *APIBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*t
 }
 
 func (a *APIBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
-	panic("not implemented") // TODO: Implement
+	for i := 0; i < bloomFilterThreads; i++ {
+		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, a.b.bloomRequests)
+	}
 }
 
 func (a *APIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
@@ -317,4 +444,8 @@ func (a *APIBackend) ChainConfig() *params.ChainConfig {
 
 func (a *APIBackend) Engine() consensus.Engine {
 	return a.blockChain().Engine()
+}
+
+func (b *APIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+	return nil, nil
 }

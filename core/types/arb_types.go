@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -137,29 +140,33 @@ type ArbitrumRetryTx struct {
 	Nonce   uint64
 	From    common.Address
 
-	GasFeeCap *big.Int        // wei per gas
-	Gas       uint64          // gas limit
-	To        *common.Address `rlp:"nil"` // nil means contract creation
-	Value     *big.Int        // wei amount
-	Data      []byte          // contract invocation input data
-	TicketId  common.Hash
-	RefundTo  common.Address
+	GasFeeCap           *big.Int        // wei per gas
+	Gas                 uint64          // gas limit
+	To                  *common.Address `rlp:"nil"` // nil means contract creation
+	Value               *big.Int        // wei amount
+	Data                []byte          // contract invocation input data
+	TicketId            common.Hash
+	RefundTo            common.Address
+	MaxRefund           *big.Int // the maximum refund sent to RefundTo (the rest goes to From)
+	SubmissionFeeRefund *big.Int // the submission fee to refund if successful (capped by MaxRefund)
 }
 
 func (tx *ArbitrumRetryTx) txType() byte { return ArbitrumRetryTxType }
 
 func (tx *ArbitrumRetryTx) copy() TxData {
 	cpy := &ArbitrumRetryTx{
-		ChainId:   new(big.Int),
-		Nonce:     tx.Nonce,
-		GasFeeCap: new(big.Int),
-		Gas:       tx.Gas,
-		From:      tx.From,
-		To:        nil,
-		Value:     new(big.Int),
-		Data:      common.CopyBytes(tx.Data),
-		TicketId:  tx.TicketId,
-		RefundTo:  tx.RefundTo,
+		ChainId:             new(big.Int),
+		Nonce:               tx.Nonce,
+		GasFeeCap:           new(big.Int),
+		Gas:                 tx.Gas,
+		From:                tx.From,
+		To:                  nil,
+		Value:               new(big.Int),
+		Data:                common.CopyBytes(tx.Data),
+		TicketId:            tx.TicketId,
+		RefundTo:            tx.RefundTo,
+		MaxRefund:           new(big.Int),
+		SubmissionFeeRefund: new(big.Int),
 	}
 	if tx.ChainId != nil {
 		cpy.ChainId.Set(tx.ChainId)
@@ -173,6 +180,12 @@ func (tx *ArbitrumRetryTx) copy() TxData {
 	}
 	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
+	}
+	if tx.MaxRefund != nil {
+		cpy.MaxRefund.Set(tx.MaxRefund)
+	}
+	if tx.SubmissionFeeRefund != nil {
+		cpy.SubmissionFeeRefund.Set(tx.SubmissionFeeRefund)
 	}
 	return cpy
 }
@@ -202,12 +215,12 @@ type ArbitrumSubmitRetryableTx struct {
 	DepositValue     *big.Int
 	GasFeeCap        *big.Int        // wei per gas
 	Gas              uint64          // gas limit
-	To               *common.Address `rlp:"nil"` // nil means contract creation
+	RetryTo          *common.Address `rlp:"nil"` // nil means contract creation
 	Value            *big.Int        // wei amount
 	Beneficiary      common.Address
 	MaxSubmissionFee *big.Int
 	FeeRefundAddr    common.Address
-	Data             []byte // contract invocation input data
+	RetryData        []byte // contract invocation input data
 }
 
 func (tx *ArbitrumSubmitRetryableTx) txType() byte { return ArbitrumSubmitRetryableTxType }
@@ -217,16 +230,16 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 		ChainId:          new(big.Int),
 		RequestId:        tx.RequestId,
 		DepositValue:     new(big.Int),
-		L1BaseFee:        tx.L1BaseFee,
+		L1BaseFee:        new(big.Int),
 		GasFeeCap:        new(big.Int),
 		Gas:              tx.Gas,
 		From:             tx.From,
-		To:               tx.To,
+		RetryTo:          tx.RetryTo,
 		Value:            new(big.Int),
 		Beneficiary:      tx.Beneficiary,
 		MaxSubmissionFee: new(big.Int),
 		FeeRefundAddr:    tx.FeeRefundAddr,
-		Data:             common.CopyBytes(tx.Data),
+		RetryData:        common.CopyBytes(tx.RetryData),
 	}
 	if tx.ChainId != nil {
 		cpy.ChainId.Set(tx.ChainId)
@@ -234,12 +247,15 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 	if tx.DepositValue != nil {
 		cpy.DepositValue.Set(tx.DepositValue)
 	}
+	if tx.L1BaseFee != nil {
+		cpy.L1BaseFee.Set(tx.L1BaseFee)
+	}
 	if tx.GasFeeCap != nil {
 		cpy.GasFeeCap.Set(tx.GasFeeCap)
 	}
-	if tx.To != nil {
-		tmp := *tx.To
-		cpy.To = &tmp
+	if tx.RetryTo != nil {
+		tmp := *tx.RetryTo
+		cpy.RetryTo = &tmp
 	}
 	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
@@ -252,23 +268,54 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 
 func (tx *ArbitrumSubmitRetryableTx) chainID() *big.Int      { return tx.ChainId }
 func (tx *ArbitrumSubmitRetryableTx) accessList() AccessList { return nil }
-func (tx *ArbitrumSubmitRetryableTx) data() []byte           { return tx.Data }
 func (tx *ArbitrumSubmitRetryableTx) gas() uint64            { return tx.Gas }
 func (tx *ArbitrumSubmitRetryableTx) gasPrice() *big.Int     { return tx.GasFeeCap }
 func (tx *ArbitrumSubmitRetryableTx) gasTipCap() *big.Int    { return big.NewInt(0) }
 func (tx *ArbitrumSubmitRetryableTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
 func (tx *ArbitrumSubmitRetryableTx) value() *big.Int        { return tx.Value }
 func (tx *ArbitrumSubmitRetryableTx) nonce() uint64          { return 0 }
-func (tx *ArbitrumSubmitRetryableTx) to() *common.Address    { return tx.To }
+func (tx *ArbitrumSubmitRetryableTx) to() *common.Address    { return &ArbRetryableTxAddress }
 func (tx *ArbitrumSubmitRetryableTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero
 }
 func (tx *ArbitrumSubmitRetryableTx) setSignatureValues(chainID, v, r, s *big.Int) {}
 func (tx *ArbitrumSubmitRetryableTx) isFake() bool                                 { return true }
 
+func (tx *ArbitrumSubmitRetryableTx) data() []byte {
+	var retryTo common.Address
+	if tx.RetryTo != nil {
+		retryTo = *tx.RetryTo
+	}
+	data := make([]byte, 0)
+	data = append(data, tx.RequestId.Bytes()...)
+	data = append(data, math.U256Bytes(tx.L1BaseFee)...)
+	data = append(data, math.U256Bytes(tx.DepositValue)...)
+	data = append(data, math.U256Bytes(tx.Value)...)
+	data = append(data, math.U256Bytes(tx.GasFeeCap)...)
+	data = append(data, math.U256Bytes(new(big.Int).SetUint64(tx.Gas))...)
+	data = append(data, math.U256Bytes(tx.MaxSubmissionFee)...)
+	data = append(data, make([]byte, 12)...)
+	data = append(data, tx.FeeRefundAddr.Bytes()...)
+	data = append(data, make([]byte, 12)...)
+	data = append(data, tx.Beneficiary.Bytes()...)
+	data = append(data, make([]byte, 12)...)
+	data = append(data, retryTo.Bytes()...)
+	offset := len(data) + 32
+	data = append(data, math.U256Bytes(big.NewInt(int64(offset)))...)
+	data = append(data, math.U256Bytes(big.NewInt(int64(len(tx.RetryData))))...)
+	data = append(data, tx.RetryData...)
+	extra := len(tx.RetryData) % 32
+	if extra > 0 {
+		data = append(data, make([]byte, 32-extra)...)
+	}
+	data = append(hexutil.MustDecode("0xc9f95d32"), data...)
+	return data
+}
+
 type ArbitrumDepositTx struct {
 	ChainId     *big.Int
 	L1RequestId common.Hash
+	From        common.Address
 	To          common.Address
 	Value       *big.Int
 }
@@ -279,9 +326,11 @@ func (d *ArbitrumDepositTx) txType() byte {
 
 func (d *ArbitrumDepositTx) copy() TxData {
 	tx := &ArbitrumDepositTx{
-		ChainId: new(big.Int),
-		To:      d.To,
-		Value:   new(big.Int),
+		ChainId:     new(big.Int),
+		L1RequestId: d.L1RequestId,
+		From:        d.From,
+		To:          d.To,
+		Value:       new(big.Int),
 	}
 	if d.ChainId != nil {
 		tx.ChainId.Set(d.ChainId)
@@ -313,11 +362,8 @@ func (d *ArbitrumDepositTx) setSignatureValues(chainID, v, r, s *big.Int) {
 }
 
 type ArbitrumInternalTx struct {
-	ChainId       *big.Int
-	Type          uint8
-	Data          []byte
-	L2BlockNumber uint64
-	TxIndex       uint64
+	ChainId *big.Int
+	Data    []byte
 }
 
 func (t *ArbitrumInternalTx) txType() byte {
@@ -327,10 +373,7 @@ func (t *ArbitrumInternalTx) txType() byte {
 func (t *ArbitrumInternalTx) copy() TxData {
 	return &ArbitrumInternalTx{
 		new(big.Int).Set(t.ChainId),
-		t.Type,
 		common.CopyBytes(t.Data),
-		t.L2BlockNumber,
-		t.TxIndex,
 	}
 }
 
@@ -343,7 +386,7 @@ func (t *ArbitrumInternalTx) gasTipCap() *big.Int    { return bigZero }
 func (t *ArbitrumInternalTx) gasFeeCap() *big.Int    { return bigZero }
 func (t *ArbitrumInternalTx) value() *big.Int        { return common.Big0 }
 func (t *ArbitrumInternalTx) nonce() uint64          { return 0 }
-func (t *ArbitrumInternalTx) to() *common.Address    { return &arbAddress }
+func (t *ArbitrumInternalTx) to() *common.Address    { return &ArbosAddress }
 func (t *ArbitrumInternalTx) isFake() bool           { return true }
 
 func (d *ArbitrumInternalTx) rawSignatureValues() (v, r, s *big.Int) {
@@ -355,9 +398,10 @@ func (d *ArbitrumInternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
 }
 
 type HeaderInfo struct {
-	SendRoot      common.Hash
-	SendCount     uint64
-	L1BlockNumber uint64
+	SendRoot           common.Hash
+	SendCount          uint64
+	L1BlockNumber      uint64
+	ArbOSFormatVersion uint64
 }
 
 func (info HeaderInfo) extra() []byte {
@@ -368,6 +412,7 @@ func (info HeaderInfo) mixDigest() [32]byte {
 	mixDigest := common.Hash{}
 	binary.BigEndian.PutUint64(mixDigest[:8], info.SendCount)
 	binary.BigEndian.PutUint64(mixDigest[8:16], info.L1BlockNumber)
+	binary.BigEndian.PutUint64(mixDigest[16:24], info.ArbOSFormatVersion)
 	return mixDigest
 }
 
@@ -388,5 +433,6 @@ func DeserializeHeaderExtraInformation(header *Header) (HeaderInfo, error) {
 	copy(extra.SendRoot[:], header.Extra)
 	extra.SendCount = binary.BigEndian.Uint64(header.MixDigest[:8])
 	extra.L1BlockNumber = binary.BigEndian.Uint64(header.MixDigest[8:16])
+	extra.ArbOSFormatVersion = binary.BigEndian.Uint64(header.MixDigest[16:24])
 	return extra, nil
 }

@@ -26,9 +26,17 @@ func (evm *EVM) Depth() int {
 	return evm.depth
 }
 
+func (evm *EVM) IncrementDepth() {
+	evm.depth += 1
+}
+
+func (evm *EVM) DecrementDepth() {
+	evm.depth -= 1
+}
+
 type TxProcessingHook interface {
 	StartTxHook() (bool, uint64, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
-	GasChargingHook(gasRemaining *uint64) (*common.Address, error)
+	GasChargingHook(gasRemaining *uint64) error
 	PushCaller(addr common.Address)
 	PopCaller()
 	ForceRefundGas() uint64
@@ -46,12 +54,11 @@ func (p DefaultTxProcessor) StartTxHook() (bool, uint64, error, []byte) {
 	return false, 0, nil, nil
 }
 
-func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) (*common.Address, error) {
-	return nil, nil
+func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) error {
+	return nil
 }
 
-func (p DefaultTxProcessor) PushCaller(addr common.Address) {
-}
+func (p DefaultTxProcessor) PushCaller(addr common.Address) {}
 
 func (p DefaultTxProcessor) PopCaller() {
 }
@@ -64,8 +71,7 @@ func (p DefaultTxProcessor) NonrefundableGas() uint64 {
 	return 0
 }
 
-func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, evmSuccess bool) {
-}
+func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, evmSuccess bool) {}
 
 func (p DefaultTxProcessor) ScheduledTxes() types.Transactions {
 	return types.Transactions{}
@@ -79,5 +85,4 @@ func (p DefaultTxProcessor) L1BlockHash(blockCtx BlockContext, l1BlocKNumber uin
 	return blockCtx.GetHash(l1BlocKNumber), nil
 }
 
-func (p DefaultTxProcessor) FillReceiptInfo(*types.Receipt) {
-}
+func (p DefaultTxProcessor) FillReceiptInfo(*types.Receipt) {}

@@ -245,7 +245,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, header *types.Header
 	}
 	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, data, accessList, true)
 
-	// Arbitrum: update the gas cap to ignore L1 costs so that it's compute-only
+	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	if core.InterceptRPCGasCap != nil && state != nil {
 		// ToMessage recurses once to allow ArbOS to intercept the result for all callers
 		// ArbOS uses this to modify globalGasCap so that the cap will ignore this tx's specific L1 data costs
@@ -253,6 +253,17 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, header *types.Header
 		return args.ToMessage(globalGasCap, header, nil) // we pass a nil to avoid another recursion
 	}
 	return msg, nil
+}
+
+// Raises the vanilla gas cap by the tx's l1 data costs in l2 terms. This creates a new gas cap that after
+// data payments are made, equals the original vanilla cap for the remaining, L2-specific work the tx does.
+func (args *TransactionArgs) L2OnlyGasCap(gasCap uint64, header *types.Header, state *state.StateDB) (uint64, error) {
+	msg, err := args.ToMessage(gasCap, header, nil)
+	if err != nil {
+		return 0, err
+	}
+	core.InterceptRPCGasCap(&gasCap, msg, header, state)
+	return gasCap, nil
 }
 
 // toTransaction converts the arguments to a transaction.

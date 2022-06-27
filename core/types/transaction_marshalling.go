@@ -46,6 +46,20 @@ type txJSON struct {
 	ChainID    *hexutil.Big `json:"chainId,omitempty"`
 	AccessList *AccessList  `json:"accessList,omitempty"`
 
+	// Arbitrum fields:
+	From                *common.Address `json:"from,omitempty"`                // Contract SubmitRetryable Unsigned Retry
+	RequestId           *common.Hash    `json:"requestId,omitempty"`           // Contract SubmitRetryable Deposit
+	TicketId            *common.Hash    `json:"ticketId,omitempty"`            // Retry
+	MaxRefund           *hexutil.Big    `json:"maxRefund,omitempty"`           // Retry
+	SubmissionFeeRefund *hexutil.Big    `json:"submissionFeeRefund,omitempty"` // Retry
+	RefundTo            *common.Address `json:"refundTo,omitempty"`            // SubmitRetryable Retry
+	L1BaseFee           *hexutil.Big    `json:"l1BaseFee,omitempty"`           // SubmitRetryable
+	DepositValue        *hexutil.Big    `json:"depositValue,omitempty"`        // SubmitRetryable
+	RetryTo             *common.Address `json:"retryTo,omitempty"`             // SubmitRetryable
+	RetryData           *hexutil.Bytes  `json:"retryData,omitempty"`           // SubmitRetryable
+	Beneficiary         *common.Address `json:"beneficiary,omitempty"`         // SubmitRetryable
+	MaxSubmissionFee    *hexutil.Big    `json:"maxSubmissionFee,omitempty"`    // SubmitRetryable
+
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
 }
@@ -56,6 +70,17 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 	// These are set for all tx types.
 	enc.Hash = t.Hash()
 	enc.Type = hexutil.Uint64(t.Type())
+
+	// Arbitrum: set to 0 for compatibility
+	var zero uint64
+	enc.Nonce = (*hexutil.Uint64)(&zero)
+	enc.Gas = (*hexutil.Uint64)(&zero)
+	enc.GasPrice = (*hexutil.Big)(common.Big0)
+	enc.Value = (*hexutil.Big)(common.Big0)
+	enc.Data = (*hexutil.Bytes)(&[]byte{})
+	enc.V = (*hexutil.Big)(common.Big0)
+	enc.R = (*hexutil.Big)(common.Big0)
+	enc.S = (*hexutil.Big)(common.Big0)
 
 	// Other fields are set conditionally depending on tx type.
 	switch tx := t.inner.(type) {
@@ -104,6 +129,62 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
+	case *ArbitrumInternalTx:
+		enc.ChainID = (*hexutil.Big)(tx.ChainId)
+		enc.Data = (*hexutil.Bytes)(&tx.Data)
+	case *ArbitrumDepositTx:
+		enc.RequestId = &tx.L1RequestId
+		enc.ChainID = (*hexutil.Big)(tx.ChainId)
+		enc.Value = (*hexutil.Big)(tx.Value)
+		enc.To = t.To()
+	case *ArbitrumUnsignedTx:
+		enc.From = (*common.Address)(&tx.From)
+		enc.ChainID = (*hexutil.Big)(tx.ChainId)
+		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
+		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
+		enc.Value = (*hexutil.Big)(tx.Value)
+		enc.Data = (*hexutil.Bytes)(&tx.Data)
+		enc.To = t.To()
+	case *ArbitrumContractTx:
+		enc.RequestId = &tx.RequestId
+		enc.From = (*common.Address)(&tx.From)
+		enc.ChainID = (*hexutil.Big)(tx.ChainId)
+		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
+		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
+		enc.Value = (*hexutil.Big)(tx.Value)
+		enc.Data = (*hexutil.Bytes)(&tx.Data)
+		enc.To = t.To()
+	case *ArbitrumRetryTx:
+		enc.From = (*common.Address)(&tx.From)
+		enc.TicketId = &tx.TicketId
+		enc.RefundTo = &tx.RefundTo
+		enc.ChainID = (*hexutil.Big)(tx.ChainId)
+		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
+		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
+		enc.Value = (*hexutil.Big)(tx.Value)
+		enc.Data = (*hexutil.Bytes)(&tx.Data)
+		enc.MaxRefund = (*hexutil.Big)(tx.MaxRefund)
+		enc.SubmissionFeeRefund = (*hexutil.Big)(tx.SubmissionFeeRefund)
+		enc.To = t.To()
+	case *ArbitrumSubmitRetryableTx:
+		enc.RequestId = &tx.RequestId
+		enc.From = &tx.From
+		enc.L1BaseFee = (*hexutil.Big)(tx.L1BaseFee)
+		enc.DepositValue = (*hexutil.Big)(tx.DepositValue)
+		enc.Beneficiary = &tx.Beneficiary
+		enc.RefundTo = &tx.FeeRefundAddr
+		enc.MaxSubmissionFee = (*hexutil.Big)(tx.MaxSubmissionFee)
+		enc.ChainID = (*hexutil.Big)(tx.ChainId)
+		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
+		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
+		enc.RetryTo = tx.RetryTo
+		enc.RetryData = (*hexutil.Bytes)(&tx.RetryData)
+		enc.Value = (*hexutil.Big)(tx.Value)
+		data := tx.data()
+		enc.Data = (*hexutil.Bytes)(&data)
+		enc.To = t.To()
 	}
 	return json.Marshal(&enc)
 }
@@ -271,6 +352,247 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			if err := sanityCheckSignature(itx.V, itx.R, itx.S, false); err != nil {
 				return err
 			}
+		}
+
+	case ArbitrumLegacyTxType:
+		if dec.Gas == nil {
+			return errors.New("missing required field 'gas' in txdata")
+		}
+		if dec.GasPrice == nil {
+			return errors.New("missing required field 'gasPrice' in txdata")
+		}
+		if dec.Data == nil {
+			return errors.New("missing required field 'input' in transaction")
+		}
+		if dec.Nonce == nil {
+			return errors.New("missing required field 'nonce' in transaction")
+		}
+		if dec.Value == nil {
+			return errors.New("missing required field 'value' in transaction")
+		}
+		if dec.V == nil {
+			return errors.New("missing required field 'v' in transaction")
+		}
+		if dec.R == nil {
+			return errors.New("missing required field 'r' in transaction")
+		}
+		if dec.S == nil {
+			return errors.New("missing required field 's' in transaction")
+		}
+		inner = &ArbitrumLegacyTxData{
+			Gas:      uint64(*dec.Gas),
+			GasPrice: (*big.Int)(dec.GasPrice),
+			Hash:     dec.Hash,
+			Data:     *dec.Data,
+			Nonce:    uint64(*dec.Nonce),
+			To:       dec.To,
+			Value:    (*big.Int)(dec.Value),
+			V:        (*big.Int)(dec.V),
+			R:        (*big.Int)(dec.R),
+			S:        (*big.Int)(dec.S),
+		}
+
+	case ArbitrumInternalTxType:
+		if dec.ChainID == nil {
+			return errors.New("missing required field 'chainId' in transaction")
+		}
+		if dec.Data == nil {
+			return errors.New("missing required field 'input' in transaction")
+		}
+		inner = &ArbitrumInternalTx{
+			ChainId: (*big.Int)(dec.ChainID),
+			Data:    *dec.Data,
+		}
+
+	case ArbitrumDepositTxType:
+		if dec.ChainID == nil {
+			return errors.New("missing required field 'chainId' in transaction")
+		}
+		if dec.RequestId == nil {
+			return errors.New("missing required field 'requestId' in transaction")
+		}
+		if dec.To == nil {
+			return errors.New("missing required field 'to' in transaction")
+		}
+		if dec.Value == nil {
+			return errors.New("missing required field 'value' in transaction")
+		}
+		inner = &ArbitrumDepositTx{
+			ChainId:     (*big.Int)(dec.ChainID),
+			L1RequestId: *dec.RequestId,
+			To:          *dec.To,
+			Value:       (*big.Int)(dec.Value),
+		}
+
+	case ArbitrumUnsignedTxType:
+		if dec.ChainID == nil {
+			return errors.New("missing required field 'chainId' in transaction")
+		}
+		if dec.From == nil {
+			return errors.New("missing required field 'from' in transaction")
+		}
+		if dec.Nonce == nil {
+			return errors.New("missing required field 'nonce' in transaction")
+		}
+		if dec.MaxFeePerGas == nil {
+			return errors.New("missing required field 'maxFeePerGas' for txdata")
+		}
+		if dec.Gas == nil {
+			return errors.New("missing required field 'gas' in txdata")
+		}
+		if dec.Value == nil {
+			return errors.New("missing required field 'value' in transaction")
+		}
+		if dec.Data == nil {
+			return errors.New("missing required field 'input' in transaction")
+		}
+		inner = &ArbitrumUnsignedTx{
+			ChainId:   (*big.Int)(dec.ChainID),
+			From:      *dec.From,
+			Nonce:     uint64(*dec.Nonce),
+			GasFeeCap: (*big.Int)(dec.MaxFeePerGas),
+			Gas:       uint64(*dec.Gas),
+			To:        dec.To,
+			Value:     (*big.Int)(dec.Value),
+			Data:      *dec.Data,
+		}
+
+	case ArbitrumContractTxType:
+		if dec.ChainID == nil {
+			return errors.New("missing required field 'chainId' in transaction")
+		}
+		if dec.RequestId == nil {
+			return errors.New("missing required field 'requestId' in transaction")
+		}
+		if dec.From == nil {
+			return errors.New("missing required field 'from' in transaction")
+		}
+		if dec.MaxFeePerGas == nil {
+			return errors.New("missing required field 'maxFeePerGas' for txdata")
+		}
+		if dec.Gas == nil {
+			return errors.New("missing required field 'gas' in txdata")
+		}
+		if dec.Value == nil {
+			return errors.New("missing required field 'value' in transaction")
+		}
+		if dec.Data == nil {
+			return errors.New("missing required field 'input' in transaction")
+		}
+		inner = &ArbitrumContractTx{
+			ChainId:   (*big.Int)(dec.ChainID),
+			RequestId: *dec.RequestId,
+			From:      *dec.From,
+			GasFeeCap: (*big.Int)(dec.MaxFeePerGas),
+			Gas:       uint64(*dec.Gas),
+			To:        dec.To,
+			Value:     (*big.Int)(dec.Value),
+			Data:      *dec.Data,
+		}
+
+	case ArbitrumRetryTxType:
+		if dec.ChainID == nil {
+			return errors.New("missing required field 'chainId' in transaction")
+		}
+		if dec.Nonce == nil {
+			return errors.New("missing required field 'nonce' in transaction")
+		}
+		if dec.From == nil {
+			return errors.New("missing required field 'from' in transaction")
+		}
+		if dec.MaxFeePerGas == nil {
+			return errors.New("missing required field 'maxFeePerGas' for txdata")
+		}
+		if dec.Gas == nil {
+			return errors.New("missing required field 'gas' in txdata")
+		}
+		if dec.Value == nil {
+			return errors.New("missing required field 'value' in transaction")
+		}
+		if dec.Data == nil {
+			return errors.New("missing required field 'input' in transaction")
+		}
+		if dec.TicketId == nil {
+			return errors.New("missing required field 'ticketId' in transaction")
+		}
+		if dec.RefundTo == nil {
+			return errors.New("missing required field 'refundTo' in transaction")
+		}
+		if dec.MaxRefund == nil {
+			return errors.New("missing required field 'maxRefund' in transaction")
+		}
+		if dec.SubmissionFeeRefund == nil {
+			return errors.New("missing required field 'submissionFeeRefund' in transaction")
+		}
+		inner = &ArbitrumRetryTx{
+			ChainId:             (*big.Int)(dec.ChainID),
+			Nonce:               uint64(*dec.Nonce),
+			From:                *dec.From,
+			GasFeeCap:           (*big.Int)(dec.MaxFeePerGas),
+			Gas:                 uint64(*dec.Gas),
+			To:                  dec.To,
+			Value:               (*big.Int)(dec.Value),
+			Data:                *dec.Data,
+			TicketId:            *dec.TicketId,
+			RefundTo:            *dec.RefundTo,
+			MaxRefund:           (*big.Int)(dec.MaxRefund),
+			SubmissionFeeRefund: (*big.Int)(dec.SubmissionFeeRefund),
+		}
+
+	case ArbitrumSubmitRetryableTxType:
+		if dec.ChainID == nil {
+			return errors.New("missing required field 'chainId' in transaction")
+		}
+		if dec.RequestId == nil {
+			return errors.New("missing required field 'requestId' in transaction")
+		}
+		if dec.From == nil {
+			return errors.New("missing required field 'from' in transaction")
+		}
+		if dec.L1BaseFee == nil {
+			return errors.New("missing required field 'l1BaseFee' in transaction")
+		}
+		if dec.DepositValue == nil {
+			return errors.New("missing required field 'depositValue' in transaction")
+		}
+		if dec.MaxFeePerGas == nil {
+			return errors.New("missing required field 'maxFeePerGas' for txdata")
+		}
+		if dec.Gas == nil {
+			return errors.New("missing required field 'gas' in txdata")
+		}
+		if dec.RetryTo == nil {
+			return errors.New("missing required field 'retryTo' in txdata")
+		}
+		if dec.Value == nil {
+			return errors.New("missing required field 'value' in transaction")
+		}
+		if dec.Beneficiary == nil {
+			return errors.New("missing required field 'beneficiary' in transaction")
+		}
+		if dec.MaxSubmissionFee == nil {
+			return errors.New("missing required field 'maxSubmissionFee' in transaction")
+		}
+		if dec.RefundTo == nil {
+			return errors.New("missing required field 'refundTo' in transaction")
+		}
+		if dec.RetryData == nil {
+			return errors.New("missing required field 'retryData' in transaction")
+		}
+		inner = &ArbitrumSubmitRetryableTx{
+			ChainId:          (*big.Int)(dec.ChainID),
+			RequestId:        *dec.RequestId,
+			From:             *dec.From,
+			L1BaseFee:        (*big.Int)(dec.L1BaseFee),
+			DepositValue:     (*big.Int)(dec.DepositValue),
+			GasFeeCap:        (*big.Int)(dec.MaxFeePerGas),
+			Gas:              uint64(*dec.Gas),
+			RetryTo:          dec.RetryTo,
+			Value:            (*big.Int)(dec.Value),
+			Beneficiary:      *dec.Beneficiary,
+			MaxSubmissionFee: (*big.Int)(dec.MaxSubmissionFee),
+			FeeRefundAddr:    *dec.RefundTo,
+			RetryData:        *dec.RetryData,
 		}
 
 	default:
