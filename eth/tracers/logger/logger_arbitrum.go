@@ -23,17 +23,21 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-func (*AccessListTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool) {
+func (*AccessListTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
 }
-func (*JSONLogger) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool) {
+func (*JSONLogger) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
 }
-func (*StructLogger) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool) {
+func (*StructLogger) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
+}
+func (*mdLogger) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool, purpose string) {
 }
 
 func (*AccessListTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {}
 func (*JSONLogger) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)       {}
 func (*StructLogger) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}
+func (*mdLogger) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)         {}
 
 func (*AccessListTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
 func (*JSONLogger) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)       {}
 func (*StructLogger) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)     {}
+func (*mdLogger) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)         {}

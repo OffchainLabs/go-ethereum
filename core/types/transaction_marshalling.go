@@ -47,21 +47,20 @@ type txJSON struct {
 	AccessList *AccessList  `json:"accessList,omitempty"`
 
 	// Arbitrum fields:
-	SubType           *hexutil.Uint64 `json:"subType,omitempty"`           // Internal
-	L2BlockNumber     *hexutil.Uint64 `json:"l2BlockNumber,omitempty"`     // Internal
-	TxIndex           *hexutil.Uint64 `json:"txIndex,omitempty"`           // Internal
-	From              *common.Address `json:"from,omitempty"`              // Contract SubmitRetryable Unsigned Retry
-	RequestId         *common.Hash    `json:"requestId,omitempty"`         // Contract SubmitRetryable Deposit
-	TicketId          *common.Hash    `json:"ticketId,omitempty"`          // Retry
-	RefundTo          *common.Address `json:"refundTo,omitempty"`          // SubmitRetryable Retry
-	L1BaseFee         *hexutil.Big    `json:"l1BaseFee,omitempty"`         // SubmitRetryable
-	DepositValue      *hexutil.Big    `json:"depositValue,omitempty"`      // SubmitRetryable
-	RetryTo           *common.Address `json:"retryTo,omitempty"`           // SubmitRetryable
-	RetryData         *hexutil.Bytes  `json:"retryData,omitempty"`         // SubmitRetryable
-	Beneficiary       *common.Address `json:"beneficiary,omitempty"`       // SubmitRetryable
-	MaxSubmissionFee  *hexutil.Big    `json:"maxSubmissionFee,omitempty"`  // SubmitRetryable
-	EffectiveGasPrice *hexutil.Uint64 `json:"effectiveGasPrice,omitempty"` // ArbLegacy
-	L1BlockNumber     *hexutil.Uint64 `json:"l1BlockNumber,omitempty"`     // ArbLegacy
+	From                *common.Address `json:"from,omitempty"`                // Contract SubmitRetryable Unsigned Retry
+	RequestId           *common.Hash    `json:"requestId,omitempty"`           // Contract SubmitRetryable Deposit
+	TicketId            *common.Hash    `json:"ticketId,omitempty"`            // Retry
+	MaxRefund           *hexutil.Big    `json:"maxRefund,omitempty"`           // Retry
+	SubmissionFeeRefund *hexutil.Big    `json:"submissionFeeRefund,omitempty"` // Retry
+	RefundTo            *common.Address `json:"refundTo,omitempty"`            // SubmitRetryable Retry
+	L1BaseFee           *hexutil.Big    `json:"l1BaseFee,omitempty"`           // SubmitRetryable
+	DepositValue        *hexutil.Big    `json:"depositValue,omitempty"`        // SubmitRetryable
+	RetryTo             *common.Address `json:"retryTo,omitempty"`             // SubmitRetryable
+	RetryData           *hexutil.Bytes  `json:"retryData,omitempty"`           // SubmitRetryable
+	Beneficiary         *common.Address `json:"beneficiary,omitempty"`         // SubmitRetryable
+	MaxSubmissionFee    *hexutil.Big    `json:"maxSubmissionFee,omitempty"`    // SubmitRetryable
+	EffectiveGasPrice   *hexutil.Uint64 `json:"effectiveGasPrice,omitempty"`   // ArbLegacy
+	L1BlockNumber       *hexutil.Uint64 `json:"l1BlockNumber,omitempty"`       // ArbLegacy
 
 	// Only used for encoding - and for ArbLegacy
 	Hash common.Hash `json:"hash"`
@@ -135,10 +134,6 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.EffectiveGasPrice = (*hexutil.Uint64)(&tx.EffectiveGasPrice)
 		enc.L1BlockNumber = (*hexutil.Uint64)(&tx.L1BlockNumber)
 	case *ArbitrumInternalTx:
-		subType := uint64(tx.SubType)
-		enc.SubType = (*hexutil.Uint64)(&subType)
-		enc.L2BlockNumber = (*hexutil.Uint64)(&tx.L2BlockNumber)
-		enc.TxIndex = (*hexutil.Uint64)(&tx.TxIndex)
 		enc.ChainID = (*hexutil.Big)(tx.ChainId)
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
 	case *ArbitrumDepositTx:
@@ -174,6 +169,8 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
 		enc.Value = (*hexutil.Big)(tx.Value)
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
+		enc.MaxRefund = (*hexutil.Big)(tx.MaxRefund)
+		enc.SubmissionFeeRefund = (*hexutil.Big)(tx.SubmissionFeeRefund)
 		enc.To = t.To()
 	case *ArbitrumSubmitRetryableTx:
 		enc.RequestId = &tx.RequestId
@@ -421,24 +418,12 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.ChainID == nil {
 			return errors.New("missing required field 'chainId' in transaction")
 		}
-		if dec.SubType == nil {
-			return errors.New("missing required field 'subType' in transaction")
-		}
 		if dec.Data == nil {
 			return errors.New("missing required field 'input' in transaction")
 		}
-		if dec.L2BlockNumber == nil {
-			return errors.New("missing required field 'l2BlockNumber' in transaction")
-		}
-		if dec.TxIndex == nil {
-			return errors.New("missing required field 'txIndex' in transaction")
-		}
 		inner = &ArbitrumInternalTx{
-			ChainId:       (*big.Int)(dec.ChainID),
-			SubType:       uint8(*dec.SubType),
-			Data:          *dec.Data,
-			L2BlockNumber: uint64(*dec.L2BlockNumber),
-			TxIndex:       uint64(*dec.TxIndex),
+			ChainId: (*big.Int)(dec.ChainID),
+			Data:    *dec.Data,
 		}
 
 	case ArbitrumDepositTxType:
@@ -555,17 +540,25 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.RefundTo == nil {
 			return errors.New("missing required field 'refundTo' in transaction")
 		}
+		if dec.MaxRefund == nil {
+			return errors.New("missing required field 'maxRefund' in transaction")
+		}
+		if dec.SubmissionFeeRefund == nil {
+			return errors.New("missing required field 'submissionFeeRefund' in transaction")
+		}
 		inner = &ArbitrumRetryTx{
-			ChainId:   (*big.Int)(dec.ChainID),
-			Nonce:     uint64(*dec.Nonce),
-			From:      *dec.From,
-			GasFeeCap: (*big.Int)(dec.MaxFeePerGas),
-			Gas:       uint64(*dec.Gas),
-			To:        dec.To,
-			Value:     (*big.Int)(dec.Value),
-			Data:      *dec.Data,
-			TicketId:  *dec.TicketId,
-			RefundTo:  *dec.RefundTo,
+			ChainId:             (*big.Int)(dec.ChainID),
+			Nonce:               uint64(*dec.Nonce),
+			From:                *dec.From,
+			GasFeeCap:           (*big.Int)(dec.MaxFeePerGas),
+			Gas:                 uint64(*dec.Gas),
+			To:                  dec.To,
+			Value:               (*big.Int)(dec.Value),
+			Data:                *dec.Data,
+			TicketId:            *dec.TicketId,
+			RefundTo:            *dec.RefundTo,
+			MaxRefund:           (*big.Int)(dec.MaxRefund),
+			SubmissionFeeRefund: (*big.Int)(dec.SubmissionFeeRefund),
 		}
 
 	case ArbitrumSubmitRetryableTxType:

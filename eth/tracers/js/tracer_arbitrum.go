@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -19,11 +19,38 @@ package js
 import (
 	"math/big"
 
+	"github.com/dop251/goja"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-func (*jsTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, amount *big.Int, before bool) {
+func (jst *jsTracer) CaptureArbitrumTransfer(
+	env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string,
+) {
+	traceTransfer, ok := goja.AssertFunction(jst.obj.Get("captureArbitrumTransfer"))
+	if !ok {
+		return
+	}
+
+	transfer := jst.vm.NewObject()
+	if from != nil {
+		transfer.Set("from", from.String())
+	} else {
+		transfer.Set("from", nil)
+	}
+	if to != nil {
+		transfer.Set("to", to.String())
+	} else {
+		transfer.Set("to", nil)
+	}
+
+	transfer.Set("value", value)
+	transfer.Set("before", before)
+	transfer.Set("purpose", purpose)
+
+	if _, err := traceTransfer(transfer); err != nil {
+		jst.err = wrapError("captureArbitrumTransfer", err)
+	}
 }
 
 func (*jsTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)        {}
