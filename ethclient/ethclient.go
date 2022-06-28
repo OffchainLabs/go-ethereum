@@ -518,6 +518,17 @@ func (ec *Client) EstimateGas(ctx context.Context, msg ethereum.CallMsg) (uint64
 	return uint64(hex), nil
 }
 
+// EstimateGasAt tries to estimate the gas needed to execute a specific transaction,
+// similar to EstimateGas but operating on a given block number instead of pending state.
+func (ec *Client) EstimateGasAt(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int) (uint64, error) {
+	var hex hexutil.Uint64
+	err := ec.c.CallContext(ctx, &hex, "eth_estimateGas", toCallArg(msg), toBlockNumArg(blockNumber))
+	if err != nil {
+		return 0, err
+	}
+	return uint64(hex), nil
+}
+
 // SendTransaction injects a signed transaction into the pending pool for execution.
 //
 // If the transaction was a contract creation use the TransactionReceipt method to get the
