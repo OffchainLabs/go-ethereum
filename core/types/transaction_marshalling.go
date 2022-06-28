@@ -56,6 +56,7 @@ type txJSON struct {
 	L1BaseFee           *hexutil.Big    `json:"l1BaseFee,omitempty"`           // SubmitRetryable
 	DepositValue        *hexutil.Big    `json:"depositValue,omitempty"`        // SubmitRetryable
 	RetryTo             *common.Address `json:"retryTo,omitempty"`             // SubmitRetryable
+	RetryValue          *hexutil.Big    `json:"retryValue,omitempty"`          // SubmitRetryable
 	RetryData           *hexutil.Bytes  `json:"retryData,omitempty"`           // SubmitRetryable
 	Beneficiary         *common.Address `json:"beneficiary,omitempty"`         // SubmitRetryable
 	MaxSubmissionFee    *hexutil.Big    `json:"maxSubmissionFee,omitempty"`    // SubmitRetryable
@@ -180,8 +181,8 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
 		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
 		enc.RetryTo = tx.RetryTo
+		enc.RetryValue = (*hexutil.Big)(tx.RetryValue)
 		enc.RetryData = (*hexutil.Bytes)(&tx.RetryData)
-		enc.Value = (*hexutil.Big)(tx.Value)
 		data := tx.data()
 		enc.Data = (*hexutil.Bytes)(&data)
 		enc.To = t.To()
@@ -564,9 +565,6 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.RetryTo == nil {
 			return errors.New("missing required field 'retryTo' in txdata")
 		}
-		if dec.Value == nil {
-			return errors.New("missing required field 'value' in transaction")
-		}
 		if dec.Beneficiary == nil {
 			return errors.New("missing required field 'beneficiary' in transaction")
 		}
@@ -575,6 +573,9 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		}
 		if dec.RefundTo == nil {
 			return errors.New("missing required field 'refundTo' in transaction")
+		}
+		if dec.RetryValue == nil {
+			return errors.New("missing required field 'retryValue' in transaction")
 		}
 		if dec.RetryData == nil {
 			return errors.New("missing required field 'retryData' in transaction")
@@ -588,7 +589,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			GasFeeCap:        (*big.Int)(dec.MaxFeePerGas),
 			Gas:              uint64(*dec.Gas),
 			RetryTo:          dec.RetryTo,
-			Value:            (*big.Int)(dec.Value),
+			RetryValue:       (*big.Int)(dec.RetryValue),
 			Beneficiary:      *dec.Beneficiary,
 			MaxSubmissionFee: (*big.Int)(dec.MaxSubmissionFee),
 			FeeRefundAddr:    *dec.RefundTo,
