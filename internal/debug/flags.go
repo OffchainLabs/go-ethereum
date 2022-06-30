@@ -25,103 +25,124 @@ import (
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/exp"
 	"github.com/fjl/memsize/memsizeui"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var Memsize memsizeui.Handler
 
 var (
-	verbosityFlag = cli.IntFlag{
-		Name:  "verbosity",
-		Usage: "Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail",
-		Value: 3,
+	verbosityFlag = &cli.IntFlag{
+		Name:     "verbosity",
+		Usage:    "Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail",
+		Value:    3,
+		Category: flags.LoggingCategory,
 	}
-	vmoduleFlag = cli.StringFlag{
-		Name:  "vmodule",
-		Usage: "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
-		Value: "",
+	vmoduleFlag = &cli.StringFlag{
+		Name:     "vmodule",
+		Usage:    "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
+		Value:    "",
+		Category: flags.LoggingCategory,
 	}
-	logjsonFlag = cli.BoolFlag{
-		Name:  "log.json",
-		Usage: "Format logs with JSON",
+	logjsonFlag = &cli.BoolFlag{
+		Name:     "log.json",
+		Usage:    "Format logs with JSON",
+		Category: flags.LoggingCategory,
 	}
-	backtraceAtFlag = cli.StringFlag{
-		Name:  "log.backtrace",
-		Usage: "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
-		Value: "",
+	backtraceAtFlag = &cli.StringFlag{
+		Name:     "log.backtrace",
+		Usage:    "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
+		Value:    "",
+		Category: flags.LoggingCategory,
 	}
-	debugFlag = cli.BoolFlag{
-		Name:  "log.debug",
-		Usage: "Prepends log messages with call-site location (file and line number)",
+	debugFlag = &cli.BoolFlag{
+		Name:     "log.debug",
+		Usage:    "Prepends log messages with call-site location (file and line number)",
+		Category: flags.LoggingCategory,
 	}
-	pprofFlag = cli.BoolFlag{
-		Name:  "pprof",
-		Usage: "Enable the pprof HTTP server",
+	pprofFlag = &cli.BoolFlag{
+		Name:     "pprof",
+		Usage:    "Enable the pprof HTTP server",
+		Category: flags.LoggingCategory,
 	}
-	pprofPortFlag = cli.IntFlag{
-		Name:  "pprof.port",
-		Usage: "pprof HTTP server listening port",
-		Value: 6060,
+	pprofPortFlag = &cli.IntFlag{
+		Name:     "pprof.port",
+		Usage:    "pprof HTTP server listening port",
+		Value:    6060,
+		Category: flags.LoggingCategory,
 	}
-	pprofAddrFlag = cli.StringFlag{
-		Name:  "pprof.addr",
-		Usage: "pprof HTTP server listening interface",
-		Value: "127.0.0.1",
+	pprofAddrFlag = &cli.StringFlag{
+		Name:     "pprof.addr",
+		Usage:    "pprof HTTP server listening interface",
+		Value:    "127.0.0.1",
+		Category: flags.LoggingCategory,
 	}
-	memprofilerateFlag = cli.IntFlag{
-		Name:  "pprof.memprofilerate",
-		Usage: "Turn on memory profiling with the given rate",
-		Value: runtime.MemProfileRate,
+	memprofilerateFlag = &cli.IntFlag{
+		Name:     "pprof.memprofilerate",
+		Usage:    "Turn on memory profiling with the given rate",
+		Value:    runtime.MemProfileRate,
+		Category: flags.LoggingCategory,
 	}
-	blockprofilerateFlag = cli.IntFlag{
-		Name:  "pprof.blockprofilerate",
-		Usage: "Turn on block profiling with the given rate",
+	blockprofilerateFlag = &cli.IntFlag{
+		Name:     "pprof.blockprofilerate",
+		Usage:    "Turn on block profiling with the given rate",
+		Category: flags.LoggingCategory,
 	}
-	cpuprofileFlag = cli.StringFlag{
-		Name:  "pprof.cpuprofile",
-		Usage: "Write CPU profile to the given file",
+	cpuprofileFlag = &cli.StringFlag{
+		Name:     "pprof.cpuprofile",
+		Usage:    "Write CPU profile to the given file",
+		Category: flags.LoggingCategory,
 	}
-	traceFlag = cli.StringFlag{
-		Name:  "trace",
-		Usage: "Write execution trace to the given file",
+	traceFlag = &cli.StringFlag{
+		Name:     "trace",
+		Usage:    "Write execution trace to the given file",
+		Category: flags.LoggingCategory,
 	}
 
 	// Deep Mind Flags
-	deepMindFlag = cli.BoolFlag{
-		Name:  "firehose-deep-mind",
-		Usage: "Activate/deactivate deep-mind instrumentation, disabled by default",
+	deepMindFlag = &cli.BoolFlag{
+		Name:     "firehose-deep-mind",
+		Usage:    "Activate/deactivate deep-mind instrumentation, disabled by default",
+		Category: flags.FirehoseCategory,
 	}
-	deepMindSyncInstrumentationFlag = cli.BoolTFlag{
-		Name:  "firehose-deep-mind-sync-instrumentation",
-		Usage: "Activate/deactivate deep-mind sync output instrumentation, enabled by default",
+	deepMindSyncInstrumentationFlag = &cli.BoolFlag{
+		Name:     "firehose-deep-mind-sync-instrumentation",
+		Usage:    "Activate/deactivate deep-mind sync output instrumentation, enabled by default",
+		Category: flags.FirehoseCategory,
+		Value:    true,
 	}
-	deepMindMiningEnabledFlag = cli.BoolFlag{
-		Name:  "firehose-deep-mind-mining-enabled",
-		Usage: "Activate/deactivate mining code even if deep-mind is active, required speculative execution on local miner node, disabled by default",
+	deepMindMiningEnabledFlag = &cli.BoolFlag{
+		Name:     "firehose-deep-mind-mining-enabled",
+		Usage:    "Activate/deactivate mining code even if deep-mind is active, required speculative execution on local miner node, disabled by default",
+		Category: flags.FirehoseCategory,
 	}
-	deepMindBlockProgressFlag = cli.BoolFlag{
-		Name:  "firehose-deep-mind-block-progress",
-		Usage: "Activate/deactivate deep-mind block progress output instrumentation, disabled by default",
+	deepMindBlockProgressFlag = &cli.BoolFlag{
+		Name:     "firehose-deep-mind-block-progress",
+		Usage:    "Activate/deactivate deep-mind block progress output instrumentation, disabled by default",
+		Category: flags.FirehoseCategory,
 	}
-	deepMindCompactionDisabledFlag = cli.BoolFlag{
-		Name:  "firehose-deep-mind-compaction-disabled",
-		Usage: "Disabled database compaction, enabled by default",
+	deepMindCompactionDisabledFlag = &cli.BoolFlag{
+		Name:     "firehose-deep-mind-compaction-disabled",
+		Usage:    "Disabled database compaction, enabled by default",
+		Category: flags.FirehoseCategory,
 	}
-	deepMindArchiveBlocksToKeepFlag = cli.Uint64Flag{
-		Name:  "firehose-deep-mind-archive-blocks-to-keep",
-		Usage: "Controls how many archive blocks the node should keep, this tweaks the core/blockchain.go constant value TriesInMemory, the default value of 0 can be used to use Geth default value instead which is 128",
-		Value: deepmind.ArchiveBlocksToKeep,
+	deepMindArchiveBlocksToKeepFlag = &cli.Uint64Flag{
+		Name:     "firehose-deep-mind-archive-blocks-to-keep",
+		Usage:    "Controls how many archive blocks the node should keep, this tweaks the core/blockchain.go constant value TriesInMemory, the default value of 0 can be used to use Geth default value instead which is 128",
+		Value:    deepmind.ArchiveBlocksToKeep,
+		Category: flags.FirehoseCategory,
 	}
-	deepMindGenesisFileFlag = cli.StringFlag{
-		Name:  "firehose-deep-mind-genesis",
-		Usage: "Invalid flag for Firehose 'fh1' versions, if you provided this flag (maybe implicitely through sf-ethereum), you are using the wrong tagged version, uses 'fh2' versions instead",
-		Value: "",
+	deepMindGenesisFileFlag = &cli.StringFlag{
+		Name:     "firehose-deep-mind-genesis",
+		Usage:    "Invalid flag for Firehose 'fh1' versions, if you provided this flag (maybe implicitely through sf-ethereum), you are using the wrong tagged version, uses 'fh2' versions instead",
+		Value:    "",
+		Category: flags.FirehoseCategory,
 	}
 )
 
@@ -160,7 +181,7 @@ func init() {
 func Setup(ctx *cli.Context) error {
 	var ostream log.Handler
 	output := io.Writer(os.Stderr)
-	if ctx.GlobalBool(logjsonFlag.Name) {
+	if ctx.Bool(logjsonFlag.Name) {
 		ostream = log.StreamHandler(output, log.JSONFormat())
 	} else {
 		usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
@@ -172,65 +193,65 @@ func Setup(ctx *cli.Context) error {
 	glogger.SetHandler(ostream)
 
 	// logging
-	verbosity := ctx.GlobalInt(verbosityFlag.Name)
+	verbosity := ctx.Int(verbosityFlag.Name)
 	glogger.Verbosity(log.Lvl(verbosity))
-	vmodule := ctx.GlobalString(vmoduleFlag.Name)
+	vmodule := ctx.String(vmoduleFlag.Name)
 	glogger.Vmodule(vmodule)
 
-	debug := ctx.GlobalBool(debugFlag.Name)
-	if ctx.GlobalIsSet(debugFlag.Name) {
-		debug = ctx.GlobalBool(debugFlag.Name)
+	debug := ctx.Bool(debugFlag.Name)
+	if ctx.IsSet(debugFlag.Name) {
+		debug = ctx.Bool(debugFlag.Name)
 	}
 	log.PrintOrigins(debug)
 
-	backtrace := ctx.GlobalString(backtraceAtFlag.Name)
+	backtrace := ctx.String(backtraceAtFlag.Name)
 	glogger.BacktraceAt(backtrace)
 
 	log.Root().SetHandler(glogger)
 
 	// profiling, tracing
 	runtime.MemProfileRate = memprofilerateFlag.Value
-	if ctx.GlobalIsSet(memprofilerateFlag.Name) {
-		runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)
+	if ctx.IsSet(memprofilerateFlag.Name) {
+		runtime.MemProfileRate = ctx.Int(memprofilerateFlag.Name)
 	}
 
-	blockProfileRate := ctx.GlobalInt(blockprofilerateFlag.Name)
+	blockProfileRate := ctx.Int(blockprofilerateFlag.Name)
 	Handler.SetBlockProfileRate(blockProfileRate)
 
-	if traceFile := ctx.GlobalString(traceFlag.Name); traceFile != "" {
+	if traceFile := ctx.String(traceFlag.Name); traceFile != "" {
 		if err := Handler.StartGoTrace(traceFile); err != nil {
 			return err
 		}
 	}
 
-	if cpuFile := ctx.GlobalString(cpuprofileFlag.Name); cpuFile != "" {
+	if cpuFile := ctx.String(cpuprofileFlag.Name); cpuFile != "" {
 		if err := Handler.StartCPUProfile(cpuFile); err != nil {
 			return err
 		}
 	}
 
 	// pprof server
-	if ctx.GlobalBool(pprofFlag.Name) {
-		listenHost := ctx.GlobalString(pprofAddrFlag.Name)
+	if ctx.Bool(pprofFlag.Name) {
+		listenHost := ctx.String(pprofAddrFlag.Name)
 
-		port := ctx.GlobalInt(pprofPortFlag.Name)
+		port := ctx.Int(pprofPortFlag.Name)
 
 		address := fmt.Sprintf("%s:%d", listenHost, port)
 		// This context value ("metrics.addr") represents the utils.MetricsHTTPFlag.Name.
 		// It cannot be imported because it will cause a cyclical dependency.
-		StartPProf(address, !ctx.GlobalIsSet("metrics.addr"))
+		StartPProf(address, !ctx.IsSet("metrics.addr"))
 	}
 
 	// Deep mind
 	log.Info("Initializing deep mind")
-	deepmind.Enabled = ctx.GlobalBool(deepMindFlag.Name)
-	deepmind.SyncInstrumentationEnabled = ctx.GlobalBoolT(deepMindSyncInstrumentationFlag.Name)
-	deepmind.MiningEnabled = ctx.GlobalBool(deepMindMiningEnabledFlag.Name)
-	deepmind.BlockProgressEnabled = ctx.GlobalBool(deepMindBlockProgressFlag.Name)
-	deepmind.CompactionDisabled = ctx.GlobalBool(deepMindCompactionDisabledFlag.Name)
-	deepmind.ArchiveBlocksToKeep = ctx.GlobalUint64(deepMindArchiveBlocksToKeepFlag.Name)
+	deepmind.Enabled = ctx.Bool(deepMindFlag.Name)
+	deepmind.SyncInstrumentationEnabled = ctx.Bool(deepMindSyncInstrumentationFlag.Name)
+	deepmind.MiningEnabled = ctx.Bool(deepMindMiningEnabledFlag.Name)
+	deepmind.BlockProgressEnabled = ctx.Bool(deepMindBlockProgressFlag.Name)
+	deepmind.CompactionDisabled = ctx.Bool(deepMindCompactionDisabledFlag.Name)
+	deepmind.ArchiveBlocksToKeep = ctx.Uint64(deepMindArchiveBlocksToKeepFlag.Name)
 
-	if ctx.GlobalString(deepMindGenesisFileFlag.Name) != "" {
+	if ctx.String(deepMindGenesisFileFlag.Name) != "" {
 		log.Error("invalid flag for Firehose 'fh1' versions, if you provided this flag (maybe implicitely through sf-ethereum), you are using the wrong tagged version, uses 'fh2' versions instead")
 		os.Exit(1)
 	}
