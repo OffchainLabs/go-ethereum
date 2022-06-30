@@ -379,11 +379,13 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if rules.IsLondon {
 		effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 	}
-	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+	if effectiveTip.Sign() > 0 {
+		st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
 
-	// Arbitrum: record the tip if nonzero (this should never happen in L2)
-	if st.evm.Config.Debug && effectiveTip.Sign() != 0 {
-		st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, nil, &st.evm.Context.Coinbase, effectiveTip, false, "tip")
+		// Arbitrum: record the tip if nonzero (this should never happen in L2)
+		if st.evm.Config.Debug {
+			st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, nil, &st.evm.Context.Coinbase, effectiveTip, false, "tip")
+		}
 	}
 
 	st.evm.ProcessingHook.EndTxHook(st.gas, vmerr == nil)
