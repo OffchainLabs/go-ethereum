@@ -259,7 +259,7 @@ func ArbitrumDevTestDASChainConfig() *ChainConfig {
 
 func ArbitrumDevnetDASChainConfig() *ChainConfig {
 	return &ChainConfig{
-		ChainID:             big.NewInt(421703),
+		ChainID:             big.NewInt(421702),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
