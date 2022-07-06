@@ -35,6 +35,10 @@ func (c *ChainConfig) IsArbitrum() bool {
 	return c.ArbitrumChainParams.EnableArbOS
 }
 
+func (c *ChainConfig) IsArbitrumNitro(num *big.Int) bool {
+	return c.IsArbitrum() && isForked(new(big.Int).SetUint64(c.ArbitrumChainParams.GenesisBlockNum), num)
+}
+
 func (c *ChainConfig) DebugMode() bool {
 	return c.ArbitrumChainParams.AllowDebugPrecompiles
 }
