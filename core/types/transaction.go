@@ -415,7 +415,7 @@ func (tx *Transaction) Hash() common.Hash {
 	if tx.Type() == LegacyTxType {
 		h = rlpHash(tx.inner)
 	} else if tx.Type() == ArbitrumLegacyTxType {
-		h = tx.inner.(*ArbitrumLegacyTxData).Hash
+		h = tx.inner.(*ArbitrumLegacyTxData).HashOverride
 	} else {
 		h = prefixedRlpHash(tx.Type(), tx.inner)
 	}
@@ -460,6 +460,9 @@ func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 	tx := s[i]
 	if tx.Type() == LegacyTxType {
 		rlp.Encode(w, tx.inner)
+	} else if tx.Type() == ArbitrumLegacyTxType {
+		arbData := tx.inner.(*ArbitrumLegacyTxData)
+		arbData.EncodeOnlyLegacyInto(w)
 	} else {
 		tx.encodeTyped(w)
 	}

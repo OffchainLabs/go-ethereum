@@ -35,6 +35,10 @@ func (c *ChainConfig) IsArbitrum() bool {
 	return c.ArbitrumChainParams.EnableArbOS
 }
 
+func (c *ChainConfig) IsArbitrumNitro(num *big.Int) bool {
+	return c.IsArbitrum() && isForked(new(big.Int).SetUint64(c.ArbitrumChainParams.GenesisBlockNum), num)
+}
+
 func (c *ChainConfig) DebugMode() bool {
 	return c.ArbitrumChainParams.AllowDebugPrecompiles
 }
@@ -317,6 +321,31 @@ func ArbitrumRinkebyShadowForkChainConfig() *ChainConfig {
 	}
 }
 
+func ArbitrumRinkebyDevTestChainConfig() *ChainConfig {
+	return &ChainConfig{
+		ChainID:             big.NewInt(421611),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.Hash{},
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(0),
+		ArbitrumChainParams: ArbitrumDevTestParams(),
+		Clique: &CliqueConfig{
+			Period: 0,
+			Epoch:  0,
+		},
+	}
+}
+
 var ArbitrumSupportedChainConfigs = []*ChainConfig{
 	ArbitrumOneChainConfig(),
 	ArbitrumAnytrustTBDChainConfig(),
@@ -325,4 +354,5 @@ var ArbitrumSupportedChainConfigs = []*ChainConfig{
 	ArbitrumDevTestDASChainConfig(),
 	ArbitrumDevnetDASChainConfig(),
 	ArbitrumRinkebyShadowForkChainConfig(),
+	ArbitrumRinkebyDevTestChainConfig(),
 }

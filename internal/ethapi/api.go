@@ -1289,14 +1289,14 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 	}
 	fields["uncles"] = uncleHashes
 
-	if config.IsArbitrum() {
-		fillArbitrumHeaderInfo(block.Header(), fields)
+	if config.IsArbitrumNitro(block.Header().Number) {
+		fillArbitrumNitroHeaderInfo(block.Header(), fields)
 	}
 
 	return fields, nil
 }
 
-func fillArbitrumHeaderInfo(header *types.Header, fields map[string]interface{}) {
+func fillArbitrumNitroHeaderInfo(header *types.Header, fields map[string]interface{}) {
 	info, err := types.DeserializeHeaderExtraInformation(header)
 	if err != nil {
 		log.Error("Expected header to contain arbitrum data", "blockHash", header.Hash())
@@ -1312,8 +1312,8 @@ func fillArbitrumHeaderInfo(header *types.Header, fields map[string]interface{})
 func (s *PublicBlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
 	fields := RPCMarshalHeader(header)
 	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
-	if s.b.ChainConfig().IsArbitrum() {
-		fillArbitrumHeaderInfo(header, fields)
+	if s.b.ChainConfig().IsArbitrumNitro(header.Number) {
+		fillArbitrumNitroHeaderInfo(header, fields)
 	}
 	return fields
 }
@@ -1777,12 +1777,23 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		if err != nil {
 			return nil, err
 		}
-		fields["effectiveGasPrice"] = hexutil.Uint64(header.BaseFee.Uint64())
-		info, err := types.DeserializeHeaderExtraInformation(header)
-		if err != nil {
-			log.Error("Expected header to contain arbitrum data", "blockHash", blockHash)
+		if s.b.ChainConfig().IsArbitrumNitro(header.Number) {
+			fields["effectiveGasPrice"] = hexutil.Uint64(header.BaseFee.Uint64())
+			info, err := types.DeserializeHeaderExtraInformation(header)
+			if err != nil {
+				log.Error("Expected header to contain arbitrum data", "blockHash", blockHash)
+			} else {
+				fields["l1BlockNumber"] = hexutil.Uint64(info.L1BlockNumber)
+			}
 		} else {
-			fields["l1BlockNumber"] = hexutil.Uint64(info.L1BlockNumber)
+			inner := tx.GetInner()
+			arbTx, ok := inner.(*types.ArbitrumLegacyTxData)
+			if !ok {
+				log.Error("Expected transaction to contain arbitrum data", "txHash", tx.Hash())
+			} else {
+				fields["effectiveGasPrice"] = hexutil.Uint64(arbTx.EffectiveGasPrice)
+				fields["l1BlockNumber"] = hexutil.Uint64(arbTx.L1BlockNumber)
+			}
 		}
 	}
 	return fields, nil
