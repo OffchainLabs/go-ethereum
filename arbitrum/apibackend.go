@@ -30,11 +30,25 @@ import (
 
 type APIBackend struct {
 	b *Backend
+
+	fallbackClientUrl string
+	fallbackClient    *rpc.Client
 }
 
-func createRegisterAPIBackend(backend *Backend) {
+func createRegisterAPIBackend(backend *Backend, fallbackClientUrl string) {
+	var fallbackClient *rpc.Client
+	var err error
+	if fallbackClientUrl != "" {
+		fallbackClient, err = rpc.Dial(fallbackClientUrl)
+		if fallbackClient == nil || err != nil {
+			log.Error("Failed connection to classic RPC. Starting without classic RPC backup", "err", err)
+			fallbackClient = nil
+		}
+	}
 	backend.apiBackend = &APIBackend{
-		b: backend,
+		b:                 backend,
+		fallbackClientUrl: fallbackClientUrl,
+		fallbackClient:    fallbackClient,
 	}
 	backend.stack.RegisterAPIs(backend.apiBackend.GetAPIs())
 }
@@ -302,6 +316,9 @@ func (a *APIBackend) stateAndHeaderFromHeader(header *types.Header, err error) (
 	if header == nil {
 		return nil, nil, errors.New("header not found")
 	}
+	if !a.blockChain().Config().IsArbitrumNitro(header.Number) {
+		return nil, header, types.ErrUseFallback
+	}
 	state, err := a.blockChain().StateAt(header.Root)
 	return state, header, err
 }
@@ -448,4 +465,12 @@ func (a *APIBackend) Engine() consensus.Engine {
 
 func (b *APIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	return nil, nil
+}
+
+func (b *APIBackend) FallbackClient() *rpc.Client {
+	if b.fallbackClient == nil && b.fallbackClientUrl != "" {
+		// TODO: reattempt connection?
+		log.Error("backup client requested, but initial connection failed")
+	}
+	return b.fallbackClient
 }

@@ -25,6 +25,8 @@ type Config struct {
 
 	// FeeHistoryMaxBlockCount limits the number of historical blocks a fee history request may cover
 	FeeHistoryMaxBlockCount uint64 `koanf:"feehistory-max-block-count"`
+
+	ClassicRedirect string `koanf:"classic-redirect"`
 }
 
 func ConfigAddOptions(prefix string, f *flag.FlagSet) {
@@ -33,6 +35,7 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.Duration(prefix+".evm-timeout", DefaultConfig.RPCEVMTimeout, "timeout used for eth_call (0=infinite)")
 	f.Uint64(prefix+".bloom-bits-blocks", DefaultConfig.BloomBitsBlocks, "number of blocks a single bloom bit section vector holds")
 	f.Uint64(prefix+".feehistory-max-block-count", DefaultConfig.FeeHistoryMaxBlockCount, "max number of blocks a fee history request may cover")
+	f.String(prefix+".classic-redirect", DefaultConfig.ClassicRedirect, "url to redirect classic requests (if empty - an error will be returned for classic requests)")
 }
 
 var DefaultConfig = Config{
@@ -42,4 +45,5 @@ var DefaultConfig = Config{
 	BloomBitsBlocks:         params.BloomBitsBlocks * 4,       // we generally have smaller blocks
 	BloomConfirms:           params.BloomConfirms,
 	FeeHistoryMaxBlockCount: 1024,
+	ClassicRedirect:         "",
 }

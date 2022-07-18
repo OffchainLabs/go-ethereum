@@ -45,8 +45,7 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 	}
 
 	backend.bloomIndexer.Start(backend.arb.BlockChain())
-
-	createRegisterAPIBackend(backend)
+	createRegisterAPIBackend(backend, config.ClassicRedirect)
 	return backend, nil
 }
 
