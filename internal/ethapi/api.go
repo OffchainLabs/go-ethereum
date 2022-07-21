@@ -1758,7 +1758,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		fields["effectiveGasPrice"] = hexutil.Uint64(gasPrice.Uint64())
 	}
 	// Assign receipt status or post state.
-	if len(receipt.PostState) > 0 {
+	if len(receipt.PostState) > 0 && tx.Type() != types.ArbitrumLegacyTxType {
 		fields["root"] = hexutil.Bytes(receipt.PostState)
 	} else {
 		fields["status"] = hexutil.Uint(receipt.Status)
