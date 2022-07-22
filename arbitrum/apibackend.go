@@ -467,10 +467,10 @@ func (b *APIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	return nil, nil
 }
 
-func (b *APIBackend) FallbackClient() *rpc.Client {
+func (b *APIBackend) FallbackClient() types.FallbackClient {
 	if b.fallbackClient == nil && b.fallbackClientUrl != "" {
 		// TODO: reattempt connection?
-		log.Error("backup client requested, but initial connection failed")
+		log.Error("fallback client requested, but initial connection failed")
 	}
 	return b.fallbackClient
 }

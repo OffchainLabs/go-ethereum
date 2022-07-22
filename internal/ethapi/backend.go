@@ -95,7 +95,7 @@ type Backend interface {
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
 
-	FallbackClient() *rpc.Client
+	FallbackClient() types.FallbackClient
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {

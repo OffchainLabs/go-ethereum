@@ -332,6 +332,6 @@ func (b *LesApiBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 	return b.eth.stateAtTransaction(ctx, block, txIndex, reexec)
 }
 
-func (b *LesApiBackend) FallbackClient() *rpc.Client {
+func (b *LesApiBackend) FallbackClient() types.FallbackClient {
 	return nil
 }

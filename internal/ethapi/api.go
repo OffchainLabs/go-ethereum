@@ -48,7 +48,7 @@ import (
 	"github.com/tyler-smith/go-bip39"
 )
 
-func fallbackClientFor(b Backend, err error) *rpc.Client {
+func fallbackClientFor(b Backend, err error) types.FallbackClient {
 	if !errors.Is(err, types.ErrUseFallback) {
 		return nil
 	}

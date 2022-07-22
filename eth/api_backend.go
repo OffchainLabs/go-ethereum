@@ -367,6 +367,6 @@ func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 	return b.eth.stateAtTransaction(block, txIndex, reexec)
 }
 
-func (b *EthAPIBackend) FallbackClient() *rpc.Client {
+func (b *EthAPIBackend) FallbackClient() types.FallbackClient {
 	return nil
 }
