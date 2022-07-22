@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/eth"
@@ -32,23 +34,57 @@ type APIBackend struct {
 	b *Backend
 
 	fallbackClientUrl string
-	fallbackClient    *rpc.Client
+	fallbackClient    types.FallbackClient
+}
+
+type ErrorFallbackClient struct {
+	err error
+}
+
+type FallBackError struct {
+	msg  string
+	code int
+}
+
+func (e *FallBackError) ErrorCode() int { return e.code }
+func (e *FallBackError) Error() string  { return e.msg }
+
+func (f *ErrorFallbackClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	return f.err
+}
+
+func createFallbackClient(fallbackClientUrl string) types.FallbackClient {
+	if fallbackClientUrl == "" {
+		return nil
+	}
+	if strings.HasPrefix(fallbackClientUrl, "error:") {
+		fields := strings.Split(fallbackClientUrl, ":")[1:]
+		errNumber, convErr := strconv.ParseInt(fields[0], 0, 0)
+		if convErr == nil {
+			fields = fields[1:]
+		} else {
+			errNumber = -32000
+		}
+		return &ErrorFallbackClient{
+			err: &FallBackError{
+				msg:  strings.Join(fields, ":"),
+				code: int(errNumber),
+			},
+		}
+	}
+	fallbackClient, err := rpc.Dial(fallbackClientUrl)
+	if fallbackClient == nil || err != nil {
+		log.Error("Failed connection to classic RPC. Starting without classic RPC backup", "err", err)
+		return nil
+	}
+	return fallbackClient
 }
 
 func createRegisterAPIBackend(backend *Backend, fallbackClientUrl string) {
-	var fallbackClient *rpc.Client
-	var err error
-	if fallbackClientUrl != "" {
-		fallbackClient, err = rpc.Dial(fallbackClientUrl)
-		if fallbackClient == nil || err != nil {
-			log.Error("Failed connection to classic RPC. Starting without classic RPC backup", "err", err)
-			fallbackClient = nil
-		}
-	}
 	backend.apiBackend = &APIBackend{
 		b:                 backend,
 		fallbackClientUrl: fallbackClientUrl,
-		fallbackClient:    fallbackClient,
+		fallbackClient:    createFallbackClient(fallbackClientUrl),
 	}
 	backend.stack.RegisterAPIs(backend.apiBackend.GetAPIs())
 }
