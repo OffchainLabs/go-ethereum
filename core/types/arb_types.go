@@ -422,7 +422,8 @@ func (info HeaderInfo) UpdateHeaderWithInfo(header *Header) {
 }
 
 func DeserializeHeaderExtraInformation(header *Header) (HeaderInfo, error) {
-	if header.Number.Sign() == 0 || len(header.Extra) == 0 {
+	if header.BaseFee == nil || header.BaseFee.Sign() == 0 || len(header.Extra) == 0 {
+		// imported blocks have no base fee
 		// The genesis block doesn't have an ArbOS encoded extra field
 		return HeaderInfo{}, nil
 	}
