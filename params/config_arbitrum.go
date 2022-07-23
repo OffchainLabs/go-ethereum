@@ -102,8 +102,7 @@ func ArbitrumRinkebyTestParams() ArbitrumChainParams {
 		AllowDebugPrecompiles:     false,
 		DataAvailabilityCommittee: false,
 		InitialArbOSVersion:       3,
-		// Not used - has init data
-		InitialChainOwner: common.Address{},
+		InitialChainOwner:         common.Address{}, // TODO
 	}
 }
 
