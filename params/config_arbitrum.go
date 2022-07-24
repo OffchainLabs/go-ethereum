@@ -44,15 +44,9 @@ func (c *ChainConfig) DebugMode() bool {
 }
 
 func (c *ChainConfig) checkArbitrumCompatible(newcfg *ChainConfig, head *big.Int) *ConfigCompatError {
-	boolToBig := func(b bool) *big.Int {
-		if b {
-			return common.Big1
-		}
-		return common.Big0
-	}
-
 	if c.IsArbitrum() != newcfg.IsArbitrum() {
-		return newCompatError("isArbitrum", boolToBig(c.IsArbitrum()), boolToBig(newcfg.IsArbitrum()))
+		// This difference applies to the entire chain, so report that the genesis block is where the difference appears.
+		return newCompatError("isArbitrum", common.Big0, common.Big0)
 	}
 	if !c.IsArbitrum() {
 		return nil
@@ -102,8 +96,7 @@ func ArbitrumRinkebyTestParams() ArbitrumChainParams {
 		AllowDebugPrecompiles:     false,
 		DataAvailabilityCommittee: false,
 		InitialArbOSVersion:       3,
-		// Not used - has init data
-		InitialChainOwner: common.Address{},
+		InitialChainOwner:         common.Address{}, // TODO
 	}
 }
 
