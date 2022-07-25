@@ -3,6 +3,7 @@ package arbitrum
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"strconv"
 	"strings"
@@ -33,8 +34,7 @@ import (
 type APIBackend struct {
 	b *Backend
 
-	fallbackClientUrl string
-	fallbackClient    types.FallbackClient
+	fallbackClient types.FallbackClient
 }
 
 type ErrorFallbackClient struct {
@@ -53,9 +53,9 @@ func (f *ErrorFallbackClient) CallContext(ctx context.Context, result interface{
 	return f.err
 }
 
-func createFallbackClient(fallbackClientUrl string) types.FallbackClient {
+func createFallbackClient(fallbackClientUrl string) (types.FallbackClient, error) {
 	if fallbackClientUrl == "" {
-		return nil
+		return nil, nil
 	}
 	if strings.HasPrefix(fallbackClientUrl, "error:") {
 		fields := strings.Split(fallbackClientUrl, ":")[1:]
@@ -70,23 +70,26 @@ func createFallbackClient(fallbackClientUrl string) types.FallbackClient {
 				msg:  strings.Join(fields, ":"),
 				code: int(errNumber),
 			},
-		}
+		}, nil
 	}
 	fallbackClient, err := rpc.Dial(fallbackClientUrl)
 	if fallbackClient == nil || err != nil {
-		log.Error("Failed connection to classic RPC. Starting without classic RPC backup", "err", err)
-		return nil
+		return nil, fmt.Errorf("failed creating fallback connection: %w", err)
 	}
-	return fallbackClient
+	return fallbackClient, nil
 }
 
-func createRegisterAPIBackend(backend *Backend, fallbackClientUrl string) {
+func createRegisterAPIBackend(backend *Backend, fallbackClientUrl string) error {
+	fallbackClient, err := createFallbackClient(fallbackClientUrl)
+	if err != nil {
+		return err
+	}
 	backend.apiBackend = &APIBackend{
-		b:                 backend,
-		fallbackClientUrl: fallbackClientUrl,
-		fallbackClient:    createFallbackClient(fallbackClientUrl),
+		b:              backend,
+		fallbackClient: fallbackClient,
 	}
 	backend.stack.RegisterAPIs(backend.apiBackend.GetAPIs())
+	return nil
 }
 
 func (a *APIBackend) GetAPIs() []rpc.API {
@@ -504,9 +507,5 @@ func (b *APIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 }
 
 func (b *APIBackend) FallbackClient() types.FallbackClient {
-	if b.fallbackClient == nil && b.fallbackClientUrl != "" {
-		// TODO: reattempt connection?
-		log.Error("fallback client requested, but initial connection failed")
-	}
 	return b.fallbackClient
 }
