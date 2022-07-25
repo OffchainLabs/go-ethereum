@@ -48,6 +48,13 @@ import (
 	"github.com/tyler-smith/go-bip39"
 )
 
+func fallbackClientFor(b Backend, err error) types.FallbackClient {
+	if !errors.Is(err, types.ErrUseFallback) {
+		return nil
+	}
+	return b.FallbackClient()
+}
+
 // PublicEthereumAPI provides an API to access Ethereum related information.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicEthereumAPI struct {
@@ -637,6 +644,11 @@ func (s *PublicBlockChainAPI) BlockNumber() hexutil.Uint64 {
 func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
+		if client := fallbackClientFor(s.b, err); client != nil {
+			var res hexutil.Big
+			err := client.CallContext(ctx, &res, "eth_getBalance", address, blockNrOrHash)
+			return &res, err
+		}
 		return nil, err
 	}
 	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
@@ -818,6 +830,11 @@ func (s *PublicBlockChainAPI) GetUncleCountByBlockHash(ctx context.Context, bloc
 func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
+		if client := fallbackClientFor(s.b, err); client != nil {
+			var res hexutil.Bytes
+			err := client.CallContext(ctx, &res, "eth_getCode", address, blockNrOrHash)
+			return res, err
+		}
 		return nil, err
 	}
 	code := state.GetCode(address)
@@ -830,6 +847,11 @@ func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Addres
 func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.Address, key string, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
+		if client := fallbackClientFor(s.b, err); client != nil {
+			var res hexutil.Bytes
+			err := client.CallContext(ctx, &res, "eth_getStorageAt", address, key, blockNrOrHash)
+			return res, err
+		}
 		return nil, err
 	}
 	res := state.GetState(address, common.HexToHash(key))
@@ -1074,6 +1096,11 @@ func (e *revertError) ErrorData() interface{} {
 func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Bytes, error) {
 	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap(), false)
 	if err != nil {
+		if client := fallbackClientFor(s.b, err); client != nil {
+			var res hexutil.Bytes
+			err := client.CallContext(ctx, &res, "eth_call", args, blockNrOrHash, overrides)
+			return res, err
+		}
 		return nil, err
 	}
 	// If the result contains a revert reason, try to unpack and return it.
@@ -1224,7 +1251,13 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args TransactionA
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
+	res, err := DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
+	if client := fallbackClientFor(s.b, err); client != nil {
+		var res hexutil.Uint64
+		err := client.CallContext(ctx, &res, "eth_estimateGas", args, blockNrOrHash)
+		return res, err
+	}
+	return res, err
 }
 
 // RPCMarshalHeader converts the given header to the RPC output .
@@ -1666,6 +1699,11 @@ func (s *PublicTransactionPoolAPI) GetTransactionCount(ctx context.Context, addr
 	// Resolve block number and use its state to ask for the nonce
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
+		if client := fallbackClientFor(s.b, err); client != nil {
+			var res hexutil.Uint64
+			err := client.CallContext(ctx, &res, "eth_getTransactionCount", address, blockNrOrHash)
+			return &res, err
+		}
 		return nil, err
 	}
 	nonce := state.GetNonce(address)

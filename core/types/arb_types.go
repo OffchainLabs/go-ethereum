@@ -1,7 +1,9 @@
 package types
 
 import (
+	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -10,6 +12,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 )
+
+var ErrUseFallback = errors.New("missing trie node 0000000000000000000000000000000000000000000000000000000000000000 (path )")
+
+type FallbackClient interface {
+	CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error
+}
 
 var bigZero = big.NewInt(0)
 
