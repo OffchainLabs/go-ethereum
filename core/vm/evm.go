@@ -653,13 +653,12 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.
-	if err != nil && evm.dmContext.Enabled() {
-		evm.dmContext.RecordCallFailed(contract.Gas, err.Error())
-	}
-
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
+			if evm.dmContext.Enabled() {
+				evm.dmContext.RecordCallFailed(contract.Gas, err.Error())
+			}
 			contract.UseGas(contract.Gas, deepmind.FailedExecutionGasChangeReason)
 		} else {
 			if evm.dmContext.Enabled() {
