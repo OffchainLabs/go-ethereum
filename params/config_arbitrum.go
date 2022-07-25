@@ -96,7 +96,7 @@ func ArbitrumRinkebyTestParams() ArbitrumChainParams {
 		AllowDebugPrecompiles:     false,
 		DataAvailabilityCommittee: false,
 		InitialArbOSVersion:       3,
-		InitialChainOwner:         common.Address{}, // TODO
+		InitialChainOwner:         common.HexToAddress("0x06C7DBC804D7BcD881D7b86b667893736b8e0Be2"),
 	}
 }
 
