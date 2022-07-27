@@ -139,6 +139,7 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
 	case *ArbitrumDepositTx:
 		enc.RequestId = &tx.L1RequestId
+		enc.From = &tx.From
 		enc.ChainID = (*hexutil.Big)(tx.ChainId)
 		enc.Value = (*hexutil.Big)(tx.Value)
 		enc.To = t.To()
@@ -437,6 +438,9 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.To == nil {
 			return errors.New("missing required field 'to' in transaction")
 		}
+		if dec.From == nil {
+			return errors.New("missing required field 'from' in transaction")
+		}
 		if dec.Value == nil {
 			return errors.New("missing required field 'value' in transaction")
 		}
@@ -444,6 +448,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			ChainId:     (*big.Int)(dec.ChainID),
 			L1RequestId: *dec.RequestId,
 			To:          *dec.To,
+			From:        *dec.From,
 			Value:       (*big.Int)(dec.Value),
 		}
 
