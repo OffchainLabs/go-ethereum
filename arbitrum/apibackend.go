@@ -371,11 +371,17 @@ func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOr
 }
 
 func (a *APIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
+	if !a.blockChain().Config().IsArbitrumNitro(block.Number()) {
+		return nil, types.ErrUseFallback
+	}
 	// DEV: This assumes that `StateAtBlock` only accesses the blockchain and chainDb fields
 	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(block, reexec, base, checkLive, preferDisk)
 }
 
 func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
+	if !a.blockChain().Config().IsArbitrumNitro(block.Number()) {
+		return nil, vm.BlockContext{}, nil, types.ErrUseFallback
+	}
 	// DEV: This assumes that `StateAtTransaction` only accesses the blockchain and chainDb fields
 	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtTransaction(block, txIndex, reexec)
 }
