@@ -258,6 +258,11 @@ func (b *LesApiBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEven
 	return b.eth.blockchain.SubscribeRemovedLogsEvent(ch)
 }
 
+func (b *LesApiBackend) SyncProgressMap() map[string]interface{} {
+	progress := b.eth.Downloader().Progress()
+	return progress.ToMap()
+}
+
 func (b *LesApiBackend) SyncProgress() ethereum.SyncProgress {
 	return b.eth.Downloader().Progress()
 }

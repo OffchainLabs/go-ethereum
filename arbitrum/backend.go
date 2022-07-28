@@ -29,7 +29,7 @@ type Backend struct {
 	chanNewBlock chan struct{} //create new L2 block unless empty
 }
 
-func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publisher ArbInterface) (*Backend, error) {
+func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publisher ArbInterface, sync SyncProgressBackend) (*Backend, error) {
 	backend := &Backend{
 		arb:     publisher,
 		stack:   stack,
@@ -45,7 +45,7 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 	}
 
 	backend.bloomIndexer.Start(backend.arb.BlockChain())
-	err := createRegisterAPIBackend(backend, config.ClassicRedirect)
+	err := createRegisterAPIBackend(backend, sync, config.ClassicRedirect)
 	if err != nil {
 		return nil, err
 	}
