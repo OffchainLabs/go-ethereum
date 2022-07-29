@@ -217,6 +217,10 @@ func (a *APIBackend) FeeHistory(
 		}
 		basefees[block-oldestBlock] = header.BaseFee
 
+		if block > int(newestBlock) {
+			break
+		}
+
 		if header.Time > prevTimestamp {
 			timeSinceLastTimeChange = header.Time - prevTimestamp
 			currentTimestampGasUsed = 0
@@ -231,8 +235,8 @@ func (a *APIBackend) FeeHistory(
 
 		prevTimestamp = header.Time
 
-		// In vanilla geth, this RPC returns the gasUsed ratio so a client can infer how the basefee will change
-		// To emulate this, we translate the compute rate into something like that, centered at an analogous 0.5
+		// In vanilla geth, this RPC returns the gasUsed ratio so a client can know how the basefee will change
+		// To emulate this, we translate the compute rate into something similar, centered at an analogous 0.5
 		var fullnessAnalogue float64
 		if timeSinceLastTimeChange > 0 {
 			fullnessAnalogue = float64(currentTimestampGasUsed) / float64(speedLimit) / float64(timeSinceLastTimeChange) / 2.0
@@ -240,7 +244,8 @@ func (a *APIBackend) FeeHistory(
 				fullnessAnalogue = 1.0
 			}
 		} else {
-			// We haven't looked far enough back to know the last timestamp change, so treat this block as full.
+			// We haven't looked far enough back to know the last timestamp change,
+			// so treat this block as full.
 			fullnessAnalogue = 1.0
 		}
 		gasUsed[block-oldestBlock] = fullnessAnalogue
