@@ -37,40 +37,16 @@ type ArbDebugConfig struct {
 }
 
 func ConfigAddOptions(prefix string, f *flag.FlagSet) {
-	f.Uint64(
-		prefix+".gas-cap", DefaultConfig.RPCGasCap,
-		"cap on computation gas that can be used in eth_call/estimateGas (0=infinite)",
-	)
-	f.Float64(
-		prefix+".tx-fee-cap", DefaultConfig.RPCTxFeeCap,
-		"cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
-	)
-	f.Duration(
-		prefix+".evm-timeout", DefaultConfig.RPCEVMTimeout,
-		"timeout used for eth_call (0=infinite)",
-	)
-	f.Uint64(
-		prefix+".bloom-bits-blocks", DefaultConfig.BloomBitsBlocks,
-		"number of blocks a single bloom bit section vector holds",
-	)
-	f.Uint64(
-		prefix+".feehistory-max-block-count", DefaultConfig.FeeHistoryMaxBlockCount,
-		"max number of blocks a fee history request may cover",
-	)
-	f.String(
-		prefix+".classic-redirect", DefaultConfig.ClassicRedirect,
-		"url to redirect classic requests, use \"error:[CODE:]MESSAGE\" to return specified error instead of redirecting",
-	)
+	f.Uint64(prefix+".gas-cap", DefaultConfig.RPCGasCap, "cap on computation gas that can be used in eth_call/estimateGas (0=infinite)")
+	f.Float64(prefix+".tx-fee-cap", DefaultConfig.RPCTxFeeCap, "cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)")
+	f.Duration(prefix+".evm-timeout", DefaultConfig.RPCEVMTimeout, "timeout used for eth_call (0=infinite)")
+	f.Uint64(prefix+".bloom-bits-blocks", DefaultConfig.BloomBitsBlocks, "number of blocks a single bloom bit section vector holds")
+	f.Uint64(prefix+".feehistory-max-block-count", DefaultConfig.FeeHistoryMaxBlockCount, "max number of blocks a fee history request may cover")
+	f.String(prefix+".classic-redirect", DefaultConfig.ClassicRedirect, "url to redirect classic requests, use \"error:[CODE:]MESSAGE\" to return specified error instead of redirecting")
 
 	arbDebug := DefaultConfig.ArbDebug
-	f.Uint64(
-		prefix+".arbdebug.block-range-bound", arbDebug.BlockRangeBound,
-		"bounds the number of blocks arbdebug calls may return",
-	)
-	f.Uint64(
-		prefix+".arbdebug.timeout-queue-bound", arbDebug.TimeoutQueueBound,
-		"bounds the length of timeout queues arbdebug calls may return",
-	)
+	f.Uint64(prefix+".arbdebug.block-range-bound", arbDebug.BlockRangeBound, "bounds the number of blocks arbdebug calls may return")
+	f.Uint64(prefix+".arbdebug.timeout-queue-bound", arbDebug.TimeoutQueueBound, "bounds the length of timeout queues arbdebug calls may return")
 }
 
 var DefaultConfig = Config{
