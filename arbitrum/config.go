@@ -62,13 +62,13 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 		"url to redirect classic requests, use \"error:[CODE:]MESSAGE\" to return specified error instead of redirecting",
 	)
 
-	ArbDebug := DefaultConfig.ArbDebug
+	arbDebug := DefaultConfig.ArbDebug
 	f.Uint64(
-		prefix+".arbdebug.block-range-bound", ArbDebug.BlockRangeBound,
+		prefix+".arbdebug.block-range-bound", arbDebug.BlockRangeBound,
 		"bounds the number of blocks arbdebug calls may return",
 	)
 	f.Uint64(
-		prefix+".arbdebug.timeout-queue-bound", ArbDebug.TimeoutQueueBound,
+		prefix+".arbdebug.timeout-queue-bound", arbDebug.TimeoutQueueBound,
 		"bounds the length of timeout queues arbdebug calls may return",
 	)
 }
