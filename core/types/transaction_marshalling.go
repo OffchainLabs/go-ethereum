@@ -56,11 +56,14 @@ type txJSON struct {
 	L1BaseFee           *hexutil.Big    `json:"l1BaseFee,omitempty"`           // SubmitRetryable
 	DepositValue        *hexutil.Big    `json:"depositValue,omitempty"`        // SubmitRetryable
 	RetryTo             *common.Address `json:"retryTo,omitempty"`             // SubmitRetryable
+	RetryValue          *hexutil.Big    `json:"retryValue,omitempty"`          // SubmitRetryable
 	RetryData           *hexutil.Bytes  `json:"retryData,omitempty"`           // SubmitRetryable
 	Beneficiary         *common.Address `json:"beneficiary,omitempty"`         // SubmitRetryable
 	MaxSubmissionFee    *hexutil.Big    `json:"maxSubmissionFee,omitempty"`    // SubmitRetryable
+	EffectiveGasPrice   *hexutil.Uint64 `json:"effectiveGasPrice,omitempty"`   // ArbLegacy
+	L1BlockNumber       *hexutil.Uint64 `json:"l1BlockNumber,omitempty"`       // ArbLegacy
 
-	// Only used for encoding:
+	// Only used for encoding - and for ArbLegacy
 	Hash common.Hash `json:"hash"`
 }
 
@@ -129,6 +132,8 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
+		enc.EffectiveGasPrice = (*hexutil.Uint64)(&tx.EffectiveGasPrice)
+		enc.L1BlockNumber = (*hexutil.Uint64)(&tx.L1BlockNumber)
 	case *ArbitrumInternalTx:
 		enc.ChainID = (*hexutil.Big)(tx.ChainId)
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
@@ -180,8 +185,8 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
 		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
 		enc.RetryTo = tx.RetryTo
+		enc.RetryValue = (*hexutil.Big)(tx.RetryValue)
 		enc.RetryData = (*hexutil.Bytes)(&tx.RetryData)
-		enc.Value = (*hexutil.Big)(tx.Value)
 		data := tx.data()
 		enc.Data = (*hexutil.Bytes)(&data)
 		enc.To = t.To()
@@ -355,41 +360,59 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		}
 
 	case ArbitrumLegacyTxType:
-		if dec.Gas == nil {
-			return errors.New("missing required field 'gas' in txdata")
-		}
-		if dec.GasPrice == nil {
-			return errors.New("missing required field 'gasPrice' in txdata")
-		}
-		if dec.Data == nil {
-			return errors.New("missing required field 'input' in transaction")
+		var itx LegacyTx
+		if dec.To != nil {
+			itx.To = dec.To
 		}
 		if dec.Nonce == nil {
 			return errors.New("missing required field 'nonce' in transaction")
 		}
+		itx.Nonce = uint64(*dec.Nonce)
+		if dec.GasPrice == nil {
+			return errors.New("missing required field 'gasPrice' in transaction")
+		}
+		itx.GasPrice = (*big.Int)(dec.GasPrice)
+		if dec.Gas == nil {
+			return errors.New("missing required field 'gas' in transaction")
+		}
+		itx.Gas = uint64(*dec.Gas)
 		if dec.Value == nil {
 			return errors.New("missing required field 'value' in transaction")
 		}
+		itx.Value = (*big.Int)(dec.Value)
+		if dec.Data == nil {
+			return errors.New("missing required field 'input' in transaction")
+		}
+		itx.Data = *dec.Data
 		if dec.V == nil {
 			return errors.New("missing required field 'v' in transaction")
 		}
+		itx.V = (*big.Int)(dec.V)
 		if dec.R == nil {
 			return errors.New("missing required field 'r' in transaction")
 		}
+		itx.R = (*big.Int)(dec.R)
 		if dec.S == nil {
 			return errors.New("missing required field 's' in transaction")
 		}
+		itx.S = (*big.Int)(dec.S)
+		withSignature := itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0
+		if withSignature {
+			if err := sanityCheckSignature(itx.V, itx.R, itx.S, true); err != nil {
+				return err
+			}
+		}
+		if dec.EffectiveGasPrice == nil {
+			return errors.New("missing required field 'EffectiveGasPrice' in transaction")
+		}
+		if dec.L1BlockNumber == nil {
+			return errors.New("missing required field 'L1BlockNumber' in transaction")
+		}
 		inner = &ArbitrumLegacyTxData{
-			Gas:      uint64(*dec.Gas),
-			GasPrice: (*big.Int)(dec.GasPrice),
-			Hash:     dec.Hash,
-			Data:     *dec.Data,
-			Nonce:    uint64(*dec.Nonce),
-			To:       dec.To,
-			Value:    (*big.Int)(dec.Value),
-			V:        (*big.Int)(dec.V),
-			R:        (*big.Int)(dec.R),
-			S:        (*big.Int)(dec.S),
+			LegacyTx:          itx,
+			HashOverride:      dec.Hash,
+			EffectiveGasPrice: uint64(*dec.EffectiveGasPrice),
+			L1BlockNumber:     uint64(*dec.L1BlockNumber),
 		}
 
 	case ArbitrumInternalTxType:
@@ -564,9 +587,6 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.RetryTo == nil {
 			return errors.New("missing required field 'retryTo' in txdata")
 		}
-		if dec.Value == nil {
-			return errors.New("missing required field 'value' in transaction")
-		}
 		if dec.Beneficiary == nil {
 			return errors.New("missing required field 'beneficiary' in transaction")
 		}
@@ -575,6 +595,9 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		}
 		if dec.RefundTo == nil {
 			return errors.New("missing required field 'refundTo' in transaction")
+		}
+		if dec.RetryValue == nil {
+			return errors.New("missing required field 'retryValue' in transaction")
 		}
 		if dec.RetryData == nil {
 			return errors.New("missing required field 'retryData' in transaction")
@@ -588,7 +611,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			GasFeeCap:        (*big.Int)(dec.MaxFeePerGas),
 			Gas:              uint64(*dec.Gas),
 			RetryTo:          dec.RetryTo,
-			Value:            (*big.Int)(dec.Value),
+			RetryValue:       (*big.Int)(dec.RetryValue),
 			Beneficiary:      *dec.Beneficiary,
 			MaxSubmissionFee: (*big.Int)(dec.MaxSubmissionFee),
 			FeeRefundAddr:    *dec.RefundTo,

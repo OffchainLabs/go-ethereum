@@ -48,6 +48,13 @@ import (
 	"github.com/tyler-smith/go-bip39"
 )
 
+func fallbackClientFor(b Backend, err error) types.FallbackClient {
+	if !errors.Is(err, types.ErrUseFallback) {
+		return nil
+	}
+	return b.FallbackClient()
+}
+
 // PublicEthereumAPI provides an API to access Ethereum related information.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicEthereumAPI struct {
@@ -637,6 +644,11 @@ func (s *PublicBlockChainAPI) BlockNumber() hexutil.Uint64 {
 func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
+		if client := fallbackClientFor(s.b, err); client != nil {
+			var res hexutil.Big
+			err := client.CallContext(ctx, &res, "eth_getBalance", address, blockNrOrHash)
+			return &res, err
+		}
 		return nil, err
 	}
 	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
@@ -818,6 +830,11 @@ func (s *PublicBlockChainAPI) GetUncleCountByBlockHash(ctx context.Context, bloc
 func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
+		if client := fallbackClientFor(s.b, err); client != nil {
+			var res hexutil.Bytes
+			err := client.CallContext(ctx, &res, "eth_getCode", address, blockNrOrHash)
+			return res, err
+		}
 		return nil, err
 	}
 	code := state.GetCode(address)
@@ -830,6 +847,11 @@ func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Addres
 func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.Address, key string, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
+		if client := fallbackClientFor(s.b, err); client != nil {
+			var res hexutil.Bytes
+			err := client.CallContext(ctx, &res, "eth_getStorageAt", address, key, blockNrOrHash)
+			return res, err
+		}
 		return nil, err
 	}
 	res := state.GetState(address, common.HexToHash(key))
@@ -1074,6 +1096,11 @@ func (e *revertError) ErrorData() interface{} {
 func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Bytes, error) {
 	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap(), false)
 	if err != nil {
+		if client := fallbackClientFor(s.b, err); client != nil {
+			var res hexutil.Bytes
+			err := client.CallContext(ctx, &res, "eth_call", args, blockNrOrHash, overrides)
+			return res, err
+		}
 		return nil, err
 	}
 	// If the result contains a revert reason, try to unpack and return it.
@@ -1224,7 +1251,13 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args TransactionA
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
+	res, err := DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
+	if client := fallbackClientFor(s.b, err); client != nil {
+		var res hexutil.Uint64
+		err := client.CallContext(ctx, &res, "eth_estimateGas", args, blockNrOrHash)
+		return res, err
+	}
+	return res, err
 }
 
 // RPCMarshalHeader converts the given header to the RPC output .
@@ -1289,14 +1322,14 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 	}
 	fields["uncles"] = uncleHashes
 
-	if config.IsArbitrum() {
-		fillArbitrumHeaderInfo(block.Header(), fields)
+	if config.IsArbitrumNitro(block.Header().Number) {
+		fillArbitrumNitroHeaderInfo(block.Header(), fields)
 	}
 
 	return fields, nil
 }
 
-func fillArbitrumHeaderInfo(header *types.Header, fields map[string]interface{}) {
+func fillArbitrumNitroHeaderInfo(header *types.Header, fields map[string]interface{}) {
 	info, err := types.DeserializeHeaderExtraInformation(header)
 	if err != nil {
 		log.Error("Expected header to contain arbitrum data", "blockHash", header.Hash())
@@ -1312,8 +1345,8 @@ func fillArbitrumHeaderInfo(header *types.Header, fields map[string]interface{})
 func (s *PublicBlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
 	fields := RPCMarshalHeader(header)
 	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
-	if s.b.ChainConfig().IsArbitrum() {
-		fillArbitrumHeaderInfo(header, fields)
+	if s.b.ChainConfig().IsArbitrumNitro(header.Number) {
+		fillArbitrumNitroHeaderInfo(header, fields)
 	}
 	return fields
 }
@@ -1362,6 +1395,7 @@ type RPCTransaction struct {
 	L1BaseFee           *hexutil.Big    `json:"l1BaseFee,omitempty"`           // SubmitRetryable
 	DepositValue        *hexutil.Big    `json:"depositValue,omitempty"`        // SubmitRetryable
 	RetryTo             *common.Address `json:"retryTo,omitempty"`             // SubmitRetryable
+	RetryValue          *hexutil.Big    `json:"retryValue,omitempty"`          // SubmitRetryable
 	RetryData           *hexutil.Bytes  `json:"retryData,omitempty"`           // SubmitRetryable
 	Beneficiary         *common.Address `json:"beneficiary,omitempty"`         // SubmitRetryable
 	MaxSubmissionFee    *hexutil.Big    `json:"maxSubmissionFee,omitempty"`    // SubmitRetryable
@@ -1436,6 +1470,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.L1BaseFee = (*hexutil.Big)(inner.L1BaseFee)
 		result.DepositValue = (*hexutil.Big)(inner.DepositValue)
 		result.RetryTo = inner.RetryTo
+		result.RetryValue = (*hexutil.Big)(inner.RetryValue)
 		result.RetryData = (*hexutil.Bytes)(&inner.RetryData)
 		result.Beneficiary = &inner.Beneficiary
 		result.RefundTo = &inner.FeeRefundAddr
@@ -1664,6 +1699,11 @@ func (s *PublicTransactionPoolAPI) GetTransactionCount(ctx context.Context, addr
 	// Resolve block number and use its state to ask for the nonce
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
+		if client := fallbackClientFor(s.b, err); client != nil {
+			var res hexutil.Uint64
+			err := client.CallContext(ctx, &res, "eth_getTransactionCount", address, blockNrOrHash)
+			return &res, err
+		}
 		return nil, err
 	}
 	nonce := state.GetNonce(address)
@@ -1756,7 +1796,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		fields["effectiveGasPrice"] = hexutil.Uint64(gasPrice.Uint64())
 	}
 	// Assign receipt status or post state.
-	if len(receipt.PostState) > 0 {
+	if len(receipt.PostState) > 0 && tx.Type() != types.ArbitrumLegacyTxType {
 		fields["root"] = hexutil.Bytes(receipt.PostState)
 	} else {
 		fields["status"] = hexutil.Uint(receipt.Status)
@@ -1775,12 +1815,23 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		if err != nil {
 			return nil, err
 		}
-		fields["effectiveGasPrice"] = hexutil.Uint64(header.BaseFee.Uint64())
-		info, err := types.DeserializeHeaderExtraInformation(header)
-		if err != nil {
-			log.Error("Expected header to contain arbitrum data", "blockHash", blockHash)
+		if s.b.ChainConfig().IsArbitrumNitro(header.Number) {
+			fields["effectiveGasPrice"] = hexutil.Uint64(header.BaseFee.Uint64())
+			info, err := types.DeserializeHeaderExtraInformation(header)
+			if err != nil {
+				log.Error("Expected header to contain arbitrum data", "blockHash", blockHash)
+			} else {
+				fields["l1BlockNumber"] = hexutil.Uint64(info.L1BlockNumber)
+			}
 		} else {
-			fields["l1BlockNumber"] = hexutil.Uint64(info.L1BlockNumber)
+			inner := tx.GetInner()
+			arbTx, ok := inner.(*types.ArbitrumLegacyTxData)
+			if !ok {
+				log.Error("Expected transaction to contain arbitrum data", "txHash", tx.Hash())
+			} else {
+				fields["effectiveGasPrice"] = hexutil.Uint64(arbTx.EffectiveGasPrice)
+				fields["l1BlockNumber"] = hexutil.Uint64(arbTx.L1BlockNumber)
+			}
 		}
 	}
 	return fields, nil

@@ -35,20 +35,18 @@ func (c *ChainConfig) IsArbitrum() bool {
 	return c.ArbitrumChainParams.EnableArbOS
 }
 
+func (c *ChainConfig) IsArbitrumNitro(num *big.Int) bool {
+	return c.IsArbitrum() && isForked(new(big.Int).SetUint64(c.ArbitrumChainParams.GenesisBlockNum), num)
+}
+
 func (c *ChainConfig) DebugMode() bool {
 	return c.ArbitrumChainParams.AllowDebugPrecompiles
 }
 
 func (c *ChainConfig) checkArbitrumCompatible(newcfg *ChainConfig, head *big.Int) *ConfigCompatError {
-	boolToBig := func(b bool) *big.Int {
-		if b {
-			return common.Big1
-		}
-		return common.Big0
-	}
-
 	if c.IsArbitrum() != newcfg.IsArbitrum() {
-		return newCompatError("isArbitrum", boolToBig(c.IsArbitrum()), boolToBig(newcfg.IsArbitrum()))
+		// This difference applies to the entire chain, so report that the genesis block is where the difference appears.
+		return newCompatError("isArbitrum", common.Big0, common.Big0)
 	}
 	if !c.IsArbitrum() {
 		return nil
@@ -72,7 +70,7 @@ func ArbitrumOneParams() ArbitrumChainParams {
 	}
 }
 
-func ArbitrumAnytrustTBDParams() ArbitrumChainParams {
+func ArbitrumNovaParams() ArbitrumChainParams {
 	return ArbitrumChainParams{
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     false,
@@ -82,13 +80,23 @@ func ArbitrumAnytrustTBDParams() ArbitrumChainParams {
 	}
 }
 
-func ArbitrumDevnetParams() ArbitrumChainParams {
+func ArbitrumRollupGoerliTestnetParams() ArbitrumChainParams {
 	return ArbitrumChainParams{
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     false,
 		DataAvailabilityCommittee: false,
-		InitialArbOSVersion:       1,
+		InitialArbOSVersion:       2,
 		InitialChainOwner:         common.HexToAddress("0x186B56023d42B2B4E7616589a5C62EEf5FCa21DD"),
+	}
+}
+
+func ArbitrumRinkebyTestParams() ArbitrumChainParams {
+	return ArbitrumChainParams{
+		EnableArbOS:               true,
+		AllowDebugPrecompiles:     false,
+		DataAvailabilityCommittee: false,
+		InitialArbOSVersion:       3,
+		InitialChainOwner:         common.Address{}, // TODO
 	}
 }
 
@@ -97,7 +105,7 @@ func ArbitrumDevTestParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     true,
 		DataAvailabilityCommittee: false,
-		InitialArbOSVersion:       2,
+		InitialArbOSVersion:       3,
 		InitialChainOwner:         common.Address{},
 	}
 }
@@ -107,17 +115,17 @@ func ArbitrumDevTestDASParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     true,
 		DataAvailabilityCommittee: true,
-		InitialArbOSVersion:       2,
+		InitialArbOSVersion:       3,
 		InitialChainOwner:         common.Address{},
 	}
 }
 
-func ArbitrumDevnetDASParams() ArbitrumChainParams {
+func ArbitrumAnytrustGoerliTestnetParams() ArbitrumChainParams {
 	return ArbitrumChainParams{
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     false,
 		DataAvailabilityCommittee: true,
-		InitialArbOSVersion:       1,
+		InitialArbOSVersion:       2,
 		InitialChainOwner:         common.HexToAddress("0x186B56023d42B2B4E7616589a5C62EEf5FCa21DD"),
 	}
 }
@@ -157,7 +165,7 @@ func ArbitrumOneChainConfig() *ChainConfig {
 	}
 }
 
-func ArbitrumAnytrustTBDChainConfig() *ChainConfig {
+func ArbitrumNovaChainConfig() *ChainConfig {
 	return &ChainConfig{
 		ChainID:             big.NewInt(42170),
 		HomesteadBlock:      big.NewInt(0),
@@ -174,7 +182,7 @@ func ArbitrumAnytrustTBDChainConfig() *ChainConfig {
 		MuirGlacierBlock:    big.NewInt(0),
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
-		ArbitrumChainParams: ArbitrumAnytrustTBDParams(),
+		ArbitrumChainParams: ArbitrumNovaParams(),
 		Clique: &CliqueConfig{
 			Period: 0,
 			Epoch:  0,
@@ -182,7 +190,7 @@ func ArbitrumAnytrustTBDChainConfig() *ChainConfig {
 	}
 }
 
-func ArbitrumDevnetChainConfig() *ChainConfig {
+func ArbitrumRollupGoerliTestnetChainConfig() *ChainConfig {
 	return &ChainConfig{
 		ChainID:             big.NewInt(421613),
 		HomesteadBlock:      big.NewInt(0),
@@ -199,7 +207,7 @@ func ArbitrumDevnetChainConfig() *ChainConfig {
 		MuirGlacierBlock:    big.NewInt(0),
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
-		ArbitrumChainParams: ArbitrumDevnetParams(),
+		ArbitrumChainParams: ArbitrumRollupGoerliTestnetParams(),
 		Clique: &CliqueConfig{
 			Period: 0,
 			Epoch:  0,
@@ -257,7 +265,7 @@ func ArbitrumDevTestDASChainConfig() *ChainConfig {
 	}
 }
 
-func ArbitrumDevnetDASChainConfig() *ChainConfig {
+func ArbitrumAnytrustGoerliTestnetChainConfig() *ChainConfig {
 	return &ChainConfig{
 		ChainID:             big.NewInt(421703),
 		HomesteadBlock:      big.NewInt(0),
@@ -274,7 +282,32 @@ func ArbitrumDevnetDASChainConfig() *ChainConfig {
 		MuirGlacierBlock:    big.NewInt(0),
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
-		ArbitrumChainParams: ArbitrumDevnetDASParams(),
+		ArbitrumChainParams: ArbitrumAnytrustGoerliTestnetParams(),
+		Clique: &CliqueConfig{
+			Period: 0,
+			Epoch:  0,
+		},
+	}
+}
+
+func ArbitrumRinkebyTestnetChainConfig() *ChainConfig {
+	return &ChainConfig{
+		ChainID:             big.NewInt(421611),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.Hash{},
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(0),
+		ArbitrumChainParams: ArbitrumRinkebyTestParams(),
 		Clique: &CliqueConfig{
 			Period: 0,
 			Epoch:  0,
@@ -284,9 +317,10 @@ func ArbitrumDevnetDASChainConfig() *ChainConfig {
 
 var ArbitrumSupportedChainConfigs = []*ChainConfig{
 	ArbitrumOneChainConfig(),
-	ArbitrumAnytrustTBDChainConfig(),
-	ArbitrumDevnetChainConfig(),
+	ArbitrumNovaChainConfig(),
+	ArbitrumRollupGoerliTestnetChainConfig(),
 	ArbitrumDevTestChainConfig(),
 	ArbitrumDevTestDASChainConfig(),
-	ArbitrumDevnetDASChainConfig(),
+	ArbitrumAnytrustGoerliTestnetChainConfig(),
+	ArbitrumRinkebyTestnetChainConfig(),
 }

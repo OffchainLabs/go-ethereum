@@ -3,7 +3,10 @@ package arbitrum
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/eth"
@@ -30,13 +33,63 @@ import (
 
 type APIBackend struct {
 	b *Backend
+
+	fallbackClient types.FallbackClient
 }
 
-func createRegisterAPIBackend(backend *Backend) {
+type ErrorFallbackClient struct {
+	err error
+}
+
+type FallBackError struct {
+	msg  string
+	code int
+}
+
+func (e *FallBackError) ErrorCode() int { return e.code }
+func (e *FallBackError) Error() string  { return e.msg }
+
+func (f *ErrorFallbackClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	return f.err
+}
+
+func createFallbackClient(fallbackClientUrl string) (types.FallbackClient, error) {
+	if fallbackClientUrl == "" {
+		return nil, nil
+	}
+	if strings.HasPrefix(fallbackClientUrl, "error:") {
+		fields := strings.Split(fallbackClientUrl, ":")[1:]
+		errNumber, convErr := strconv.ParseInt(fields[0], 0, 0)
+		if convErr == nil {
+			fields = fields[1:]
+		} else {
+			errNumber = -32000
+		}
+		return &ErrorFallbackClient{
+			err: &FallBackError{
+				msg:  strings.Join(fields, ":"),
+				code: int(errNumber),
+			},
+		}, nil
+	}
+	fallbackClient, err := rpc.Dial(fallbackClientUrl)
+	if fallbackClient == nil || err != nil {
+		return nil, fmt.Errorf("failed creating fallback connection: %w", err)
+	}
+	return fallbackClient, nil
+}
+
+func createRegisterAPIBackend(backend *Backend, fallbackClientUrl string) error {
+	fallbackClient, err := createFallbackClient(fallbackClientUrl)
+	if err != nil {
+		return err
+	}
 	backend.apiBackend = &APIBackend{
-		b: backend,
+		b:              backend,
+		fallbackClient: fallbackClient,
 	}
 	backend.stack.RegisterAPIs(backend.apiBackend.GetAPIs())
+	return nil
 }
 
 func (a *APIBackend) GetAPIs() []rpc.API {
@@ -302,6 +355,9 @@ func (a *APIBackend) stateAndHeaderFromHeader(header *types.Header, err error) (
 	if header == nil {
 		return nil, nil, errors.New("header not found")
 	}
+	if !a.blockChain().Config().IsArbitrumNitro(header.Number) {
+		return nil, header, types.ErrUseFallback
+	}
 	state, err := a.blockChain().StateAt(header.Root)
 	return state, header, err
 }
@@ -448,4 +504,8 @@ func (a *APIBackend) Engine() consensus.Engine {
 
 func (b *APIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	return nil, nil
+}
+
+func (b *APIBackend) FallbackClient() types.FallbackClient {
+	return b.fallbackClient
 }
