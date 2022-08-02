@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -35,6 +35,7 @@ type APIBackend struct {
 	b *Backend
 
 	fallbackClient types.FallbackClient
+	sync           SyncProgressBackend
 }
 
 type ErrorFallbackClient struct {
@@ -79,7 +80,11 @@ func createFallbackClient(fallbackClientUrl string) (types.FallbackClient, error
 	return fallbackClient, nil
 }
 
-func createRegisterAPIBackend(backend *Backend, fallbackClientUrl string) error {
+type SyncProgressBackend interface {
+	SyncProgressMap() map[string]interface{}
+}
+
+func createRegisterAPIBackend(backend *Backend, sync SyncProgressBackend, fallbackClientUrl string) error {
 	fallbackClient, err := createFallbackClient(fallbackClientUrl)
 	if err != nil {
 		return err
@@ -87,6 +92,7 @@ func createRegisterAPIBackend(backend *Backend, fallbackClientUrl string) error 
 	backend.apiBackend = &APIBackend{
 		b:              backend,
 		fallbackClient: fallbackClient,
+		sync:           sync,
 	}
 	backend.stack.RegisterAPIs(backend.apiBackend.GetAPIs())
 	return nil
@@ -130,8 +136,20 @@ func (a *APIBackend) GetArbitrumNode() interface{} {
 }
 
 // General Ethereum API
+func (a *APIBackend) SyncProgressMap() map[string]interface{} {
+	return a.sync.SyncProgressMap()
+}
+
 func (a *APIBackend) SyncProgress() ethereum.SyncProgress {
-	panic("not implemented") // TODO: Implement
+	progress := a.sync.SyncProgressMap()
+
+	if progress == nil || len(progress) == 0 {
+		return ethereum.SyncProgress{}
+	}
+	return ethereum.SyncProgress{
+		CurrentBlock: 0,
+		HighestBlock: 1,
+	}
 }
 
 func (a *APIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
