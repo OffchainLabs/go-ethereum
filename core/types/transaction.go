@@ -60,7 +60,6 @@ type Transaction struct {
 	time  time.Time // Time first seen locally (spam avoidance)
 
 	// Arbitrum cache: must be atomically accessed
-	PosterCost    atomic.Value
 	CalldataUnits uint64
 
 	// caches
