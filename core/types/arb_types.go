@@ -22,7 +22,7 @@ var fallbackErrorCode = -32001
 func SetFallbackError(msg string, code int) {
 	fallbackErrorMsg = msg
 	fallbackErrorCode = code
-	log.Info("setting fallback", "msg", msg, "code", code)
+	log.Debug("setting fallback error", "msg", msg, "code", code)
 }
 
 func (f fallbackError) ErrorCode() int { return fallbackErrorCode }
