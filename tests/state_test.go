@@ -250,7 +250,6 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				}
 				statedb.RevertToSnapshot(snapshot)
 			}
-
 		})
 	}
 }
