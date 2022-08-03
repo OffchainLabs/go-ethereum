@@ -353,7 +353,16 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if rules.IsLondon {
 		effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 	}
-	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip), false, st.dmContext, deepmind.BalanceChangeReason("reward_transaction_fee"))
+
+	if st.evm.Config.NoBaseFee && st.gasFeeCap.Sign() == 0 && st.gasTipCap.Sign() == 0 {
+		// Skip fee payment when NoBaseFee is set and the fee fields
+		// are 0. This avoids a negative effectiveTip being applied to
+		// the coinbase when simulating calls.
+	} else {
+		fee := new(big.Int).SetUint64(st.gasUsed())
+		fee.Mul(fee, effectiveTip)
+		st.state.AddBalance(st.evm.Context.Coinbase, fee, false, st.dmContext, deepmind.BalanceChangeReason("reward_transaction_fee"))
+	}
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),
