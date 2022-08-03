@@ -17,7 +17,7 @@ type fallbackError struct {
 }
 
 var fallbackErrorMsg = "missing trie node 0000000000000000000000000000000000000000000000000000000000000000 (path ) <nil>"
-var fallbackErrorCode = -32001
+var fallbackErrorCode = -32000
 
 func SetFallbackError(msg string, code int) {
 	fallbackErrorMsg = msg
