@@ -1333,15 +1333,57 @@ func (s *PublicBlockChainAPI) rpcMarshalHeader(ctx context.Context, header *type
 	return fields
 }
 
+func (s *PublicBlockChainAPI) arbClassicL1BlockNumber(ctx context.Context, block *types.Block) (hexutil.Uint64, error) {
+	chainConfig := s.b.ChainConfig()
+	blockNum := block.Number().Int64()
+	i := 0
+	for {
+		transactions := block.Transactions()
+		if len(transactions) > 0 {
+			legacyTx, ok := transactions[0].GetInner().(*types.ArbitrumLegacyTxData)
+			if !ok {
+				return 0, fmt.Errorf("couldn't read legacy transaction from block %d", blockNum)
+			}
+			return hexutil.Uint64(legacyTx.L1BlockNumber), nil
+		}
+		blockNum++
+		var err error
+		block, err = s.b.BlockByNumber(ctx, rpc.BlockNumber(blockNum))
+		if err != nil {
+			return 0, err
+		}
+		if blockNum >= int64(chainConfig.ArbitrumChainParams.GenesisBlockNum) {
+			info, err := types.DeserializeHeaderExtraInformation(block.Header())
+			if err != nil {
+				return 0, err
+			}
+			return hexutil.Uint64(info.L1BlockNumber), nil
+		}
+		i++
+		if i > 5 {
+			return 0, fmt.Errorf("couldn't find block with transactions. Reached %d", blockNum)
+		}
+	}
+}
+
 // rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
-	fields, err := RPCMarshalBlock(b, inclTx, fullTx, s.b.ChainConfig())
+	chainConfig := s.b.ChainConfig()
+	fields, err := RPCMarshalBlock(b, inclTx, fullTx, chainConfig)
 	if err != nil {
 		return nil, err
 	}
 	if inclTx {
 		fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, b.Hash()))
+	}
+	if chainConfig.IsArbitrum() && !chainConfig.IsArbitrumNitro(b.Number()) {
+		l1BlockNumber, err := s.arbClassicL1BlockNumber(ctx, b)
+		if err != nil {
+			log.Error("error trying to fill legacy l1BlockNumber", "err", err)
+		} else {
+			fields["l1BlockNumber"] = hexutil.Uint64(l1BlockNumber)
+		}
 	}
 	return fields, err
 }
