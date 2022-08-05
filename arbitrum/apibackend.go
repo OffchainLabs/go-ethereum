@@ -38,22 +38,6 @@ type APIBackend struct {
 	sync           SyncProgressBackend
 }
 
-type ErrorFallbackClient struct {
-	err error
-}
-
-type FallBackError struct {
-	msg  string
-	code int
-}
-
-func (e *FallBackError) ErrorCode() int { return e.code }
-func (e *FallBackError) Error() string  { return e.msg }
-
-func (f *ErrorFallbackClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
-	return f.err
-}
-
 func createFallbackClient(fallbackClientUrl string) (types.FallbackClient, error) {
 	if fallbackClientUrl == "" {
 		return nil, nil
@@ -66,12 +50,8 @@ func createFallbackClient(fallbackClientUrl string) (types.FallbackClient, error
 		} else {
 			errNumber = -32000
 		}
-		return &ErrorFallbackClient{
-			err: &FallBackError{
-				msg:  strings.Join(fields, ":"),
-				code: int(errNumber),
-			},
-		}, nil
+		types.SetFallbackError(strings.Join(fields, ":"), int(errNumber))
+		return nil, nil
 	}
 	fallbackClient, err := rpc.Dial(fallbackClientUrl)
 	if fallbackClient == nil || err != nil {

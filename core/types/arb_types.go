@@ -3,17 +3,32 @@ package types
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var ErrUseFallback = errors.New("missing trie node 0000000000000000000000000000000000000000000000000000000000000000 (path )")
+type fallbackError struct {
+}
+
+var fallbackErrorMsg = "missing trie node 0000000000000000000000000000000000000000000000000000000000000000 (path ) <nil>"
+var fallbackErrorCode = -32000
+
+func SetFallbackError(msg string, code int) {
+	fallbackErrorMsg = msg
+	fallbackErrorCode = code
+	log.Debug("setting fallback error", "msg", msg, "code", code)
+}
+
+func (f fallbackError) ErrorCode() int { return fallbackErrorCode }
+func (f fallbackError) Error() string  { return fallbackErrorMsg }
+
+var ErrUseFallback = fallbackError{}
 
 type FallbackClient interface {
 	CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error
