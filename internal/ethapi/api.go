@@ -1334,9 +1334,9 @@ func (s *PublicBlockChainAPI) rpcMarshalHeader(ctx context.Context, header *type
 }
 
 func (s *PublicBlockChainAPI) arbClassicL1BlockNumber(ctx context.Context, block *types.Block) (hexutil.Uint64, error) {
-	chainConfig := s.b.ChainConfig()
-	blockNum := block.Number().Int64()
-	i := 0
+	startBlockNum := block.Number().Int64()
+	blockNum := startBlockNum
+	i := int64(0)
 	for {
 		transactions := block.Transactions()
 		if len(transactions) > 0 {
@@ -1346,22 +1346,18 @@ func (s *PublicBlockChainAPI) arbClassicL1BlockNumber(ctx context.Context, block
 			}
 			return hexutil.Uint64(legacyTx.L1BlockNumber), nil
 		}
-		blockNum++
+		if blockNum == 0 {
+			return 0, nil
+		}
+		i++
+		blockNum = startBlockNum - i
+		if i > 5 {
+			return 0, fmt.Errorf("couldn't find block with transactions. Reached %d", blockNum)
+		}
 		var err error
 		block, err = s.b.BlockByNumber(ctx, rpc.BlockNumber(blockNum))
 		if err != nil {
 			return 0, err
-		}
-		if blockNum >= int64(chainConfig.ArbitrumChainParams.GenesisBlockNum) {
-			info, err := types.DeserializeHeaderExtraInformation(block.Header())
-			if err != nil {
-				return 0, err
-			}
-			return hexutil.Uint64(info.L1BlockNumber), nil
-		}
-		i++
-		if i > 5 {
-			return 0, fmt.Errorf("couldn't find block with transactions. Reached %d", blockNum)
 		}
 	}
 }
