@@ -1051,6 +1051,10 @@ func newRevertError(result *core.ExecutionResult) *revertError {
 	}
 }
 
+func NewRevertError(result *core.ExecutionResult) *revertError {
+	return newRevertError(result)
+}
+
 // revertError is an API error that encompassas an EVM revertal with JSON error
 // code and a binary data blob.
 type revertError struct {
