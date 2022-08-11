@@ -1,9 +1,5 @@
 package deepmind
 
-import "os"
-
-var DebugTheMerge = os.Getenv("FIREHOSE_DEBUG_THEMERGE") != ""
-
 // Enabled determines if deep mind instrumentation is enabled. Controlling
 // deepmind behavior is then controlled via other flag like.
 var Enabled = false
