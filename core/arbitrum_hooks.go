@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -48,6 +49,7 @@ var InterceptRPCGasCap func(gascap *uint64, msg types.Message, header *types.Hea
 var RenderRPCError func(data []byte) error
 
 type NodeInterfaceBackendAPI interface {
+	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error)
