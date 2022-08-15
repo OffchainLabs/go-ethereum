@@ -1697,6 +1697,16 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 			if err := bc.writeKnownBlock(block); err != nil {
 				return it.index, err
 			}
+
+			// some blocks with 0 transactions are only processed here
+			if dmContext := deepmind.MaybeSyncContext(); dmContext.Enabled() {
+				dmContext.StartBlock(block)
+				dmContext.FinalizeBlock(block)
+				ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+				td := new(big.Int).Add(block.Difficulty(), ptd)
+				dmContext.EndBlock(block, bc.CurrentFinalizedBlock(), td)
+			}
+
 			stats.processed++
 
 			// We can assume that logs are empty here, since the only way for consecutive
