@@ -38,7 +38,18 @@ type APIBackend struct {
 	sync           SyncProgressBackend
 }
 
-func createFallbackClient(fallbackClientUrl string) (types.FallbackClient, error) {
+type timeoutFallbackClient struct {
+	impl    types.FallbackClient
+	timeout time.Duration
+}
+
+func (c *timeoutFallbackClient) CallContext(ctxIn context.Context, result interface{}, method string, args ...interface{}) error {
+	ctx, cancel := context.WithTimeout(ctxIn, c.timeout)
+	defer cancel()
+	return c.impl.CallContext(ctx, result, method, args)
+}
+
+func createFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.Duration) (types.FallbackClient, error) {
 	if fallbackClientUrl == "" {
 		return nil, nil
 	}
@@ -53,9 +64,17 @@ func createFallbackClient(fallbackClientUrl string) (types.FallbackClient, error
 		types.SetFallbackError(strings.Join(fields, ":"), int(errNumber))
 		return nil, nil
 	}
-	fallbackClient, err := rpc.Dial(fallbackClientUrl)
+	var fallbackClient types.FallbackClient
+	var err error
+	fallbackClient, err = rpc.Dial(fallbackClientUrl)
 	if fallbackClient == nil || err != nil {
 		return nil, fmt.Errorf("failed creating fallback connection: %w", err)
+	}
+	if fallbackClientTimeout != 0 {
+		fallbackClient = &timeoutFallbackClient{
+			impl:    fallbackClient,
+			timeout: fallbackClientTimeout,
+		}
 	}
 	return fallbackClient, nil
 }
@@ -64,8 +83,8 @@ type SyncProgressBackend interface {
 	SyncProgressMap() map[string]interface{}
 }
 
-func createRegisterAPIBackend(backend *Backend, sync SyncProgressBackend, fallbackClientUrl string) error {
-	fallbackClient, err := createFallbackClient(fallbackClientUrl)
+func createRegisterAPIBackend(backend *Backend, sync SyncProgressBackend, fallbackClientUrl string, fallbackClientTimeout time.Duration) error {
+	fallbackClient, err := createFallbackClient(fallbackClientUrl, fallbackClientTimeout)
 	if err != nil {
 		return err
 	}
