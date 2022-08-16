@@ -169,7 +169,7 @@ func (ctx *Context) EndBlock(block *types.Block, finalizedBlock *types.Block, to
 	}
 
 	if finalizedBlock != nil {
-		endData["finalizedBlockNum"] = finalizedBlock.Header().Number
+		endData["finalizedBlockNum"] = (*hexutil.Big)(finalizedBlock.Header().Number)
 		endData["finalizedBlockHash"] = finalizedBlock.Header().Hash()
 	}
 
