@@ -28,7 +28,8 @@ type Config struct {
 
 	ArbDebug ArbDebugConfig `koanf:"arbdebug"`
 
-	ClassicRedirect string `koanf:"classic-redirect"`
+	ClassicRedirect        string        `koanf:"classic-redirect"`
+	ClassicRedirectTimeout time.Duration `koanf:"classic-redirect-timeout"`
 }
 
 type ArbDebugConfig struct {
@@ -43,6 +44,7 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.Uint64(prefix+".bloom-bits-blocks", DefaultConfig.BloomBitsBlocks, "number of blocks a single bloom bit section vector holds")
 	f.Uint64(prefix+".feehistory-max-block-count", DefaultConfig.FeeHistoryMaxBlockCount, "max number of blocks a fee history request may cover")
 	f.String(prefix+".classic-redirect", DefaultConfig.ClassicRedirect, "url to redirect classic requests, use \"error:[CODE:]MESSAGE\" to return specified error instead of redirecting")
+	f.Duration(prefix+".classic-redirect-timeout", DefaultConfig.ClassicRedirectTimeout, "timeout for forwarded classic requests, where 0 = no timeout")
 
 	arbDebug := DefaultConfig.ArbDebug
 	f.Uint64(prefix+".arbdebug.block-range-bound", arbDebug.BlockRangeBound, "bounds the number of blocks arbdebug calls may return")

@@ -45,7 +45,7 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 	}
 
 	backend.bloomIndexer.Start(backend.arb.BlockChain())
-	err := createRegisterAPIBackend(backend, sync, config.ClassicRedirect)
+	err := createRegisterAPIBackend(backend, sync, config.ClassicRedirect, config.ClassicRedirectTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +76,7 @@ func (b *Backend) ArbInterface() ArbInterface {
 	return b.arb
 }
 
-//TODO: this is used when registering backend as lifecycle in stack
+// TODO: this is used when registering backend as lifecycle in stack
 func (b *Backend) Start() error {
 	b.startBloomHandlers(b.config.BloomBitsBlocks)
 
