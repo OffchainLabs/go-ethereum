@@ -31,13 +31,15 @@ import (
 var ReadyEVMForL2 func(evm *vm.EVM, msg Message)
 
 // Allows ArbOS to swap out or return early from an RPC message to support the NodeInterface virtual contract
-var InterceptRPCMessage func(
+var InterceptRPCMessage = func(
 	msg types.Message,
 	ctx context.Context,
 	statedb *state.StateDB,
 	header *types.Header,
 	backend NodeInterfaceBackendAPI,
-) (types.Message, *ExecutionResult, error)
+) (types.Message, *ExecutionResult, error) {
+	return msg, nil, nil
+}
 
 // Gets ArbOS's maximum intended gas per second
 var GetArbOSSpeedLimitPerSecond func(statedb *state.StateDB) (uint64, error)
