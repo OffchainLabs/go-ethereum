@@ -55,7 +55,7 @@ func (bc *BlockChain) ClipToPostNitroGenesis(blockNum rpc.BlockNumber) (rpc.Bloc
 	return blockNum, currentBlock
 }
 
-// finds the first block that isn't sufficiently old to be GC'd
+// finds the number of blocks that aren't prunable
 func (bc *BlockChain) FindRetentionBound() uint64 {
 	minimumSpan := bc.cacheConfig.TriesInMemory
 	minimumAge := uint64(bc.cacheConfig.TrieRetention.Seconds())
@@ -76,23 +76,29 @@ func (bc *BlockChain) FindRetentionBound() uint64 {
 	leap := int64(1)
 	for timeBound > 0 {
 		age := current.Time() - bc.GetBlockByNumber(uint64(timeBound)).Time()
-		if age < minimumAge {
+		if age > minimumAge {
 			break
 		}
 		timeBound = saturatingCast(int64(timeBound) - leap)
 		leap *= 2
 	}
+	if timeBound == heightBound {
+		return current.NumberU64() - timeBound + 1
+	}
 
-	// binary search on the interval [a, b] for the first insufficiently old block
-	a := timeBound + 1
-	b := heightBound
-	for a != b {
-		mid := a/2 + b/2
+	// Algo: binary search on the interval [a, b] for the first prunable block
+	//   Timebound is a prunable block, if one exists.
+	//   We want to return the first block that's not prunable.
+	//
+	a := timeBound   // a prunable block
+	b := heightBound // not prunable
+	for a+1 < b {
+		mid := a/2 + b/2 // mid < b and mid > a
 		age := current.Time() - bc.GetBlockByNumber(mid).Time()
-		if age < minimumAge {
-			b = mid
+		if age <= minimumAge {
+			b = mid // mid is not prunable and less than b
 		} else {
-			a = mid + 1
+			a = mid // mid is prunable, but might equal a
 		}
 	}
 	return current.NumberU64() - a
