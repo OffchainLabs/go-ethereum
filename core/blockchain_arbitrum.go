@@ -54,3 +54,46 @@ func (bc *BlockChain) ClipToPostNitroGenesis(blockNum rpc.BlockNumber) (rpc.Bloc
 	}
 	return blockNum, currentBlock
 }
+
+// finds the first block that isn't sufficiently old to be GC'd
+func (bc *BlockChain) FindRetentionBound() uint64 {
+	minimumSpan := bc.cacheConfig.TriesInMemory
+	minimumAge := uint64(bc.cacheConfig.TrieRetention.Seconds())
+
+	saturatingCast := func(value int64) uint64 {
+		if value < 0 {
+			return 0
+		}
+		return uint64(value)
+	}
+
+	// enforce that the block be sufficiently deep
+	current := bc.CurrentBlock()
+	heightBound := saturatingCast(int64(current.NumberU64()) - int64(minimumSpan) + 1)
+
+	// find the left bound to our subsequent binary search
+	timeBound := heightBound
+	leap := int64(1)
+	for timeBound > 0 {
+		age := current.Time() - bc.GetBlockByNumber(uint64(timeBound)).Time()
+		if age < minimumAge {
+			break
+		}
+		timeBound = saturatingCast(int64(timeBound) - leap)
+		leap *= 2
+	}
+
+	// binary search on the interval [a, b] for the first insufficiently old block
+	a := timeBound
+	b := heightBound
+	for a != b {
+		mid := a/2 + b/2
+		age := current.Time() - bc.GetBlockByNumber(mid).Time()
+		if age < minimumAge {
+			b = mid
+		} else {
+			a = mid
+		}
+	}
+	return current.NumberU64() - a + 1
+}
