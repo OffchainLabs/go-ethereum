@@ -84,7 +84,7 @@ func (bc *BlockChain) FindRetentionBound() uint64 {
 	}
 
 	// binary search on the interval [a, b] for the first insufficiently old block
-	a := timeBound
+	a := timeBound + 1
 	b := heightBound
 	for a != b {
 		mid := a/2 + b/2
@@ -92,8 +92,8 @@ func (bc *BlockChain) FindRetentionBound() uint64 {
 		if age < minimumAge {
 			b = mid
 		} else {
-			a = mid
+			a = mid + 1
 		}
 	}
-	return current.NumberU64() - a + 1
+	return current.NumberU64() - a
 }
