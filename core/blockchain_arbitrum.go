@@ -88,12 +88,12 @@ func (bc *BlockChain) FindRetentionBound() uint64 {
 
 	// Algo: binary search on the interval [a, b] for the first prunable block
 	//   Timebound is a prunable block, if one exists.
-	//   We want to return the first block that's not prunable.
+	//   We want to find the first block that's not prunable.
 	//
 	a := timeBound   // a prunable block, if possible
 	b := heightBound // not prunable
 	for a+1 < b {
-		mid := a/2 + b/2 // mid < b and mid > a
+		mid := a/2 + b/2 // a < mid < b
 		age := current.Time() - bc.GetBlockByNumber(mid).Time()
 		if age <= minimumAge {
 			b = mid // mid is not prunable and less than b
