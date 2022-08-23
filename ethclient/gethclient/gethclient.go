@@ -191,6 +191,10 @@ func toBlockNumArg(number *big.Int) string {
 	if number.Cmp(finalized) == 0 {
 		return "finalized"
 	}
+	safe := big.NewInt(int64(rpc.SafeBlockNumber))
+	if number.Cmp(safe) == 0 {
+		return "safe"
+	}
 	return hexutil.EncodeBig(number)
 }
 
