@@ -103,7 +103,7 @@ func (a *APIBackend) GetAPIs() []rpc.API {
 	apis = append(apis, rpc.API{
 		Namespace: "eth",
 		Version:   "1.0",
-		Service:   filters.NewPublicFilterAPI(a, false, 5*time.Minute),
+		Service:   filters.NewFilterAPI(a, false, 5*time.Minute),
 		Public:    true,
 	})
 
