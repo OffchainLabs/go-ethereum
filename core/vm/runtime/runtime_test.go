@@ -334,7 +334,7 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 	cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	cfg.GasLimit = gas
 	if len(tracerCode) > 0 {
-		tracer, err := tracers.New(tracerCode, new(tracers.Context))
+		tracer, err := tracers.New(tracerCode, new(tracers.Context), nil)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -458,7 +458,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 		byte(vm.JUMP),
 	}
 
-	calllRevertingContractWithInput := []byte{
+	callRevertingContractWithInput := []byte{
 		byte(vm.JUMPDEST), //
 		// push args for the call
 		byte(vm.PUSH1), 0, // out size
@@ -486,7 +486,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 	benchmarkNonModifyingCode(100000000, loopingCode, "loop-100M", "", b)
 	benchmarkNonModifyingCode(100000000, callInexistant, "call-nonexist-100M", "", b)
 	benchmarkNonModifyingCode(100000000, callEOA, "call-EOA-100M", "", b)
-	benchmarkNonModifyingCode(100000000, calllRevertingContractWithInput, "call-reverting-100M", "", b)
+	benchmarkNonModifyingCode(100000000, callRevertingContractWithInput, "call-reverting-100M", "", b)
 
 	//benchmarkNonModifyingCode(10000000, staticCallIdentity, "staticcall-identity-10M", b)
 	//benchmarkNonModifyingCode(10000000, loopingCode, "loop-10M", b)
@@ -833,7 +833,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 			statedb.SetCode(common.HexToAddress("0xee"), calleeCode, deepmind.NoOpContext)
 			statedb.SetCode(common.HexToAddress("0xff"), depressedCode, deepmind.NoOpContext)
 
-			tracer, err := tracers.New(jsTracer, new(tracers.Context))
+			tracer, err := tracers.New(jsTracer, new(tracers.Context), nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -869,7 +869,7 @@ func TestJSTracerCreateTx(t *testing.T) {
 	code := []byte{byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN)}
 
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	tracer, err := tracers.New(jsTracer, new(tracers.Context))
+	tracer, err := tracers.New(jsTracer, new(tracers.Context), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
