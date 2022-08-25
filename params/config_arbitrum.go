@@ -64,9 +64,8 @@ func ArbitrumOneParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     false,
 		DataAvailabilityCommittee: false,
-		// Not used as arbitrum one has init data
-		InitialArbOSVersion: 1,
-		InitialChainOwner:   common.Address{},
+		InitialArbOSVersion:       6,
+		InitialChainOwner:         common.HexToAddress("0xd345e41ae2cb00311956aa7109fc801ae8c81a52"),
 	}
 }
 
