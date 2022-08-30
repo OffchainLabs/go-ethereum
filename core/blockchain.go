@@ -884,7 +884,7 @@ func (bc *BlockChain) Stop() {
 	if !bc.cacheConfig.TrieDirtyDisabled {
 		triedb := bc.stateCache.TrieDB()
 
-		for _, offset := range []uint64{0, 1, math.MaxUint64} {
+		for _, offset := range []uint64{0, 1, bc.cacheConfig.TriesInMemory - 1, math.MaxUint64} {
 			if number := bc.CurrentBlock().NumberU64(); number > offset {
 				var recent *types.Block
 				if offset == math.MaxUint {
