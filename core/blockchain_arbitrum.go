@@ -73,6 +73,10 @@ func (bc *BlockChain) FindRetentionBound() uint64 {
 	minimumSpan := bc.cacheConfig.TriesInMemory
 	minimumAge := uint64(bc.cacheConfig.TrieRetention.Seconds())
 
+	if minimumAge == 0 {
+		return minimumSpan
+	}
+
 	saturatingCast := func(value int64) uint64 {
 		if value < 0 {
 			return 0
