@@ -491,6 +491,7 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 				return nil
 			}
 		}
+		t.triedb.Commit(parent.root, true, nil)
 	default:
 		panic(fmt.Sprintf("unknown data layer: %T", parent))
 	}
