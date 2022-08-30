@@ -92,7 +92,7 @@ func (bc *BlockChain) FindRetentionBound() uint64 {
 	//
 	a := timeBound   // a prunable block, if possible
 	b := heightBound // not prunable
-	for a+1 < b {
+	for a+2 < b {
 		mid := a/2 + b/2 // a < mid < b
 		age := current.Time() - bc.GetBlockByNumber(mid).Time()
 		if age <= minimumAge {
