@@ -122,7 +122,7 @@ func (t *BlockTest) Run(snapshotter bool) error {
 	} else {
 		engine = ethash.NewShared()
 	}
-	cache := &core.CacheConfig{TrieCleanLimit: 0}
+	cache := &core.CacheConfig{TrieCleanLimit: 0, TriesInMemory: 128}
 	if snapshotter {
 		cache.SnapshotLimit = 1
 		cache.SnapshotWait = true
