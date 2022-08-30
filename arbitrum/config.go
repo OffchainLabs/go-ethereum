@@ -52,8 +52,8 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 }
 
 var DefaultConfig = Config{
-	RPCGasCap:               ethconfig.Defaults.RPCGasCap,     // 50,000,000
-	RPCTxFeeCap:             ethconfig.Defaults.RPCTxFeeCap,   // 1 ether
+	RPCGasCap:               ethconfig.Defaults.RPCGasCap, // 50,000,000
+	RPCTxFeeCap:             0,
 	RPCEVMTimeout:           ethconfig.Defaults.RPCEVMTimeout, // 5 seconds
 	BloomBitsBlocks:         params.BloomBitsBlocks * 4,       // we generally have smaller blocks
 	BloomConfirms:           params.BloomConfirms,
