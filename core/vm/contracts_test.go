@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 )
 
 // precompiledTest defines the input/output pairs for precompiled contract tests.
@@ -403,9 +403,9 @@ func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
 	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
 	contract := NewContract(AccountRef(common.HexToAddress("1337")),
-		nil, new(big.Int), p.RequiredGas(in), deepmind.NoOpContext)
+		nil, new(big.Int), p.RequiredGas(in), firehose.NoOpContext)
 	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, contract.Gas), func(t *testing.T) {
-		if res, err := RunPrecompiledContract(p, in, contract, deepmind.NoOpContext); err != nil {
+		if res, err := RunPrecompiledContract(p, in, contract, firehose.NoOpContext); err != nil {
 			t.Error(err)
 		} else if common.Bytes2Hex(res) != test.expected {
 			t.Errorf("Expected %v, got %v", test.expected, common.Bytes2Hex(res))
@@ -422,9 +422,9 @@ func testPrecompiledOOG(addr string, test precompiledTest, t *testing.T) {
 	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
 	contract := NewContract(AccountRef(common.HexToAddress("1337")),
-		nil, new(big.Int), p.RequiredGas(in)-1, deepmind.NoOpContext)
+		nil, new(big.Int), p.RequiredGas(in)-1, firehose.NoOpContext)
 	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, contract.Gas), func(t *testing.T) {
-		_, err := RunPrecompiledContract(p, in, contract, deepmind.NoOpContext)
+		_, err := RunPrecompiledContract(p, in, contract, firehose.NoOpContext)
 		if err.Error() != "out of gas" {
 			t.Errorf("Expected error [out of gas], got [%v]", err)
 		}
@@ -440,10 +440,10 @@ func testPrecompiledFailure(addr string, test precompiledFailureTest, t *testing
 	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
 	contract := NewContract(AccountRef(common.HexToAddress("31337")),
-		nil, new(big.Int), p.RequiredGas(in), deepmind.NoOpContext)
+		nil, new(big.Int), p.RequiredGas(in), firehose.NoOpContext)
 
 	t.Run(test.name, func(t *testing.T) {
-		_, err := RunPrecompiledContract(p, in, contract, deepmind.NoOpContext)
+		_, err := RunPrecompiledContract(p, in, contract, firehose.NoOpContext)
 		if !reflect.DeepEqual(err, test.expectedError) {
 			t.Errorf("Expected error [%v], got [%v]", test.expectedError, err)
 		}
@@ -463,7 +463,7 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 	in := common.Hex2Bytes(test.input)
 	reqGas := p.RequiredGas(in)
 	contract := NewContract(AccountRef(common.HexToAddress("1337")),
-		nil, new(big.Int), reqGas, deepmind.NoOpContext)
+		nil, new(big.Int), reqGas, firehose.NoOpContext)
 
 	var (
 		res  []byte
@@ -476,7 +476,7 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 		for i := 0; i < bench.N; i++ {
 			contract.Gas = reqGas
 			copy(data, in)
-			res, err = RunPrecompiledContract(p, data, contract, deepmind.NoOpContext)
+			res, err = RunPrecompiledContract(p, data, contract, firehose.NoOpContext)
 		}
 		bench.StopTimer()
 		//Check if it is correct

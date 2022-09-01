@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -58,68 +58,68 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 // transactions failed to execute due to insufficient gas it will return an error.
 func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
 	var (
-		receipts  types.Receipts
-		usedGas   = new(uint64)
-		header    = block.Header()
-		allLogs   []*types.Log
-		gp        = new(GasPool).AddGas(block.GasLimit())
-		dmContext = deepmind.MaybeSyncContext()
+		receipts        types.Receipts
+		usedGas         = new(uint64)
+		header          = block.Header()
+		allLogs         []*types.Log
+		gp              = new(GasPool).AddGas(block.GasLimit())
+		firehoseContext = firehose.MaybeSyncContext()
 	)
 
-	if dmContext.Enabled() {
-		dmContext.StartBlock(block)
+	if firehoseContext.Enabled() {
+		firehoseContext.StartBlock(block)
 	}
 
 	// Mutate the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
-		misc.ApplyDAOHardFork(statedb, dmContext)
+		misc.ApplyDAOHardFork(statedb, firehoseContext)
 	}
 
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
 
-		if dmContext.Enabled() {
+		if firehoseContext.Enabled() {
 			// London fork not active in this branch yet, replace by `header.BaseFee` instead of `nil` when it's the case (and remove this comment)
-			dmContext.StartTransaction(tx, nil)
+			firehoseContext.StartTransaction(tx, nil)
 		}
 
-		receipt, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg, dmContext)
+		receipt, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg, firehoseContext)
 		if err != nil {
-			if dmContext.Enabled() {
-				dmContext.RecordFailedTransaction(err)
-				dmContext.ExitBlock()
+			if firehoseContext.Enabled() {
+				firehoseContext.RecordFailedTransaction(err)
+				firehoseContext.ExitBlock()
 			}
 
 			return nil, nil, 0, err
 		}
 
-		if dmContext.Enabled() {
-			dmContext.EndTransaction(receipt)
+		if firehoseContext.Enabled() {
+			firehoseContext.EndTransaction(receipt)
 		}
 
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 
-	// Finalize block is a bit special since it can be enabled without the full deep mind sync.
-	// As such, if deep mind is enabled, we log it and us the deep mind context. Otherwise if
+	// Finalize block is a bit special since it can be enabled without the full firehose sync.
+	// As such, if firehose is enabled, we log it and us the firehose context. Otherwise if
 	// block progress is enabled.
-	if dmContext.Enabled() {
-		dmContext.FinalizeBlock(block)
-	} else if deepmind.BlockProgressEnabled {
-		deepmind.SyncContext().FinalizeBlock(block)
+	if firehoseContext.Enabled() {
+		firehoseContext.FinalizeBlock(block)
+	} else if firehose.BlockProgressEnabled {
+		firehose.SyncContext().FinalizeBlock(block)
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), dmContext)
+	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), firehoseContext)
 
-	if dmContext.Enabled() {
+	if firehoseContext.Enabled() {
 		// Calculate the total difficulty of the block
 		ptd := p.bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 		td := new(big.Int).Add(block.Difficulty(), ptd)
 
-		dmContext.EndBlock(block, td)
+		firehoseContext.EndBlock(block, td)
 	}
 
 	return receipts, allLogs, *usedGas, nil
@@ -129,21 +129,21 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, dmContext *deepmind.Context) (*types.Receipt, error) {
+func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, firehoseContext *firehose.Context) (*types.Receipt, error) {
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
 	if err != nil {
 		return nil, err
 	}
 
-	if dmContext.Enabled() {
-		dmContext.RecordTrxFrom(msg.From())
+	if firehoseContext.Enabled() {
+		firehoseContext.RecordTrxFrom(msg.From())
 	}
 
 	// Create a new context to be used in the EVM environment
 	context := NewEVMContext(msg, header, bc, author)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmenv := vm.NewEVM(context, statedb, config, cfg, dmContext)
+	vmenv := vm.NewEVM(context, statedb, config, cfg, firehoseContext)
 	// Apply the transaction to the current state (included in the env)
 	_, gas, failed, err := ApplyMessage(vmenv, msg, gp)
 

@@ -254,8 +254,8 @@ var AppHelpFlagGroups = []flagGroup{
 		Name: "MISC",
 	},
 	{
-		Name:  "DEEP MIND",
-		Flags: debug.DeepMindFlags,
+		Name:  "FIREHOSE",
+		Flags: debug.FirehoseFlags,
 	},
 }
 

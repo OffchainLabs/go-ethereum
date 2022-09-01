@@ -39,7 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -760,7 +760,7 @@ type account struct {
 
 var unsetTrxHash = common.Hash{}
 
-func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides map[common.Address]account, vmCfg vm.Config, timeout time.Duration, globalGasCap *big.Int, dmContext *deepmind.Context) ([]byte, uint64, bool, error) {
+func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides map[common.Address]account, vmCfg vm.Config, timeout time.Duration, globalGasCap *big.Int, firehoseContext *firehose.Context) ([]byte, uint64, bool, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
@@ -782,27 +782,27 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	for addr, account := range overrides {
 		// Override account nonce.
 		if account.Nonce != nil {
-			state.SetNonce(addr, uint64(*account.Nonce), deepmind.NoOpContext)
+			state.SetNonce(addr, uint64(*account.Nonce), firehose.NoOpContext)
 		}
 		// Override account(contract) code.
 		if account.Code != nil {
-			state.SetCode(addr, *account.Code, deepmind.NoOpContext)
+			state.SetCode(addr, *account.Code, firehose.NoOpContext)
 		}
 		// Override account balance.
 		if account.Balance != nil {
-			state.SetBalance(addr, (*big.Int)(*account.Balance), deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
+			state.SetBalance(addr, (*big.Int)(*account.Balance), firehose.NoOpContext, firehose.IgnoredBalanceChangeReason)
 		}
 		if account.State != nil && account.StateDiff != nil {
 			return nil, 0, false, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
 		}
 		// Replace entire state if caller requires.
 		if account.State != nil {
-			state.SetStorage(addr, *account.State, deepmind.NoOpContext)
+			state.SetStorage(addr, *account.State, firehose.NoOpContext)
 		}
 		// Apply state diff into specified accounts.
 		if account.StateDiff != nil {
 			for key, value := range *account.StateDiff {
-				state.SetState(addr, key, value, deepmind.NoOpContext)
+				state.SetState(addr, key, value, firehose.NoOpContext)
 			}
 		}
 	}
@@ -846,7 +846,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	defer cancel()
 
 	// Get a new instance of the EVM.
-	evm, vmError, err := b.GetEVM(ctx, msg, state, header, dmContext)
+	evm, vmError, err := b.GetEVM(ctx, msg, state, header, firehoseContext)
 	if err != nil {
 		return nil, 0, false, err
 	}
@@ -857,8 +857,8 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		evm.Cancel()
 	}()
 
-	if dmContext.Enabled() {
-		dmContext.StartTransactionRaw(
+	if firehoseContext.Enabled() {
+		firehoseContext.StartTransactionRaw(
 			unsetTrxHash,
 			msg.To(),
 			msg.Value(),
@@ -872,7 +872,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 			nil,
 			0,
 		)
-		dmContext.RecordTrxFrom(msg.From())
+		firehoseContext.RecordTrxFrom(msg.From())
 	}
 
 	// Setup the gas pool (also for unmetered requests)
@@ -887,7 +887,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		return nil, 0, false, fmt.Errorf("execution aborted (timeout = %v)", timeout)
 	}
 
-	if dmContext.Enabled() {
+	if firehoseContext.Enabled() {
 		config := evm.ChainConfig()
 		// Update the state with pending changes
 		var root []byte
@@ -924,10 +924,10 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		receipt.BlockNumber = header.Number
 		receipt.TransactionIndex = 0
 
-		dmContext.EndTransaction(receipt)
+		firehoseContext.EndTransaction(receipt)
 	}
 
-	// If in deep mind context, we should most probably attach the error here inside the deep mind context
+	// If in firehose context, we should most probably attach the error here inside the firehose context
 	// somehow so it's attached to the top-leve transaction trace and not return this here. The handler above
 	// us will need to understand that a nil error and nil result means send me everything. For now, it will
 	// simply fail, might even be the "good condition" to do.
@@ -945,7 +945,7 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 	if overrides != nil {
 		accounts = *overrides
 	}
-	result, _, _, err := DoCall(ctx, s.b, args, blockNrOrHash, accounts, vm.Config{}, 5*time.Second, s.b.RPCGasCap(), deepmind.NoOpContext)
+	result, _, _, err := DoCall(ctx, s.b, args, blockNrOrHash, accounts, vm.Config{}, 5*time.Second, s.b.RPCGasCap(), firehose.NoOpContext)
 	return (hexutil.Bytes)(result), err
 }
 
@@ -988,7 +988,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 	executable := func(gas uint64) bool {
 		args.Gas = (*hexutil.Uint64)(&gas)
 
-		_, _, failed, err := DoCall(ctx, b, args, blockNrOrHash, nil, vm.Config{}, 0, gasCap, deepmind.NoOpContext)
+		_, _, failed, err := DoCall(ctx, b, args, blockNrOrHash, nil, vm.Config{}, 0, gasCap, firehose.NoOpContext)
 		if err != nil || failed {
 			return false
 		}

@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -50,16 +50,16 @@ The state transitioning model does all the necessary work to work out a valid ne
 6) Derive new state root
 */
 type StateTransition struct {
-	gp         *GasPool
-	msg        Message
-	gas        uint64
-	gasPrice   *big.Int
-	initialGas uint64
-	value      *big.Int
-	data       []byte
-	state      vm.StateDB
-	evm        *vm.EVM
-	dmContext  *deepmind.Context
+	gp              *GasPool
+	msg             Message
+	gas             uint64
+	gasPrice        *big.Int
+	initialGas      uint64
+	value           *big.Int
+	data            []byte
+	state           vm.StateDB
+	evm             *vm.EVM
+	firehoseContext *firehose.Context
 }
 
 // Message represents a message sent to a contract.
@@ -125,7 +125,7 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition 
 		data:     msg.Data(),
 		state:    evm.StateDB,
 
-		dmContext: evm.DeepmindContext(),
+		firehoseContext: evm.FirehoseContext(),
 	}
 }
 
@@ -148,13 +148,13 @@ func (st *StateTransition) to() common.Address {
 	return *st.msg.To()
 }
 
-func (st *StateTransition) useGas(amount uint64, reason deepmind.GasChangeReason) error {
+func (st *StateTransition) useGas(amount uint64, reason firehose.GasChangeReason) error {
 	if st.gas < amount {
 		return vm.ErrOutOfGas
 	}
 
-	if st.dmContext.Enabled() {
-		st.dmContext.RecordGasConsume(st.gas, amount, reason)
+	if st.firehoseContext.Enabled() {
+		st.firehoseContext.RecordGasConsume(st.gas, amount, reason)
 	}
 	st.gas -= amount
 
@@ -172,7 +172,7 @@ func (st *StateTransition) buyGas() error {
 	st.gas += st.msg.Gas()
 
 	st.initialGas = st.msg.Gas()
-	st.state.SubBalance(st.msg.From(), mgval, st.dmContext, deepmind.BalanceChangeReason("gas_buy"))
+	st.state.SubBalance(st.msg.From(), mgval, st.firehoseContext, firehose.BalanceChangeReason("gas_buy"))
 	return nil
 }
 
@@ -207,7 +207,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	if err != nil {
 		return nil, 0, false, err
 	}
-	if err = st.useGas(gas, deepmind.GasChangeReason("intrinsic_gas")); err != nil {
+	if err = st.useGas(gas, firehose.GasChangeReason("intrinsic_gas")); err != nil {
 		return nil, 0, false, err
 	}
 
@@ -222,7 +222,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value)
 	} else {
 		// Increment the nonce for the next transaction
-		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1, st.dmContext)
+		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1, st.firehoseContext)
 		ret, st.gas, vmerr = evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 	if vmerr != nil {
@@ -235,7 +235,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		}
 	}
 	st.refundGas()
-	st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice), false, st.dmContext, deepmind.BalanceChangeReason("reward_transaction_fee"))
+	st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice), false, st.firehoseContext, firehose.BalanceChangeReason("reward_transaction_fee"))
 
 	return ret, st.gasUsed(), vmerr != nil, err
 }
@@ -250,7 +250,7 @@ func (st *StateTransition) refundGas() {
 
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
-	st.state.AddBalance(st.msg.From(), remaining, false, st.dmContext, deepmind.BalanceChangeReason("gas_refund"))
+	st.state.AddBalance(st.msg.From(), remaining, false, st.firehoseContext, firehose.BalanceChangeReason("gas_refund"))
 
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.

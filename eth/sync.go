@@ -23,8 +23,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
@@ -182,12 +182,12 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		mode = downloader.FastSync
 	}
 
-	if deepmind.Enabled {
-		// If deepmind is enabled, we force the mode to be a FullSync mode to ensure we correctly
+	if firehose.Enabled {
+		// If firehose is enabled, we force the mode to be a FullSync mode to ensure we correctly
 		// process all transactions. It should probably be adapter so that speculative execution
 		// node could use fast sync which is not the case here.
 		if mode != downloader.FullSync {
-			log.Warn("Firehose changed syncing mode to 'full', it is required for proper extraction of the data when enabling Firehose instrumentation through --firehose-deep-mind-enabled", "old", mode, "new", downloader.FullSync)
+			log.Warn("Firehose changed syncing mode to 'full', it is required for proper extraction of the data when enabling Firehose instrumentation through --firehose-enabled", "old", mode, "new", downloader.FullSync)
 		}
 
 		mode = downloader.FullSync

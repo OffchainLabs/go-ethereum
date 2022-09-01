@@ -1,4 +1,4 @@
-package deepmind
+package firehose
 
 import (
 	"math/big"

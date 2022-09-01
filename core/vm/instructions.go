@@ -23,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/crypto/sha3"
 )
@@ -400,8 +400,8 @@ func opSha3(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 		evm.StateDB.AddPreimage(interpreter.hasherBuf, data)
 	}
 
-	if interpreter.evm.dmContext.Enabled() {
-		interpreter.evm.dmContext.RecordKeccak(interpreter.hasherBuf, data)
+	if interpreter.evm.firehoseContext.Enabled() {
+		interpreter.evm.firehoseContext.RecordKeccak(interpreter.hasherBuf, data)
 	}
 
 	stack.push(interpreter.intPool.get().SetBytes(interpreter.hasherBuf[:]))
@@ -640,7 +640,7 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory
 func opSstore(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	loc := common.BigToHash(stack.pop())
 	val := stack.pop()
-	interpreter.evm.StateDB.SetState(contract.Address(), loc, common.BigToHash(val), interpreter.evm.dmContext)
+	interpreter.evm.StateDB.SetState(contract.Address(), loc, common.BigToHash(val), interpreter.evm.firehoseContext)
 
 	interpreter.intPool.put(val)
 	return nil, nil
@@ -702,7 +702,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memor
 		gas -= gas / 64
 	}
 
-	contract.UseGas(gas, deepmind.GasChangeReason("contract_creation"))
+	contract.UseGas(gas, firehose.GasChangeReason("contract_creation"))
 	res, addr, returnGas, suberr := interpreter.evm.Create(contract, input, gas, value)
 
 	// Push item on the stack based on the returned error. If the ruleset is
@@ -716,8 +716,8 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memor
 	} else {
 		stack.push(interpreter.intPool.get().SetBytes(addr.Bytes()))
 	}
-	if interpreter.evm.dmContext.Enabled() {
-		interpreter.evm.dmContext.RecordGasRefund(contract.Gas, returnGas)
+	if interpreter.evm.firehoseContext.Enabled() {
+		interpreter.evm.firehoseContext.RecordGasRefund(contract.Gas, returnGas)
 	}
 
 	contract.Gas += returnGas
@@ -740,7 +740,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memo
 
 	// Apply EIP150
 	gas -= gas / 64
-	contract.UseGas(gas, deepmind.GasChangeReason("contract_creation2"))
+	contract.UseGas(gas, firehose.GasChangeReason("contract_creation2"))
 	res, addr, returnGas, suberr := interpreter.evm.Create2(contract, input, gas, endowment, salt)
 
 	// Push item on the stack based on the returned error.
@@ -750,8 +750,8 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memo
 		stack.push(interpreter.intPool.get().SetBytes(addr.Bytes()))
 	}
 
-	if interpreter.evm.dmContext.Enabled() {
-		interpreter.evm.dmContext.RecordGasRefund(contract.Gas, returnGas)
+	if interpreter.evm.firehoseContext.Enabled() {
+		interpreter.evm.firehoseContext.RecordGasRefund(contract.Gas, returnGas)
 	}
 
 	contract.Gas += returnGas
@@ -788,8 +788,8 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if interpreter.evm.dmContext.Enabled() {
-		interpreter.evm.dmContext.RecordGasRefund(contract.Gas, returnGas)
+	if interpreter.evm.firehoseContext.Enabled() {
+		interpreter.evm.firehoseContext.RecordGasRefund(contract.Gas, returnGas)
 	}
 	contract.Gas += returnGas
 
@@ -821,8 +821,8 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, contract *Contract, mem
 		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if interpreter.evm.dmContext.Enabled() {
-		interpreter.evm.dmContext.RecordGasRefund(contract.Gas, returnGas)
+	if interpreter.evm.firehoseContext.Enabled() {
+		interpreter.evm.firehoseContext.RecordGasRefund(contract.Gas, returnGas)
 	}
 
 	contract.Gas += returnGas
@@ -850,8 +850,8 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract,
 		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if interpreter.evm.dmContext.Enabled() {
-		interpreter.evm.dmContext.RecordGasRefund(contract.Gas, returnGas)
+	if interpreter.evm.firehoseContext.Enabled() {
+		interpreter.evm.firehoseContext.RecordGasRefund(contract.Gas, returnGas)
 	}
 
 	contract.Gas += returnGas
@@ -878,8 +878,8 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, m
 	if err == nil || err == errExecutionReverted {
 		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
-	if interpreter.evm.dmContext.Enabled() {
-		interpreter.evm.dmContext.RecordGasRefund(contract.Gas, returnGas)
+	if interpreter.evm.firehoseContext.Enabled() {
+		interpreter.evm.firehoseContext.RecordGasRefund(contract.Gas, returnGas)
 	}
 
 	contract.Gas += returnGas
@@ -909,9 +909,9 @@ func opStop(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 
 func opSuicide(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	balance := interpreter.evm.StateDB.GetBalance(contract.Address())
-	interpreter.evm.StateDB.AddBalance(common.BigToAddress(stack.pop()), balance, false, interpreter.evm.dmContext, deepmind.BalanceChangeReason("suicide_refund"))
+	interpreter.evm.StateDB.AddBalance(common.BigToAddress(stack.pop()), balance, false, interpreter.evm.firehoseContext, firehose.BalanceChangeReason("suicide_refund"))
 
-	interpreter.evm.StateDB.Suicide(contract.Address(), interpreter.evm.dmContext)
+	interpreter.evm.StateDB.Suicide(contract.Address(), interpreter.evm.firehoseContext)
 	return nil, nil
 }
 
@@ -934,7 +934,7 @@ func makeLog(size int) executionFunc {
 			// This is a non-consensus field, but assigned here because
 			// core/state doesn't know the current block number.
 			BlockNumber: interpreter.evm.BlockNumber.Uint64(),
-		}, interpreter.evm.dmContext)
+		}, interpreter.evm.firehoseContext)
 
 		interpreter.intPool.put(mStart, mSize)
 		return nil, nil
