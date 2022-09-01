@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -60,12 +60,12 @@ func testCtx() *vmContext {
 }
 
 func runTrace(tracer *Tracer, vmctx *vmContext) (json.RawMessage, error) {
-	env := vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer}, deepmind.NoOpContext)
+	env := vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer}, firehose.NoOpContext)
 	var (
 		startGas uint64 = 10000
 		value           = big.NewInt(0)
 	)
-	contract := vm.NewContract(account{}, account{}, value, startGas, deepmind.NoOpContext)
+	contract := vm.NewContract(account{}, account{}, value, startGas, firehose.NoOpContext)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
 
 	tracer.CaptureStart(contract.Caller(), contract.Address(), false, []byte{}, startGas, value)
@@ -150,8 +150,8 @@ func TestHaltBetweenSteps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer}, deepmind.NoOpContext)
-	contract := vm.NewContract(&account{}, &account{}, big.NewInt(0), 0, deepmind.NoOpContext)
+	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer}, firehose.NoOpContext)
+	contract := vm.NewContract(&account{}, &account{}, big.NewInt(0), 0, firehose.NoOpContext)
 
 	tracer.CaptureState(env, 0, 0, 0, 0, nil, nil, nil, contract, 0, nil)
 	timeout := errors.New("stahp")

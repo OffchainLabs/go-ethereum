@@ -31,8 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -439,10 +439,10 @@ func (w *worker) mainLoop() {
 	for {
 		select {
 		case req := <-w.newWorkCh:
-			if deepmind.Enabled && !deepmind.MiningEnabled {
+			if firehose.Enabled && !firehose.MiningEnabled {
 				// This receives and processes all transactions received on the P2P network.
 				// By **not** processing this now received transaction, it prevents doing a
-				// speculative execution of the transaction and thus, breaking deep mind that
+				// speculative execution of the transaction and thus, breaking firehose that
 				// expects linear execution of all logs.
 				continue
 			}
@@ -450,10 +450,10 @@ func (w *worker) mainLoop() {
 			w.commitNewWork(req.interrupt, req.noempty, req.timestamp)
 
 		case ev := <-w.chainSideCh:
-			if deepmind.Enabled && !deepmind.MiningEnabled {
+			if firehose.Enabled && !firehose.MiningEnabled {
 				// This receives and processes all transactions received on the P2P network.
 				// By **not** processing this now received transaction, it prevents doing a
-				// speculative execution of the transaction and thus, breaking deep mind that
+				// speculative execution of the transaction and thus, breaking firehose that
 				// expects linear execution of all logs.
 				continue
 			}
@@ -497,10 +497,10 @@ func (w *worker) mainLoop() {
 			}
 
 		case ev := <-w.txsCh:
-			if deepmind.Enabled && !deepmind.MiningEnabled {
+			if firehose.Enabled && !firehose.MiningEnabled {
 				// This receives and processes all transactions received on the P2P network.
 				// By **not** processing this now received transaction, it prevents doing a
-				// speculative execution of the transaction and thus, breaking deep mind that
+				// speculative execution of the transaction and thus, breaking firehose that
 				// expects linear execution of all logs.
 				continue
 			}
@@ -761,7 +761,7 @@ func (w *worker) updateSnapshot() {
 func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
 	snap := w.current.state.Snapshot()
 
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig(), deepmind.NoOpContext)
+	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig(), firehose.NoOpContext)
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
 		return nil, err
@@ -943,7 +943,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	// Create the current work task and check any fork transitions needed
 	env := w.current
 	if w.chainConfig.DAOForkSupport && w.chainConfig.DAOForkBlock != nil && w.chainConfig.DAOForkBlock.Cmp(header.Number) == 0 {
-		misc.ApplyDAOHardFork(env.state, deepmind.NoOpContext)
+		misc.ApplyDAOHardFork(env.state, firehose.NoOpContext)
 	}
 	// Accumulate the uncles for the current block
 	uncles := make([]*types.Header, 0, 2)
@@ -1018,7 +1018,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	// Deep copy receipts here to avoid interaction between different tasks.
 	receipts := copyReceipts(w.current.receipts)
 	s := w.current.state.Copy()
-	block, err := w.engine.FinalizeAndAssemble(w.chain, w.current.header, s, w.current.txs, uncles, receipts, deepmind.NoOpContext)
+	block, err := w.engine.FinalizeAndAssemble(w.chain, w.current.header, s, w.current.txs, uncles, receipts, firehose.NoOpContext)
 	if err != nil {
 		return err
 	}

@@ -25,9 +25,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
@@ -303,12 +303,12 @@ func (cs *chainSyncer) startSync(op *chainSyncOp) {
 
 // doSync synchronizes the local blockchain with a remote peer.
 func (h *handler) doSync(op *chainSyncOp) error {
-	if deepmind.Enabled {
-		// If deepmind is enabled, we force the mode to be a FullSync mode to ensure we correctly
+	if firehose.Enabled {
+		// If Firehose is enabled, we force the mode to be a FullSync mode to ensure we correctly
 		// process all transactions. It should probably be adapter so that speculative execution
 		// node could use fast sync which is not the case here.
 		if op.mode != downloader.FullSync {
-			log.Warn("Firehose changed syncing mode to 'full', it is required for proper extraction of the data when enabling Firehose instrumentation through --firehose-deep-mind-enabled", "old", op.mode, "new", downloader.FullSync)
+			log.Warn("Firehose changed syncing mode to 'full', it is required for proper extraction of the data when enabling Firehose instrumentation through --firehose-enabled", "old", op.mode, "new", downloader.FullSync)
 		}
 
 		op.mode = downloader.FullSync

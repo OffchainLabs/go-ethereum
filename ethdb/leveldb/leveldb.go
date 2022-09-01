@@ -79,15 +79,15 @@ type Database struct {
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
 
-	deepmindCompactionDisabled bool
+	firehoseCompactionDisabled bool
 
 	log log.Logger // Contextual logger tracking the database path
 }
 
 // New returns a wrapped LevelDB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string, deepmindCompactionDisabled bool) (*Database, error) {
-	return NewCustom(file, namespace, deepmindCompactionDisabled, func(options *opt.Options) {
+func New(file string, cache int, handles int, namespace string, firehoseCompactionDisabled bool) (*Database, error) {
+	return NewCustom(file, namespace, firehoseCompactionDisabled, func(options *opt.Options) {
 		// Ensure we have some minimal caching and file guarantees
 		if cache < minCache {
 			cache = minCache
@@ -105,7 +105,7 @@ func New(file string, cache int, handles int, namespace string, deepmindCompacti
 // NewCustom returns a wrapped LevelDB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
 // The customize function allows the caller to modify the leveldb options.
-func NewCustom(file string, namespace string, deepmindCompactionDisabled bool, customize func(options *opt.Options)) (*Database, error) {
+func NewCustom(file string, namespace string, firehoseCompactionDisabled bool, customize func(options *opt.Options)) (*Database, error) {
 	options := configureOptions(customize)
 	logger := log.New("database", file)
 	usedCache := options.GetBlockCacheCapacity() + options.GetWriteBuffer()*2
@@ -115,7 +115,7 @@ func NewCustom(file string, namespace string, deepmindCompactionDisabled bool, c
 	}
 	logger.Info("Allocated cache and file handles", logCtx...)
 
-	if deepmindCompactionDisabled {
+	if firehoseCompactionDisabled {
 		logger.Info("Disabling database compaction by setting L0 Compaction + Write triggers threshold to MAX_INT")
 		// By setting those values really high, we disable compaction of the database completely
 		maxInt := int(^uint(0) >> 1)
@@ -139,7 +139,7 @@ func NewCustom(file string, namespace string, deepmindCompactionDisabled bool, c
 		db:                         db,
 		log:                        logger,
 		quitChan:                   make(chan chan error),
-		deepmindCompactionDisabled: deepmindCompactionDisabled,
+		firehoseCompactionDisabled: firehoseCompactionDisabled,
 	}
 	ldb.compTimeMeter = metrics.NewRegisteredMeter(namespace+"compact/time", nil)
 	ldb.compReadMeter = metrics.NewRegisteredMeter(namespace+"compact/input", nil)
@@ -243,8 +243,8 @@ func (db *Database) Stat(property string) (string, error) {
 // is treated as a key after all keys in the data store. If both is nil then it
 // will compact entire data store.
 func (db *Database) Compact(start []byte, limit []byte) error {
-	if db.deepmindCompactionDisabled {
-		db.log.Info("Database compaction is disabled through --firehose-deep-mind-compaction-disabled")
+	if db.firehoseCompactionDisabled {
+		db.log.Info("Database compaction is disabled through --firehose-compaction-disabled")
 		return nil
 	}
 

@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -138,7 +138,8 @@ func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) *vm.EVM {
 		}
 		return core.CanTransfer(db, address, amount)
 	}
-	transfer := func(db vm.StateDB, sender, recipient common.Address, amount *big.Int, dmContext *deepmind.Context) {}
+	transfer := func(db vm.StateDB, sender, recipient common.Address, amount *big.Int, firehoseContext *firehose.Context) {
+	}
 	txContext := vm.TxContext{
 		Origin:   t.json.Exec.Origin,
 		GasPrice: t.json.Exec.GasPrice,
@@ -154,7 +155,7 @@ func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) *vm.EVM {
 		Difficulty:  t.json.Env.Difficulty,
 	}
 	vmconfig.NoRecursion = true
-	return vm.NewEVM(context, txContext, statedb, params.MainnetChainConfig, vmconfig, deepmind.NoOpContext)
+	return vm.NewEVM(context, txContext, statedb, params.MainnetChainConfig, vmconfig, firehose.NoOpContext)
 }
 
 func vmTestBlockHash(n uint64) common.Hash {

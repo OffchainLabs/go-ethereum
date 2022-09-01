@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/urfave/cli.v1"
@@ -147,7 +147,7 @@ func runCmd(ctx *cli.Context) error {
 	if ctx.GlobalString(SenderFlag.Name) != "" {
 		sender = common.HexToAddress(ctx.GlobalString(SenderFlag.Name))
 	}
-	statedb.CreateAccount(sender, deepmind.NoOpContext)
+	statedb.CreateAccount(sender, firehose.NoOpContext)
 
 	if ctx.GlobalString(ReceiverFlag.Name) != "" {
 		receiver = common.HexToAddress(ctx.GlobalString(ReceiverFlag.Name))
@@ -258,7 +258,7 @@ func runCmd(ctx *cli.Context) error {
 		}
 	} else {
 		if len(code) > 0 {
-			statedb.SetCode(receiver, code, deepmind.NoOpContext)
+			statedb.SetCode(receiver, code, firehose.NoOpContext)
 		}
 		execFunc = func() ([]byte, uint64, error) {
 			return runtime.Call(receiver, input, &runtimeConfig)

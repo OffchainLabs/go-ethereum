@@ -25,7 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -93,7 +93,7 @@ func init() {
 func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFunc, name string) {
 
 	var (
-		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{}, deepmind.NoOpContext)
+		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{}, firehose.NoOpContext)
 		stack          = newstack()
 		pc             = uint64(0)
 		evmInterpreter = env.interpreter.(*EVMInterpreter)
@@ -192,7 +192,7 @@ func TestSAR(t *testing.T) {
 
 func TestAddMod(t *testing.T) {
 	var (
-		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{}, deepmind.NoOpContext)
+		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{}, firehose.NoOpContext)
 		stack          = newstack()
 		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
 		pc             = uint64(0)
@@ -231,7 +231,7 @@ func TestAddMod(t *testing.T) {
 // getResult is a convenience function to generate the expected values
 func getResult(args []*twoOperandParams, opFn executionFunc) []TwoOperandTestcase {
 	var (
-		env         = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{}, deepmind.NoOpContext)
+		env         = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{}, firehose.NoOpContext)
 		stack       = newstack()
 		pc          = uint64(0)
 		interpreter = env.interpreter.(*EVMInterpreter)
@@ -281,7 +281,7 @@ func TestJsonTestcases(t *testing.T) {
 
 func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 	var (
-		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{}, deepmind.NoOpContext)
+		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{}, firehose.NoOpContext)
 		stack          = newstack()
 		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
 	)
@@ -515,7 +515,7 @@ func BenchmarkOpIsZero(b *testing.B) {
 
 func TestOpMstore(t *testing.T) {
 	var (
-		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{}, deepmind.NoOpContext)
+		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{}, firehose.NoOpContext)
 		stack          = newstack()
 		mem            = NewMemory()
 		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
@@ -539,7 +539,7 @@ func TestOpMstore(t *testing.T) {
 
 func BenchmarkOpMstore(bench *testing.B) {
 	var (
-		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{}, deepmind.NoOpContext)
+		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{}, firehose.NoOpContext)
 		stack          = newstack()
 		mem            = NewMemory()
 		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
@@ -560,7 +560,7 @@ func BenchmarkOpMstore(bench *testing.B) {
 
 func BenchmarkOpSHA3(bench *testing.B) {
 	var (
-		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{}, deepmind.NoOpContext)
+		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{}, firehose.NoOpContext)
 		stack          = newstack()
 		mem            = NewMemory()
 		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)

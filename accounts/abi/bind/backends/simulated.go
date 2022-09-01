@@ -37,10 +37,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -423,7 +423,7 @@ func (b *SimulatedBackend) PendingNonceAt(ctx context.Context, account common.Ad
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	return b.pendingState.GetOrNewStateObject(account, false, deepmind.NoOpContext).Nonce(), nil
+	return b.pendingState.GetOrNewStateObject(account, false, firehose.NoOpContext).Nonce(), nil
 }
 
 // SuggestGasPrice implements ContractTransactor.SuggestGasPrice. Since the simulated
@@ -539,8 +539,8 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 		call.Value = new(big.Int)
 	}
 	// Set infinite balance to the fake caller account.
-	from := stateDB.GetOrNewStateObject(call.From, false, deepmind.NoOpContext)
-	from.SetBalance(math.MaxBig256, deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
+	from := stateDB.GetOrNewStateObject(call.From, false, firehose.NoOpContext)
+	from.SetBalance(math.MaxBig256, firehose.NoOpContext, firehose.IgnoredBalanceChangeReason)
 	// Execute the call.
 	msg := callMsg{call}
 
@@ -548,10 +548,10 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	evmContext := core.NewEVMBlockContext(block.Header(), b.blockchain, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{}, deepmind.NoOpContext)
+	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{}, firehose.NoOpContext)
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 
-	return core.NewStateTransition(vmEnv, msg, gasPool, deepmind.NoOpContext).TransitionDb()
+	return core.NewStateTransition(vmEnv, msg, gasPool, firehose.NoOpContext).TransitionDb()
 }
 
 // SendTransaction updates the pending block to include the given transaction.

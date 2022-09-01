@@ -32,10 +32,10 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
@@ -246,7 +246,7 @@ func init() {
 	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, consoleFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
-	app.Flags = append(app.Flags, debug.DeepMindFlags...)
+	app.Flags = append(app.Flags, debug.FirehoseFlags...)
 	app.Flags = append(app.Flags, metricsFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
@@ -254,9 +254,9 @@ func init() {
 			return err
 		}
 
-		deepmind.MaybeSyncContext().InitVersion(
+		firehose.MaybeSyncContext().InitVersion(
 			params.VersionWithCommit(gitCommit, gitDate),
-			params.DeepmindVersion(),
+			params.FirehoseVersion(),
 			params.Variant,
 		)
 

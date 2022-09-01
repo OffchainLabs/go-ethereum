@@ -19,7 +19,7 @@ package vm
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 )
 
 // OpCode is an EVM opcode
@@ -546,35 +546,35 @@ func StringToOp(str string) OpCode {
 	return stringToOp[str]
 }
 
-// Deep mind additions
+// Firehose additions
 
-var opCodeToGasChangeReasonMap = map[OpCode]deepmind.GasChangeReason{
-	CREATE:         deepmind.GasChangeReason("contract_creation"),
-	CREATE2:        deepmind.GasChangeReason("contract_creation2"),
-	CALL:           deepmind.GasChangeReason("call"),
-	STATICCALL:     deepmind.GasChangeReason("static_call"),
-	CALLCODE:       deepmind.GasChangeReason("call_code"),
-	DELEGATECALL:   deepmind.GasChangeReason("delegate_call"),
-	RETURN:         deepmind.GasChangeReason("return"),
-	REVERT:         deepmind.GasChangeReason("revert"),
-	LOG0:           deepmind.GasChangeReason("event_log"),
-	LOG1:           deepmind.GasChangeReason("event_log"),
-	LOG2:           deepmind.GasChangeReason("event_log"),
-	LOG3:           deepmind.GasChangeReason("event_log"),
-	LOG4:           deepmind.GasChangeReason("event_log"),
-	SELFDESTRUCT:   deepmind.GasChangeReason("self_destruct"),
-	CALLDATACOPY:   deepmind.GasChangeReason("call_data_copy"),
-	CODECOPY:       deepmind.GasChangeReason("code_copy"),
-	EXTCODECOPY:    deepmind.GasChangeReason("ext_code_copy"),
-	RETURNDATACOPY: deepmind.GasChangeReason("return_data_copy"),
+var opCodeToGasChangeReasonMap = map[OpCode]firehose.GasChangeReason{
+	CREATE:         firehose.GasChangeReason("contract_creation"),
+	CREATE2:        firehose.GasChangeReason("contract_creation2"),
+	CALL:           firehose.GasChangeReason("call"),
+	STATICCALL:     firehose.GasChangeReason("static_call"),
+	CALLCODE:       firehose.GasChangeReason("call_code"),
+	DELEGATECALL:   firehose.GasChangeReason("delegate_call"),
+	RETURN:         firehose.GasChangeReason("return"),
+	REVERT:         firehose.GasChangeReason("revert"),
+	LOG0:           firehose.GasChangeReason("event_log"),
+	LOG1:           firehose.GasChangeReason("event_log"),
+	LOG2:           firehose.GasChangeReason("event_log"),
+	LOG3:           firehose.GasChangeReason("event_log"),
+	LOG4:           firehose.GasChangeReason("event_log"),
+	SELFDESTRUCT:   firehose.GasChangeReason("self_destruct"),
+	CALLDATACOPY:   firehose.GasChangeReason("call_data_copy"),
+	CODECOPY:       firehose.GasChangeReason("code_copy"),
+	EXTCODECOPY:    firehose.GasChangeReason("ext_code_copy"),
+	RETURNDATACOPY: firehose.GasChangeReason("return_data_copy"),
 }
 
 // We only track a few high costs op code that gives a rough idea where gas is spent
-func OpCodeToGasChangeReason(op OpCode) deepmind.GasChangeReason {
+func OpCodeToGasChangeReason(op OpCode) firehose.GasChangeReason {
 	reason, found := opCodeToGasChangeReasonMap[op]
 	if found {
 		return reason
 	}
 
-	return deepmind.IgnoredGasChangeReason
+	return firehose.IgnoredGasChangeReason
 }

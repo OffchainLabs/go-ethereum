@@ -25,10 +25,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/olekukonko/tablewriter"
 )
@@ -217,7 +217,7 @@ func NewMemoryDatabaseWithCap(size int) ethdb.Database {
 // NewLevelDBDatabase creates a persistent key-value database without a freezer
 // moving immutable chain segments into cold storage.
 func NewLevelDBDatabase(file string, cache int, handles int, namespace string) (ethdb.Database, error) {
-	db, err := leveldb.New(file, cache, handles, namespace, deepmind.CompactionDisabled)
+	db, err := leveldb.New(file, cache, handles, namespace, firehose.CompactionDisabled)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +227,7 @@ func NewLevelDBDatabase(file string, cache int, handles int, namespace string) (
 // NewLevelDBDatabaseWithFreezer creates a persistent key-value database with a
 // freezer moving immutable chain segments into cold storage.
 func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, freezer string, namespace string) (ethdb.Database, error) {
-	kvdb, err := leveldb.New(file, cache, handles, namespace, deepmind.CompactionDisabled)
+	kvdb, err := leveldb.New(file, cache, handles, namespace, firehose.CompactionDisabled)
 	if err != nil {
 		return nil, err
 	}

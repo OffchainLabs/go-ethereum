@@ -30,8 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -126,7 +126,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	if chainConfig.DAOForkSupport &&
 		chainConfig.DAOForkBlock != nil &&
 		chainConfig.DAOForkBlock.Cmp(new(big.Int).SetUint64(pre.Env.Number)) == 0 {
-		misc.ApplyDAOHardFork(statedb, deepmind.NoOpContext)
+		misc.ApplyDAOHardFork(statedb, firehose.NoOpContext)
 	}
 
 	for i, tx := range txs {
@@ -145,7 +145,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		statedb.Prepare(tx.Hash(), blockHash, txIndex)
 		txContext := core.NewEVMTxContext(msg)
 		snapshot := statedb.Snapshot()
-		evm := vm.NewEVM(vmContext, txContext, statedb, chainConfig, vmConfig, deepmind.NoOpContext)
+		evm := vm.NewEVM(vmContext, txContext, statedb, chainConfig, vmConfig, firehose.NoOpContext)
 
 		// (ret []byte, usedGas uint64, failed bool, err error)
 		msgResult, err := core.ApplyMessage(evm, msg, gaspool)
@@ -219,9 +219,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			reward.Sub(reward, big.NewInt(0).SetUint64(ommer.Delta))
 			reward.Mul(reward, blockReward)
 			reward.Div(reward, big.NewInt(8))
-			statedb.AddBalance(ommer.Address, reward, false, deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
+			statedb.AddBalance(ommer.Address, reward, false, firehose.NoOpContext, firehose.IgnoredBalanceChangeReason)
 		}
-		statedb.AddBalance(pre.Env.Coinbase, minerReward, false, deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
+		statedb.AddBalance(pre.Env.Coinbase, minerReward, false, firehose.NoOpContext, firehose.IgnoredBalanceChangeReason)
 	}
 	// Commit block
 	root, err := statedb.Commit(chainConfig.IsEIP158(vmContext.BlockNumber))
@@ -245,11 +245,11 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB 
 	sdb := state.NewDatabase(db)
 	statedb, _ := state.New(common.Hash{}, sdb, nil)
 	for addr, a := range accounts {
-		statedb.SetCode(addr, a.Code, deepmind.NoOpContext)
-		statedb.SetNonce(addr, a.Nonce, deepmind.NoOpContext)
-		statedb.SetBalance(addr, a.Balance, deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason)
+		statedb.SetCode(addr, a.Code, firehose.NoOpContext)
+		statedb.SetNonce(addr, a.Nonce, firehose.NoOpContext)
+		statedb.SetBalance(addr, a.Balance, firehose.NoOpContext, firehose.IgnoredBalanceChangeReason)
 		for k, v := range a.Storage {
-			statedb.SetState(addr, k, v, deepmind.NoOpContext)
+			statedb.SetState(addr, k, v, firehose.NoOpContext)
 		}
 	}
 	// Commit and re-open to start with a clean state.

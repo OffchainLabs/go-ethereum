@@ -22,7 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -52,11 +52,11 @@ func (*dummyStatedb) GetRefund() uint64 { return 1337 }
 
 func TestStoreCapture(t *testing.T) {
 	var (
-		env      = NewEVM(BlockContext{}, TxContext{}, &dummyStatedb{}, params.TestChainConfig, Config{}, deepmind.NoOpContext)
+		env      = NewEVM(BlockContext{}, TxContext{}, &dummyStatedb{}, params.TestChainConfig, Config{}, firehose.NoOpContext)
 		logger   = NewStructLogger(nil)
 		mem      = NewMemory()
 		stack    = newstack()
-		contract = NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 0, deepmind.NoOpContext)
+		contract = NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 0, firehose.NoOpContext)
 	)
 	stack.push(uint256.NewInt().SetUint64(1))
 	stack.push(uint256.NewInt())

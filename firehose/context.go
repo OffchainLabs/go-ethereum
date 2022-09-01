@@ -1,4 +1,4 @@
-package deepmind
+package firehose
 
 import (
 	"encoding/binary"
@@ -39,16 +39,16 @@ func MaybeSyncContext() *Context {
 	return syncContext
 }
 
-// SyncContext returns the sync context without any checking if deep mind is enabled or not. Use
+// SyncContext returns the sync context without any checking if firehose is enabled or not. Use
 // it only for specific cases and ensure you only use it when it's strictly correct to do so as this
 // will print stdout lines.
 func SyncContext() *Context {
 	return syncContext
 }
 
-// Context is a block level data container used throughout deep mind instrumentation to
+// Context is a block level data container used throughout firehose instrumentation to
 // keep active state about current instrumentation. This contains method to deal with
-// block, transaction and call metadata required for proper functionning of Deep Mind
+// block, transaction and call metadata required for proper functionning of Firehose
 // code.
 type Context struct {
 	printer Printer
@@ -144,7 +144,7 @@ func (ctx *Context) StartBlock(block *types.Block) {
 
 func (ctx *Context) FinalizeBlock(block *types.Block) {
 	// We must not check if the finalize block is actually in the a block since
-	// when deep mind block progress only is enabled, it would hit a panic
+	// when firehose block progress only is enabled, it would hit a panic
 	ctx.printer.Print("FINALIZE_BLOCK", Uint64(block.NumberU64()))
 }
 
@@ -216,7 +216,7 @@ func gasPrice(tx *types.Transaction, baseFee *big.Int) *big.Int {
 }
 
 func errUnhandledTransactionType(tag string, value uint8) error {
-	return fmt.Errorf("unhandled transaction type's %d for deepmind.%s(), carefully review the patch, if this new transaction type add new fields, think about adding them to Firehose Block format, when you see this message, it means something changed in the chain model and great care and thinking most be put here to properly understand the changes and the consequences they bring for the instrumentation", value, tag)
+	return fmt.Errorf("unhandled transaction type's %d for firehose.%s(), carefully review the patch, if this new transaction type add new fields, think about adding them to Firehose Block format, when you see this message, it means something changed in the chain model and great care and thinking most be put here to properly understand the changes and the consequences they bring for the instrumentation", value, tag)
 }
 
 func (ctx *Context) StartTransactionRaw(
@@ -678,7 +678,7 @@ func (ctx *Context) RecordTrxPool(eventType string, tx *types.Transaction, err e
 
 type AccessList types.AccessList
 
-// marshal in a binary format that will be printed as hex in deep mind and read on the console reader
+// marshal in a binary format that will be printed as hex in firehose and read on the console reader
 // in a binary format.
 //
 // An access list format will be, varint for the length of the list, followed by each tuple

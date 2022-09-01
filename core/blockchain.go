@@ -39,9 +39,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -120,7 +120,7 @@ const (
 	BlockChainVersion uint64 = 8
 )
 
-// Deepmind tweaked constants
+// Firehose tweaked constants
 const (
 	// DefaultTriesInMemory keeps the default value of TriesInMemory value so we can determine if it changed.
 	// The default values is still used in the P2P network so we don't advertise that we keep more state than
@@ -128,7 +128,7 @@ const (
 	DefaultTriesInMemory = uint64(128)
 )
 
-// Deepmind turned this into a `var` to allow overriding, was a `const`
+// Firehose turned this into a `var` to allow overriding, was a `const`
 var TriesInMemory = DefaultTriesInMemory
 
 // CacheConfig contains the configuration values for the trie caching/pruning
@@ -230,12 +230,12 @@ type BlockChain struct {
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
 func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(block *types.Block) bool, txLookupLimit *uint64) (*BlockChain, error) {
-	// This is one of the rare case where deepmind is not enabled and we still perform something.
-	if deepmind.ArchiveBlocksToKeep != 0 {
+	// This is one of the rare case where firehose is not enabled and we still perform something.
+	if firehose.ArchiveBlocksToKeep != 0 {
 		old := TriesInMemory
-		TriesInMemory = deepmind.ArchiveBlocksToKeep
+		TriesInMemory = firehose.ArchiveBlocksToKeep
 
-		log.Info("Deepmind overrode TriesInMemory value (coming from archive blocks to keep value)", "tries_in_memory", deepmind.ArchiveBlocksToKeep, "was", old)
+		log.Info("Firehose overrode TriesInMemory value (coming from archive blocks to keep value)", "tries_in_memory", firehose.ArchiveBlocksToKeep, "was", old)
 	}
 
 	if cacheConfig == nil {
@@ -397,16 +397,16 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover)
 	}
 
-	if deepmind.Enabled && bc.CurrentBlock().NumberU64() == 0 {
+	if firehose.Enabled && bc.CurrentBlock().NumberU64() == 0 {
 		if bc.genesisBlock == nil {
 			panic(fmt.Errorf("expected to have genesis block here"))
 		}
 
-		if deepmind.GenesisConfig == nil {
+		if firehose.GenesisConfig == nil {
 			panic(fmt.Errorf("The genesis config is not set, there is something weird as all code path should generate the correct genesis config"))
 		}
 
-		genesis := deepmind.GenesisConfig.(*Genesis)
+		genesis := firehose.GenesisConfig.(*Genesis)
 		if genesis == nil {
 			panic(fmt.Errorf("The genesis config is not set, there is something weird as all code path should generate the correct genesis config"))
 		}
@@ -416,10 +416,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		// the genesis config computed matched Geth savec genesis block.
 		recomputedGenesisBlock := genesis.ToBlock(nil)
 		if bc.genesisBlock.Hash() != recomputedGenesisBlock.Hash() {
-			panic(fmt.Errorf("invalid Firehose genesis block and actual chain's stored genesis block, the actual genesis block's hash field extracted from Geth's database does not fit with hash of genesis block generated from Firehose determined genesis config, you might need to provide the correct 'genesis.json' file via --firehose-deep-mind-genesis"))
+			panic(fmt.Errorf("invalid Firehose genesis block and actual chain's stored genesis block, the actual genesis block's hash field extracted from Geth's database does not fit with hash of genesis block generated from Firehose determined genesis config, you might need to provide the correct 'genesis.json' file via --firehose-genesis-file"))
 		}
 
-		deepmind.MaybeSyncContext().RecordGenesisBlock(bc.genesisBlock, func(ctx *deepmind.Context) {
+		firehose.MaybeSyncContext().RecordGenesisBlock(bc.genesisBlock, func(ctx *firehose.Context) {
 			sortedAddrs := make([]common.Address, len(genesis.Alloc))
 			i := 0
 			for addr := range genesis.Alloc {
@@ -436,7 +436,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 
 				ctx.RecordNewAccount(addr)
 
-				ctx.RecordBalanceChange(addr, common.Big0, account.Balance, deepmind.BalanceChangeReason("genesis_balance"))
+				ctx.RecordBalanceChange(addr, common.Big0, account.Balance, firehose.BalanceChangeReason("genesis_balance"))
 				if len(account.Code) > 0 {
 					ctx.RecordCodeChange(addr, nil, nil, crypto.Keccak256Hash(account.Code), account.Code)
 				}
