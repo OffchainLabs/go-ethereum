@@ -192,6 +192,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			EnablePreimageRecording: config.EnablePreimageRecording,
 		}
 		cacheConfig = &core.CacheConfig{
+
+			// Arbitrum
+			TriesInMemory: 128,
+			TrieRetention: 30 * time.Minute,
+
 			TrieCleanLimit:      config.TrieCleanCache,
 			TrieCleanJournal:    stack.ResolvePath(config.TrieCleanCacheJournal),
 			TrieCleanRejournal:  config.TrieCleanCacheRejournal,

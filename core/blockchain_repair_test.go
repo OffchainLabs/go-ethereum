@@ -1767,6 +1767,11 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
 		engine  = ethash.NewFullFaker()
 		config  = &CacheConfig{
+
+			// Arbitrum
+			TriesInMemory: 128,
+			TrieRetention: 30 * time.Minute,
+
 			TrieCleanLimit: 256,
 			TrieDirtyLimit: 256,
 			TrieTimeLimit:  5 * time.Minute,
@@ -1891,6 +1896,11 @@ func TestIssue23496(t *testing.T) {
 		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
 		engine  = ethash.NewFullFaker()
 		config  = &CacheConfig{
+
+			// Arbitrum
+			TriesInMemory: 128,
+			TrieRetention: 30 * time.Minute,
+
 			TrieCleanLimit: 256,
 			TrieDirtyLimit: 256,
 			TrieTimeLimit:  5 * time.Minute,
