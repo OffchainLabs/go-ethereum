@@ -1936,6 +1936,16 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			if err := bc.writeKnownBlock(block); err != nil {
 				return it.index, err
 			}
+
+			// some blocks with 0 transactions are only processed here
+			if firehoseContext := firehose.MaybeSyncContext(); firehoseContext.Enabled() {
+				firehoseContext.StartBlock(block)
+				firehoseContext.FinalizeBlock(block)
+				ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+				td := new(big.Int).Add(block.Difficulty(), ptd)
+				firehoseContext.EndBlock(block, td)
+			}
+
 			stats.processed++
 
 			// We can assume that logs are empty here, since the only way for consecutive

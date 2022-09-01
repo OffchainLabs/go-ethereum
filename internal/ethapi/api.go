@@ -1023,7 +1023,7 @@ func (s *PublicBlockChainAPI) Execute(ctx context.Context, args CallArgs, blockN
 
 	// As soon as we have an execution result, we should have a complete Firehose log, so let's return it
 	if result != nil {
-		return firehoseContext.DeepMindLog(), nil
+		return firehoseContext.FirehoseLog(), nil
 	}
 
 	if err != nil {
