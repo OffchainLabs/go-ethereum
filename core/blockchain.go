@@ -1702,7 +1702,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 				return it.index, err
 			}
 
-			// some blocks with 0 transactions are only processed here
+			// Firehose, some blocks with 0 transactions are only processed here, this was causing
+			// holes as some empty blocks "already" prcoessed (not sure where) were actually skipped.
+			// This enforces that blocks are correctly emitted even though empty.
 			if firehoseContext := firehose.MaybeSyncContext(); firehoseContext.Enabled() {
 				firehoseContext.StartBlock(block)
 				firehoseContext.FinalizeBlock(block)
