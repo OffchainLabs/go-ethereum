@@ -94,7 +94,7 @@ func (ctx *Context) Enabled() bool {
 	return ctx != nil
 }
 
-func (ctx *Context) DeepMindLog() []byte {
+func (ctx *Context) FirehoseLog() []byte {
 	if ctx == nil {
 		return nil
 	}

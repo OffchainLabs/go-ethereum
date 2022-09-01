@@ -27,7 +27,7 @@ func (p *DelegateToWriterPrinter) Disabled() bool {
 }
 
 func (p *DelegateToWriterPrinter) Print(input ...string) {
-	line := "DMLOG " + strings.Join(input, " ") + "\n"
+	line := "FIRE " + strings.Join(input, " ") + "\n"
 	var written int
 	var err error
 	loops := 10
@@ -45,8 +45,8 @@ func (p *DelegateToWriterPrinter) Print(input ...string) {
 		}
 	}
 
-	errstr := fmt.Sprintf("\nDMLOG FAILED WRITING %dx: %s\n", loops, err)
-	ioutil.WriteFile("/tmp/deep_mind_writer_failed_print.log", []byte(errstr), 0644)
+	errstr := fmt.Sprintf("\nFIREHOSE FAILED WRITING %dx: %s\n", loops, err)
+	ioutil.WriteFile("/tmp/firehose_writer_failed_print.log", []byte(errstr), 0644)
 	fmt.Fprint(p.writer, errstr)
 }
 
