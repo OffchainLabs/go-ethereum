@@ -1,4 +1,4 @@
-package deepmind
+package firehose
 
 import (
 	"bytes"
@@ -46,7 +46,7 @@ func (p *DelegateToWriterPrinter) Print(input ...string) {
 	}
 
 	errstr := fmt.Sprintf("\nDMLOG FAILED WRITING %dx: %s\n", loops, err)
-	ioutil.WriteFile("/tmp/deep_mind_writer_failed_print.log", []byte(errstr), 0644)
+	ioutil.WriteFile("/tmp/firehose_writer_failed_print.log", []byte(errstr), 0644)
 	fmt.Fprint(p.writer, errstr)
 }
 

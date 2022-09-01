@@ -25,8 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -48,22 +48,22 @@ func makeTestState() (Database, common.Hash, []*testAccount) {
 	// Fill it with some arbitrary data
 	var accounts []*testAccount
 	for i := byte(0); i < 96; i++ {
-		obj := state.GetOrNewStateObject(common.BytesToAddress([]byte{i}), false, deepmind.NoOpContext)
+		obj := state.GetOrNewStateObject(common.BytesToAddress([]byte{i}), false, firehose.NoOpContext)
 		acc := &testAccount{address: common.BytesToAddress([]byte{i})}
 
-		obj.AddBalance(big.NewInt(int64(11*i)), deepmind.NoOpContext, "test")
+		obj.AddBalance(big.NewInt(int64(11*i)), firehose.NoOpContext, "test")
 		acc.balance = big.NewInt(int64(11 * i))
 
-		obj.SetNonce(uint64(42*i), deepmind.NoOpContext)
+		obj.SetNonce(uint64(42*i), firehose.NoOpContext)
 		acc.nonce = uint64(42 * i)
 
 		if i%3 == 0 {
-			obj.SetCode(crypto.Keccak256Hash([]byte{i, i, i, i, i}), []byte{i, i, i, i, i}, deepmind.NoOpContext)
+			obj.SetCode(crypto.Keccak256Hash([]byte{i, i, i, i, i}), []byte{i, i, i, i, i}, firehose.NoOpContext)
 			acc.code = []byte{i, i, i, i, i}
 		}
 		if i%5 == 0 {
 			for j := byte(0); j < 5; j++ {
-				obj.SetState(db, crypto.Keccak256Hash([]byte{i, i, i, i, i, j, j}), crypto.Keccak256Hash([]byte{i, i, i, i, i, j, j}), deepmind.NoOpContext)
+				obj.SetState(db, crypto.Keccak256Hash([]byte{i, i, i, i, i, j, j}), crypto.Keccak256Hash([]byte{i, i, i, i, i, j, j}), firehose.NoOpContext)
 			}
 		}
 		state.updateStateObject(obj)

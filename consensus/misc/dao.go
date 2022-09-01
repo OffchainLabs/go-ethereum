@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -72,15 +72,15 @@ func VerifyDAOHeaderExtraData(config *params.ChainConfig, header *types.Header) 
 // ApplyDAOHardFork modifies the state database according to the DAO hard-fork
 // rules, transferring all balances of a set of DAO accounts to a single refund
 // contract.
-func ApplyDAOHardFork(statedb *state.StateDB, dmContext *deepmind.Context) {
+func ApplyDAOHardFork(statedb *state.StateDB, firehoseContext *firehose.Context) {
 	// Retrieve the contract to refund balances into
 	if !statedb.Exist(params.DAORefundContract) {
-		statedb.CreateAccount(params.DAORefundContract, dmContext)
+		statedb.CreateAccount(params.DAORefundContract, firehoseContext)
 	}
 
 	// Move every DAO account and extra-balance account funds into the refund contract
 	for _, addr := range params.DAODrainList() {
-		statedb.AddBalance(params.DAORefundContract, statedb.GetBalance(addr), false, dmContext, deepmind.BalanceChangeReason("dao_refund_contract"))
-		statedb.SetBalance(addr, new(big.Int), dmContext, deepmind.BalanceChangeReason("dao_adjust_balance"))
+		statedb.AddBalance(params.DAORefundContract, statedb.GetBalance(addr), false, firehoseContext, firehose.BalanceChangeReason("dao_refund_contract"))
+		statedb.SetBalance(addr, new(big.Int), firehoseContext, firehose.BalanceChangeReason("dao_adjust_balance"))
 	}
 }

@@ -33,8 +33,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -133,14 +133,14 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			statedb, err := state.New(header.Root, state.NewDatabase(db), nil)
 
 			if err == nil {
-				from := statedb.GetOrNewStateObject(bankAddr, false, deepmind.NoOpContext)
-				from.SetBalance(math.MaxBig256, deepmind.NoOpContext, "test")
+				from := statedb.GetOrNewStateObject(bankAddr, false, firehose.NoOpContext)
+				from.SetBalance(math.MaxBig256, firehose.NoOpContext, "test")
 
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), 100000, big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), new(big.Int), data, nil, true)}
 
 				context := core.NewEVMBlockContext(header, bc, nil)
 				txContext := core.NewEVMTxContext(msg)
-				vmenv := vm.NewEVM(context, txContext, statedb, config, vm.Config{NoBaseFee: true}, deepmind.NoOpContext)
+				vmenv := vm.NewEVM(context, txContext, statedb, config, vm.Config{NoBaseFee: true}, firehose.NoOpContext)
 
 				//vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(math.MaxUint64)
@@ -150,11 +150,11 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 		} else {
 			header := lc.GetHeaderByHash(bhash)
 			state := light.NewState(ctx, header, lc.Odr())
-			state.SetBalance(bankAddr, math.MaxBig256, deepmind.NoOpContext, "test")
+			state.SetBalance(bankAddr, math.MaxBig256, firehose.NoOpContext, "test")
 			msg := callmsg{types.NewMessage(bankAddr, &testContractAddr, 0, new(big.Int), 100000, big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), new(big.Int), data, nil, true)}
 			context := core.NewEVMBlockContext(header, lc, nil)
 			txContext := core.NewEVMTxContext(msg)
-			vmenv := vm.NewEVM(context, txContext, state, config, vm.Config{NoBaseFee: true}, deepmind.NoOpContext)
+			vmenv := vm.NewEVM(context, txContext, state, config, vm.Config{NoBaseFee: true}, firehose.NoOpContext)
 			gp := new(core.GasPool).AddGas(math.MaxUint64)
 			result, _ := core.ApplyMessage(vmenv, msg, gp)
 			if state.Error() == nil {

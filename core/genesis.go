@@ -32,8 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -92,14 +92,14 @@ func (ga *GenesisAlloc) deriveHash() (common.Hash, error) {
 	}
 
 	// Since everything in there is ephemeral, there is no reason to output any of those
-	dmContext := deepmind.NoOpContext
+	firehoseContext := firehose.NoOpContext
 
 	for addr, account := range *ga {
-		statedb.AddBalance(addr, account.Balance, false, dmContext, deepmind.IgnoredBalanceChangeReason)
-		statedb.SetCode(addr, account.Code, dmContext)
-		statedb.SetNonce(addr, account.Nonce, dmContext)
+		statedb.AddBalance(addr, account.Balance, false, firehoseContext, firehose.IgnoredBalanceChangeReason)
+		statedb.SetCode(addr, account.Code, firehoseContext)
+		statedb.SetNonce(addr, account.Nonce, firehoseContext)
 		for key, value := range account.Storage {
-			statedb.SetState(addr, key, value, dmContext)
+			statedb.SetState(addr, key, value, firehoseContext)
 		}
 	}
 	return statedb.Commit(false)
@@ -116,14 +116,14 @@ func (ga *GenesisAlloc) flush(db ethdb.Database) error {
 
 	// Don't think this will ever be actually called while syncing a chain, but let's keep it
 	// with a potential real Firehose output
-	dmContext := deepmind.MaybeSyncContext()
+	firehoseContext := firehose.MaybeSyncContext()
 
 	for addr, account := range *ga {
-		statedb.AddBalance(addr, account.Balance, false, dmContext, deepmind.BalanceChangeReason("genesis_balance"))
-		statedb.SetCode(addr, account.Code, dmContext)
-		statedb.SetNonce(addr, account.Nonce, dmContext)
+		statedb.AddBalance(addr, account.Balance, false, firehoseContext, firehose.BalanceChangeReason("genesis_balance"))
+		statedb.SetCode(addr, account.Code, firehoseContext)
+		statedb.SetNonce(addr, account.Nonce, firehoseContext)
 		for key, value := range account.Storage {
-			statedb.SetState(addr, key, value, dmContext)
+			statedb.SetState(addr, key, value, firehoseContext)
 		}
 	}
 	root, err := statedb.Commit(false)
@@ -378,7 +378,6 @@ func (g *Genesis) ToBlock() *types.Block {
 	if err != nil {
 		panic(err)
 	}
-
 	head := &types.Header{
 		Number:     new(big.Int).SetUint64(g.Number),
 		Nonce:      types.EncodeNonce(g.Nonce),

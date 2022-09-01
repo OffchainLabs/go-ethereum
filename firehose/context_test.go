@@ -1,4 +1,4 @@
-package deepmind
+package firehose
 
 import (
 	"encoding/hex"

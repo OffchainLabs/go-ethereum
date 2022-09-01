@@ -26,11 +26,12 @@ import (
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/exp"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/fjl/memsize/memsizeui"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
@@ -107,41 +108,41 @@ var (
 		Category: flags.LoggingCategory,
 	}
 
-	// Deep Mind Flags
-	deepMindFlag = &cli.BoolFlag{
-		Name:     "firehose-deep-mind",
-		Usage:    "Activate/deactivate deep-mind instrumentation, disabled by default",
+	// Firehose Flags
+	firehoseEnabledFlag = &cli.BoolFlag{
+		Name:     "firehose-enabled",
+		Usage:    "Activate/deactivate Firehose instrumentation, disabled by default",
 		Category: flags.FirehoseCategory,
 	}
-	deepMindSyncInstrumentationFlag = &cli.BoolFlag{
-		Name:     "firehose-deep-mind-sync-instrumentation",
-		Usage:    "Activate/deactivate deep-mind sync output instrumentation, enabled by default",
-		Category: flags.FirehoseCategory,
+	firehoseSyncInstrumentationFlag = &cli.BoolFlag{
+		Name:     "firehose-sync-instrumentation",
+		Usage:    "Activate/deactivate Firehose sync output instrumentation, enabled by default",
 		Value:    true,
-	}
-	deepMindMiningEnabledFlag = &cli.BoolFlag{
-		Name:     "firehose-deep-mind-mining-enabled",
-		Usage:    "Activate/deactivate mining code even if deep-mind is active, required speculative execution on local miner node, disabled by default",
 		Category: flags.FirehoseCategory,
 	}
-	deepMindBlockProgressFlag = &cli.BoolFlag{
-		Name:     "firehose-deep-mind-block-progress",
-		Usage:    "Activate/deactivate deep-mind block progress output instrumentation, disabled by default",
+	firehoseMiningEnabledFlag = &cli.BoolFlag{
+		Name:     "firehose-mining-enabled",
+		Usage:    "Activate/deactivate mining code even if Firehose is active, required speculative execution on local miner node, disabled by default",
 		Category: flags.FirehoseCategory,
 	}
-	deepMindCompactionDisabledFlag = &cli.BoolFlag{
-		Name:     "firehose-deep-mind-compaction-disabled",
+	firehoseBlockProgressFlag = &cli.BoolFlag{
+		Name:     "firehose-block-progress",
+		Usage:    "Activate/deactivate Firehose block progress output instrumentation, disabled by default",
+		Category: flags.FirehoseCategory,
+	}
+	firehoseCompactionDisabledFlag = &cli.BoolFlag{
+		Name:     "firehose-compaction-disabled",
 		Usage:    "Disabled database compaction, enabled by default",
 		Category: flags.FirehoseCategory,
 	}
-	deepMindArchiveBlocksToKeepFlag = &cli.Uint64Flag{
-		Name:     "firehose-deep-mind-archive-blocks-to-keep",
+	firehoseArchiveBlocksToKeepFlag = &cli.Uint64Flag{
+		Name:     "firehose-archive-blocks-to-keep",
 		Usage:    "Controls how many archive blocks the node should keep, this tweaks the core/blockchain.go constant value TriesInMemory, the default value of 0 can be used to use Geth default value instead which is 128",
-		Value:    deepmind.ArchiveBlocksToKeep,
+		Value:    firehose.ArchiveBlocksToKeep,
 		Category: flags.FirehoseCategory,
 	}
-	deepMindGenesisFileFlag = &cli.StringFlag{
-		Name:     "firehose-deep-mind-genesis",
+	firehoseGenesisFileFlag = &cli.StringFlag{
+		Name:     "firehose-genesis-file",
 		Usage:    "On private chains where the genesis config is not known to Geth, you **must** provide the 'genesis.json' file path for proper instrumentation of genesis block",
 		Value:    "",
 		Category: flags.FirehoseCategory,
@@ -164,10 +165,10 @@ var Flags = []cli.Flag{
 	traceFlag,
 }
 
-// DeepMindFlags holds all dfuse Deep Mind related command-line flags.
-var DeepMindFlags = []cli.Flag{
-	deepMindFlag, deepMindSyncInstrumentationFlag, deepMindMiningEnabledFlag, deepMindBlockProgressFlag,
-	deepMindCompactionDisabledFlag, deepMindArchiveBlocksToKeepFlag, deepMindGenesisFileFlag,
+// FirehoseFlags holds all StreamingFast Firehose related command-line flags.
+var FirehoseFlags = []cli.Flag{
+	firehoseEnabledFlag, firehoseSyncInstrumentationFlag, firehoseMiningEnabledFlag, firehoseBlockProgressFlag,
+	firehoseCompactionDisabledFlag, firehoseArchiveBlocksToKeepFlag, firehoseGenesisFileFlag,
 }
 
 var glogger *log.GlogHandler
@@ -244,22 +245,22 @@ func Setup(ctx *cli.Context, genesis *core.Genesis) error {
 		StartPProf(address, !ctx.IsSet("metrics.addr"))
 	}
 
-	// Deep mind
-	log.Info("Initializing deep mind")
-	deepmind.Enabled = ctx.Bool(deepMindFlag.Name)
-	deepmind.SyncInstrumentationEnabled = ctx.Bool(deepMindSyncInstrumentationFlag.Name)
-	deepmind.MiningEnabled = ctx.Bool(deepMindMiningEnabledFlag.Name)
-	deepmind.BlockProgressEnabled = ctx.Bool(deepMindBlockProgressFlag.Name)
-	deepmind.CompactionDisabled = ctx.Bool(deepMindCompactionDisabledFlag.Name)
-	deepmind.ArchiveBlocksToKeep = ctx.Uint64(deepMindArchiveBlocksToKeepFlag.Name)
+	// Firehose
+	log.Info("Initializing firehose")
+	firehose.Enabled = ctx.Bool(firehoseEnabledFlag.Name)
+	firehose.SyncInstrumentationEnabled = ctx.Bool(firehoseSyncInstrumentationFlag.Name)
+	firehose.MiningEnabled = ctx.Bool(firehoseMiningEnabledFlag.Name)
+	firehose.BlockProgressEnabled = ctx.Bool(firehoseBlockProgressFlag.Name)
+	firehose.CompactionDisabled = ctx.Bool(firehoseCompactionDisabledFlag.Name)
+	firehose.ArchiveBlocksToKeep = ctx.Uint64(firehoseArchiveBlocksToKeepFlag.Name)
 
 	genesisProvenance := "unset"
 
 	if genesis != nil {
-		deepmind.GenesisConfig = genesis
+		firehose.GenesisConfig = genesis
 		genesisProvenance = "Geth Specific Flag"
 	} else {
-		if genesisFilePath := ctx.String(deepMindGenesisFileFlag.Name); genesisFilePath != "" {
+		if genesisFilePath := ctx.String(firehoseGenesisFileFlag.Name); genesisFilePath != "" {
 			file, err := os.Open(genesisFilePath)
 			if err != nil {
 				return fmt.Errorf("firehose open genesis file: %w", err)
@@ -271,22 +272,25 @@ func Setup(ctx *cli.Context, genesis *core.Genesis) error {
 				return fmt.Errorf("decode genesis file %q: %w", genesisFilePath, err)
 			}
 
-			deepmind.GenesisConfig = genesis
-			genesisProvenance = "Flag " + deepMindGenesisFileFlag.Name
+			firehose.GenesisConfig = genesis
+			genesisProvenance = "Flag " + firehoseGenesisFileFlag.Name
 		} else {
-			deepmind.GenesisConfig = core.DefaultGenesisBlock()
+			firehose.GenesisConfig = core.DefaultGenesisBlock()
 			genesisProvenance = "Geth Default"
 		}
 	}
 
-	log.Info("Deep mind initialized",
-		"enabled", deepmind.Enabled,
-		"sync_instrumentation_enabled", deepmind.SyncInstrumentationEnabled,
-		"mining_enabled", deepmind.MiningEnabled,
-		"block_progress_enabled", deepmind.BlockProgressEnabled,
-		"compaction_disabled", deepmind.CompactionDisabled,
-		"archive_blocks_to_keep", deepmind.ArchiveBlocksToKeep,
+	log.Info("Firehose initialized",
+		"enabled", firehose.Enabled,
+		"sync_instrumentation_enabled", firehose.SyncInstrumentationEnabled,
+		"mining_enabled", firehose.MiningEnabled,
+		"block_progress_enabled", firehose.BlockProgressEnabled,
+		"compaction_disabled", firehose.CompactionDisabled,
+		"archive_blocks_to_keep", firehose.ArchiveBlocksToKeep,
 		"genesis_provenance", genesisProvenance,
+		"firehose_version", params.FirehoseVersion(),
+		"geth_version", params.VersionWithMeta,
+		"chain_variant", params.Variant,
 	)
 
 	return nil

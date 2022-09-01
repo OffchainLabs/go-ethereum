@@ -20,7 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/holiman/uint256"
 )
 
@@ -62,12 +62,12 @@ type Contract struct {
 	Gas   uint64
 	value *big.Int
 
-	dmContext *deepmind.Context
+	firehoseContext *firehose.Context
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
-func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uint64, dmContext *deepmind.Context) *Contract {
-	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object, dmContext: dmContext}
+func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uint64, firehoseContext *firehose.Context) *Contract {
+	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object, firehoseContext: firehoseContext}
 
 	if parent, ok := caller.(*Contract); ok {
 		// Reuse JUMPDEST analysis from parent context if available.
@@ -162,13 +162,13 @@ func (c *Contract) Caller() common.Address {
 }
 
 // UseGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) UseGas(gas uint64, reason deepmind.GasChangeReason) (ok bool) {
+func (c *Contract) UseGas(gas uint64, reason firehose.GasChangeReason) (ok bool) {
 	if c.Gas < gas {
 		return false
 	}
 
-	if c.dmContext.Enabled() {
-		c.dmContext.RecordGasConsume(c.Gas, gas, reason)
+	if c.firehoseContext.Enabled() {
+		c.firehoseContext.RecordGasConsume(c.Gas, gas, reason)
 	}
 	c.Gas -= gas
 

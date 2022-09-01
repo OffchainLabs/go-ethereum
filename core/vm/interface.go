@@ -21,23 +21,23 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 )
 
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
-	CreateAccount(common.Address, *deepmind.Context)
+	CreateAccount(common.Address, *firehose.Context)
 
-	SubBalance(common.Address, *big.Int, *deepmind.Context, deepmind.BalanceChangeReason)
-	AddBalance(common.Address, *big.Int, bool, *deepmind.Context, deepmind.BalanceChangeReason)
+	SubBalance(common.Address, *big.Int, *firehose.Context, firehose.BalanceChangeReason)
+	AddBalance(common.Address, *big.Int, bool, *firehose.Context, firehose.BalanceChangeReason)
 	GetBalance(common.Address) *big.Int
 
 	GetNonce(common.Address) uint64
-	SetNonce(common.Address, uint64, *deepmind.Context)
+	SetNonce(common.Address, uint64, *firehose.Context)
 
 	GetCodeHash(common.Address) common.Hash
 	GetCode(common.Address) []byte
-	SetCode(common.Address, []byte, *deepmind.Context)
+	SetCode(common.Address, []byte, *firehose.Context)
 	GetCodeSize(common.Address) int
 
 	AddRefund(uint64)
@@ -46,9 +46,9 @@ type StateDB interface {
 
 	GetCommittedState(common.Address, common.Hash) common.Hash
 	GetState(common.Address, common.Hash) common.Hash
-	SetState(common.Address, common.Hash, common.Hash, *deepmind.Context)
+	SetState(common.Address, common.Hash, common.Hash, *firehose.Context)
 
-	Suicide(common.Address, *deepmind.Context) bool
+	Suicide(common.Address, *firehose.Context) bool
 	HasSuicided(common.Address) bool
 
 	// Exist reports whether the given account exists in state.
@@ -71,7 +71,7 @@ type StateDB interface {
 	RevertToSnapshot(int)
 	Snapshot() int
 
-	AddLog(*types.Log, *deepmind.Context)
+	AddLog(*types.Log, *firehose.Context)
 	AddPreimage(common.Hash, []byte)
 
 	ForEachStorage(common.Address, func(common.Hash, common.Hash) bool) error

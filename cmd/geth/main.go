@@ -30,10 +30,10 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
@@ -251,25 +251,25 @@ func init() {
 		rpcFlags,
 		consoleFlags,
 		debug.Flags,
-		debug.DeepMindFlags,
+		debug.FirehoseFlags,
 		metricsFlags,
 	)
 
 	app.Before = func(ctx *cli.Context) error {
 		flags.MigrateGlobalFlags(ctx)
 
-		// Force sync mode to `full` for deep mind code (whatever the value flag!)
+		// Force sync mode to `full` for Firehose code (whatever the value flag!)
 		if err := ctx.Set(utils.SyncModeFlag.Name, "full"); err != nil {
-			log.Error("deep mind failed to set sync mode to full", err)
+			log.Error("firehose failed to set sync mode to full", err)
 		}
 
 		if err := debug.Setup(ctx, utils.MakeGenesis(ctx)); err != nil {
 			return err
 		}
 
-		deepmind.MaybeSyncContext().InitVersion(
+		firehose.MaybeSyncContext().InitVersion(
 			params.VersionWithCommit(gitCommit, gitDate),
-			params.DeepmindVersion(),
+			params.FirehoseVersion(),
 			params.Variant,
 		)
 

@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 )
 
 func filledStateDB() *StateDB {
@@ -34,12 +34,12 @@ func filledStateDB() *StateDB {
 	skey := common.HexToHash("aaa")
 	sval := common.HexToHash("bbb")
 
-	state.SetBalance(addr, big.NewInt(42), deepmind.NoOpContext, deepmind.IgnoredBalanceChangeReason) // Change the account trie
-	state.SetCode(addr, []byte("hello"), deepmind.NoOpContext)                                        // Change an external metadata
-	state.SetState(addr, skey, sval, deepmind.NoOpContext)                                            // Change the storage trie
+	state.SetBalance(addr, big.NewInt(42), firehose.NoOpContext, firehose.IgnoredBalanceChangeReason) // Change the account trie
+	state.SetCode(addr, []byte("hello"), firehose.NoOpContext)                                        // Change an external metadata
+	state.SetState(addr, skey, sval, firehose.NoOpContext)                                            // Change the storage trie
 	for i := 0; i < 100; i++ {
 		sk := common.BigToHash(big.NewInt(int64(i)))
-		state.SetState(addr, sk, sk, deepmind.NoOpContext) // Change the storage trie
+		state.SetState(addr, sk, sk, firehose.NoOpContext) // Change the storage trie
 	}
 	return state
 }

@@ -26,8 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests"
 )
@@ -88,7 +88,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 		//EnableMemory: false,
 		//EnableReturnData: false,
 	})
-	evm := vm.NewEVM(context, txContext, statedb, params.AllEthashProtocolChanges, vm.Config{Debug: true, Tracer: tracer}, deepmind.NoOpContext)
+	evm := vm.NewEVM(context, txContext, statedb, params.AllEthashProtocolChanges, vm.Config{Debug: true, Tracer: tracer}, firehose.NoOpContext)
 	msg, err := tx.AsMessage(signer, nil)
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)

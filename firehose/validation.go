@@ -1,4 +1,4 @@
-package deepmind
+package firehose
 
 import (
 	"bytes"
@@ -30,7 +30,7 @@ func init() {
 
 				This panic means that a transaction that Firehose don't know about has most probably
 				been added and you must take **great care** to instrument it. One of the most important place
-				to look is in 'deepmind.StartTransaction' where it should be properly handled. Think
+				to look is in 'firehose.StartTransaction' where it should be properly handled. Think
 				carefully, read the EIP and ensure that any new "semantic" the transactions type's is
 				bringing is handled and instrumented (it might affect Block and other execution units also).
 

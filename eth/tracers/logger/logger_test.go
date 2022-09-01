@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -51,14 +51,14 @@ type dummyStatedb struct {
 
 func (*dummyStatedb) GetRefund() uint64                                    { return 1337 }
 func (*dummyStatedb) GetState(_ common.Address, _ common.Hash) common.Hash { return common.Hash{} }
-func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash, dmContext *deepmind.Context) {
+func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash, firehoseContext *firehose.Context) {
 }
 
 func TestStoreCapture(t *testing.T) {
 	var (
 		logger   = NewStructLogger(nil)
-		env      = vm.NewEVM(vm.BlockContext{}, vm.TxContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: logger}, deepmind.NoOpContext)
-		contract = vm.NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 100000, deepmind.NoOpContext)
+		env      = vm.NewEVM(vm.BlockContext{}, vm.TxContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: logger}, firehose.NoOpContext)
+		contract = vm.NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 100000, firehose.NoOpContext)
 	)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x0, byte(vm.SSTORE)}
 	var index common.Hash

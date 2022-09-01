@@ -32,9 +32,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/params"
 
 	// force-load js tracers to trigger registration
@@ -116,7 +116,7 @@ func TestCall(t *testing.T) {
 		byte(vm.PUSH1), 32,
 		byte(vm.PUSH1), 0,
 		byte(vm.RETURN),
-	}, deepmind.NoOpContext)
+	}, firehose.NoOpContext)
 
 	ret, _, err := Call(address, nil, &Config{State: state})
 	if err != nil {
@@ -168,8 +168,8 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 		receiver   = common.BytesToAddress([]byte("receiver"))
 	)
 
-	statedb.CreateAccount(sender, deepmind.NoOpContext)
-	statedb.SetCode(receiver, common.FromHex(code), deepmind.NoOpContext)
+	statedb.CreateAccount(sender, firehose.NoOpContext)
+	statedb.SetCode(receiver, common.FromHex(code), firehose.NoOpContext)
 	runtimeConfig := Config{
 		Origin:      sender,
 		State:       statedb,
@@ -348,25 +348,25 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 		vmenv       = NewEnv(cfg)
 		sender      = vm.AccountRef(cfg.Origin)
 	)
-	cfg.State.CreateAccount(destination, deepmind.NoOpContext)
+	cfg.State.CreateAccount(destination, firehose.NoOpContext)
 	eoa := common.HexToAddress("E0")
 	{
-		cfg.State.CreateAccount(eoa, deepmind.NoOpContext)
-		cfg.State.SetNonce(eoa, 100, deepmind.NoOpContext)
+		cfg.State.CreateAccount(eoa, firehose.NoOpContext)
+		cfg.State.SetNonce(eoa, 100, firehose.NoOpContext)
 	}
 	reverting := common.HexToAddress("EE")
 	{
-		cfg.State.CreateAccount(reverting, deepmind.NoOpContext)
+		cfg.State.CreateAccount(reverting, firehose.NoOpContext)
 		cfg.State.SetCode(reverting, []byte{
 			byte(vm.PUSH1), 0x00,
 			byte(vm.PUSH1), 0x00,
 			byte(vm.REVERT),
-		}, deepmind.NoOpContext)
+		}, firehose.NoOpContext)
 	}
 
 	//cfg.State.CreateAccount(cfg.Origin)
 	// set the receiver's (the executing contract) code for execution.
-	cfg.State.SetCode(destination, code, deepmind.NoOpContext)
+	cfg.State.SetCode(destination, code, firehose.NoOpContext)
 	vmenv.Call(sender, destination, nil, gas, cfg.Value)
 
 	b.Run(name, func(b *testing.B) {
@@ -826,12 +826,12 @@ func TestRuntimeJSTracer(t *testing.T) {
 	for i, jsTracer := range jsTracers {
 		for j, tc := range tests {
 			statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-			statedb.SetCode(main, tc.code, deepmind.NoOpContext)
-			statedb.SetCode(common.HexToAddress("0xbb"), calleeCode, deepmind.NoOpContext)
-			statedb.SetCode(common.HexToAddress("0xcc"), calleeCode, deepmind.NoOpContext)
-			statedb.SetCode(common.HexToAddress("0xdd"), calleeCode, deepmind.NoOpContext)
-			statedb.SetCode(common.HexToAddress("0xee"), calleeCode, deepmind.NoOpContext)
-			statedb.SetCode(common.HexToAddress("0xff"), depressedCode, deepmind.NoOpContext)
+			statedb.SetCode(main, tc.code, firehose.NoOpContext)
+			statedb.SetCode(common.HexToAddress("0xbb"), calleeCode, firehose.NoOpContext)
+			statedb.SetCode(common.HexToAddress("0xcc"), calleeCode, firehose.NoOpContext)
+			statedb.SetCode(common.HexToAddress("0xdd"), calleeCode, firehose.NoOpContext)
+			statedb.SetCode(common.HexToAddress("0xee"), calleeCode, firehose.NoOpContext)
+			statedb.SetCode(common.HexToAddress("0xff"), depressedCode, firehose.NoOpContext)
 
 			tracer, err := tracers.New(jsTracer, new(tracers.Context), nil)
 			if err != nil {

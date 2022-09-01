@@ -33,8 +33,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/deepmind"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -194,11 +194,11 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 		}
 
 		// Perform read-only call.
-		st.SetBalance(testBankAddress, math.MaxBig256, deepmind.NoOpContext, "test")
+		st.SetBalance(testBankAddress, math.MaxBig256, firehose.NoOpContext, "test")
 		msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), 1000000, big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), new(big.Int), data, nil, true)}
 		txContext := core.NewEVMTxContext(msg)
 		context := core.NewEVMBlockContext(header, chain, nil)
-		vmenv := vm.NewEVM(context, txContext, st, config, vm.Config{NoBaseFee: true}, deepmind.NoOpContext)
+		vmenv := vm.NewEVM(context, txContext, st, config, vm.Config{NoBaseFee: true}, firehose.NoOpContext)
 		gp := new(core.GasPool).AddGas(math.MaxUint64)
 		result, _ := core.ApplyMessage(vmenv, msg, gp)
 		res = append(res, result.Return()...)

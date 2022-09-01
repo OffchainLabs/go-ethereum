@@ -19,7 +19,7 @@ package runtime
 import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 )
 
 func NewEnv(cfg *Config) *vm.EVM {
@@ -39,5 +39,5 @@ func NewEnv(cfg *Config) *vm.EVM {
 		BaseFee:     cfg.BaseFee,
 	}
 
-	return vm.NewEVM(blockContext, txContext, cfg.State, cfg.ChainConfig, cfg.EVMConfig, deepmind.NoOpContext)
+	return vm.NewEVM(blockContext, txContext, cfg.State, cfg.ChainConfig, cfg.EVMConfig, firehose.NoOpContext)
 }

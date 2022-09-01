@@ -21,7 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -195,7 +195,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
 
-		if !contract.UseGas(cost, deepmind.IgnoredGasChangeReason) {
+		if !contract.UseGas(cost, firehose.IgnoredGasChangeReason) {
 			return nil, ErrOutOfGas
 		}
 		if operation.dynamicGas != nil {
@@ -220,9 +220,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			// cost is explicitly set so that the capture state defer method can get the proper cost
 			var dynamicCost uint64
 			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
-			// Deep mind we ignore dynamic cost because later below, we perform a single GAS_CHANGE for both constant + dynamic to aggregate the 2 gas change events
+			// Firehose we ignore dynamic cost because later below, we perform a single GAS_CHANGE for both constant + dynamic to aggregate the 2 gas change events
 			cost += dynamicCost // for tracing
-			if err != nil || !contract.UseGas(dynamicCost, deepmind.IgnoredGasChangeReason) {
+			if err != nil || !contract.UseGas(dynamicCost, firehose.IgnoredGasChangeReason) {
 				return nil, ErrOutOfGas
 			}
 			// Do tracing before memory expansion
@@ -238,10 +238,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			logged = true
 		}
 
-		if in.evm.dmContext.Enabled() {
+		if in.evm.firehoseContext.Enabled() {
 			if cost != 0 {
 				gasChangeReason := OpCodeToGasChangeReason(op)
-				if gasChangeReason != deepmind.IgnoredGasChangeReason {
+				if gasChangeReason != firehose.IgnoredGasChangeReason {
 					// When execution reach this point, `contract.UseGas` has been called once
 					// (for only a static) or twice (for both static + dynamic cost). Since it
 					// has been called, it's mean the `c.Gas` has already been adjusted down
@@ -249,7 +249,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 					//
 					// Hence to retrieve the `gasOld` value, we need to come back at state when
 					// gas was not consumed, which means doing `contract.Gas + cost`.
-					in.evm.dmContext.RecordGasConsume(contract.Gas+cost, cost, gasChangeReason)
+					in.evm.firehoseContext.RecordGasConsume(contract.Gas+cost, cost, gasChangeReason)
 				}
 			}
 		}

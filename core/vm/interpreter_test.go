@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/deepmind"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -39,16 +39,16 @@ var loopInterruptTests = []string{
 func TestLoopInterrupt(t *testing.T) {
 	address := common.BytesToAddress([]byte("contract"))
 	vmctx := BlockContext{
-		Transfer: func(StateDB, common.Address, common.Address, *big.Int, *deepmind.Context) {},
+		Transfer: func(StateDB, common.Address, common.Address, *big.Int, *firehose.Context) {},
 	}
 
 	for i, tt := range loopInterruptTests {
 		statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-		statedb.CreateAccount(address, deepmind.NoOpContext)
-		statedb.SetCode(address, common.Hex2Bytes(tt), deepmind.NoOpContext)
+		statedb.CreateAccount(address, firehose.NoOpContext)
+		statedb.SetCode(address, common.Hex2Bytes(tt), firehose.NoOpContext)
 		statedb.Finalise(true)
 
-		evm := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, Config{}, deepmind.NoOpContext)
+		evm := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, Config{}, firehose.NoOpContext)
 
 		errChannel := make(chan error)
 		timeout := make(chan bool)
