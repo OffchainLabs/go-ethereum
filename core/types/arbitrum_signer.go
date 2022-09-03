@@ -34,6 +34,9 @@ func (s arbitrumSigner) Sender(tx *Transaction) (common.Address, error) {
 		return inner.From, nil
 	case *ArbitrumLegacyTxData:
 		legacyData := tx.inner.(*ArbitrumLegacyTxData)
+		if legacyData.Sender != nil {
+			return *legacyData.Sender, nil
+		}
 		fakeTx := NewTx(&legacyData.LegacyTx)
 		return s.Signer.Sender(fakeTx)
 	default:
