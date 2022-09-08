@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -190,11 +191,25 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 			merger.ReachTTD()
 			api.eth.Downloader().Cancel()
 		}
+
+		if firehose.Enabled {
+			if update.FinalizedBlockHash != (common.Hash{}) {
+				if finalBlock := api.eth.BlockChain().GetBlockByHash(update.FinalizedBlockHash); finalBlock == nil {
+					// advertised finalized block is in the future, we are syncing
+					firehose.SetSyncingBehindFinalized(true)
+				}
+			}
+		}
+
 		log.Info("Forkchoice requested sync to new head", "number", header.Number, "hash", header.Hash())
 		if err := api.eth.Downloader().BeaconSync(api.eth.SyncMode(), header); err != nil {
 			return beacon.STATUS_SYNCING, err
 		}
 		return beacon.STATUS_SYNCING, nil
+	}
+
+	if firehose.Enabled {
+		firehose.SetSyncingBehindFinalized(false)
 	}
 	// Block is known locally, just sanity check that the beacon client does not
 	// attempt to push us back to before the merge.

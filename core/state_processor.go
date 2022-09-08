@@ -143,7 +143,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			td = new(big.Int).Add(difficulty, ptd)
 		}
 
-		firehoseContext.EndBlock(block, p.bc.CurrentFinalizedBlock(), td)
+		finalizedBlock := p.bc.CurrentFinalizedBlock()
+
+		if finalizedBlock != nil && firehose.SyncingBehindFinalized() {
+			// if beaconFinalizedBlockNum is in the future, the 'finalizedBlock' will not progress until we reach it.
+			// we don't want to advertise a super old finalizedBlock when reprocessing.
+			finalizedBlock = nil
+		}
+
+		firehoseContext.EndBlock(block, finalizedBlock, td)
 	}
 
 	return receipts, allLogs, *usedGas, nil
