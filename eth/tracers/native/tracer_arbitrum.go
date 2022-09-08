@@ -58,13 +58,18 @@ func (*noopTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address
 }
 func (*prestateTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
 }
+func (*revertReasonTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
+}
 
-func (*callTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}
-func (*fourByteTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {}
-func (*noopTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}
-func (*prestateTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {}
+func (*callTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)         {}
+func (*fourByteTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}
+func (*noopTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)         {}
+func (*prestateTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}
+func (*revertReasonTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {}
 
 func (*callTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)     {}
 func (*fourByteTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
 func (*noopTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)     {}
 func (*prestateTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
+func (*revertReasonTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {
+}

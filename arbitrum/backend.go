@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/shutdowncheck"
 	"github.com/ethereum/go-ethereum/node"
 )
 
@@ -24,12 +25,14 @@ type Backend struct {
 	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
 	bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
 
+	shutdownTracker *shutdowncheck.ShutdownTracker
+
 	chanTxs      chan *types.Transaction
 	chanClose    chan struct{} //close coroutine
 	chanNewBlock chan struct{} //create new L2 block unless empty
 }
 
-func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publisher ArbInterface) (*Backend, error) {
+func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publisher ArbInterface, sync SyncProgressBackend) (*Backend, error) {
 	backend := &Backend{
 		arb:     publisher,
 		stack:   stack,
@@ -39,14 +42,19 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 		bloomRequests: make(chan chan *bloombits.Retrieval),
 		bloomIndexer:  core.NewBloomIndexer(chainDb, config.BloomBitsBlocks, config.BloomConfirms),
 
+		shutdownTracker: shutdowncheck.NewShutdownTracker(chainDb),
+
 		chanTxs:      make(chan *types.Transaction, 100),
 		chanClose:    make(chan struct{}),
 		chanNewBlock: make(chan struct{}, 1),
 	}
 
 	backend.bloomIndexer.Start(backend.arb.BlockChain())
-
-	createRegisterAPIBackend(backend)
+	err := createRegisterAPIBackend(backend, sync, config.ClassicRedirect, config.ClassicRedirectTimeout)
+	if err != nil {
+		return nil, err
+	}
+	backend.shutdownTracker.MarkStartup()
 	return backend, nil
 }
 
@@ -74,9 +82,10 @@ func (b *Backend) ArbInterface() ArbInterface {
 	return b.arb
 }
 
-//TODO: this is used when registering backend as lifecycle in stack
+// TODO: this is used when registering backend as lifecycle in stack
 func (b *Backend) Start() error {
 	b.startBloomHandlers(b.config.BloomBitsBlocks)
+	b.shutdownTracker.Start()
 
 	return nil
 }
@@ -84,6 +93,8 @@ func (b *Backend) Start() error {
 func (b *Backend) Stop() error {
 	b.scope.Close()
 	b.bloomIndexer.Close()
+	b.shutdownTracker.Stop()
+	b.chainDb.Close()
 	close(b.chanClose)
 	return nil
 }

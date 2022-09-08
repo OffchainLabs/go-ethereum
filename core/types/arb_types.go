@@ -1,15 +1,38 @@
 package types
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum/go-ethereum/common"
 )
+
+type fallbackError struct {
+}
+
+var fallbackErrorMsg = "missing trie node 0000000000000000000000000000000000000000000000000000000000000000 (path ) <nil>"
+var fallbackErrorCode = -32000
+
+func SetFallbackError(msg string, code int) {
+	fallbackErrorMsg = msg
+	fallbackErrorCode = code
+	log.Debug("setting fallback error", "msg", msg, "code", code)
+}
+
+func (f fallbackError) ErrorCode() int { return fallbackErrorCode }
+func (f fallbackError) Error() string  { return fallbackErrorMsg }
+
+var ErrUseFallback = fallbackError{}
+
+type FallbackClient interface {
+	CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error
+}
 
 var bigZero = big.NewInt(0)
 
@@ -422,7 +445,8 @@ func (info HeaderInfo) UpdateHeaderWithInfo(header *Header) {
 }
 
 func DeserializeHeaderExtraInformation(header *Header) (HeaderInfo, error) {
-	if header.Number.Sign() == 0 || len(header.Extra) == 0 {
+	if header.BaseFee == nil || header.BaseFee.Sign() == 0 || len(header.Extra) == 0 {
+		// imported blocks have no base fee
 		// The genesis block doesn't have an ArbOS encoded extra field
 		return HeaderInfo{}, nil
 	}

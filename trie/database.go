@@ -685,6 +685,11 @@ func (db *Database) Cap(limit common.StorageSize) error {
 // Note, this method is a non-synchronized mutator. It is unsafe to call this
 // concurrently with other mutators.
 func (db *Database) Commit(node common.Hash, report bool, callback func(common.Hash)) error {
+	if node == (common.Hash{}) {
+		// There's no data to commit in this node
+		return nil
+	}
+
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
 	// memory cache during commit but not yet in persistent storage). This is ensured
@@ -812,7 +817,7 @@ func (c *cleaner) Put(key []byte, rlp []byte) error {
 	delete(c.db.dirties, hash)
 	c.db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 	if node.children != nil {
-		c.db.dirtiesSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
+		c.db.childrenSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
 	}
 	// Move the flushed node into the clean cache to prevent insta-reloads
 	if c.db.cleans != nil {

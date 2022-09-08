@@ -76,6 +76,11 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 	// Import the canonical chain
 	gspec.MustCommit(backend.chaindb)
 	cacheConfig := &core.CacheConfig{
+
+		// Arbitrum
+		TriesInMemory: 128,
+		TrieRetention: 30 * time.Minute,
+
 		TrieCleanLimit:    256,
 		TrieDirtyLimit:    256,
 		TrieTimeLimit:     5 * time.Minute,

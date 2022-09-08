@@ -3,14 +3,17 @@ package arbitrum
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -30,13 +33,68 @@ import (
 
 type APIBackend struct {
 	b *Backend
+
+	fallbackClient types.FallbackClient
+	sync           SyncProgressBackend
 }
 
-func createRegisterAPIBackend(backend *Backend) {
+type timeoutFallbackClient struct {
+	impl    types.FallbackClient
+	timeout time.Duration
+}
+
+func (c *timeoutFallbackClient) CallContext(ctxIn context.Context, result interface{}, method string, args ...interface{}) error {
+	ctx, cancel := context.WithTimeout(ctxIn, c.timeout)
+	defer cancel()
+	return c.impl.CallContext(ctx, result, method, args)
+}
+
+func createFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.Duration) (types.FallbackClient, error) {
+	if fallbackClientUrl == "" {
+		return nil, nil
+	}
+	if strings.HasPrefix(fallbackClientUrl, "error:") {
+		fields := strings.Split(fallbackClientUrl, ":")[1:]
+		errNumber, convErr := strconv.ParseInt(fields[0], 0, 0)
+		if convErr == nil {
+			fields = fields[1:]
+		} else {
+			errNumber = -32000
+		}
+		types.SetFallbackError(strings.Join(fields, ":"), int(errNumber))
+		return nil, nil
+	}
+	var fallbackClient types.FallbackClient
+	var err error
+	fallbackClient, err = rpc.Dial(fallbackClientUrl)
+	if fallbackClient == nil || err != nil {
+		return nil, fmt.Errorf("failed creating fallback connection: %w", err)
+	}
+	if fallbackClientTimeout != 0 {
+		fallbackClient = &timeoutFallbackClient{
+			impl:    fallbackClient,
+			timeout: fallbackClientTimeout,
+		}
+	}
+	return fallbackClient, nil
+}
+
+type SyncProgressBackend interface {
+	SyncProgressMap() map[string]interface{}
+}
+
+func createRegisterAPIBackend(backend *Backend, sync SyncProgressBackend, fallbackClientUrl string, fallbackClientTimeout time.Duration) error {
+	fallbackClient, err := createFallbackClient(fallbackClientUrl, fallbackClientTimeout)
+	if err != nil {
+		return err
+	}
 	backend.apiBackend = &APIBackend{
-		b: backend,
+		b:              backend,
+		fallbackClient: fallbackClient,
+		sync:           sync,
 	}
 	backend.stack.RegisterAPIs(backend.apiBackend.GetAPIs())
+	return nil
 }
 
 func (a *APIBackend) GetAPIs() []rpc.API {
@@ -45,7 +103,7 @@ func (a *APIBackend) GetAPIs() []rpc.API {
 	apis = append(apis, rpc.API{
 		Namespace: "eth",
 		Version:   "1.0",
-		Service:   filters.NewPublicFilterAPI(a, false, 5*time.Minute),
+		Service:   filters.NewFilterAPI(a, false, 5*time.Minute),
 		Public:    true,
 	})
 
@@ -77,8 +135,20 @@ func (a *APIBackend) GetArbitrumNode() interface{} {
 }
 
 // General Ethereum API
+func (a *APIBackend) SyncProgressMap() map[string]interface{} {
+	return a.sync.SyncProgressMap()
+}
+
 func (a *APIBackend) SyncProgress() ethereum.SyncProgress {
-	panic("not implemented") // TODO: Implement
+	progress := a.sync.SyncProgressMap()
+
+	if progress == nil || len(progress) == 0 {
+		return ethereum.SyncProgress{}
+	}
+	return ethereum.SyncProgress{
+		CurrentBlock: 0,
+		HighestBlock: 1,
+	}
 }
 
 func (a *APIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
@@ -164,6 +234,10 @@ func (a *APIBackend) FeeHistory(
 		}
 		basefees[block-oldestBlock] = header.BaseFee
 
+		if block > int(newestBlock) {
+			break
+		}
+
 		if header.Time > prevTimestamp {
 			timeSinceLastTimeChange = header.Time - prevTimestamp
 			currentTimestampGasUsed = 0
@@ -178,8 +252,8 @@ func (a *APIBackend) FeeHistory(
 
 		prevTimestamp = header.Time
 
-		// In vanilla geth, this RPC returns the gasUsed ratio so a client can infer how the basefee will change
-		// To emulate this, we translate the compute rate into something like that, centered at an analogous 0.5
+		// In vanilla geth, this RPC returns the gasUsed ratio so a client can know how the basefee will change
+		// To emulate this, we translate the compute rate into something similar, centered at an analogous 0.5
 		var fullnessAnalogue float64
 		if timeSinceLastTimeChange > 0 {
 			fullnessAnalogue = float64(currentTimestampGasUsed) / float64(speedLimit) / float64(timeSinceLastTimeChange) / 2.0
@@ -187,7 +261,8 @@ func (a *APIBackend) FeeHistory(
 				fullnessAnalogue = 1.0
 			}
 		} else {
-			// We haven't looked far enough back to know the last timestamp change, so treat this block as full.
+			// We haven't looked far enough back to know the last timestamp change,
+			// so treat this block as full.
 			fullnessAnalogue = 1.0
 		}
 		gasUsed[block-oldestBlock] = fullnessAnalogue
@@ -302,6 +377,9 @@ func (a *APIBackend) stateAndHeaderFromHeader(header *types.Header, err error) (
 	if header == nil {
 		return nil, nil, errors.New("header not found")
 	}
+	if !a.blockChain().Config().IsArbitrumNitro(header.Number) {
+		return nil, header, types.ErrUseFallback
+	}
 	state, err := a.blockChain().StateAt(header.Root)
 	return state, header, err
 }
@@ -315,11 +393,17 @@ func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOr
 }
 
 func (a *APIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
+	if !a.blockChain().Config().IsArbitrumNitro(block.Number()) {
+		return nil, types.ErrUseFallback
+	}
 	// DEV: This assumes that `StateAtBlock` only accesses the blockchain and chainDb fields
 	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(block, reexec, base, checkLive, preferDisk)
 }
 
 func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
+	if !a.blockChain().Config().IsArbitrumNitro(block.Number()) {
+		return nil, vm.BlockContext{}, nil, types.ErrUseFallback
+	}
 	// DEV: This assumes that `StateAtTransaction` only accesses the blockchain and chainDb fields
 	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtTransaction(block, txIndex, reexec)
 }
@@ -448,4 +532,8 @@ func (a *APIBackend) Engine() consensus.Engine {
 
 func (b *APIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	return nil, nil
+}
+
+func (b *APIBackend) FallbackClient() types.FallbackClient {
+	return b.fallbackClient
 }

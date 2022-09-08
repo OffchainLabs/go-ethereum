@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -45,6 +47,7 @@ type TxProcessingHook interface {
 	ScheduledTxes() types.Transactions
 	L1BlockNumber(blockCtx BlockContext) (uint64, error)
 	L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error)
+	GasPriceOp(evm *EVM) *big.Int
 	FillReceiptInfo(receipt *types.Receipt)
 }
 
@@ -83,6 +86,10 @@ func (p DefaultTxProcessor) L1BlockNumber(blockCtx BlockContext) (uint64, error)
 
 func (p DefaultTxProcessor) L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error) {
 	return blockCtx.GetHash(l1BlocKNumber), nil
+}
+
+func (p DefaultTxProcessor) GasPriceOp(evm *EVM) *big.Int {
+	return evm.GasPrice
 }
 
 func (p DefaultTxProcessor) FillReceiptInfo(*types.Receipt) {}

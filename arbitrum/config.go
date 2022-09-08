@@ -25,6 +25,16 @@ type Config struct {
 
 	// FeeHistoryMaxBlockCount limits the number of historical blocks a fee history request may cover
 	FeeHistoryMaxBlockCount uint64 `koanf:"feehistory-max-block-count"`
+
+	ArbDebug ArbDebugConfig `koanf:"arbdebug"`
+
+	ClassicRedirect        string        `koanf:"classic-redirect"`
+	ClassicRedirectTimeout time.Duration `koanf:"classic-redirect-timeout"`
+}
+
+type ArbDebugConfig struct {
+	BlockRangeBound   uint64 `koanf:"block-range-bound"`
+	TimeoutQueueBound uint64 `koanf:"timeout-queue-bound"`
 }
 
 func ConfigAddOptions(prefix string, f *flag.FlagSet) {
@@ -33,6 +43,12 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.Duration(prefix+".evm-timeout", DefaultConfig.RPCEVMTimeout, "timeout used for eth_call (0=infinite)")
 	f.Uint64(prefix+".bloom-bits-blocks", DefaultConfig.BloomBitsBlocks, "number of blocks a single bloom bit section vector holds")
 	f.Uint64(prefix+".feehistory-max-block-count", DefaultConfig.FeeHistoryMaxBlockCount, "max number of blocks a fee history request may cover")
+	f.String(prefix+".classic-redirect", DefaultConfig.ClassicRedirect, "url to redirect classic requests, use \"error:[CODE:]MESSAGE\" to return specified error instead of redirecting")
+	f.Duration(prefix+".classic-redirect-timeout", DefaultConfig.ClassicRedirectTimeout, "timeout for forwarded classic requests, where 0 = no timeout")
+
+	arbDebug := DefaultConfig.ArbDebug
+	f.Uint64(prefix+".arbdebug.block-range-bound", arbDebug.BlockRangeBound, "bounds the number of blocks arbdebug calls may return")
+	f.Uint64(prefix+".arbdebug.timeout-queue-bound", arbDebug.TimeoutQueueBound, "bounds the length of timeout queues arbdebug calls may return")
 }
 
 var DefaultConfig = Config{
@@ -42,4 +58,9 @@ var DefaultConfig = Config{
 	BloomBitsBlocks:         params.BloomBitsBlocks * 4,       // we generally have smaller blocks
 	BloomConfirms:           params.BloomConfirms,
 	FeeHistoryMaxBlockCount: 1024,
+	ClassicRedirect:         "",
+	ArbDebug: ArbDebugConfig{
+		BlockRangeBound:   1024,
+		TimeoutQueueBound: 1024,
+	},
 }

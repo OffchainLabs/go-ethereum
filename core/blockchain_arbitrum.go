@@ -18,9 +18,22 @@
 package core
 
 import (
+	"time"
+
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
 )
+
+// WriteBlockAndSetHeadWithTime also counts processTime, which will cause intermittent TrieDirty cache writes
+func (bc *BlockChain) WriteBlockAndSetHeadWithTime(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool, processTime time.Duration) (status WriteStatus, err error) {
+	if !bc.chainmu.TryLock() {
+		return NonStatTy, errChainStopped
+	}
+	defer bc.chainmu.Unlock()
+	bc.gcproc += processTime
+	return bc.writeBlockAndSetHead(block, receipts, logs, state, emitHeadEvent)
+}
 
 func (bc *BlockChain) ReorgToOldBlock(newHead *types.Block) error {
 	bc.wg.Add(1)
