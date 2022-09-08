@@ -2,11 +2,26 @@ package firehose
 
 import (
 	"math/big"
+	"sync/atomic"
 
 	"github.com/golang-collections/collections/stack"
 )
 
 var EmptyValue = new(big.Int)
+
+var behindFinalized int32
+
+func SyncingBehindFinalized() bool {
+	return atomic.LoadInt32(&behindFinalized) != 0
+}
+
+func SetSyncingBehindFinalized(behind bool) {
+	if behind {
+		atomic.StoreInt32(&behindFinalized, 1)
+	} else {
+		atomic.StoreInt32(&behindFinalized, 0)
+	}
+}
 
 type logItem = map[string]interface{}
 
