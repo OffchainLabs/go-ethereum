@@ -33,12 +33,17 @@ func NewArbitrumLegacyTx(origTx *Transaction, hashOverride common.Hash, effectiv
 
 func (tx *ArbitrumLegacyTxData) copy() TxData {
 	legacyCopy := tx.LegacyTx.copy().(*LegacyTx)
+	var sender *common.Address
+	if tx.Sender != nil {
+		sender = new(common.Address)
+		*sender = *tx.Sender
+	}
 	return &ArbitrumLegacyTxData{
 		LegacyTx:          *legacyCopy,
 		HashOverride:      tx.HashOverride,
 		EffectiveGasPrice: tx.EffectiveGasPrice,
 		L1BlockNumber:     tx.L1BlockNumber,
-		Sender:            tx.Sender,
+		Sender:            sender,
 	}
 }
 
