@@ -57,10 +57,10 @@ var DefaultConfig = Config{
 	RPCEVMTimeout:           ethconfig.Defaults.RPCEVMTimeout, // 5 seconds
 	BloomBitsBlocks:         params.BloomBitsBlocks * 4,       // we generally have smaller blocks
 	BloomConfirms:           params.BloomConfirms,
-	FeeHistoryMaxBlockCount: 1024,
+	FeeHistoryMaxBlockCount: 512,
 	ClassicRedirect:         "",
 	ArbDebug: ArbDebugConfig{
-		BlockRangeBound:   1024,
-		TimeoutQueueBound: 1024,
+		BlockRangeBound:   256,
+		TimeoutQueueBound: 256,
 	},
 }
