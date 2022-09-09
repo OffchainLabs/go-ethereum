@@ -962,14 +962,12 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	msg.TxRunMode = txRunMode
 
 	// Arbitrum: support NodeInterface.sol by swapping out the message if needed
-	if core.InterceptRPCMessage != nil {
-		var res *core.ExecutionResult
-		msg, res, err = core.InterceptRPCMessage(msg, ctx, state, header, b)
-		if err != nil || res != nil {
-			return res, err
-		}
-		msg.TxRunMode = txRunMode
+	var res *core.ExecutionResult
+	msg, res, err = core.InterceptRPCMessage(msg, ctx, state, header, b)
+	if err != nil || res != nil {
+		return res, err
 	}
+	msg.TxRunMode = txRunMode
 
 	evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
 	if err != nil {
