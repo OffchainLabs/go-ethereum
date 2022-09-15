@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -66,4 +67,13 @@ func (bc *BlockChain) ClipToPostNitroGenesis(blockNum rpc.BlockNumber) (rpc.Bloc
 		blockNum = nitroGenesis
 	}
 	return blockNum, currentBlock
+}
+
+func (bc *BlockChain) RecoverState(block *types.Block) error {
+	if bc.HasState(block.Root()) {
+		return nil
+	}
+	log.Warn("recovering block state", "num", block.Number(), "hash", block.Hash(), "root", block.Root())
+	_, err := bc.recoverAncestors(block)
+	return err
 }
