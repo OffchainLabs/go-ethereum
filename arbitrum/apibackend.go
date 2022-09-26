@@ -46,7 +46,7 @@ type timeoutFallbackClient struct {
 func (c *timeoutFallbackClient) CallContext(ctxIn context.Context, result interface{}, method string, args ...interface{}) error {
 	ctx, cancel := context.WithTimeout(ctxIn, c.timeout)
 	defer cancel()
-	return c.impl.CallContext(ctx, result, method, args)
+	return c.impl.CallContext(ctx, result, method, args...)
 }
 
 func createFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.Duration) (types.FallbackClient, error) {
