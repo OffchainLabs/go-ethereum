@@ -49,7 +49,7 @@ func (c *timeoutFallbackClient) CallContext(ctxIn context.Context, result interf
 	return c.impl.CallContext(ctx, result, method, args...)
 }
 
-func createFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.Duration) (types.FallbackClient, error) {
+func CreateFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.Duration) (types.FallbackClient, error) {
 	if fallbackClientUrl == "" {
 		return nil, nil
 	}
@@ -84,7 +84,7 @@ type SyncProgressBackend interface {
 }
 
 func createRegisterAPIBackend(backend *Backend, sync SyncProgressBackend, fallbackClientUrl string, fallbackClientTimeout time.Duration) error {
-	fallbackClient, err := createFallbackClient(fallbackClientUrl, fallbackClientTimeout)
+	fallbackClient, err := CreateFallbackClient(fallbackClientUrl, fallbackClientTimeout)
 	if err != nil {
 		return err
 	}
