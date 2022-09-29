@@ -88,6 +88,8 @@ type Database struct {
 	childrenSize  common.StorageSize // Storage size of the external children tracking
 	preimagesSize common.StorageSize // Storage size of the preimages cache
 
+	validateDeleted bool // Validate nodes when deleting them
+
 	lock sync.RWMutex
 }
 
@@ -266,6 +268,8 @@ type Config struct {
 	Cache     int    // Memory allowance (MB) to use for caching trie nodes in memory
 	Journal   string // Journal of clean cache to survive node restarts
 	Preimages bool   // Flag whether the preimage of trie key is recorded
+
+	ValidateDeleted bool // Validate nodes when deleting them
 }
 
 // NewDatabase creates a new trie database to store ephemeral trie content before
@@ -293,6 +297,8 @@ func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database
 		dirties: map[common.Hash]*cachedNode{{}: {
 			children: make(map[common.Hash]uint16),
 		}},
+
+		validateDeleted: (config != nil) && config.ValidateDeleted,
 	}
 	if config == nil || config.Preimages { // TODO(karalabe): Flip to default off in the future
 		db.preimages = make(map[common.Hash][]byte)
