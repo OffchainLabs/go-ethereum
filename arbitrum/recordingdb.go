@@ -157,7 +157,7 @@ func PrepareRecording(blockchain *core.BlockChain, lastBlockHeader *types.Header
 	if lastBlockHeader != nil {
 		prevRoot = lastBlockHeader.Root
 	}
-	recordingStateDb, err := state.New(prevRoot, recordingStateDatabase, nil)
+	recordingStateDb, err := state.NewDeterministic(prevRoot, recordingStateDatabase)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create recordingStateDb: %w", err)
 	}

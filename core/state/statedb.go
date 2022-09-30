@@ -130,6 +130,8 @@ type StateDB struct {
 	StorageUpdated int
 	AccountDeleted int
 	StorageDeleted int
+
+	deterministic bool
 }
 
 // New creates a new state from a given trie.
@@ -161,6 +163,15 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 			sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
 		}
 	}
+	return sdb, nil
+}
+
+func NewDeterministic(root common.Hash, db Database) (*StateDB, error) {
+	sdb, err := New(root, db, nil)
+	if err != nil {
+		return nil, err
+	}
+	sdb.deterministic = true
 	return sdb, nil
 }
 
@@ -890,9 +901,26 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// the account prefetcher. Instead, let's process all the storage updates
 	// first, giving the account prefeches just a few more milliseconds of time
 	// to pull useful data from disk.
-	for addr := range s.stateObjectsPending {
-		if obj := s.stateObjects[addr]; !obj.deleted {
-			obj.updateRoot(s.db)
+	if s.deterministic {
+		type addressAndBig struct {
+			address common.Address
+			big     *big.Int
+		}
+		addressesToUpdate := make([]addressAndBig, 0, len(s.stateObjectsPending))
+		for addr := range s.stateObjectsPending {
+			addressesToUpdate = append(addressesToUpdate, addressAndBig{addr, addr.Hash().Big()})
+		}
+		sort.Slice(addressesToUpdate, func(i, j int) bool { return addressesToUpdate[i].big.Cmp(addressesToUpdate[j].big) < 0 })
+		for _, addr := range addressesToUpdate {
+			if obj := s.stateObjects[addr.address]; !obj.deleted {
+				obj.updateRoot(s.db)
+			}
+		}
+	} else {
+		for addr := range s.stateObjectsPending {
+			if obj := s.stateObjects[addr]; !obj.deleted {
+				obj.updateRoot(s.db)
+			}
 		}
 	}
 	// Now we're about to start to write changes to the trie. The trie is so far
