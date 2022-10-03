@@ -18,6 +18,7 @@
 package state
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -902,17 +903,13 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// first, giving the account prefeches just a few more milliseconds of time
 	// to pull useful data from disk.
 	if s.deterministic {
-		type addressAndBig struct {
-			address common.Address
-			big     *big.Int
-		}
-		addressesToUpdate := make([]addressAndBig, 0, len(s.stateObjectsPending))
+		addressesToUpdate := make([]common.Address, 0, len(s.stateObjectsPending))
 		for addr := range s.stateObjectsPending {
-			addressesToUpdate = append(addressesToUpdate, addressAndBig{addr, addr.Hash().Big()})
+			addressesToUpdate = append(addressesToUpdate, addr)
 		}
-		sort.Slice(addressesToUpdate, func(i, j int) bool { return addressesToUpdate[i].big.Cmp(addressesToUpdate[j].big) < 0 })
+		sort.Slice(addressesToUpdate, func(i, j int) bool { return bytes.Compare(addressesToUpdate[i][:], addressesToUpdate[j][:]) < 0 })
 		for _, addr := range addressesToUpdate {
-			if obj := s.stateObjects[addr.address]; !obj.deleted {
+			if obj := s.stateObjects[addr]; !obj.deleted {
 				obj.updateRoot(s.db)
 			}
 		}

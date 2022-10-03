@@ -322,11 +322,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	hasher := s.db.hasher
 
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
-	type hashAndBig struct {
-		hash common.Hash
-		big  *big.Int
-	}
-	keysToDelete := make([]hashAndBig, 0, len(s.pendingStorage))
+	keysToDelete := make([]common.Hash, 0, len(s.pendingStorage))
 	for key, value := range s.pendingStorage {
 		// Skip noop changes, persist actual changes
 		if value == s.originStorage[key] {
@@ -337,7 +333,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 		var v []byte
 		if (value == common.Hash{}) {
 			if s.db.deterministic {
-				keysToDelete = append(keysToDelete, hashAndBig{key, key.Big()})
+				keysToDelete = append(keysToDelete, key)
 			} else {
 				s.setError(tr.TryDelete(key[:]))
 				s.db.StorageDeleted += 1
@@ -362,9 +358,9 @@ func (s *stateObject) updateTrie(db Database) Trie {
 		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
 	}
 	if len(keysToDelete) > 0 {
-		sort.Slice(keysToDelete, func(i, j int) bool { return keysToDelete[i].big.Cmp(keysToDelete[j].big) < 0 })
+		sort.Slice(keysToDelete, func(i, j int) bool { return bytes.Compare(keysToDelete[i][:], keysToDelete[j][:]) < 0 })
 		for _, key := range keysToDelete {
-			s.setError(tr.TryDelete(key.hash[:]))
+			s.setError(tr.TryDelete(key[:]))
 			s.db.StorageDeleted += 1
 		}
 	}
