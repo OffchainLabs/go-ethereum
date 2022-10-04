@@ -149,16 +149,11 @@ func (r *RecordingChainContext) GetMinBlockNumberAccessed() uint64 {
 	return r.minBlockNumberAccessed
 }
 
-func PrepareRecording(blockchain *core.BlockChain, lastBlockHeader *types.Header, validateDeleted bool) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
+func PrepareRecording(blockchain *core.BlockChain, lastBlockHeader *types.Header) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
 	rawTrie := blockchain.StateCache().TrieDB()
 	recordingKeyValue := NewRecordingKV(rawTrie)
 
-	trieDbConfig := trie.Config{
-		Cache:           0,
-		Preimages:       true, // default
-		ValidateDeleted: validateDeleted,
-	}
-	recordingStateDatabase := state.NewDatabaseWithConfig(rawdb.NewDatabase(recordingKeyValue), &trieDbConfig)
+	recordingStateDatabase := state.NewDatabase(rawdb.NewDatabase(recordingKeyValue))
 	var prevRoot common.Hash
 	if lastBlockHeader != nil {
 		prevRoot = lastBlockHeader.Root

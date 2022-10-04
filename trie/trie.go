@@ -440,13 +440,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			// need to be tracked at all since it's always embedded.
 			t.tracer.onDelete(prefix)
 
-			var err error
-
-			if t.db.validateDeleted {
-				_, _, err = t.delete(n.Val, append(prefix, key...), []byte{})
-			}
-
-			return true, nil, err // remove n entirely for whole matches
+			return true, nil, nil // remove n entirely for whole matches
 		}
 		// The key is longer than n.Key. Remove the remaining suffix
 		// from the subtrie. Child can never be nil here since the
@@ -507,16 +501,6 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 				} else {
 					pos = -2
 					break
-				}
-			}
-		}
-		if t.db.validateDeleted {
-			for _, child := range n.Children {
-				if child != nil {
-					_, err = t.resolve(child, prefix)
-					if err != nil {
-						return false, nil, err
-					}
 				}
 			}
 		}
