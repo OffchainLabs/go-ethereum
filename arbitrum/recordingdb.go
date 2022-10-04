@@ -2,6 +2,7 @@ package arbitrum
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -192,4 +194,65 @@ func PreimagesFromRecording(chainContextIf core.ChainContext, recordingDb *Recor
 		entries[hash] = bytes
 	}
 	return entries, nil
+}
+
+func GetOrRecreateReferencedState(ctx context.Context, header *types.Header, bc *core.BlockChain) (*state.StateDB, error) {
+	stateDatbase := bc.StateCache()
+	trieDB := stateDatbase.TrieDB()
+	stateDb, err := state.New(header.Root, stateDatbase, nil)
+	if err == nil {
+		trieDB.Reference(header.Root, common.Hash{})
+		return stateDb, nil
+	}
+	currentHeader := header
+	var lastRoot common.Hash
+	for ctx.Err() == nil {
+		nextHeader := bc.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64()-1)
+		if nextHeader == nil {
+			return nil, fmt.Errorf("chain doesn't contain parent of block %d hash %v", currentHeader.Number, currentHeader.Hash())
+		}
+		currentHeader = nextHeader
+		if currentHeader.Number.Uint64() < bc.Config().ArbitrumChainParams.GenesisBlockNum {
+			return nil, fmt.Errorf("moved beyond genesis looking for state")
+		}
+		stateDb, err = state.New(currentHeader.Root, stateDatbase, nil)
+		if err == nil {
+			trieDB.Reference(header.Root, common.Hash{})
+			lastRoot = currentHeader.Root
+			defer func() { trieDB.Dereference(lastRoot) }()
+			break
+		}
+	}
+	returnedBlockNumber := header.Number.Uint64()
+	blockToRecreate := currentHeader.Number.Uint64() + 1
+	for ctx.Err() == nil {
+		block := bc.GetBlockByNumber(blockToRecreate)
+		if block == nil {
+			return nil, fmt.Errorf("block not found while recreating: %d", blockToRecreate)
+		}
+		_, _, _, err := bc.Processor().Process(block, stateDb, vm.Config{})
+		if err != nil {
+			return nil, fmt.Errorf("failed recreating state for block %d : %w", blockToRecreate, err)
+		}
+		trieDB.Reference(block.Root(), common.Hash{})
+		lastRoot = block.Root()
+		if blockToRecreate >= returnedBlockNumber {
+			if block.Hash() != header.Hash() {
+				return nil, fmt.Errorf("blockHash doesn't match when recreating number: %d expected: %v got: %v", blockToRecreate, header.Hash(), block.Hash())
+			}
+			// double reference because te defer is going to remove one
+			trieDB.Reference(block.Root(), common.Hash{})
+			return stateDb, nil
+		}
+		blockToRecreate++
+	}
+	return nil, ctx.Err()
+}
+
+func ReferenceState(header *types.Header, bc *core.BlockChain) {
+	bc.StateCache().TrieDB().Reference(header.Root, common.Hash{})
+}
+
+func DereferenceState(header *types.Header, bc *core.BlockChain) {
+	bc.StateCache().TrieDB().Dereference(header.Root)
 }
