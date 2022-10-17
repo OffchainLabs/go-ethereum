@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -321,6 +322,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	hasher := s.db.hasher
 
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
+	keysToDelete := make([]common.Hash, 0, len(s.pendingStorage))
 	for key, value := range s.pendingStorage {
 		// Skip noop changes, persist actual changes
 		if value == s.originStorage[key] {
@@ -330,8 +332,12 @@ func (s *stateObject) updateTrie(db Database) Trie {
 
 		var v []byte
 		if (value == common.Hash{}) {
-			s.setError(tr.TryDelete(key[:]))
-			s.db.StorageDeleted += 1
+			if s.db.deterministic {
+				keysToDelete = append(keysToDelete, key)
+			} else {
+				s.setError(tr.TryDelete(key[:]))
+				s.db.StorageDeleted += 1
+			}
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
@@ -350,6 +356,13 @@ func (s *stateObject) updateTrie(db Database) Trie {
 			storage[crypto.HashData(hasher, key[:])] = v // v will be nil if it's deleted
 		}
 		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
+	}
+	if len(keysToDelete) > 0 {
+		sort.Slice(keysToDelete, func(i, j int) bool { return bytes.Compare(keysToDelete[i][:], keysToDelete[j][:]) < 0 })
+		for _, key := range keysToDelete {
+			s.setError(tr.TryDelete(key[:]))
+			s.db.StorageDeleted += 1
+		}
 	}
 	if s.db.prefetcher != nil {
 		s.db.prefetcher.used(s.addrHash, s.data.Root, usedStorage)

@@ -152,12 +152,13 @@ func (r *RecordingChainContext) GetMinBlockNumberAccessed() uint64 {
 func PrepareRecording(blockchain *core.BlockChain, lastBlockHeader *types.Header) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
 	rawTrie := blockchain.StateCache().TrieDB()
 	recordingKeyValue := NewRecordingKV(rawTrie)
+
 	recordingStateDatabase := state.NewDatabase(rawdb.NewDatabase(recordingKeyValue))
 	var prevRoot common.Hash
 	if lastBlockHeader != nil {
 		prevRoot = lastBlockHeader.Root
 	}
-	recordingStateDb, err := state.New(prevRoot, recordingStateDatabase, nil)
+	recordingStateDb, err := state.NewDeterministic(prevRoot, recordingStateDatabase)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create recordingStateDb: %w", err)
 	}

@@ -8,6 +8,7 @@ import (
 
 var ArbosAddress = common.HexToAddress("0xa4b05")
 var ArbSysAddress = common.HexToAddress("0x64")
+var ArbGasInfoAddress = common.HexToAddress("0x6c")
 var ArbRetryableTxAddress = common.HexToAddress("0x6e")
 var NodeInterfaceAddress = common.HexToAddress("0xc8")
 var NodeInterfaceDebugAddress = common.HexToAddress("0xc9")
@@ -34,6 +35,9 @@ func (s arbitrumSigner) Sender(tx *Transaction) (common.Address, error) {
 		return inner.From, nil
 	case *ArbitrumLegacyTxData:
 		legacyData := tx.inner.(*ArbitrumLegacyTxData)
+		if legacyData.Sender != nil {
+			return *legacyData.Sender, nil
+		}
 		fakeTx := NewTx(&legacyData.LegacyTx)
 		return s.Signer.Sender(fakeTx)
 	default:

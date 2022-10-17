@@ -60,7 +60,7 @@ var DefaultConfig = Config{
 	FeeHistoryMaxBlockCount: 1024,
 	ClassicRedirect:         "",
 	ArbDebug: ArbDebugConfig{
-		BlockRangeBound:   1024,
-		TimeoutQueueBound: 1024,
+		BlockRangeBound:   256,
+		TimeoutQueueBound: 512,
 	},
 }
