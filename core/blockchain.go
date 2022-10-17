@@ -552,7 +552,7 @@ func (bc *BlockChain) SetSafe(block *types.Block) {
 // setHeadBeyondRoot rewinds the local chain to a new head with the extra condition
 // that the rewind must pass the specified state root. The extra condition is
 // ignored if it causes rolling back more than rewindLimit Gas (0 meaning infinte).
-// If the limit was hit it will choose latest full head. This method is meant to be
+// If the limit was hit, rewind to last block with state. This method is meant to be
 // used when rewinding with snapshots enabled to ensure that we go back further than
 // persistent disk layer. Depending on whether the node was fast synced or full, and
 // in which state, the method will try to delete minimal data from disk whilst
@@ -633,7 +633,14 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 						break
 					}
 					if lastFullBlock != 0 && rewindLimit > 0 {
-						gasRolledBack += newHeadBlock.GasUsed()
+						gasUsedInBlock := newHeadBlock.GasUsed()
+						if bc.chainConfig.IsArbitrum() {
+							receipts := bc.GetReceiptsByHash(newHeadBlock.Hash())
+							for _, receipt := range receipts {
+								gasUsedInBlock -= receipt.GasUsedForL1
+							}
+						}
+						gasRolledBack += gasUsedInBlock
 						if rewindLimit > 0 && gasRolledBack >= rewindLimit {
 							blockNumber = lastFullBlock
 							newHeadBlock = bc.GetBlock(lastFullBlockHash, lastFullBlock)
