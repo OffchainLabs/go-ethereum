@@ -151,9 +151,8 @@ func (r *RecordingChainContext) GetMinBlockNumberAccessed() uint64 {
 	return r.minBlockNumberAccessed
 }
 
-func PrepareRecording(blockchain *core.BlockChain, lastBlockHeader *types.Header) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
-	rawTrie := blockchain.StateCache().TrieDB()
-	recordingKeyValue := NewRecordingKV(rawTrie)
+func PrepareRecording(trieDB *trie.Database, chainContext core.ChainContext, lastBlockHeader *types.Header) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
+	recordingKeyValue := NewRecordingKV(trieDB)
 
 	recordingStateDatabase := state.NewDatabase(rawdb.NewDatabase(recordingKeyValue))
 	var prevRoot common.Hash
@@ -169,7 +168,7 @@ func PrepareRecording(blockchain *core.BlockChain, lastBlockHeader *types.Header
 		if !lastBlockHeader.Number.IsUint64() {
 			return nil, nil, nil, errors.New("block number not uint64")
 		}
-		recordingChainContext = NewRecordingChainContext(blockchain, lastBlockHeader.Number.Uint64())
+		recordingChainContext = NewRecordingChainContext(chainContext, lastBlockHeader.Number.Uint64())
 	}
 	return recordingStateDb, recordingChainContext, recordingKeyValue, nil
 }
@@ -196,26 +195,26 @@ func PreimagesFromRecording(chainContextIf core.ChainContext, recordingDb *Recor
 	return entries, nil
 }
 
-func GetOrRecreateReferencedState(ctx context.Context, header *types.Header, bc *core.BlockChain) (*state.StateDB, error) {
-	stateDatbase := bc.StateCache()
-	trieDB := stateDatbase.TrieDB()
-	stateDb, err := state.New(header.Root, stateDatbase, nil)
+func GetOrRecreateReferencedState(ctx context.Context, header *types.Header, bc *core.BlockChain, stateDatabase state.Database) (*state.StateDB, error) {
+	trieDB := stateDatabase.TrieDB()
+	stateDb, err := state.New(header.Root, stateDatabase, nil)
 	if err == nil {
 		trieDB.Reference(header.Root, common.Hash{})
 		return stateDb, nil
 	}
+	returnedBlockNumber := header.Number.Uint64()
+	genesis := bc.Config().ArbitrumChainParams.GenesisBlockNum
 	currentHeader := header
 	var lastRoot common.Hash
 	for ctx.Err() == nil {
-		nextHeader := bc.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64()-1)
-		if nextHeader == nil {
+		if currentHeader.Number.Uint64() <= genesis {
+			return nil, fmt.Errorf("moved beyond genesis looking for state looking for %d, genesis %d, err %w", returnedBlockNumber, genesis, err)
+		}
+		currentHeader = bc.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64()-1)
+		if currentHeader == nil {
 			return nil, fmt.Errorf("chain doesn't contain parent of block %d hash %v", currentHeader.Number, currentHeader.Hash())
 		}
-		currentHeader = nextHeader
-		if currentHeader.Number.Uint64() < bc.Config().ArbitrumChainParams.GenesisBlockNum {
-			return nil, fmt.Errorf("moved beyond genesis looking for state")
-		}
-		stateDb, err = state.New(currentHeader.Root, stateDatbase, nil)
+		stateDb, err = state.New(currentHeader.Root, stateDatabase, nil)
 		if err == nil {
 			trieDB.Reference(header.Root, common.Hash{})
 			lastRoot = currentHeader.Root
@@ -223,7 +222,6 @@ func GetOrRecreateReferencedState(ctx context.Context, header *types.Header, bc 
 			break
 		}
 	}
-	returnedBlockNumber := header.Number.Uint64()
 	blockToRecreate := currentHeader.Number.Uint64() + 1
 	for ctx.Err() == nil {
 		block := bc.GetBlockByNumber(blockToRecreate)
@@ -233,6 +231,13 @@ func GetOrRecreateReferencedState(ctx context.Context, header *types.Header, bc 
 		_, _, _, err := bc.Processor().Process(block, stateDb, vm.Config{})
 		if err != nil {
 			return nil, fmt.Errorf("failed recreating state for block %d : %w", blockToRecreate, err)
+		}
+		root, err := stateDb.Commit(true)
+		if err != nil {
+			return nil, fmt.Errorf("failed commiting state for block %d : %w", blockToRecreate, err)
+		}
+		if root != block.Root() {
+			return nil, fmt.Errorf("bad state recreating block %d : exp: %v got %v", blockToRecreate, block.Root(), root)
 		}
 		trieDB.Reference(block.Root(), common.Hash{})
 		lastRoot = block.Root()
@@ -249,10 +254,10 @@ func GetOrRecreateReferencedState(ctx context.Context, header *types.Header, bc 
 	return nil, ctx.Err()
 }
 
-func ReferenceState(header *types.Header, bc *core.BlockChain) {
-	bc.StateCache().TrieDB().Reference(header.Root, common.Hash{})
+func ReferenceState(header *types.Header, stateDatabase state.Database) {
+	stateDatabase.TrieDB().Reference(header.Root, common.Hash{})
 }
 
-func DereferenceState(header *types.Header, bc *core.BlockChain) {
-	bc.StateCache().TrieDB().Dereference(header.Root)
+func DereferenceState(header *types.Header, stateDatabase state.Database) {
+	stateDatabase.TrieDB().Dereference(header.Root)
 }
