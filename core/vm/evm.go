@@ -396,7 +396,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 
 		// It's a sure thing that caller is a Contract, it cannot be anything else, so we are safe
 		parent := caller.(*Contract)
-		evm.firehoseContext.RecordCallParams("DELEGATE", parent.CallerAddress, addr, parent.value, gas, input)
+		evm.firehoseContext.RecordCallParams("DELEGATE", parent.Address(), addr, parent.value, gas, input)
 	}
 
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
