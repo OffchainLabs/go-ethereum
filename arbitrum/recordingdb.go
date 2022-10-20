@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -27,7 +28,7 @@ type RecordingKV struct {
 	enableBypass  bool
 }
 
-func NewRecordingKV(inner *trie.Database) *RecordingKV {
+func newRecordingKV(inner *trie.Database) *RecordingKV {
 	return &RecordingKV{inner, make(map[common.Hash][]byte), false}
 }
 
@@ -128,7 +129,7 @@ type RecordingChainContext struct {
 	initialBlockNumber     uint64
 }
 
-func NewRecordingChainContext(inner core.ChainContext, blocknumber uint64) *RecordingChainContext {
+func newRecordingChainContext(inner core.ChainContext, blocknumber uint64) *RecordingChainContext {
 	return &RecordingChainContext{
 		bc:                     inner,
 		minBlockNumberAccessed: blocknumber,
@@ -151,8 +152,74 @@ func (r *RecordingChainContext) GetMinBlockNumberAccessed() uint64 {
 	return r.minBlockNumberAccessed
 }
 
-func PrepareRecording(trieDB *trie.Database, chainContext core.ChainContext, lastBlockHeader *types.Header) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
-	recordingKeyValue := NewRecordingKV(trieDB)
+type RecordingDatabase struct {
+	db         state.Database
+	bc         *core.BlockChain
+	mutex      sync.Mutex // protects StateFor and Dereference
+	references int64
+}
+
+func NewRecordingDatabase(ethdb ethdb.Database, blockchain *core.BlockChain) *RecordingDatabase {
+	return &RecordingDatabase{
+		db: state.NewDatabaseWithConfig(ethdb, &trie.Config{Cache: 16}), //TODO cache needed? configurable?
+		bc: blockchain,
+	}
+}
+
+// Normal geth state.New + Reference is not atomic vs Dereference. This one is.
+// This function does not recreate a state
+func (r *RecordingDatabase) StateFor(header *types.Header) (*state.StateDB, error) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	sdb, err := state.NewDeterministic(header.Root, r.db)
+	if err == nil {
+		r.referenceRootLockHeld(header.Root)
+	}
+	return sdb, err
+}
+
+func (r *RecordingDatabase) Dereference(header *types.Header) {
+	if header != nil {
+		r.dereferenceRoot(header.Root)
+	}
+}
+
+// lock must be held when calling that
+func (r *RecordingDatabase) referenceRootLockHeld(root common.Hash) {
+	r.references++
+	r.db.TrieDB().Reference(root, common.Hash{})
+}
+
+func (r *RecordingDatabase) dereferenceRoot(root common.Hash) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.references--
+	r.db.TrieDB().Dereference(root)
+}
+
+func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected common.Hash) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	result, err := statedb.Commit(true)
+	if err != nil {
+		return err
+	}
+	if result != expected {
+		return fmt.Errorf("bad root hash expected: %v got: %v", expected, result)
+	}
+	r.referenceRootLockHeld(result)
+	return nil
+}
+
+func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeader *types.Header) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
+	_, err := r.GetOrRecreateState(ctx, lastBlockHeader)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	finalDereference := lastBlockHeader // dereference in case of error
+	defer func() { r.Dereference(finalDereference) }()
+	recordingKeyValue := newRecordingKV(r.db.TrieDB())
 
 	recordingStateDatabase := state.NewDatabase(rawdb.NewDatabase(recordingKeyValue))
 	var prevRoot common.Hash
@@ -168,96 +235,83 @@ func PrepareRecording(trieDB *trie.Database, chainContext core.ChainContext, las
 		if !lastBlockHeader.Number.IsUint64() {
 			return nil, nil, nil, errors.New("block number not uint64")
 		}
-		recordingChainContext = NewRecordingChainContext(chainContext, lastBlockHeader.Number.Uint64())
+		recordingChainContext = newRecordingChainContext(r.bc, lastBlockHeader.Number.Uint64())
 	}
+	finalDereference = nil
 	return recordingStateDb, recordingChainContext, recordingKeyValue, nil
 }
 
-func PreimagesFromRecording(chainContextIf core.ChainContext, recordingDb *RecordingKV) (map[common.Hash][]byte, error) {
+func (r *RecordingDatabase) PreimagesFromRecording(chainContextIf core.ChainContext, recordingDb *RecordingKV) (map[common.Hash][]byte, error) {
 	entries := recordingDb.GetRecordedEntries()
 	recordingChainContext, ok := chainContextIf.(*RecordingChainContext)
 	if (recordingChainContext == nil) || (!ok) {
 		return nil, errors.New("recordingChainContext invalid")
 	}
-	blockchain, ok := recordingChainContext.bc.(*core.BlockChain)
-	if (blockchain == nil) || (!ok) {
-		return nil, errors.New("blockchain invalid")
-	}
+
 	for i := recordingChainContext.GetMinBlockNumberAccessed(); i <= recordingChainContext.initialBlockNumber; i++ {
-		header := blockchain.GetHeaderByNumber(i)
+		header := r.bc.GetHeaderByNumber(i)
 		hash := header.Hash()
 		bytes, err := rlp.EncodeToBytes(header)
 		if err != nil {
-			panic(fmt.Sprintf("Error RLP encoding header: %v\n", err))
+			return nil, fmt.Errorf("Error RLP encoding header: %v\n", err)
 		}
 		entries[hash] = bytes
 	}
 	return entries, nil
 }
 
-func GetOrRecreateReferencedState(ctx context.Context, header *types.Header, bc *core.BlockChain, stateDatabase state.Database) (*state.StateDB, error) {
-	trieDB := stateDatabase.TrieDB()
-	stateDb, err := state.New(header.Root, stateDatabase, nil)
+func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *types.Header) (*state.StateDB, error) {
+	stateDb, err := r.StateFor(header)
 	if err == nil {
-		trieDB.Reference(header.Root, common.Hash{})
 		return stateDb, nil
 	}
 	returnedBlockNumber := header.Number.Uint64()
-	genesis := bc.Config().ArbitrumChainParams.GenesisBlockNum
+	genesis := r.bc.Config().ArbitrumChainParams.GenesisBlockNum
 	currentHeader := header
 	var lastRoot common.Hash
 	for ctx.Err() == nil {
 		if currentHeader.Number.Uint64() <= genesis {
 			return nil, fmt.Errorf("moved beyond genesis looking for state looking for %d, genesis %d, err %w", returnedBlockNumber, genesis, err)
 		}
-		currentHeader = bc.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64()-1)
+		currentHeader = r.bc.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64()-1)
 		if currentHeader == nil {
 			return nil, fmt.Errorf("chain doesn't contain parent of block %d hash %v", currentHeader.Number, currentHeader.Hash())
 		}
-		stateDb, err = state.New(currentHeader.Root, stateDatabase, nil)
+		stateDb, err = r.StateFor(currentHeader)
 		if err == nil {
-			trieDB.Reference(header.Root, common.Hash{})
 			lastRoot = currentHeader.Root
-			defer func() { trieDB.Dereference(lastRoot) }()
+			defer func() {
+				if (lastRoot != common.Hash{}) {
+					r.dereferenceRoot(lastRoot)
+				}
+			}()
 			break
 		}
 	}
 	blockToRecreate := currentHeader.Number.Uint64() + 1
 	for ctx.Err() == nil {
-		block := bc.GetBlockByNumber(blockToRecreate)
+		block := r.bc.GetBlockByNumber(blockToRecreate)
 		if block == nil {
 			return nil, fmt.Errorf("block not found while recreating: %d", blockToRecreate)
 		}
-		_, _, _, err := bc.Processor().Process(block, stateDb, vm.Config{})
+		_, _, _, err := r.bc.Processor().Process(block, stateDb, vm.Config{})
 		if err != nil {
 			return nil, fmt.Errorf("failed recreating state for block %d : %w", blockToRecreate, err)
 		}
-		root, err := stateDb.Commit(true)
+		err = r.addStateVerify(stateDb, block.Root())
 		if err != nil {
 			return nil, fmt.Errorf("failed commiting state for block %d : %w", blockToRecreate, err)
 		}
-		if root != block.Root() {
-			return nil, fmt.Errorf("bad state recreating block %d : exp: %v got %v", blockToRecreate, block.Root(), root)
-		}
-		trieDB.Reference(block.Root(), common.Hash{})
 		lastRoot = block.Root()
 		if blockToRecreate >= returnedBlockNumber {
 			if block.Hash() != header.Hash() {
 				return nil, fmt.Errorf("blockHash doesn't match when recreating number: %d expected: %v got: %v", blockToRecreate, header.Hash(), block.Hash())
 			}
-			// double reference because te defer is going to remove one
-			trieDB.Reference(block.Root(), common.Hash{})
+			// don't dereference this one
+			lastRoot = common.Hash{}
 			return stateDb, nil
 		}
 		blockToRecreate++
 	}
 	return nil, ctx.Err()
-}
-
-func ReferenceState(header *types.Header, stateDatabase state.Database) {
-	stateDatabase.TrieDB().Reference(header.Root, common.Hash{})
-}
-
-func DereferenceState(header *types.Header, stateDatabase state.Database) {
-	stateDatabase.TrieDB().Dereference(header.Root)
 }
