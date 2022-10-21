@@ -310,6 +310,7 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 		if err != nil {
 			return nil, fmt.Errorf("failed commiting state for block %d : %w", blockToRecreate, err)
 		}
+		r.dereferenceRoot(lastRoot)
 		lastRoot = block.Root()
 		if blockToRecreate >= returnedBlockNumber {
 			if block.Hash() != header.Hash() {
@@ -322,4 +323,8 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 		blockToRecreate++
 	}
 	return nil, ctx.Err()
+}
+
+func (r *RecordingDatabase) ReferenceCount() int64 {
+	return r.references
 }
