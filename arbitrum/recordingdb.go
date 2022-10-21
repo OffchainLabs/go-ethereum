@@ -212,8 +212,10 @@ func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected comm
 	return nil
 }
 
-func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeader *types.Header) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
-	_, err := r.GetOrRecreateState(ctx, lastBlockHeader)
+type StateBuildingLogFunction func(targetHeader, header *types.Header, hasState bool)
+
+func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeader *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
+	_, err := r.GetOrRecreateState(ctx, lastBlockHeader, logFunc)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -260,7 +262,7 @@ func (r *RecordingDatabase) PreimagesFromRecording(chainContextIf core.ChainCont
 	return entries, nil
 }
 
-func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *types.Header) (*state.StateDB, error) {
+func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, error) {
 	stateDb, err := r.StateFor(header)
 	if err == nil {
 		return stateDb, nil
@@ -270,6 +272,9 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 	currentHeader := header
 	var lastRoot common.Hash
 	for ctx.Err() == nil {
+		if logFunc != nil {
+			logFunc(header, currentHeader, false)
+		}
 		if currentHeader.Number.Uint64() <= genesis {
 			return nil, fmt.Errorf("moved beyond genesis looking for state looking for %d, genesis %d, err %w", returnedBlockNumber, genesis, err)
 		}
@@ -293,6 +298,9 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 		block := r.bc.GetBlockByNumber(blockToRecreate)
 		if block == nil {
 			return nil, fmt.Errorf("block not found while recreating: %d", blockToRecreate)
+		}
+		if logFunc != nil {
+			logFunc(header, block.Header(), true)
 		}
 		_, _, _, err := r.bc.Processor().Process(block, stateDb, vm.Config{})
 		if err != nil {
