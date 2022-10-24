@@ -142,10 +142,9 @@ var (
 		Category: flags.FirehoseCategory,
 	}
 	firehoseGenesisFileFlag = &cli.StringFlag{
-		Name:     "firehose-genesis-file",
-		Usage:    "On private chains where the genesis config is not known to Geth, you **must** provide the 'genesis.json' file path for proper instrumentation of genesis block",
-		Value:    "",
-		Category: flags.FirehoseCategory,
+		Name:  "firehose-genesis-file",
+		Usage: "On private chains where the genesis config is not known to Geth, you **must** provide the 'genesis.json' file path for proper instrumentation of genesis block",
+		Value: "",
 	}
 )
 
