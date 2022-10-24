@@ -27,7 +27,7 @@ const (
 	VersionMeta  = "fh2" // Version metadata to append to the version string
 
 	FirehoseVersionMajor = 2
-	FirehoseVersionMinor = 0
+	FirehoseVersionMinor = 1
 	Variant              = "geth"
 )
 
