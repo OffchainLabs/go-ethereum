@@ -126,11 +126,6 @@ var (
 		Usage: "On private chains where the genesis config is not known to Geth, you **must** provide the 'genesis.json' file path for proper instrumentation of genesis block",
 		Value: "",
 	}
-	deepMindGenesisFileFlag = cli.StringFlag{
-		Name:  "firehose-deep-mind-genesis",
-		Usage: "Invalid flag for Firehose 'fh1' versions, if you provided this flag (maybe implicitely through sf-ethereum), you are using the wrong tagged version, uses 'fh2' versions instead",
-		Value: "",
-	}
 )
 
 // Flags holds all command-line flags required for debugging.
