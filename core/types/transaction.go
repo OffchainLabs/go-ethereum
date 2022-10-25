@@ -213,6 +213,10 @@ func (tx *Transaction) decodeTyped(b []byte, arbParsing bool) (TxData, error) {
 			var inner ArbitrumSubmitRetryableTx
 			err := rlp.DecodeBytes(b[1:], &inner)
 			return &inner, err
+		case ArbitrumLegacyTxType:
+			var inner ArbitrumLegacyTxData
+			err := rlp.DecodeBytes(b[1:], &inner)
+			return &inner, err
 		}
 	}
 	switch b[0] {
@@ -222,10 +226,6 @@ func (tx *Transaction) decodeTyped(b []byte, arbParsing bool) (TxData, error) {
 		return &inner, err
 	case DynamicFeeTxType:
 		var inner DynamicFeeTx
-		err := rlp.DecodeBytes(b[1:], &inner)
-		return &inner, err
-	case ArbitrumLegacyTxType:
-		var inner ArbitrumLegacyTxData
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
 	default:
