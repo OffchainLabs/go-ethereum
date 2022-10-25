@@ -185,6 +185,13 @@ func (r *RecordingDatabase) Dereference(header *types.Header) {
 	}
 }
 
+func (r *RecordingDatabase) WriteStateToDatabase(header *types.Header) error {
+	if header != nil {
+		return r.db.TrieDB().Commit(header.Root, true, nil)
+	}
+	return nil
+}
+
 // lock must be held when calling that
 func (r *RecordingDatabase) referenceRootLockHeld(root common.Hash) {
 	r.references++
