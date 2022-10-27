@@ -310,8 +310,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// 5. there is no overflow when calculating intrinsic gas
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
 
-	// Arbitrum: drop support for tips from upgrade 2 onward
-	if st.evm.ChainConfig().IsArbitrum() && st.gasPrice.Cmp(st.evm.Context.BaseFee) > 0 {
+	// Arbitrum: drop tip for delayed (and old) messages
+	if st.evm.ProcessingHook.DropTip() && st.gasPrice.Cmp(st.evm.Context.BaseFee) > 0 {
 		st.gasPrice = st.evm.Context.BaseFee
 		st.gasTipCap = common.Big0
 	}
@@ -345,7 +345,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	st.gas -= gas
 
-	if err := st.evm.ProcessingHook.GasChargingHook(&st.gas); err != nil {
+	tipAmount := big.NewInt(0)
+	tipReceipient, err := st.evm.ProcessingHook.GasChargingHook(&st.gas)
+	if err != nil {
 		return nil, err
 	}
 
@@ -388,12 +390,13 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 		fee := new(big.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTip)
-		st.state.AddBalance(st.evm.Context.Coinbase, fee)
+		st.state.AddBalance(tipReceipient, fee)
+		tipAmount = fee
+	}
 
-		// Arbitrum: record the tip if nonzero (this should never happen in L2)
-		if st.evm.Config.Debug {
-			st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, nil, &st.evm.Context.Coinbase, fee, false, "tip")
-		}
+	// Arbitrum: record the tip
+	if st.evm.Config.Debug && !st.evm.ProcessingHook.DropTip() {
+		st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, nil, &tipReceipient, tipAmount, false, "tip")
 	}
 
 	st.evm.ProcessingHook.EndTxHook(st.gas, vmerr == nil)
