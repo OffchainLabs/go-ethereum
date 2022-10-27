@@ -345,6 +345,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	st.gas -= gas
 
+	tipAmount := big.NewInt(0)
 	tipReceipient, err := st.evm.ProcessingHook.GasChargingHook(&st.gas)
 	if err != nil {
 		return nil, err
@@ -390,11 +391,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		fee := new(big.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTip)
 		st.state.AddBalance(tipReceipient, fee)
+		tipAmount = fee
+	}
 
-		// Arbitrum: record the tip
-		if st.evm.Config.Debug {
-			st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, nil, &st.evm.Context.Coinbase, fee, false, "tip")
-		}
+	// Arbitrum: record the tip
+	if st.evm.Config.Debug && !st.evm.ProcessingHook.DropTip() {
+		st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, nil, &tipReceipient, tipAmount, false, "tip")
 	}
 
 	st.evm.ProcessingHook.EndTxHook(st.gas, vmerr == nil)
