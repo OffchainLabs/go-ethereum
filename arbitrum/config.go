@@ -24,7 +24,7 @@ type Config struct {
 	BloomConfirms   uint64 `koanf:"bloom-confirms"`
 
 	// Parameters for the filter system
-	FilterLogCacheSize uint64        `koanf:"filter-log-cache-size"`
+	FilterLogCacheSize int           `koanf:"filter-log-cache-size"`
 	FilterTimeout      time.Duration `koanf:"filter-timeout"`
 
 	// FeeHistoryMaxBlockCount limits the number of historical blocks a fee history request may cover
@@ -49,7 +49,7 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.Uint64(prefix+".feehistory-max-block-count", DefaultConfig.FeeHistoryMaxBlockCount, "max number of blocks a fee history request may cover")
 	f.String(prefix+".classic-redirect", DefaultConfig.ClassicRedirect, "url to redirect classic requests, use \"error:[CODE:]MESSAGE\" to return specified error instead of redirecting")
 	f.Duration(prefix+".classic-redirect-timeout", DefaultConfig.ClassicRedirectTimeout, "timeout for forwarded classic requests, where 0 = no timeout")
-	f.Uint64(prefix+".filter-log-cache-size", DefaultConfig.FilterLogCacheSize, "log filter system maximum number of cached blocks")
+	f.Int(prefix+".filter-log-cache-size", DefaultConfig.FilterLogCacheSize, "log filter system maximum number of cached blocks")
 	f.Duration(prefix+".filter-timeout", DefaultConfig.FilterTimeout, "log filter system maximum time filters stay active")
 
 	arbDebug := DefaultConfig.ArbDebug
