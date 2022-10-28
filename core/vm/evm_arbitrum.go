@@ -38,11 +38,12 @@ func (evm *EVM) DecrementDepth() {
 
 type TxProcessingHook interface {
 	StartTxHook() (bool, uint64, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
-	GasChargingHook(gasRemaining *uint64) error
+	GasChargingHook(gasRemaining *uint64) (common.Address, error)
 	PushCaller(addr common.Address)
 	PopCaller()
 	ForceRefundGas() uint64
 	NonrefundableGas() uint64
+	DropTip() bool
 	EndTxHook(totalGasUsed uint64, evmSuccess bool)
 	ScheduledTxes() types.Transactions
 	L1BlockNumber(blockCtx BlockContext) (uint64, error)
@@ -51,28 +52,27 @@ type TxProcessingHook interface {
 	FillReceiptInfo(receipt *types.Receipt)
 }
 
-type DefaultTxProcessor struct{}
+type DefaultTxProcessor struct {
+	evm *EVM
+}
 
 func (p DefaultTxProcessor) StartTxHook() (bool, uint64, error, []byte) {
 	return false, 0, nil, nil
 }
 
-func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) error {
-	return nil
+func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) (common.Address, error) {
+	return p.evm.Context.Coinbase, nil
 }
 
 func (p DefaultTxProcessor) PushCaller(addr common.Address) {}
 
-func (p DefaultTxProcessor) PopCaller() {
-}
+func (p DefaultTxProcessor) PopCaller() {}
 
-func (p DefaultTxProcessor) ForceRefundGas() uint64 {
-	return 0
-}
+func (p DefaultTxProcessor) ForceRefundGas() uint64 { return 0 }
 
-func (p DefaultTxProcessor) NonrefundableGas() uint64 {
-	return 0
-}
+func (p DefaultTxProcessor) NonrefundableGas() uint64 { return 0 }
+
+func (p DefaultTxProcessor) DropTip() bool { return false }
 
 func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, evmSuccess bool) {}
 
