@@ -10,10 +10,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/log"
-
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -23,10 +19,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/filters"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -103,7 +102,7 @@ func (a *APIBackend) GetAPIs() []rpc.API {
 	apis = append(apis, rpc.API{
 		Namespace: "eth",
 		Version:   "1.0",
-		Service:   filters.NewFilterAPI(a, false, 5*time.Minute),
+		Service:   filters.NewFilterAPI(filters.NewFilterSystem(a, filters.Config{Timeout: time.Minute * 5}), false),
 		Public:    true,
 	})
 
@@ -425,7 +424,15 @@ func (a *APIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.
 		vmConfig = a.blockChain().GetVMConfig()
 	}
 	txContext := core.NewEVMTxContext(msg)
-	context := core.NewEVMBlockContext(header, a.blockChain(), nil)
+	ph, err := a.HeaderByHash(ctx, header.ParentHash)
+	if err != nil {
+		return nil, nil, err
+	}
+	var excessDataGas *big.Int
+	if ph != nil {
+		excessDataGas = ph.ExcessDataGas
+	}
+	context := core.NewEVMBlockContext(header, excessDataGas, a.blockChain(), nil)
 	return vm.NewEVM(context, txContext, state, a.blockChain().Config(), *vmConfig), vmError, nil
 }
 
@@ -491,7 +498,7 @@ func (a *APIBackend) BloomStatus() (uint64, uint64) {
 	return a.b.config.BloomBitsBlocks, sections
 }
 
-func (a *APIBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {
+func (a *APIBackend) GetLogs(ctx context.Context, blockHash common.Hash, _ uint64) ([][]*types.Log, error) {
 	receipts := a.blockChain().GetReceiptsByHash(blockHash)
 	if receipts == nil {
 		return nil, nil

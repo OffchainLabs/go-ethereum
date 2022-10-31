@@ -665,7 +665,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		EIP2028:   pool.istanbul,
 		EIP4844:   pool.eip4844,
 	}
-	intrGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, rules)
+	intrGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, rules.Homestead, rules.EIP2028)
 	if err != nil {
 		return err
 	}
