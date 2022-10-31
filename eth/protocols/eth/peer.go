@@ -133,7 +133,7 @@ func (p *Peer) ID() string {
 	return p.id
 }
 
-// Version retrieves the peer's negoatiated `eth` protocol version.
+// Version retrieves the peer's negotiated `eth` protocol version.
 func (p *Peer) Version() uint {
 	return p.version
 }
@@ -189,7 +189,7 @@ func (p *Peer) markTransaction(hash common.Hash) {
 //
 // The reasons this is public is to allow packages using this protocol to write
 // tests that directly send messages without having to do the asyn queueing.
-func (p *Peer) SendTransactions(txs types.Transactions) error {
+func (p *Peer) SendTransactions(txs types.NetworkTransactions) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	for _, tx := range txs {
 		p.knownTxs.Add(tx.Hash())

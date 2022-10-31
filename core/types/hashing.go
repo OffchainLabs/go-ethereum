@@ -18,7 +18,11 @@ package types
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"sync"
+
+	"github.com/protolambda/ztyp/codec"
+	"github.com/protolambda/ztyp/tree"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -54,6 +58,19 @@ func prefixedRlpHash(prefix byte, x interface{}) (h common.Hash) {
 	sha.Reset()
 	sha.Write([]byte{prefix})
 	rlp.Encode(sha, x)
+	sha.Read(h[:])
+	return h
+}
+
+// prefixedSSZHash writes the prefix into the hasher before SSZ hash-tree-root-ing x.
+// It's used for typed transactions.
+func prefixedSSZHash(prefix byte, x tree.HTR) (h common.Hash) {
+	sha := hasherPool.Get().(crypto.KeccakState)
+	defer hasherPool.Put(sha)
+	sha.Reset()
+	sha.Write([]byte{prefix})
+	htr := x.HashTreeRoot(tree.GetHashFn())
+	sha.Write(htr[:])
 	sha.Read(h[:])
 	return h
 }
@@ -110,4 +127,15 @@ func DeriveSha(list DerivableList, hasher TrieHasher) common.Hash {
 		hasher.Update(indexBuf, value)
 	}
 	return hasher.Hash()
+}
+
+// sszHash returns the hash ot the raw serialized ssz-container (i.e. without merkelization)
+func sszHash(c codec.Serializable) ([32]byte, error) {
+	sha := sha256.New()
+	if err := c.Serialize(codec.NewEncodingWriter(sha)); err != nil {
+		return [32]byte{}, err
+	}
+	var sum [32]byte
+	copy(sum[:], sha.Sum(nil))
+	return sum, nil
 }

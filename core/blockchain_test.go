@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/protolambda/ztyp/view"
 )
 
 // So we can deterministically seed different blockchains
@@ -155,11 +156,12 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 			}
 			return err
 		}
-		statedb, err := state.New(blockchain.GetBlockByHash(block.ParentHash()).Root(), blockchain.stateCache, nil)
+		parent := blockchain.GetBlockByHash(block.ParentHash())
+		statedb, err := state.New(parent.Root(), blockchain.stateCache, nil)
 		if err != nil {
 			return err
 		}
-		receipts, _, usedGas, err := blockchain.processor.Process(block, statedb, vm.Config{})
+		receipts, _, usedGas, err := blockchain.processor.Process(block, parent.Header().ExcessDataGas, statedb, vm.Config{})
 		if err != nil {
 			blockchain.reportBlock(block, receipts, err)
 			return err
@@ -759,9 +761,9 @@ func TestFastVsFullChains(t *testing.T) {
 				block.AddTx(tx)
 			}
 		}
-		// If the block number is a multiple of 5, add a few bonus uncles to the block
-		if i%5 == 5 {
-			block.AddUncle(&types.Header{ParentHash: block.PrevBlock(i - 1).Hash(), Number: big.NewInt(int64(i - 1))})
+		// If the block number is a multiple of 5, add an uncle to the block
+		if i%5 == 4 {
+			block.AddUncle(&types.Header{ParentHash: block.PrevBlock(i - 2).Hash(), Number: big.NewInt(int64(i))})
 		}
 	})
 	// Import the chain as an archive node for the comparison baseline
@@ -1941,8 +1943,8 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 			Alloc:   GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
-		signer     = types.LatestSigner(gspec.Config)
-		genesis, _ = gspec.Commit(db)
+		signer  = types.LatestSigner(gspec.Config)
+		genesis = gspec.MustCommit(db)
 	)
 	// Generate and import the canonical chain
 	diskdb := rawdb.NewMemoryDatabase()
@@ -3863,5 +3865,97 @@ func TestCanonicalHashMarker(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestDataBlobTxs tests the following:
+//
+// 1. Writes data hash from transaction to storage.
+func TestDataBlobTxs(t *testing.T) {
+	var (
+		one = common.Hash{1}
+		two = common.Hash{2}
+		aa  = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+
+		// Generate a canonical chain to act as the main dataset
+		engine = ethash.NewFaker()
+		db     = rawdb.NewMemoryDatabase()
+
+		// A sender who makes transactions, has some funds
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		gspec   = &Genesis{
+			Config: params.AllEthashProtocolChanges,
+			Alloc: GenesisAlloc{
+				addr1: {Balance: funds},
+				// The address 0xAAAA writes dataHashes[1] to storage slot 0x0.
+				aa: {
+					Code: []byte{
+						byte(vm.PUSH1),
+						byte(0x1),
+						byte(vm.DATAHASH),
+						byte(vm.PUSH1),
+						byte(0x0),
+						byte(vm.SSTORE),
+					},
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+			},
+		}
+	)
+
+	// We test the transition from non-sharding to sharding
+	// Genesis (block 0): AllEthhashProtocolChanges
+	// Block 1          : ""
+	// Block 2          : Sharding
+	gspec.Config.ShardingForkBlock = common.Big2
+	genesis := gspec.MustCommit(db)
+	signer := types.LatestSigner(gspec.Config)
+
+	blocks, _ := GenerateChain(gspec.Config, genesis, engine, db, 2, func(i int, b *BlockGen) {
+		if i == 0 {
+			// i==0 is a non-sharding block
+			return
+		}
+		b.SetCoinbase(common.Address{1})
+		msg := types.BlobTxMessage{
+			Nonce: 0,
+			Gas:   500000,
+		}
+		msg.To.Address = (*types.AddressSSZ)(&aa)
+		msg.ChainID.SetFromBig((*big.Int)(gspec.Config.ChainID))
+		msg.Nonce = view.Uint64View(0)
+		msg.GasFeeCap.SetFromBig(newGwei(5))
+		msg.GasTipCap.SetFromBig(big.NewInt(2))
+		msg.MaxFeePerDataGas.SetFromBig(big.NewInt(params.MinDataGasPrice))
+		// TODO: Add test case for max data fee too low
+		msg.BlobVersionedHashes = []common.Hash{one, two}
+		txdata := &types.SignedBlobTx{Message: msg}
+
+		tx := types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key1)
+
+		b.AddTx(tx)
+	})
+
+	diskdb := rawdb.NewMemoryDatabase()
+	gspec.MustCommit(diskdb)
+
+	chain, err := NewBlockChain(diskdb, nil, gspec.Config, engine, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	state, _ := chain.State()
+
+	// 1. Check that the storage slot is set to dataHashes[1].
+	actual := state.GetState(aa, common.Hash{0})
+	if actual != two {
+		t.Fatalf("incorrect data hash written to state (want: %s, got: %s)", two, actual)
 	}
 }

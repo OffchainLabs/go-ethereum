@@ -81,17 +81,19 @@ func (tx *ArbitrumUnsignedTx) copy() TxData {
 	return cpy
 }
 
-func (tx *ArbitrumUnsignedTx) chainID() *big.Int      { return tx.ChainId }
-func (tx *ArbitrumUnsignedTx) accessList() AccessList { return nil }
-func (tx *ArbitrumUnsignedTx) data() []byte           { return tx.Data }
-func (tx *ArbitrumUnsignedTx) gas() uint64            { return tx.Gas }
-func (tx *ArbitrumUnsignedTx) gasPrice() *big.Int     { return tx.GasFeeCap }
-func (tx *ArbitrumUnsignedTx) gasTipCap() *big.Int    { return bigZero }
-func (tx *ArbitrumUnsignedTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
-func (tx *ArbitrumUnsignedTx) value() *big.Int        { return tx.Value }
-func (tx *ArbitrumUnsignedTx) nonce() uint64          { return tx.Nonce }
-func (tx *ArbitrumUnsignedTx) to() *common.Address    { return tx.To }
-func (tx *ArbitrumUnsignedTx) isFake() bool           { return false }
+func (tx *ArbitrumUnsignedTx) chainID() *big.Int          { return tx.ChainId }
+func (tx *ArbitrumUnsignedTx) accessList() AccessList     { return nil }
+func (tx *ArbitrumUnsignedTx) data() []byte               { return tx.Data }
+func (tx *ArbitrumUnsignedTx) gas() uint64                { return tx.Gas }
+func (tx *ArbitrumUnsignedTx) gasPrice() *big.Int         { return tx.GasFeeCap }
+func (tx *ArbitrumUnsignedTx) gasTipCap() *big.Int        { return bigZero }
+func (tx *ArbitrumUnsignedTx) gasFeeCap() *big.Int        { return tx.GasFeeCap }
+func (tx *ArbitrumUnsignedTx) maxFeePerDataGas() *big.Int { return big.NewInt(0) }
+func (tx *ArbitrumUnsignedTx) dataHashes() []common.Hash  { return make([]common.Hash, 0) }
+func (tx *ArbitrumUnsignedTx) value() *big.Int            { return tx.Value }
+func (tx *ArbitrumUnsignedTx) nonce() uint64              { return tx.Nonce }
+func (tx *ArbitrumUnsignedTx) to() *common.Address        { return tx.To }
+func (tx *ArbitrumUnsignedTx) isFake() bool               { return false }
 
 func (tx *ArbitrumUnsignedTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero
@@ -142,16 +144,18 @@ func (tx *ArbitrumContractTx) copy() TxData {
 	return cpy
 }
 
-func (tx *ArbitrumContractTx) chainID() *big.Int      { return tx.ChainId }
-func (tx *ArbitrumContractTx) accessList() AccessList { return nil }
-func (tx *ArbitrumContractTx) data() []byte           { return tx.Data }
-func (tx *ArbitrumContractTx) gas() uint64            { return tx.Gas }
-func (tx *ArbitrumContractTx) gasPrice() *big.Int     { return tx.GasFeeCap }
-func (tx *ArbitrumContractTx) gasTipCap() *big.Int    { return bigZero }
-func (tx *ArbitrumContractTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
-func (tx *ArbitrumContractTx) value() *big.Int        { return tx.Value }
-func (tx *ArbitrumContractTx) nonce() uint64          { return 0 }
-func (tx *ArbitrumContractTx) to() *common.Address    { return tx.To }
+func (tx *ArbitrumContractTx) chainID() *big.Int          { return tx.ChainId }
+func (tx *ArbitrumContractTx) accessList() AccessList     { return nil }
+func (tx *ArbitrumContractTx) data() []byte               { return tx.Data }
+func (tx *ArbitrumContractTx) gas() uint64                { return tx.Gas }
+func (tx *ArbitrumContractTx) gasPrice() *big.Int         { return tx.GasFeeCap }
+func (tx *ArbitrumContractTx) gasTipCap() *big.Int        { return bigZero }
+func (tx *ArbitrumContractTx) gasFeeCap() *big.Int        { return tx.GasFeeCap }
+func (tx *ArbitrumContractTx) maxFeePerDataGas() *big.Int { return big.NewInt(0) }
+func (tx *ArbitrumContractTx) dataHashes() []common.Hash  { return make([]common.Hash, 0) }
+func (tx *ArbitrumContractTx) value() *big.Int            { return tx.Value }
+func (tx *ArbitrumContractTx) nonce() uint64              { return 0 }
+func (tx *ArbitrumContractTx) to() *common.Address        { return tx.To }
 func (tx *ArbitrumContractTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero
 }
@@ -213,16 +217,18 @@ func (tx *ArbitrumRetryTx) copy() TxData {
 	return cpy
 }
 
-func (tx *ArbitrumRetryTx) chainID() *big.Int      { return tx.ChainId }
-func (tx *ArbitrumRetryTx) accessList() AccessList { return nil }
-func (tx *ArbitrumRetryTx) data() []byte           { return tx.Data }
-func (tx *ArbitrumRetryTx) gas() uint64            { return tx.Gas }
-func (tx *ArbitrumRetryTx) gasPrice() *big.Int     { return tx.GasFeeCap }
-func (tx *ArbitrumRetryTx) gasTipCap() *big.Int    { return bigZero }
-func (tx *ArbitrumRetryTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
-func (tx *ArbitrumRetryTx) value() *big.Int        { return tx.Value }
-func (tx *ArbitrumRetryTx) nonce() uint64          { return tx.Nonce }
-func (tx *ArbitrumRetryTx) to() *common.Address    { return tx.To }
+func (tx *ArbitrumRetryTx) chainID() *big.Int          { return tx.ChainId }
+func (tx *ArbitrumRetryTx) accessList() AccessList     { return nil }
+func (tx *ArbitrumRetryTx) data() []byte               { return tx.Data }
+func (tx *ArbitrumRetryTx) gas() uint64                { return tx.Gas }
+func (tx *ArbitrumRetryTx) gasPrice() *big.Int         { return tx.GasFeeCap }
+func (tx *ArbitrumRetryTx) gasTipCap() *big.Int        { return bigZero }
+func (tx *ArbitrumRetryTx) gasFeeCap() *big.Int        { return tx.GasFeeCap }
+func (tx *ArbitrumRetryTx) maxFeePerDataGas() *big.Int { return big.NewInt(0) }
+func (tx *ArbitrumRetryTx) dataHashes() []common.Hash  { return make([]common.Hash, 0) }
+func (tx *ArbitrumRetryTx) value() *big.Int            { return tx.Value }
+func (tx *ArbitrumRetryTx) nonce() uint64              { return tx.Nonce }
+func (tx *ArbitrumRetryTx) to() *common.Address        { return tx.To }
 func (tx *ArbitrumRetryTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero
 }
@@ -289,15 +295,17 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 	return cpy
 }
 
-func (tx *ArbitrumSubmitRetryableTx) chainID() *big.Int      { return tx.ChainId }
-func (tx *ArbitrumSubmitRetryableTx) accessList() AccessList { return nil }
-func (tx *ArbitrumSubmitRetryableTx) gas() uint64            { return tx.Gas }
-func (tx *ArbitrumSubmitRetryableTx) gasPrice() *big.Int     { return tx.GasFeeCap }
-func (tx *ArbitrumSubmitRetryableTx) gasTipCap() *big.Int    { return big.NewInt(0) }
-func (tx *ArbitrumSubmitRetryableTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
-func (tx *ArbitrumSubmitRetryableTx) value() *big.Int        { return common.Big0 }
-func (tx *ArbitrumSubmitRetryableTx) nonce() uint64          { return 0 }
-func (tx *ArbitrumSubmitRetryableTx) to() *common.Address    { return &ArbRetryableTxAddress }
+func (tx *ArbitrumSubmitRetryableTx) chainID() *big.Int           { return tx.ChainId }
+func (tx *ArbitrumSubmitRetryableTx) accessList() AccessList      { return nil }
+func (tx *ArbitrumSubmitRetryableTx) gas() uint64                 { return tx.Gas }
+func (tx *ArbitrumSubmitRetryableTx) gasPrice() *big.Int          { return tx.GasFeeCap }
+func (tx *ArbitrumSubmitRetryableTx) gasTipCap() *big.Int         { return big.NewInt(0) }
+func (tx *ArbitrumSubmitRetryableTx) gasFeeCap() *big.Int         { return tx.GasFeeCap }
+func (stx *ArbitrumSubmitRetryableTx) maxFeePerDataGas() *big.Int { return big.NewInt(0) }
+func (stx *ArbitrumSubmitRetryableTx) dataHashes() []common.Hash  { return make([]common.Hash, 0) }
+func (tx *ArbitrumSubmitRetryableTx) value() *big.Int             { return common.Big0 }
+func (tx *ArbitrumSubmitRetryableTx) nonce() uint64               { return 0 }
+func (tx *ArbitrumSubmitRetryableTx) to() *common.Address         { return &ArbRetryableTxAddress }
 func (tx *ArbitrumSubmitRetryableTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero
 }
@@ -364,17 +372,19 @@ func (d *ArbitrumDepositTx) copy() TxData {
 	return tx
 }
 
-func (d *ArbitrumDepositTx) chainID() *big.Int      { return d.ChainId }
-func (d *ArbitrumDepositTx) accessList() AccessList { return nil }
-func (d *ArbitrumDepositTx) data() []byte           { return nil }
-func (d *ArbitrumDepositTx) gas() uint64            { return 0 }
-func (d *ArbitrumDepositTx) gasPrice() *big.Int     { return bigZero }
-func (d *ArbitrumDepositTx) gasTipCap() *big.Int    { return bigZero }
-func (d *ArbitrumDepositTx) gasFeeCap() *big.Int    { return bigZero }
-func (d *ArbitrumDepositTx) value() *big.Int        { return d.Value }
-func (d *ArbitrumDepositTx) nonce() uint64          { return 0 }
-func (d *ArbitrumDepositTx) to() *common.Address    { return &d.To }
-func (d *ArbitrumDepositTx) isFake() bool           { return true }
+func (d *ArbitrumDepositTx) chainID() *big.Int          { return d.ChainId }
+func (d *ArbitrumDepositTx) accessList() AccessList     { return nil }
+func (d *ArbitrumDepositTx) data() []byte               { return nil }
+func (d *ArbitrumDepositTx) gas() uint64                { return 0 }
+func (d *ArbitrumDepositTx) gasPrice() *big.Int         { return bigZero }
+func (d *ArbitrumDepositTx) gasTipCap() *big.Int        { return bigZero }
+func (d *ArbitrumDepositTx) gasFeeCap() *big.Int        { return bigZero }
+func (d *ArbitrumDepositTx) maxFeePerDataGas() *big.Int { return big.NewInt(0) }
+func (d *ArbitrumDepositTx) dataHashes() []common.Hash  { return make([]common.Hash, 0) }
+func (d *ArbitrumDepositTx) value() *big.Int            { return d.Value }
+func (d *ArbitrumDepositTx) nonce() uint64              { return 0 }
+func (d *ArbitrumDepositTx) to() *common.Address        { return &d.To }
+func (d *ArbitrumDepositTx) isFake() bool               { return true }
 
 func (d *ArbitrumDepositTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero
@@ -400,17 +410,19 @@ func (t *ArbitrumInternalTx) copy() TxData {
 	}
 }
 
-func (t *ArbitrumInternalTx) chainID() *big.Int      { return t.ChainId }
-func (t *ArbitrumInternalTx) accessList() AccessList { return nil }
-func (t *ArbitrumInternalTx) data() []byte           { return t.Data }
-func (t *ArbitrumInternalTx) gas() uint64            { return 0 }
-func (t *ArbitrumInternalTx) gasPrice() *big.Int     { return bigZero }
-func (t *ArbitrumInternalTx) gasTipCap() *big.Int    { return bigZero }
-func (t *ArbitrumInternalTx) gasFeeCap() *big.Int    { return bigZero }
-func (t *ArbitrumInternalTx) value() *big.Int        { return common.Big0 }
-func (t *ArbitrumInternalTx) nonce() uint64          { return 0 }
-func (t *ArbitrumInternalTx) to() *common.Address    { return &ArbosAddress }
-func (t *ArbitrumInternalTx) isFake() bool           { return true }
+func (t *ArbitrumInternalTx) chainID() *big.Int          { return t.ChainId }
+func (t *ArbitrumInternalTx) accessList() AccessList     { return nil }
+func (t *ArbitrumInternalTx) data() []byte               { return t.Data }
+func (t *ArbitrumInternalTx) gas() uint64                { return 0 }
+func (t *ArbitrumInternalTx) gasPrice() *big.Int         { return bigZero }
+func (t *ArbitrumInternalTx) gasTipCap() *big.Int        { return bigZero }
+func (t *ArbitrumInternalTx) gasFeeCap() *big.Int        { return bigZero }
+func (t *ArbitrumInternalTx) maxFeePerDataGas() *big.Int { return big.NewInt(0) }
+func (t *ArbitrumInternalTx) dataHashes() []common.Hash  { return make([]common.Hash, 0) }
+func (t *ArbitrumInternalTx) value() *big.Int            { return common.Big0 }
+func (t *ArbitrumInternalTx) nonce() uint64              { return 0 }
+func (t *ArbitrumInternalTx) to() *common.Address        { return &ArbosAddress }
+func (t *ArbitrumInternalTx) isFake() bool               { return true }
 
 func (d *ArbitrumInternalTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero

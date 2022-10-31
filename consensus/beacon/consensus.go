@@ -79,7 +79,10 @@ func (beacon *Beacon) Author(header *types.Header) (common.Address, error) {
 // VerifyHeader checks whether a header conforms to the consensus rules of the
 // stock Ethereum consensus engine.
 func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
-	reached, _ := IsTTDReached(chain, header.ParentHash, header.Number.Uint64()-1)
+	reached, err := IsTTDReached(chain, header.ParentHash, header.Number.Uint64()-1)
+	if err != nil {
+		return err
+	}
 	if !reached {
 		return beacon.ethone.VerifyHeader(chain, header, seal)
 	}
@@ -114,8 +117,19 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 		}
 	}
 
-	// All the headers have passed the transition point, use new rules.
 	if len(preHeaders) == 0 {
+		// All the headers are pos headers. Verify that the parent block reached total terminal difficulty.
+		if reached, err := IsTTDReached(chain, headers[0].ParentHash, headers[0].Number.Uint64()-1); !reached {
+			// TTD not reached for the first block, mark subsequent with invalid terminal block
+			if err == nil {
+				err = consensus.ErrInvalidTerminalBlock
+			}
+			results := make(chan error, len(headers))
+			for i := 0; i < len(headers); i++ {
+				results <- err
+			}
+			return make(chan struct{}), results
+		}
 		return beacon.verifyHeaders(chain, headers, nil)
 	}
 
@@ -248,8 +262,19 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(common.Big1) != 0 {
 		return consensus.ErrInvalidNumber
 	}
-	// Verify the header's EIP-1559 attributes.
-	return misc.VerifyEip1559Header(chain.Config(), parent, header)
+	if chain.Config().IsLondon(header.Number) {
+		// Verify the header's EIP-1559 attributes.
+		if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
+			return err
+		}
+	}
+	if chain.Config().IsSharding(header.Number) {
+		// Verify the header's EIP-4844 attributes.
+		if err := misc.VerifyEip4844Header(chain.Config(), parent, header); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // verifyHeaders is similar to verifyHeader, but verifies a batch of headers
@@ -318,6 +343,13 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 	// The block reward is no longer handled here. It's done by the
 	// external consensus engine.
 	header.Root = state.IntermediateRoot(true)
+	if chain.Config().IsSharding(header.Number) {
+		if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
+			header.SetExcessDataGas(misc.CalcExcessDataGas(parent.ExcessDataGas, misc.CountBlobs(txs)))
+		} else {
+			header.SetExcessDataGas(new(big.Int))
+		}
+	}
 }
 
 // FinalizeAndAssemble implements consensus.Engine, setting the final state and

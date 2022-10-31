@@ -59,6 +59,10 @@ var (
 	// by a transaction is higher than what's left in the block.
 	ErrGasLimitReached = errors.New("gas limit reached")
 
+	// ErrDataGasLimitReached is returned by the gas pool if the amount of data gas required by a
+	// transaction is higher than what's left in the block.
+	ErrDataGasLimitReached = errors.New("data gas limit reached")
+
 	// ErrInsufficientFundsForTransfer is returned if the transaction sender doesn't
 	// have enough funds for transfer(topmost call only).
 	ErrInsufficientFundsForTransfer = errors.New("insufficient funds for transfer")
@@ -81,6 +85,10 @@ var (
 	// ErrTipAboveFeeCap is a sanity error to ensure no one is able to specify a
 	// transaction with a tip higher than the total fee cap.
 	ErrTipAboveFeeCap = errors.New("max priority fee per gas higher than max fee per gas")
+
+	// ErrMaxFeePerDataGas is returned if the transaction specified a
+	// max_fee_per_data_gas that is below the current data gas price.
+	ErrMaxFeePerDataGas = errors.New("max data fee per gas too low")
 
 	// ErrTipVeryHigh is a sanity error to avoid extremely big numbers specified
 	// in the tip field.

@@ -17,6 +17,7 @@
 package beacon
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -40,6 +41,14 @@ type payloadAttributesMarshaling struct {
 	Timestamp hexutil.Uint64
 }
 
+// BlobsBundleV1 holds the blobs of an execution payload, to be retrieved separately
+type BlobsBundleV1 struct {
+	BlockHash       common.Hash           `json:"blockHash"     gencodec:"required"`
+	KZGs            []types.KZGCommitment `json:"kzgs"      gencodec:"required"`
+	Blobs           []types.Blob          `json:"blobs"      gencodec:"required"`
+	AggregatedProof types.KZGProof        `json:"aggregatedProof" gencodec:"required"`
+}
+
 //go:generate go run github.com/fjl/gencodec -type ExecutableDataV1 -field-override executableDataMarshaling -out gen_ed.go
 
 // ExecutableDataV1 structure described at https://github.com/ethereum/execution-apis/tree/main/src/engine/specification.md
@@ -58,6 +67,9 @@ type ExecutableDataV1 struct {
 	BaseFeePerGas *big.Int       `json:"baseFeePerGas" gencodec:"required"`
 	BlockHash     common.Hash    `json:"blockHash"     gencodec:"required"`
 	Transactions  [][]byte       `json:"transactions"  gencodec:"required"`
+
+	// New in EIP-4844
+	ExcessDataGas *big.Int `json:"excessDataGas" gencodec:"optional"`
 }
 
 // JSON type overrides for executableData.
@@ -67,6 +79,7 @@ type executableDataMarshaling struct {
 	GasUsed       hexutil.Uint64
 	Timestamp     hexutil.Uint64
 	BaseFeePerGas *hexutil.Big
+	ExcessDataGas *hexutil.Big
 	ExtraData     hexutil.Bytes
 	LogsBloom     hexutil.Bytes
 	Transactions  []hexutil.Bytes
@@ -117,7 +130,7 @@ type ForkchoiceStateV1 struct {
 func encodeTransactions(txs []*types.Transaction) [][]byte {
 	var enc = make([][]byte, len(txs))
 	for i, tx := range txs {
-		enc[i], _ = tx.MarshalBinary()
+		enc[i], _ = tx.MarshalMinimal()
 	}
 	return enc
 }
@@ -156,21 +169,22 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 		return nil, fmt.Errorf("invalid baseFeePerGas: %v", params.BaseFeePerGas)
 	}
 	header := &types.Header{
-		ParentHash:  params.ParentHash,
-		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    params.FeeRecipient,
-		Root:        params.StateRoot,
-		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash: params.ReceiptsRoot,
-		Bloom:       types.BytesToBloom(params.LogsBloom),
-		Difficulty:  common.Big0,
-		Number:      new(big.Int).SetUint64(params.Number),
-		GasLimit:    params.GasLimit,
-		GasUsed:     params.GasUsed,
-		Time:        params.Timestamp,
-		BaseFee:     params.BaseFeePerGas,
-		Extra:       params.ExtraData,
-		MixDigest:   params.Random,
+		ParentHash:    params.ParentHash,
+		UncleHash:     types.EmptyUncleHash,
+		Coinbase:      params.FeeRecipient,
+		Root:          params.StateRoot,
+		TxHash:        types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
+		ReceiptHash:   params.ReceiptsRoot,
+		Bloom:         types.BytesToBloom(params.LogsBloom),
+		Difficulty:    common.Big0,
+		Number:        new(big.Int).SetUint64(params.Number),
+		GasLimit:      params.GasLimit,
+		GasUsed:       params.GasUsed,
+		Time:          params.Timestamp,
+		BaseFee:       params.BaseFeePerGas,
+		ExcessDataGas: params.ExcessDataGas,
+		Extra:         params.ExtraData,
+		MixDigest:     params.Random,
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
 	if block.Hash() != params.BlockHash {
@@ -181,6 +195,7 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 
 // BlockToExecutableData constructs the executableDataV1 structure by filling the
 // fields from the given block. It assumes the given block is post-merge block.
+// Additional blob contents are provided as well.
 func BlockToExecutableData(block *types.Block) *ExecutableDataV1 {
 	return &ExecutableDataV1{
 		BlockHash:     block.Hash(),
@@ -191,6 +206,7 @@ func BlockToExecutableData(block *types.Block) *ExecutableDataV1 {
 		GasLimit:      block.GasLimit(),
 		GasUsed:       block.GasUsed(),
 		BaseFeePerGas: block.BaseFee(),
+		ExcessDataGas: block.ExcessDataGas(),
 		Timestamp:     block.Time(),
 		ReceiptsRoot:  block.ReceiptHash(),
 		LogsBloom:     block.Bloom().Bytes(),
@@ -198,4 +214,31 @@ func BlockToExecutableData(block *types.Block) *ExecutableDataV1 {
 		Random:        block.MixDigest(),
 		ExtraData:     block.Extra(),
 	}
+}
+
+func BlockToBlobData(block *types.Block) (*BlobsBundleV1, error) {
+	blockHash := block.Hash()
+	blobsBundle := &BlobsBundleV1{BlockHash: blockHash}
+	for i, tx := range block.Transactions() {
+		if tx.Type() == types.BlobTxType {
+			versionedHashes, kzgs, blobs, aggProof := tx.BlobWrapData()
+			if len(versionedHashes) != len(kzgs) || len(versionedHashes) != len(blobs) {
+				return nil, fmt.Errorf("tx %d in block %s has inconsistent blobs (%d) / kzgs (%d)"+
+					" / versioned hashes (%d)", i, blockHash, len(blobs), len(kzgs), len(versionedHashes))
+			}
+			var zProof types.KZGProof
+			if zProof == aggProof {
+				return nil, errors.New("aggregated proof is not available in blobs")
+			}
+			blobsBundle.Blobs = append(blobsBundle.Blobs, blobs...)
+			blobsBundle.KZGs = append(blobsBundle.KZGs, kzgs...)
+		}
+	}
+
+	_, _, aggregatedProof, err := types.Blobs(blobsBundle.Blobs).ComputeCommitmentsAndAggregatedProof()
+	if err != nil {
+		return nil, err
+	}
+	blobsBundle.AggregatedProof = aggregatedProof
+	return blobsBundle, nil
 }
