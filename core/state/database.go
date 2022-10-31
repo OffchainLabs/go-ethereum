@@ -143,7 +143,7 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	return tr, nil
 }
 
-// OpenTrie opens the main account trie at a specific root hash.
+// fastcache chunks are not mannaged by GC.
 func (db *cachingDB) finalizer() {
 	db.codeCache.Reset()
 }
