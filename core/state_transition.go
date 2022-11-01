@@ -58,6 +58,7 @@ type StateTransition struct {
 	gasPrice     *big.Int
 	gasFeeCap    *big.Int
 	gasTipCap    *big.Int
+	initialGas   uint64
 	value        *big.Int
 	data         []byte
 	state        vm.StateDB
@@ -210,7 +211,16 @@ func (st *StateTransition) to() common.Address {
 
 func (st *StateTransition) buyGas() error {
 	mgval := new(big.Int).SetUint64(st.msg.Gas())
-	mgval = mgval.Mul(mgval, st.msg.GasPrice())
+	mgval = mgval.Mul(mgval, st.gasPrice)
+	balanceCheck := mgval
+	if st.gasFeeCap != nil {
+		balanceCheck = new(big.Int).SetUint64(st.msg.Gas())
+		balanceCheck = balanceCheck.Mul(balanceCheck, st.gasFeeCap)
+		balanceCheck.Add(balanceCheck, st.value)
+	}
+	if have, want := st.state.GetBalance(st.msg.From()), balanceCheck; have.Cmp(want) < 0 {
+		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
+	}
 
 	// compute data fee for eip-4844 data blobs if any
 	dgval := new(big.Int)
@@ -224,22 +234,6 @@ func (st *StateTransition) buyGas() error {
 		dgval.Mul(misc.GetDataGasPrice(st.evm.Context.ExcessDataGas), dgu)
 	}
 
-	// perform the required user balance checks
-	balanceRequired := new(big.Int)
-	if st.msg.GasFeeCap() == nil {
-		balanceRequired.Set(mgval)
-	} else {
-		balanceRequired.Add(st.msg.Value(), dgval)
-		// EIP-1559 mandates that the sender has enough balance to cover not just actual fee but
-		// the max gas fee, so we compute this upper bound rather than use mgval here.
-		maxGasFee := new(big.Int).SetUint64(st.msg.Gas())
-		maxGasFee.Mul(maxGasFee, st.msg.GasFeeCap())
-		balanceRequired.Add(balanceRequired, maxGasFee)
-	}
-	if have, want := st.state.GetBalance(st.msg.From()), balanceRequired; have.Cmp(want) < 0 {
-		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
-	}
-
 	// perform gas pool accounting
 	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
 		return err
@@ -251,6 +245,7 @@ func (st *StateTransition) buyGas() error {
 
 	// deduct the total gas fee (regular + data) from the sender's balance
 	mgval.Add(mgval, dgval)
+	st.initialGas = st.msg.Gas()
 	st.state.SubBalance(st.msg.From(), mgval)
 
 	// Arbitrum: record fee payment
@@ -285,27 +280,25 @@ func (st *StateTransition) preCheck() error {
 	}
 	// Make sure that transaction GasFeeCap is greater than the baseFee (post london)
 	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
-		gasFeeCap := st.msg.GasFeeCap()
-		gasTipCap := st.msg.GasTipCap()
 		// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
-		if !st.evm.Config.NoBaseFee || gasFeeCap.BitLen() > 0 || gasTipCap.BitLen() > 0 {
-			if l := gasFeeCap.BitLen(); l > 256 {
+		if !st.evm.Config.NoBaseFee || st.gasFeeCap.BitLen() > 0 || st.gasTipCap.BitLen() > 0 {
+			if l := st.gasFeeCap.BitLen(); l > 256 {
 				return fmt.Errorf("%w: address %v, maxFeePerGas bit length: %d", ErrFeeCapVeryHigh,
 					st.msg.From().Hex(), l)
 			}
-			if l := gasTipCap.BitLen(); l > 256 {
+			if l := st.gasTipCap.BitLen(); l > 256 {
 				return fmt.Errorf("%w: address %v, maxPriorityFeePerGas bit length: %d", ErrTipVeryHigh,
 					st.msg.From().Hex(), l)
 			}
-			if gasFeeCap.Cmp(gasTipCap) < 0 {
+			if st.gasFeeCap.Cmp(st.gasTipCap) < 0 {
 				return fmt.Errorf("%w: address %v, maxPriorityFeePerGas: %s, maxFeePerGas: %s", ErrTipAboveFeeCap,
-					st.msg.From().Hex(), gasTipCap, gasFeeCap)
+					st.msg.From().Hex(), st.gasTipCap, st.gasFeeCap)
 			}
 			// This will panic if baseFee is nil, but basefee presence is verified
 			// as part of header validation.
-			if gasFeeCap.Cmp(st.evm.Context.BaseFee) < 0 {
+			if st.gasFeeCap.Cmp(st.evm.Context.BaseFee) < 0 {
 				return fmt.Errorf("%w: address %v, maxFeePerGas: %s baseFee: %s", ErrFeeCapTooLow,
-					st.msg.From().Hex(), gasFeeCap, st.evm.Context.BaseFee)
+					st.msg.From().Hex(), st.gasFeeCap, st.evm.Context.BaseFee)
 			}
 		}
 	}
@@ -369,7 +362,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	if st.evm.Config.Debug {
-		st.evm.Config.Tracer.CaptureTxStart(st.msg.Gas())
+		st.evm.Config.Tracer.CaptureTxStart(st.initialGas)
 		defer func() {
 			st.evm.Config.Tracer.CaptureTxEnd(st.gasRemaining)
 		}()
@@ -432,9 +425,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		st.refundGas(params.RefundQuotientEIP3529)
 	}
 
-	effectiveTip := msg.GasPrice()
+	effectiveTip := st.gasPrice
 	if rules.IsLondon {
-		effectiveTip = cmath.BigMin(msg.GasTipCap(), new(big.Int).Sub(msg.GasFeeCap(), st.evm.Context.BaseFee))
+		effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 	}
 	if st.evm.Config.NoBaseFee && st.gasFeeCap.Sign() == 0 && st.gasTipCap.Sign() == 0 {
 		// Skip fee payment when NoBaseFee is set and the fee fields
@@ -484,7 +477,7 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 	}
 
 	// Return ETH for remaining gas, exchanged at the original rate.
-	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gasRemaining), st.msg.GasPrice())
+	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gasRemaining), st.gasPrice)
 	st.state.AddBalance(st.msg.From(), remaining)
 
 	// Arbitrum: record the gas refund
@@ -500,7 +493,7 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 
 // gasUsed returns the amount of gas used up by the state transition.
 func (st *StateTransition) gasUsed() uint64 {
-	return st.msg.Gas() - st.gasRemaining
+	return st.initialGas - st.gasRemaining
 }
 
 func (st *StateTransition) dataGasUsed() *big.Int {
