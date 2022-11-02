@@ -292,20 +292,25 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 		stateDb, err = r.StateFor(currentHeader)
 		if err == nil {
 			lastRoot = currentHeader.Root
-			defer func() {
-				if (lastRoot != common.Hash{}) {
-					r.dereferenceRoot(lastRoot)
-				}
-			}()
 			break
 		}
 	}
+	defer func() {
+		if (lastRoot != common.Hash{}) {
+			r.dereferenceRoot(lastRoot)
+		}
+	}()
 	blockToRecreate := currentHeader.Number.Uint64() + 1
+	prevHash := currentHeader.Hash()
 	for ctx.Err() == nil {
 		block := r.bc.GetBlockByNumber(blockToRecreate)
 		if block == nil {
 			return nil, fmt.Errorf("block not found while recreating: %d", blockToRecreate)
 		}
+		if block.ParentHash() != prevHash {
+			return nil, fmt.Errorf("reorg detected: number %d expectedPrev: %v foundPrev: %v", blockToRecreate, prevHash, block.ParentHash())
+		}
+		prevHash = block.Hash()
 		if logFunc != nil {
 			logFunc(header, block.Header(), true)
 		}
