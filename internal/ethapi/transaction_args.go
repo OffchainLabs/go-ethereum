@@ -23,8 +23,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/protolambda/ztyp/view"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -310,32 +308,6 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 	var data types.TxData
 	var opts []types.TxOption
 	switch {
-	case args.Blobs != nil:
-		al := types.AccessList{}
-		if args.AccessList != nil {
-			al = *args.AccessList
-		}
-		msg := types.BlobTxMessage{}
-		msg.To.Address = (*types.AddressSSZ)(args.To)
-		msg.ChainID.SetFromBig((*big.Int)(args.ChainID))
-		msg.Nonce = view.Uint64View(*args.Nonce)
-		msg.Gas = view.Uint64View(*args.Gas)
-		msg.GasFeeCap.SetFromBig((*big.Int)(args.MaxFeePerGas))
-		msg.GasTipCap.SetFromBig((*big.Int)(args.MaxPriorityFeePerGas))
-		msg.Value.SetFromBig((*big.Int)(args.Value))
-		msg.Data = args.data()
-		msg.AccessList = types.AccessListView(al)
-		commitments, versionedHashes, aggregatedProof, err := types.Blobs(args.Blobs).ComputeCommitmentsAndAggregatedProof()
-		// XXX if blobs are invalid we will omit the wrap-data (and an error will pop-up later)
-		if err == nil {
-			opts = append(opts, types.WithTxWrapData(&types.BlobTxWrapData{
-				BlobKzgs:           commitments,
-				Blobs:              args.Blobs,
-				KzgAggregatedProof: aggregatedProof,
-			}))
-			msg.BlobVersionedHashes = versionedHashes
-		}
-		data = &types.SignedBlobTx{Message: msg}
 	case args.MaxFeePerGas != nil:
 		al := types.AccessList{}
 		if args.AccessList != nil {

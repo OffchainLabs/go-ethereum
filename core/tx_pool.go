@@ -686,7 +686,6 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	errs := []error{nil}
 	pool.filterKnownTxsLocked(txs, errs)
 	pool.filterInvalidTxsLocked(txs, errs, local)
-	pool.filterInvalidBlobTxsLocked(txs, errs)
 	if errs[0] == nil {
 		return pool.addValidTx(tx, local)
 	}
@@ -980,7 +979,6 @@ func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) ([]error,
 	errs := make([]error, len(txs))
 	pool.filterKnownTxsLocked(txs, errs)
 	pool.filterInvalidTxsLocked(txs, errs, local)
-	pool.filterInvalidBlobTxsLocked(txs, errs)
 	dirty := pool.addValidTxsLocked(txs, errs, local)
 	return errs, dirty
 }
@@ -1010,22 +1008,6 @@ func (pool *TxPool) filterInvalidTxsLocked(txs []*types.Transaction, errs []erro
 		err := pool.validateTx(tx, isLocal)
 		if err != nil {
 			log.Trace("Discarding invalid transaction", "hash", tx.Hash(), "err", err)
-			invalidTxMeter.Mark(1)
-			errs[i] = err
-		}
-	}
-}
-
-// filterInvalidBlobTxsLocked marks all blob txs (if any) with an error if the blobs or kzg commitments are invalid
-func (pool *TxPool) filterInvalidBlobTxsLocked(txs []*types.Transaction, errs []error) {
-	for i, tx := range txs {
-		if errs[i] != nil {
-			continue
-		}
-		// all blobs within the tx can still be batched together
-		err := tx.VerifyBlobs()
-		if err != nil {
-			log.Trace("Discarding blob transaction", "hash", tx.Hash(), "err", err)
 			invalidTxMeter.Mark(1)
 			errs[i] = err
 		}

@@ -337,16 +337,6 @@ func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.Execu
 	return beacon.BlockToExecutableData(block), nil
 }
 
-// GetBlobsBundleV1 returns a bundle of all blob and corresponding KZG commitments by payload id
-func (api *ConsensusAPI) GetBlobsBundleV1(payloadID beacon.PayloadID) (*beacon.BlobsBundleV1, error) {
-	log.Trace("Engine API request received", "method", "GetBlobsBundle")
-	block := api.localBlocks.get(payloadID)
-	if block == nil {
-		return nil, beacon.UnknownPayload
-	}
-	return beacon.BlockToBlobData(block)
-}
-
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.PayloadStatusV1, error) {
 	log.Trace("Engine API request received", "method", "ExecutePayload", "number", params.Number, "hash", params.BlockHash)

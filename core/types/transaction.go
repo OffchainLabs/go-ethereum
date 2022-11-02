@@ -108,7 +108,6 @@ type TxWrapData interface {
 	aggregatedProof() KZGProof
 	encodeTyped(w io.Writer, txdata TxData) error
 	sizeWrapData() common.StorageSize
-	verifyBlobs(inner TxData) error
 }
 
 // TxData is the underlying data of a transaction.
@@ -568,14 +567,6 @@ func (tx *Transaction) WrapDataSize() common.StorageSize {
 // IsIncomplete returns true if the transaction can be wrapped but is not.
 func (tx *Transaction) IsIncomplete() bool {
 	return tx.Type() == BlobTxType && tx.wrapData == nil
-}
-
-// VerifyBlobs verifies the blob transaction
-func (tx *Transaction) VerifyBlobs() error {
-	if tx.wrapData != nil {
-		return tx.wrapData.verifyBlobs(tx.inner)
-	}
-	return nil
 }
 
 // BlobWrapData returns the blob and kzg data, if any.

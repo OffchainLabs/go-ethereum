@@ -17,7 +17,6 @@
 package beacon
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -214,31 +213,4 @@ func BlockToExecutableData(block *types.Block) *ExecutableDataV1 {
 		Random:        block.MixDigest(),
 		ExtraData:     block.Extra(),
 	}
-}
-
-func BlockToBlobData(block *types.Block) (*BlobsBundleV1, error) {
-	blockHash := block.Hash()
-	blobsBundle := &BlobsBundleV1{BlockHash: blockHash}
-	for i, tx := range block.Transactions() {
-		if tx.Type() == types.BlobTxType {
-			versionedHashes, kzgs, blobs, aggProof := tx.BlobWrapData()
-			if len(versionedHashes) != len(kzgs) || len(versionedHashes) != len(blobs) {
-				return nil, fmt.Errorf("tx %d in block %s has inconsistent blobs (%d) / kzgs (%d)"+
-					" / versioned hashes (%d)", i, blockHash, len(blobs), len(kzgs), len(versionedHashes))
-			}
-			var zProof types.KZGProof
-			if zProof == aggProof {
-				return nil, errors.New("aggregated proof is not available in blobs")
-			}
-			blobsBundle.Blobs = append(blobsBundle.Blobs, blobs...)
-			blobsBundle.KZGs = append(blobsBundle.KZGs, kzgs...)
-		}
-	}
-
-	_, _, aggregatedProof, err := types.Blobs(blobsBundle.Blobs).ComputeCommitmentsAndAggregatedProof()
-	if err != nil {
-		return nil, err
-	}
-	blobsBundle.AggregatedProof = aggregatedProof
-	return blobsBundle, nil
 }

@@ -19,7 +19,6 @@ package types
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/protolambda/ztyp/view"
@@ -516,10 +515,6 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 				BlobKzgs:           dec.BlobKzgs,
 				Blobs:              dec.Blobs,
 				KzgAggregatedProof: dec.KzgAggregatedProof,
-			}
-			// Verify that versioned hashes match kzgs, and kzgs match blobs.
-			if err := t.wrapData.verifyBlobs(&itx); err != nil {
-				return fmt.Errorf("blob wrapping data is invalid: %v", err)
 			}
 		}
 	case ArbitrumInternalTxType:
