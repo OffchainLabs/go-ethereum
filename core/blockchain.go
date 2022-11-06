@@ -597,6 +597,24 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 				gasRolledBack := uint64(0)
 
 				for {
+					if rewindLimit > 0 {
+						// Arbitrum: track the amount of gas rolled back and stop the rollback early if necessary
+						gasUsedInBlock := newHeadBlock.GasUsed()
+						if bc.chainConfig.IsArbitrum() {
+							receipts := bc.GetReceiptsByHash(newHeadBlock.Hash())
+							for _, receipt := range receipts {
+								gasUsedInBlock -= receipt.GasUsedForL1
+							}
+						}
+						gasRolledBack += gasUsedInBlock
+						if lastFullBlock != 0 && gasRolledBack >= rewindLimit {
+							blockNumber = lastFullBlock
+							newHeadBlock = bc.GetBlock(lastFullBlockHash, lastFullBlock)
+							log.Debug("Rewound to block with state but not snapshot", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
+							break
+						}
+					}
+
 					// If a root threshold was requested but not yet crossed, check
 					if root != (common.Hash{}) && !rootFound && newHeadBlock.Root() == root {
 						rootFound, blockNumber = true, newHeadBlock.NumberU64()
@@ -637,21 +655,6 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 						}
 						log.Debug("Rewound to block with state", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
 						break
-					}
-					if lastFullBlock != 0 && rewindLimit > 0 {
-						gasUsedInBlock := newHeadBlock.GasUsed()
-						if bc.chainConfig.IsArbitrum() {
-							receipts := bc.GetReceiptsByHash(newHeadBlock.Hash())
-							for _, receipt := range receipts {
-								gasUsedInBlock -= receipt.GasUsedForL1
-							}
-						}
-						gasRolledBack += gasUsedInBlock
-						if rewindLimit > 0 && gasRolledBack >= rewindLimit {
-							blockNumber = lastFullBlock
-							newHeadBlock = bc.GetBlock(lastFullBlockHash, lastFullBlock)
-							break
-						}
 					}
 					log.Debug("Skipping block with threshold state", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash(), "root", newHeadBlock.Root())
 					newHeadBlock = bc.GetBlock(newHeadBlock.ParentHash(), newHeadBlock.NumberU64()-1) // Keep rewinding
