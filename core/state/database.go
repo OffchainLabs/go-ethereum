@@ -19,6 +19,7 @@ package state
 import (
 	"errors"
 	"fmt"
+	"runtime"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -118,11 +119,13 @@ func NewDatabase(db ethdb.Database) Database {
 // large memory cache.
 func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 	csc, _ := lru.New(codeSizeCacheSize)
-	return &cachingDB{
+	cdb := &cachingDB{
 		db:            trie.NewDatabaseWithConfig(db, config),
 		codeSizeCache: csc,
 		codeCache:     fastcache.New(codeCacheSize),
 	}
+	runtime.SetFinalizer(cdb, (*cachingDB).finalizer)
+	return cdb
 }
 
 type cachingDB struct {
@@ -138,6 +141,11 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 		return nil, err
 	}
 	return tr, nil
+}
+
+// fastcache chunks are not mannaged by GC.
+func (db *cachingDB) finalizer() {
+	db.codeCache.Reset()
 }
 
 // OpenStorageTrie opens the storage trie of an account.
