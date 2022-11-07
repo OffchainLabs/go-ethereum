@@ -597,7 +597,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 				gasRolledBack := uint64(0)
 
 				for {
-					if rewindLimit > 0 {
+					if rewindLimit > 0 && lastFullBlock != 0 {
 						// Arbitrum: track the amount of gas rolled back and stop the rollback early if necessary
 						gasUsedInBlock := newHeadBlock.GasUsed()
 						if bc.chainConfig.IsArbitrum() {
@@ -607,7 +607,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 							}
 						}
 						gasRolledBack += gasUsedInBlock
-						if lastFullBlock != 0 && gasRolledBack >= rewindLimit {
+						if gasRolledBack >= rewindLimit {
 							blockNumber = lastFullBlock
 							newHeadBlock = bc.GetBlock(lastFullBlockHash, lastFullBlock)
 							log.Debug("Rewound to block with state but not snapshot", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
