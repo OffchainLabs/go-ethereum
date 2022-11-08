@@ -297,12 +297,20 @@ func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database
 	if config == nil || config.Preimages { // TODO(karalabe): Flip to default off in the future
 		db.preimages = make(map[common.Hash][]byte)
 	}
+	runtime.SetFinalizer(db, (*Database).finalizer)
 	return db
 }
 
 // DiskDB retrieves the persistent storage backing the trie database.
 func (db *Database) DiskDB() ethdb.KeyValueStore {
 	return db.diskdb
+}
+
+// must call Reset() to reclaim memory used by fastcache
+func (db *Database) finalizer() {
+	if db.cleans != nil {
+		db.cleans.Reset()
+	}
 }
 
 // insert inserts a collapsed trie node into the memory database.
