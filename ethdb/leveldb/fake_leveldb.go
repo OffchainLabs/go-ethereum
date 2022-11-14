@@ -32,7 +32,7 @@ type Database struct {
 
 // New returns a wrapped LevelDB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string, readonly bool) (*Database, error) {
+func New(file string, cache int, handles int, namespace string, readonly bool, firehoseCompactionDisabled bool) (*Database, error) {
 	return nil, errors.New("leveldb is unavailable on JS platforms")
 }
 

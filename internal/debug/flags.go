@@ -17,6 +17,7 @@
 package debug
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,10 +25,13 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/exp"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/fjl/memsize/memsizeui"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
@@ -103,6 +107,45 @@ var (
 		Usage:    "Write execution trace to the given file",
 		Category: flags.LoggingCategory,
 	}
+
+	// Firehose Flags
+	firehoseEnabledFlag = &cli.BoolFlag{
+		Name:     "firehose-enabled",
+		Usage:    "Activate/deactivate Firehose instrumentation, disabled by default",
+		Category: flags.FirehoseCategory,
+	}
+	firehoseSyncInstrumentationFlag = &cli.BoolFlag{
+		Name:     "firehose-sync-instrumentation",
+		Usage:    "Activate/deactivate Firehose sync output instrumentation, enabled by default",
+		Value:    true,
+		Category: flags.FirehoseCategory,
+	}
+	firehoseMiningEnabledFlag = &cli.BoolFlag{
+		Name:     "firehose-mining-enabled",
+		Usage:    "Activate/deactivate mining code even if Firehose is active, required speculative execution on local miner node, disabled by default",
+		Category: flags.FirehoseCategory,
+	}
+	firehoseBlockProgressFlag = &cli.BoolFlag{
+		Name:     "firehose-block-progress",
+		Usage:    "Activate/deactivate Firehose block progress output instrumentation, disabled by default",
+		Category: flags.FirehoseCategory,
+	}
+	firehoseCompactionDisabledFlag = &cli.BoolFlag{
+		Name:     "firehose-compaction-disabled",
+		Usage:    "Disabled database compaction, enabled by default",
+		Category: flags.FirehoseCategory,
+	}
+	firehoseArchiveBlocksToKeepFlag = &cli.Uint64Flag{
+		Name:     "firehose-archive-blocks-to-keep",
+		Usage:    "Controls how many archive blocks the node should keep, this tweaks the core/blockchain.go constant value TriesInMemory, the default value of 0 can be used to use Geth default value instead which is 128",
+		Value:    firehose.ArchiveBlocksToKeep,
+		Category: flags.FirehoseCategory,
+	}
+	firehoseGenesisFileFlag = &cli.StringFlag{
+		Name:  "firehose-genesis-file",
+		Usage: "On private chains where the genesis config is not known to Geth, you **must** provide the 'genesis.json' file path for proper instrumentation of genesis block",
+		Value: "",
+	}
 )
 
 // Flags holds all command-line flags required for debugging.
@@ -121,6 +164,12 @@ var Flags = []cli.Flag{
 	traceFlag,
 }
 
+// FirehoseFlags holds all StreamingFast Firehose related command-line flags.
+var FirehoseFlags = []cli.Flag{
+	firehoseEnabledFlag, firehoseSyncInstrumentationFlag, firehoseMiningEnabledFlag, firehoseBlockProgressFlag,
+	firehoseCompactionDisabledFlag, firehoseArchiveBlocksToKeepFlag, firehoseGenesisFileFlag,
+}
+
 var glogger *log.GlogHandler
 
 func init() {
@@ -131,7 +180,7 @@ func init() {
 
 // Setup initializes profiling and logging based on the CLI flags.
 // It should be called as early as possible in the program.
-func Setup(ctx *cli.Context) error {
+func Setup(ctx *cli.Context, genesis *core.Genesis) error {
 	var ostream log.Handler
 	output := io.Writer(os.Stderr)
 	if ctx.Bool(logjsonFlag.Name) {
@@ -194,6 +243,55 @@ func Setup(ctx *cli.Context) error {
 		// It cannot be imported because it will cause a cyclical dependency.
 		StartPProf(address, !ctx.IsSet("metrics.addr"))
 	}
+
+	// Firehose
+	log.Info("Initializing firehose")
+	firehose.Enabled = ctx.Bool(firehoseEnabledFlag.Name)
+	firehose.SyncInstrumentationEnabled = ctx.Bool(firehoseSyncInstrumentationFlag.Name)
+	firehose.MiningEnabled = ctx.Bool(firehoseMiningEnabledFlag.Name)
+	firehose.BlockProgressEnabled = ctx.Bool(firehoseBlockProgressFlag.Name)
+	firehose.CompactionDisabled = ctx.Bool(firehoseCompactionDisabledFlag.Name)
+	firehose.ArchiveBlocksToKeep = ctx.Uint64(firehoseArchiveBlocksToKeepFlag.Name)
+
+	genesisProvenance := "unset"
+
+	if genesis != nil {
+		firehose.GenesisConfig = genesis
+		genesisProvenance = "Geth Specific Flag"
+	} else {
+		if genesisFilePath := ctx.String(firehoseGenesisFileFlag.Name); genesisFilePath != "" {
+			file, err := os.Open(genesisFilePath)
+			if err != nil {
+				return fmt.Errorf("firehose open genesis file: %w", err)
+			}
+			defer file.Close()
+
+			genesis := &core.Genesis{}
+			if err := json.NewDecoder(file).Decode(genesis); err != nil {
+				return fmt.Errorf("decode genesis file %q: %w", genesisFilePath, err)
+			}
+
+			firehose.GenesisConfig = genesis
+			genesisProvenance = "Flag " + firehoseGenesisFileFlag.Name
+		} else {
+			firehose.GenesisConfig = core.DefaultGenesisBlock()
+			genesisProvenance = "Geth Default"
+		}
+	}
+
+	log.Info("Firehose initialized",
+		"enabled", firehose.Enabled,
+		"sync_instrumentation_enabled", firehose.SyncInstrumentationEnabled,
+		"mining_enabled", firehose.MiningEnabled,
+		"block_progress_enabled", firehose.BlockProgressEnabled,
+		"compaction_disabled", firehose.CompactionDisabled,
+		"archive_blocks_to_keep", firehose.ArchiveBlocksToKeep,
+		"genesis_provenance", genesisProvenance,
+		"firehose_version", params.FirehoseVersion(),
+		"geth_version", params.VersionWithMeta,
+		"chain_variant", params.Variant,
+	)
+
 	return nil
 }
 

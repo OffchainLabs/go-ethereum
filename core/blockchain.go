@@ -18,6 +18,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -37,8 +38,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/internal/syncx"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -118,6 +121,17 @@ const (
 	//    * New scheme for contract code in order to separate the codes and trie nodes
 	BlockChainVersion uint64 = 8
 )
+
+// Firehose tweaked constants
+const (
+	// DefaultTriesInMemory keeps the default value of TriesInMemory value so we can determine if it changed.
+	// The default values is still used in the P2P network so we don't advertise that we keep more state than
+	// other Full nodes keep by default.
+	DefaultTriesInMemory = uint64(128)
+)
+
+// Firehose turned this into a `var` to allow overriding, was a `const`
+var TriesInMemory = DefaultTriesInMemory
 
 // CacheConfig contains the configuration values for the trie caching/pruning
 // that's resident in a blockchain.
@@ -235,6 +249,14 @@ type trieGcEntry struct {
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
 func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
+	// This is one of the rare case where Firehose is not enabled and we still perform something.
+	if firehose.ArchiveBlocksToKeep != 0 {
+		old := TriesInMemory
+		TriesInMemory = firehose.ArchiveBlocksToKeep
+
+		log.Info("Firehose overrode TriesInMemory value (coming from archive blocks to keep value)", "tries_in_memory", firehose.ArchiveBlocksToKeep, "was", old)
+	}
+
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -405,6 +427,61 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			recover = true
 		}
 		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover)
+	}
+
+	if firehose.Enabled && bc.CurrentBlock().NumberU64() == 0 {
+		if bc.genesisBlock == nil {
+			panic(fmt.Errorf("expected to have genesis block here"))
+		}
+
+		if firehose.GenesisConfig == nil {
+			panic(fmt.Errorf("The genesis config is not set, there is something weird as all code path should generate the correct genesis config"))
+		}
+
+		genesis := firehose.GenesisConfig.(*Genesis)
+		if genesis == nil {
+			panic(fmt.Errorf("The genesis config is not set, there is something weird as all code path should generate the correct genesis config"))
+		}
+
+		// As far as I can tell, the block's hash comes from the keccak hash of the rlp encoding
+		// of the block's header which includes all fields. So we can check the hash to ensure
+		// the genesis config computed matched Geth saved genesis block.
+		recomputedGenesisBlock := genesis.ToBlock()
+		if bc.genesisBlock.Hash() != recomputedGenesisBlock.Hash() {
+			panic(fmt.Errorf("invalid Firehose genesis block and actual chain's stored genesis block, the actual genesis block's hash field extracted from Geth's database does not fit with hash of genesis block generated from Firehose determined genesis config, you might need to provide the correct 'genesis.json' file via --firehose-genesis-file"))
+		}
+
+		firehose.MaybeSyncContext().RecordGenesisBlock(bc.genesisBlock, func(ctx *firehose.Context) {
+			sortedAddrs := make([]common.Address, len(genesis.Alloc))
+			i := 0
+			for addr := range genesis.Alloc {
+				sortedAddrs[i] = addr
+				i++
+			}
+
+			sort.Slice(sortedAddrs, func(i, j int) bool {
+				return bytes.Compare(sortedAddrs[i][:], sortedAddrs[j][:]) <= -1
+			})
+
+			for _, addr := range sortedAddrs {
+				account := genesis.Alloc[addr]
+
+				ctx.RecordNewAccount(addr)
+
+				ctx.RecordBalanceChange(addr, common.Big0, account.Balance, firehose.BalanceChangeReason("genesis_balance"))
+				if len(account.Code) > 0 {
+					ctx.RecordCodeChange(addr, nil, nil, crypto.Keccak256Hash(account.Code), account.Code)
+				}
+
+				if account.Nonce > 0 {
+					ctx.RecordNonceChange(addr, 0, account.Nonce)
+				}
+
+				for key, value := range account.Storage {
+					ctx.RecordStorageChange(addr, key, common.Hash{}, value)
+				}
+			}
+		})
 	}
 
 	// Start future block processor.
@@ -1690,6 +1767,18 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 			if err := bc.writeKnownBlock(block); err != nil {
 				return it.index, err
 			}
+
+			// Firehose, some blocks with 0 transactions are only processed here, this was causing
+			// holes as some empty blocks "already" prcoessed (not sure where) were actually skipped.
+			// This enforces that blocks are correctly emitted even though empty.
+			if firehoseContext := firehose.MaybeSyncContext(); firehoseContext.Enabled() {
+				firehoseContext.StartBlock(block)
+				firehoseContext.FinalizeBlock(block)
+				ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+				td := new(big.Int).Add(block.Difficulty(), ptd)
+				firehoseContext.EndBlock(block, bc.CurrentFinalizedBlock(), td)
+			}
+
 			stats.processed++
 
 			// We can assume that logs are empty here, since the only way for consecutive

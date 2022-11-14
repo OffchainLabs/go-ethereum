@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/firehose"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -531,6 +532,14 @@ func (w *worker) mainLoop() {
 	for {
 		select {
 		case req := <-w.newWorkCh:
+			if firehose.Enabled && !firehose.MiningEnabled {
+				// This receives and processes all transactions received on the P2P network.
+				// By **not** processing this now received transaction, it prevents doing a
+				// speculative execution of the transaction and thus, breaking firehose that
+				// expects linear execution of all logs.
+				continue
+			}
+
 			w.commitWork(req.interrupt, req.noempty, req.timestamp)
 
 		case req := <-w.getWorkCh:
@@ -543,6 +552,14 @@ func (w *worker) mainLoop() {
 				req.result <- block
 			}
 		case ev := <-w.chainSideCh:
+			if firehose.Enabled && !firehose.MiningEnabled {
+				// This receives and processes all transactions received on the P2P network.
+				// By **not** processing this now received transaction, it prevents doing a
+				// speculative execution of the transaction and thus, breaking firehose that
+				// expects linear execution of all logs.
+				continue
+			}
+
 			// Short circuit for duplicate side blocks
 			if _, exist := w.localUncles[ev.Block.Hash()]; exist {
 				continue
@@ -580,6 +597,14 @@ func (w *worker) mainLoop() {
 			}
 
 		case ev := <-w.txsCh:
+			if firehose.Enabled && !firehose.MiningEnabled {
+				// This receives and processes all transactions received on the P2P network.
+				// By **not** processing this now received transaction, it prevents doing a
+				// speculative execution of the transaction and thus, breaking firehose that
+				// expects linear execution of all logs.
+				continue
+			}
+
 			// Apply transactions to the pending state if we're not sealing
 			//
 			// Note all transactions received may not be continuous with transactions
@@ -825,7 +850,7 @@ func (w *worker) updateSnapshot(env *environment) {
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
 	snap := env.state.Snapshot()
 
-	receipt, _, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
+	receipt, _, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig(), firehose.NoOpContext)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		return nil, err
@@ -1084,7 +1109,7 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	if !params.noTxs {
 		w.fillTransactions(nil, work)
 	}
-	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
+	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts, firehose.NoOpContext)
 }
 
 // commitWork generates several new sealing tasks based on the parent block
@@ -1142,7 +1167,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		// Create a local environment copy, avoid the data race with snapshot state.
 		// https://github.com/ethereum/go-ethereum/issues/24299
 		env := env.copy()
-		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.unclelist(), env.receipts)
+		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.unclelist(), env.receipts, firehose.NoOpContext)
 		if err != nil {
 			return err
 		}

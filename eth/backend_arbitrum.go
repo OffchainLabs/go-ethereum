@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/firehose"
 )
 
 func NewArbEthereum(
@@ -19,5 +20,5 @@ func NewArbEthereum(
 }
 
 func (eth *Ethereum) StateAtTransaction(block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
-	return eth.stateAtTransaction(block, txIndex, reexec)
+	return eth.stateAtTransaction(block, txIndex, reexec, firehose.NoOpContext)
 }

@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -46,7 +47,7 @@ func init() {
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Before = func(ctx *cli.Context) error {
 		flags.MigrateGlobalFlags(ctx)
-		return debug.Setup(ctx)
+		return debug.Setup(ctx, utils.MakeGenesis(ctx))
 	}
 	app.After = func(ctx *cli.Context) error {
 		debug.Exit()
