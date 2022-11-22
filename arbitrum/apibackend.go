@@ -85,27 +85,28 @@ type SyncProgressBackend interface {
 	FinalizedBlockNumber(ctx context.Context) (uint64, error)
 }
 
-func createRegisterAPIBackend(backend *Backend, sync SyncProgressBackend, fallbackClientUrl string, fallbackClientTimeout time.Duration) error {
+func createRegisterAPIBackend(backend *Backend, sync SyncProgressBackend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration) (*filters.FilterSystem, error) {
 	fallbackClient, err := CreateFallbackClient(fallbackClientUrl, fallbackClientTimeout)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	backend.apiBackend = &APIBackend{
 		b:              backend,
 		fallbackClient: fallbackClient,
 		sync:           sync,
 	}
-	backend.stack.RegisterAPIs(backend.apiBackend.GetAPIs())
-	return nil
+	filterSystem := filters.NewFilterSystem(backend.apiBackend, filterConfig)
+	backend.stack.RegisterAPIs(backend.apiBackend.GetAPIs(filterSystem))
+	return filterSystem, nil
 }
 
-func (a *APIBackend) GetAPIs() []rpc.API {
+func (a *APIBackend) GetAPIs(filterSystem *filters.FilterSystem) []rpc.API {
 	apis := ethapi.GetAPIs(a)
 
 	apis = append(apis, rpc.API{
 		Namespace: "eth",
 		Version:   "1.0",
-		Service:   filters.NewFilterAPI(a, false, 5*time.Minute),
+		Service:   filters.NewFilterAPI(filterSystem, false),
 		Public:    true,
 	})
 
@@ -517,16 +518,8 @@ func (a *APIBackend) BloomStatus() (uint64, uint64) {
 	return a.b.config.BloomBitsBlocks, sections
 }
 
-func (a *APIBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {
-	receipts := a.blockChain().GetReceiptsByHash(blockHash)
-	if receipts == nil {
-		return nil, nil
-	}
-	logs := make([][]*types.Log, len(receipts))
-	for i, receipt := range receipts {
-		logs[i] = receipt.Logs
-	}
-	return logs, nil
+func (a *APIBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {
+	return rawdb.ReadLogs(a.ChainDb(), hash, number, a.ChainConfig()), nil
 }
 
 func (a *APIBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
