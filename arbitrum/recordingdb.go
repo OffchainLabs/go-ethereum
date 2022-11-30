@@ -162,6 +162,7 @@ func PrepareRecording(blockchain *core.BlockChain, lastBlockHeader *types.Header
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create recordingStateDb: %w", err)
 	}
+	recordingStateDb.StartRecording()
 	var recordingChainContext *RecordingChainContext
 	if lastBlockHeader != nil {
 		if !lastBlockHeader.Number.IsUint64() {

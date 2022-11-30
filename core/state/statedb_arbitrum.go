@@ -18,9 +18,48 @@
 package state
 
 import (
+	"errors"
+
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
 func (s *StateDB) GetCurrentTxLogs() []*types.Log {
 	return s.logs[s.thash]
+}
+
+func (s *StateDB) StartRecording() {
+	s.programs = []common.Address{}
+}
+
+func (s *StateDB) RecordProgram(program common.Address) {
+	if s.programs != nil {
+		s.programs = append(s.programs, program)
+		println("RECORDED PROGRAM ", program.Hex())
+	}
+}
+
+func (s *StateDB) RecordedPrograms() [][]byte {
+	programs := [][]byte{}
+	if s.programs != nil {
+		for _, program := range s.programs {
+			programs = append(programs, s.GetCode(program))
+		}
+	}
+	return programs
+}
+
+// TODO: move to ArbDB
+var machines = make(map[common.Address][]byte)
+
+func (s *StateDB) AddPolyMachine(version uint64, program common.Address, source []byte) {
+	machines[program] = source
+}
+
+func (s *StateDB) GetPolyMachine(version uint64, program common.Address) ([]byte, error) {
+	machine, ok := machines[program]
+	if !ok {
+		return nil, errors.New("no program for given address")
+	}
+	return machine, nil
 }
