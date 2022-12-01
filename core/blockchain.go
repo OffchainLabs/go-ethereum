@@ -86,12 +86,13 @@ var (
 )
 
 const (
-	bodyCacheLimit      = 256
-	blockCacheLimit     = 256
-	receiptsCacheLimit  = 32
-	txLookupCacheLimit  = 1024
-	maxFutureBlocks     = 256
-	maxTimeFutureBlocks = 30
+	bodyCacheLimit       = 256
+	blockCacheLimit      = 256
+	receiptsCacheLimit   = 32
+	txLookupCacheLimit   = 1024
+	maxFutureBlocks      = 256
+	maxTimeFutureBlocks  = 30
+	DefaultTriesInMemory = 128
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -146,7 +147,7 @@ type CacheConfig struct {
 var defaultCacheConfig = &CacheConfig{
 
 	// Arbitrum Config Options
-	TriesInMemory: 128,
+	TriesInMemory: DefaultTriesInMemory,
 	TrieRetention: 30 * time.Minute,
 
 	TrieCleanLimit: 256,
