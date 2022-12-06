@@ -260,6 +260,11 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		OnlyWithAddresses: true,
 		Max:               AccountRangeMaxResults, // Sanity limit over RPC
 	}
+	// arbitrum: in case of ArbEthereum, miner in not available here
+	// use current block instead of pending
+	if blockNr == rpc.PendingBlockNumber && api.eth.miner == nil {
+		blockNr = rpc.LatestBlockNumber
+	}
 	if blockNr == rpc.PendingBlockNumber {
 		// If we're dumping the pending state, we need to request
 		// both the pending block as well as the pending state from
@@ -320,7 +325,7 @@ func (api *DebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) 
 		} else {
 			blockRlp = fmt.Sprintf("%#x", rlpBytes)
 		}
-		if blockJSON, err = ethapi.RPCMarshalBlock(block, true, true, api.eth.APIBackend.ChainConfig()); err != nil {
+		if blockJSON, err = ethapi.RPCMarshalBlock(block, true, true, api.eth.blockchain.Config()); err != nil {
 			blockJSON = map[string]interface{}{"error": err.Error()}
 		}
 		results = append(results, &BadBlockArgs{
@@ -341,6 +346,11 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 	var err error
 
 	if number, ok := blockNrOrHash.Number(); ok {
+		// arbitrum: in case of ArbEthereum, miner in not available here
+		// use current block instead of pending
+		if number == rpc.PendingBlockNumber && api.eth.miner == nil {
+			number = rpc.LatestBlockNumber
+		}
 		if number == rpc.PendingBlockNumber {
 			// If we're dumping the pending state, we need to request
 			// both the pending block as well as the pending state from
