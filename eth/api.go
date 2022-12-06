@@ -260,20 +260,20 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		OnlyWithAddresses: true,
 		Max:               AccountRangeMaxResults, // Sanity limit over RPC
 	}
-	var block *types.Block
+	// arbitrum: in case of ArbEthereum, miner in not available here
+	// use current block instead of pending
+	if blockNr == rpc.PendingBlockNumber && api.eth.miner == nil {
+		blockNr = rpc.LatestBlockNumber
+	}
 	if blockNr == rpc.PendingBlockNumber {
-		if api.eth.miner == nil {
-			// arbitrum: in case of ArbEthereum, miner is not available here
-			// use current block instead of pending
-			block = api.eth.blockchain.CurrentBlock()
-		} else {
-			// If we're dumping the pending state, we need to request
-			// both the pending block as well as the pending state from
-			// the miner and operate on those
-			_, stateDb := api.eth.miner.Pending()
-			return stateDb.RawDump(opts), nil
-		}
-	} else if blockNr == rpc.LatestBlockNumber {
+		// If we're dumping the pending state, we need to request
+		// both the pending block as well as the pending state from
+		// the miner and operate on those
+		_, stateDb := api.eth.miner.Pending()
+		return stateDb.RawDump(opts), nil
+	}
+	var block *types.Block
+	if blockNr == rpc.LatestBlockNumber {
 		block = api.eth.blockchain.CurrentBlock()
 	} else if blockNr == rpc.FinalizedBlockNumber {
 		block = api.eth.blockchain.CurrentFinalizedBlock()
