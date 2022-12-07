@@ -66,9 +66,9 @@ var (
 // Pruner is an offline tool to prune the stale state with the
 // help of the snapshot. The workflow of pruner is very simple:
 //
-// - iterate the snapshot, reconstruct the relevant state
-// - iterate the database, delete all other state entries which
-//   don't belong to the target state and the genesis state
+//   - iterate the snapshot, reconstruct the relevant state
+//   - iterate the database, delete all other state entries which
+//     don't belong to the target state and the genesis state
 //
 // It can take several hours(around 2 hours for mainnet) to finish
 // the whole pruning work. It's recommended to run this offline tool
@@ -261,6 +261,8 @@ func (p *Pruner) Prune(root common.Hash) error {
 		}
 		// Use the bottom-most diff layer as the target
 		root = layers[len(layers)-1].Root()
+	} else if p.snaptree.Snapshot(root) == nil {
+		p.snaptree.Rebuild(root, false)
 	}
 	// Ensure the root is really present. The weak assumption
 	// is the presence of root can indicate the presence of the
@@ -489,7 +491,7 @@ const warningLog = `
 
 WARNING!
 
-The clean trie cache is not found. Please delete it by yourself after the 
+The clean trie cache is not found. Please delete it by yourself after the
 pruning. Remember don't start the Geth without deleting the clean trie cache
 otherwise the entire database may be damaged!
 
