@@ -774,7 +774,7 @@ func (bc *BlockChain) SnapSyncCommitHead(hash common.Hash) error {
 	// Destroy any existing state snapshot and regenerate it in the background,
 	// also resuming the normal maintenance of any previously paused snapshot.
 	if bc.snaps != nil {
-		bc.snaps.Rebuild(block.Root(), true)
+		bc.snaps.Rebuild(block.Root())
 	}
 	log.Info("Committed new head block", "number", block.Number(), "hash", hash)
 	return nil

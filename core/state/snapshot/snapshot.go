@@ -179,10 +179,10 @@ type Tree struct {
 // If the memory layers in the journal do not match the disk layer (e.g. there is
 // a gap) or the journal is missing, there are two repair cases:
 //
-//   - if the 'recovery' parameter is true, all memory diff-layers will be discarded.
-//     This case happens when the snapshot is 'ahead' of the state trie.
-//   - otherwise, the entire snapshot is considered invalid and will be recreated on
-//     a background thread.
+// - if the 'recovery' parameter is true, all memory diff-layers will be discarded.
+//   This case happens when the snapshot is 'ahead' of the state trie.
+// - otherwise, the entire snapshot is considered invalid and will be recreated on
+//   a background thread.
 func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, async bool, rebuild bool, recovery bool) (*Tree, error) {
 	// Create a new, empty snapshot tree
 	snap := &Tree{
@@ -203,7 +203,7 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root comm
 	if err != nil {
 		if rebuild {
 			log.Warn("Failed to load snapshot, regenerating", "err", err)
-			snap.Rebuild(root, true) // We pass in async = true as the defer will call waitBuild if needed
+			snap.Rebuild(root)
 			return snap, nil
 		}
 		return nil, err // Bail out the error, don't rebuild automatically.
@@ -372,12 +372,6 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 	}
 	diff, ok := snap.(*diffLayer)
 	if !ok {
-		if layers == 0 {
-			t.lock.Lock()
-			defer t.lock.Unlock()
-			t.layers = map[common.Hash]snapshot{root: snap.(snapshot)}
-			return nil
-		}
 		return fmt.Errorf("snapshot [%#x] is disk layer", root)
 	}
 	// If the generator is still running, use a more aggressive cap
@@ -695,14 +689,7 @@ func (t *Tree) Journal(root common.Hash) (common.Hash, error) {
 // Rebuild wipes all available snapshot data from the persistent database and
 // discard all caches and diff layers. Afterwards, it starts a new snapshot
 // generator with the given root hash.
-func (t *Tree) Rebuild(root common.Hash, async bool) {
-	var genPending chan struct{}
-	if !async {
-		defer func() {
-			<-genPending
-		}()
-	}
-
+func (t *Tree) Rebuild(root common.Hash) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -739,9 +726,9 @@ func (t *Tree) Rebuild(root common.Hash, async bool) {
 	// Start generating a new snapshot from scratch on a background thread. The
 	// generator will run a wiper first if there's not one running right now.
 	log.Info("Rebuilding state snapshot")
-	snap := generateSnapshot(t.diskdb, t.triedb, t.cache, root)
-	t.layers = map[common.Hash]snapshot{root: snap}
-	genPending = snap.genPending
+	t.layers = map[common.Hash]snapshot{
+		root: generateSnapshot(t.diskdb, t.triedb, t.cache, root),
+	}
 }
 
 // AccountIterator creates a new account iterator for the specified root hash and
