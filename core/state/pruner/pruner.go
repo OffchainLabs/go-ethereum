@@ -326,6 +326,7 @@ func (p *Pruner) Prune(roots []common.Hash) error {
 	var lastRoot common.Hash
 	for _, root := range roots {
 		log.Info("Building bloom filter for pruning", "root", root)
+		lastSnaptree = nil // free up memory
 		var snaptree *snapshot.Tree
 		if headSnaptree != nil {
 			snaptree = headSnaptree
