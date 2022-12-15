@@ -27,6 +27,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -42,6 +43,9 @@ import (
 
 // Node is a container on which services can be registered.
 type Node struct {
+	// Arbitrum: we support stopping the RPC early
+	rpcRunning int32
+
 	eventmux      *event.TypeMux
 	config        *Config
 	accman        *accounts.Manager
@@ -278,6 +282,8 @@ func (n *Node) openEndpoints() error {
 	if err != nil {
 		n.stopRPC()
 		n.server.Stop()
+	} else {
+		atomic.StoreInt32(&n.rpcRunning, 1)
 	}
 	return err
 }
@@ -505,7 +511,17 @@ func (n *Node) wsServerForPort(port int, authenticated bool) *httpServer {
 	return wsServer
 }
 
+// Arbitrum: we support stopping the RPC early.
+// This function can be called multiple times, or before startRPC.
+func (n *Node) StopRPC() {
+	n.stopRPC()
+}
+
 func (n *Node) stopRPC() {
+	if atomic.SwapInt32(&n.rpcRunning, 0) == 0 {
+		// The RPC was already stopped or was never started
+		return
+	}
 	n.http.stop()
 	n.ws.stop()
 	n.httpAuth.stop()
