@@ -245,6 +245,14 @@ func (p *Pruner) Prune(roots []common.Hash) error {
 	var layers []snapshot.Snapshot
 	var headSnaptree *snapshot.Tree
 	if len(roots) == 0 {
+		headBlock := rawdb.ReadHeadBlock(p.db)
+		if headBlock == nil {
+			return errors.New("Failed to load head block")
+		}
+		headSnaptree, err = snapshot.New(p.db, trie.NewDatabase(p.db), 256, headBlock.Root(), false, false, false)
+		if err != nil {
+			return err // The relevant snapshot(s) might not exist
+		}
 		// Retrieve all snapshot layers from the current HEAD.
 		// In theory there are 128 difflayers + 1 disk layer present,
 		// so 128 diff layers are expected to be returned.
