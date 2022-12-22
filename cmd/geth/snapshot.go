@@ -187,6 +187,9 @@ func pruneState(ctx *cli.Context) error {
 			return err
 		}
 		targetRoots = append(targetRoots, root)
+	} else {
+		// Prune to the last snapshot
+		targetRoots = append(targetRoots, common.Hash{})
 	}
 	if err = pruner.Prune(targetRoots); err != nil {
 		log.Error("Failed to prune state", "err", err)

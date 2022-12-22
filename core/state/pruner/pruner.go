@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -114,8 +115,64 @@ func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint6
 	}, nil
 }
 
+func removeOtherRoots(db ethdb.Database, rootsList []common.Hash, stateBloom *stateBloom) error {
+	roots := make(map[common.Hash]struct{})
+	for _, root := range rootsList {
+		roots[root] = struct{}{}
+	}
+	headBlock := rawdb.ReadHeadBlock(db)
+	if headBlock == nil {
+		return errors.New("failed to load head block")
+	}
+	threads := runtime.NumCPU()
+	var wg sync.WaitGroup
+	errors := make(chan error, threads)
+	for thread := 0; thread < threads; thread++ {
+		thread := thread
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			firstBlockNum := headBlock.NumberU64() / uint64(threads) * uint64(thread)
+			if thread == threads-1 {
+				firstBlockNum = headBlock.NumberU64()
+			}
+			var endBlockNum uint64
+			if thread > 0 {
+				endBlockNum = headBlock.NumberU64()/uint64(threads)*uint64(thread-1) + 1
+			}
+			firstBlockHash := rawdb.ReadCanonicalHash(db, firstBlockNum)
+			block := rawdb.ReadBlock(db, firstBlockHash, firstBlockNum)
+			for {
+				if block == nil || block.Root() == (common.Hash{}) {
+					return
+				}
+				bloomContains, err := stateBloom.Contain(block.Root().Bytes())
+				if err != nil {
+					errors <- err
+					return
+				}
+				_, rootsContains := roots[block.Root()]
+				if bloomContains && !rootsContains {
+					// This state root is a false positive of the bloom filter
+					err = db.Delete(block.Root().Bytes())
+					if err != nil {
+						errors <- err
+						return
+					}
+				}
+				if block.NumberU64() <= endBlockNum {
+					return
+				}
+				block = rawdb.ReadBlock(db, block.ParentHash(), block.NumberU64()-1)
+			}
+		}()
+	}
+	wg.Wait()
+	return <-errors
+}
+
 // Arbitrum: snaptree and root are for the final snapshot kept
-func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, stateBloom *stateBloom, bloomPath string, middleStateRoots map[common.Hash]struct{}, start time.Time) error {
+func prune(snaptree *snapshot.Tree, allRoots []common.Hash, maindb ethdb.Database, stateBloom *stateBloom, bloomPath string, start time.Time) error {
 	// Delete all stale trie nodes in the disk. With the help of state bloom
 	// the trie nodes(and codes) belong to the active state will be filtered
 	// out. A very small part of stale tries will also be filtered because of
@@ -144,14 +201,10 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 			if isCode {
 				checkKey = codeKey
 			}
-			if _, exist := middleStateRoots[common.BytesToHash(checkKey)]; exist {
-				log.Debug("Forcibly delete the middle state roots", "hash", common.BytesToHash(checkKey))
-			} else {
-				if ok, err := stateBloom.Contain(checkKey); err != nil {
-					return err
-				} else if ok {
-					continue
-				}
+			if ok, err := stateBloom.Contain(checkKey); err != nil {
+				return err
+			} else if ok {
+				continue
 			}
 			count += 1
 			size += common.StorageSize(len(key) + len(iter.Value()))
@@ -188,21 +241,32 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 	iter.Release()
 	log.Info("Pruned state data", "nodes", count, "size", size, "elapsed", common.PrettyDuration(time.Since(pstart)))
 
-	if snaptree.Snapshot(root) != nil {
+	var snapRoot common.Hash
+	if len(allRoots) > 0 {
+		snapRoot = allRoots[len(allRoots)-1]
+	}
+	if snapRoot != (common.Hash{}) && snaptree.Snapshot(snapRoot) != nil {
 		// Pruning is done, now drop the "useless" layers from the snapshot.
 		// Firstly, flushing the target layer into the disk. After that all
 		// diff layers below the target will all be merged into the disk.
-		if err := snaptree.Cap(root, 0); err != nil {
+		if err := snaptree.Cap(snapRoot, 0); err != nil {
 			return err
 		}
 		// Secondly, flushing the snapshot journal into the disk. All diff
 		// layers upon are dropped silently. Eventually the entire snapshot
 		// tree is converted into a single disk layer with the pruning target
 		// as the root.
-		if _, err := snaptree.Journal(root); err != nil {
+		if _, err := snaptree.Journal(snapRoot); err != nil {
 			return err
 		}
 	}
+
+	// Clean up any false positives that are top-level state roots.
+	err := removeOtherRoots(maindb, allRoots, stateBloom)
+	if err != nil {
+		return err
+	}
+
 	// Delete the state bloom, it marks the entire pruning procedure is
 	// finished. If any crashes or manual exit happens before this,
 	// `RecoverPruning` will pick it up in the next restarts to redo all
@@ -233,28 +297,8 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 	return nil
 }
 
-func nodeIteratorKey(it trie.NodeIterator) (common.Hash, error) {
-	if it.Leaf() {
-		keyBytes := it.LeafKey()
-		if len(keyBytes) != len(common.Hash{}) {
-			return common.Hash{}, fmt.Errorf("unexpected db key length %v", len(keyBytes))
-		}
-		key := common.BytesToHash(keyBytes)
-		if key == (common.Hash{}) {
-			return common.Hash{}, errors.New("got zero key for trie db node")
-		}
-		return key, nil
-	} else {
-		return it.Hash(), nil
-	}
-}
-
-// We assume output does not need the value, only the key
-func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output ethdb.KeyValueWriter) error {
-	err := output.Put(root.Bytes(), nil)
-	if err != nil {
-		return err
-	}
+// We assume state blooms do not need the value, only the key
+func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBloom) error {
 	sdb := state.NewDatabase(db)
 	tr, err := sdb.OpenTrie(root)
 	if err != nil {
@@ -275,16 +319,13 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output ethdb.Ke
 	}
 
 	for accountIt.Next(true) {
-		if accountIt.Error() != nil {
-			return accountIt.Error()
-		}
-		accountKey, err := nodeIteratorKey(accountIt)
-		if err != nil {
-			return err
-		}
-		err = output.Put(accountKey.Bytes(), nil)
-		if err != nil {
-			return err
+		accountTrieHash := accountIt.Hash()
+		// If the iterator hash is the empty hash, this is an embedded node
+		if accountTrieHash != (common.Hash{}) {
+			err = output.Put(accountTrieHash.Bytes(), nil)
+			if err != nil {
+				return err
+			}
 		}
 		if accountIt.Leaf() {
 			keyBytes := accountIt.LeafKey()
@@ -292,9 +333,6 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output ethdb.Ke
 				return fmt.Errorf("unexpected db key length %v", len(keyBytes))
 			}
 			key := common.BytesToHash(keyBytes)
-			if accountKey != key {
-				return fmt.Errorf("got trie node hash %v but leaf key %v", accountKey, key)
-			}
 			if time.Since(lastLog) >= time.Second*30 {
 				lastLog = time.Now()
 				progress := binary.BigEndian.Uint16(key.Bytes()[:2])
@@ -307,10 +345,6 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output ethdb.Ke
 			}
 			if !bytes.Equal(data.CodeHash, emptyCode) {
 				output.Put(data.CodeHash, nil)
-			}
-			err := output.Put(data.Root.Bytes(), nil)
-			if err != nil {
-				return err
 			}
 			storageTr, err := sdb.OpenStorageTrie(key, data.Root)
 			if err != nil {
@@ -327,22 +361,24 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output ethdb.Ke
 				}()
 				storageIt := storageTr.NodeIterator(nil)
 				for storageIt.Next(true) {
-					err = storageIt.Error()
-					if err != nil {
-						return
+					storageTrieHash := storageIt.Hash()
+					if storageTrieHash != (common.Hash{}) {
+						// The inner bloomfilter library has a mutex so concurrency is fine here
+						err = output.Put(storageTrieHash.Bytes(), nil)
+						if err != nil {
+							return
+						}
 					}
-					var storageKey common.Hash
-					storageKey, err = nodeIteratorKey(storageIt)
-					if err != nil {
-						return
-					}
-					err = output.Put(storageKey.Bytes(), nil)
-					if err != nil {
-						return
-					}
+				}
+				err = storageIt.Error()
+				if err != nil {
+					return
 				}
 			}()
 		}
+	}
+	if accountIt.Error() != nil {
+		return accountIt.Error()
 	}
 	for i := 0; i < threads; i++ {
 		err = <-results
@@ -361,37 +397,30 @@ func (p *Pruner) Prune(roots []common.Hash) error {
 	// reuse it for pruning instead of generating a new one. It's
 	// mandatory because a part of state may already be deleted,
 	// the recovery procedure is necessary.
-	_, stateBloomRoot, err := findBloomFilter(p.datadir)
+	stateBloomPath, stateBloomRoots, err := findBloomFilter(p.datadir)
 	if err != nil {
 		return err
 	}
-	if stateBloomRoot != (common.Hash{}) {
-		return RecoverPruning(p.datadir, p.db, p.trieCachePath)
+	if len(stateBloomRoots) > 0 {
+		return RecoverPruning(p.datadir, p.db, p.trieCachePath, stateBloomPath, stateBloomRoots)
 	}
-	// If the target state root is not specified, use the HEAD-127 as the
-	// target. The reason for picking it is:
-	// - in most of the normal cases, the related state is available
-	// - the probability of this layer being reorg is very low
-	var layers []snapshot.Snapshot
-	if len(roots) == 0 {
-		// Retrieve all snapshot layers from the current HEAD.
-		// In theory there are 128 difflayers + 1 disk layer present,
-		// so 128 diff layers are expected to be returned.
-		layers = p.snaptree.Snapshots(p.headHeader.Root, 128, true)
-		if len(layers) != 128 {
-			// Reject if the accumulated diff layers are less than 128. It
-			// means in most of normal cases, there is no associated state
-			// with bottom-most diff layer.
-			return fmt.Errorf("snapshot not old enough yet: need %d more blocks", 128-len(layers))
-		}
-		// Use the bottom-most diff layer as the target
-		roots = append(roots, layers[len(layers)-1].Root())
-	}
+	// Retrieve all snapshot layers from the current HEAD.
+	// In theory there are 128 difflayers + 1 disk layer present,
+	// so 128 diff layers are expected to be returned.
+	layers := p.snaptree.Snapshots(p.headHeader.Root, -1, true)
 	for _, root := range roots {
+		snapshotTarget := root == common.Hash{}
+		if snapshotTarget {
+			// Use the bottom-most diff layer as the target
+			root = layers[len(layers)-1].Root()
+		}
 		// Ensure the root is really present. The weak assumption
 		// is the presence of root can indicate the presence of the
 		// entire trie.
 		if !rawdb.HasTrieNode(p.db, root) {
+			if !snapshotTarget {
+				return fmt.Errorf("associated state[%x] is not present", root)
+			}
 			// The special case is for clique based networks(rinkeby, goerli
 			// and some other private networks), it's possible that two
 			// consecutive blocks will have same root. In this case snapshot
@@ -399,12 +428,8 @@ func (p *Pruner) Prune(roots []common.Hash) error {
 			// head-127 layer. Instead the paired layer is higher than the
 			// bottom-most diff layer. Try to find the bottom-most snapshot
 			// layer with state available.
-			//
-			// Note HEAD and HEAD-1 is ignored. Usually there is the associated
-			// state available, but we don't want to use the topmost state
-			// as the pruning target.
 			var found bool
-			for i := len(layers) - 2; i >= 2; i-- {
+			for i := len(layers) - 2; i >= 0; i-- {
 				if rawdb.HasTrieNode(p.db, layers[i].Root()) {
 					root = layers[i].Root()
 					found = true
@@ -413,10 +438,7 @@ func (p *Pruner) Prune(roots []common.Hash) error {
 				}
 			}
 			if !found {
-				if len(layers) > 0 {
-					return errors.New("no snapshot paired state")
-				}
-				return fmt.Errorf("associated state[%x] is not present", root)
+				return errors.New("no snapshot paired state")
 			}
 		} else {
 			if len(layers) > 0 {
@@ -432,26 +454,9 @@ func (p *Pruner) Prune(roots []common.Hash) error {
 	// state is picked for usage.
 	deleteCleanTrieCache(p.trieCachePath)
 
-	// All the state roots of the middle layer should be forcibly pruned,
-	// otherwise the dangling state will be left.
-	middleRoots := make(map[common.Hash]struct{})
-	for _, layer := range layers {
-		var hasRoot bool
-		for _, root := range roots {
-			if layer.Root() == root {
-				hasRoot = true
-				break
-			}
-		}
-		if hasRoot {
-			break
-		}
-		middleRoots[layer.Root()] = struct{}{}
-	}
 	// Traverse the target state, re-construct the whole state trie and
 	// commit to the given bloom filter.
 	start := time.Now()
-	var lastRoot common.Hash
 	for _, root := range roots {
 		log.Info("Building bloom filter for pruning", "root", root)
 		if p.snaptree.Snapshot(root) != nil {
@@ -463,7 +468,6 @@ func (p *Pruner) Prune(roots []common.Hash) error {
 				return err
 			}
 		}
-		lastRoot = root
 	}
 	// Traverse the genesis, put all genesis state entries into the
 	// bloom filter too.
@@ -477,7 +481,7 @@ func (p *Pruner) Prune(roots []common.Hash) error {
 		return err
 	}
 	log.Info("State bloom filter committed", "name", filterName)
-	return prune(p.snaptree, lastRoot, p.db, p.stateBloom, filterName, middleRoots, start)
+	return prune(p.snaptree, roots, p.db, p.stateBloom, filterName, start)
 }
 
 // RecoverPruning will resume the pruning procedure during the system restart.
@@ -487,11 +491,7 @@ func (p *Pruner) Prune(roots []common.Hash) error {
 // pruning can be resumed. What's more if the bloom filter is constructed, the
 // pruning **has to be resumed**. Otherwise a lot of dangling nodes may be left
 // in the disk.
-func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) error {
-	stateBloomPath, stateBloomRoot, err := findBloomFilter(datadir)
-	if err != nil {
-		return err
-	}
+func RecoverPruning(datadir string, db ethdb.Database, trieCachePath, stateBloomPath string, stateBloomRoots []common.Hash) error {
 	if stateBloomPath == "" {
 		return nil // nothing to recover
 	}
@@ -523,24 +523,7 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 	// state is picked for usage.
 	deleteCleanTrieCache(trieCachePath)
 
-	// All the state roots of the middle layers should be forcibly pruned,
-	// otherwise the dangling state will be left.
-	var (
-		found       bool
-		layers      = snaptree.Snapshots(headBlock.Root(), 128, true)
-		middleRoots = make(map[common.Hash]struct{})
-	)
-	for _, layer := range layers {
-		if layer.Root() == stateBloomRoot {
-			found = true
-			break
-		}
-		middleRoots[layer.Root()] = struct{}{}
-	}
-	if !found {
-		log.Warn("Pruning target state is not existent")
-	}
-	return prune(snaptree, stateBloomRoot, db, stateBloom, stateBloomPath, middleRoots, time.Now())
+	return prune(snaptree, stateBloomRoots, db, stateBloom, stateBloomPath, time.Now())
 }
 
 // extractGenesis loads the genesis state and commits all the state entries
@@ -554,47 +537,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 	if genesis == nil {
 		return errors.New("missing genesis block")
 	}
-	t, err := trie.NewStateTrie(common.Hash{}, genesis.Root(), trie.NewDatabase(db))
-	if err != nil {
-		return err
-	}
-	accIter := t.NodeIterator(nil)
-	for accIter.Next(true) {
-		hash := accIter.Hash()
-
-		// Embedded nodes don't have hash.
-		if hash != (common.Hash{}) {
-			stateBloom.Put(hash.Bytes(), nil)
-		}
-		// If it's a leaf node, yes we are touching an account,
-		// dig into the storage trie further.
-		if accIter.Leaf() {
-			var acc types.StateAccount
-			if err := rlp.DecodeBytes(accIter.LeafBlob(), &acc); err != nil {
-				return err
-			}
-			if acc.Root != emptyRoot {
-				storageTrie, err := trie.NewStateTrie(common.BytesToHash(accIter.LeafKey()), acc.Root, trie.NewDatabase(db))
-				if err != nil {
-					return err
-				}
-				storageIter := storageTrie.NodeIterator(nil)
-				for storageIter.Next(true) {
-					hash := storageIter.Hash()
-					if hash != (common.Hash{}) {
-						stateBloom.Put(hash.Bytes(), nil)
-					}
-				}
-				if storageIter.Error() != nil {
-					return storageIter.Error()
-				}
-			}
-			if !bytes.Equal(acc.CodeHash, emptyCode) {
-				stateBloom.Put(acc.CodeHash, nil)
-			}
-		}
-	}
-	return accIter.Error()
+	return dumpRawTrieDescendants(db, genesis.Root(), stateBloom)
 }
 
 func bloomFilterName(datadir string, hashes []common.Hash) string {
@@ -605,32 +548,37 @@ func bloomFilterName(datadir string, hashes []common.Hash) string {
 	return path + "." + stateBloomFileSuffix
 }
 
-func isBloomFilter(filename string) (bool, common.Hash) {
+func isBloomFilter(filename string) (bool, []common.Hash) {
 	filename = filepath.Base(filename)
 	if strings.HasPrefix(filename, stateBloomFilePrefix) && strings.HasSuffix(filename, stateBloomFileSuffix) {
-		return true, common.HexToHash(filename[len(stateBloomFilePrefix)+1 : len(filename)-len(stateBloomFileSuffix)-1])
+		parts := strings.Split(filename[len(stateBloomFilePrefix)+1:len(filename)-len(stateBloomFileSuffix)-1], ".")
+		var roots []common.Hash
+		for _, part := range parts {
+			roots = append(roots, common.HexToHash(part))
+		}
+		return true, roots
 	}
-	return false, common.Hash{}
+	return false, nil
 }
 
-func findBloomFilter(datadir string) (string, common.Hash, error) {
+func findBloomFilter(datadir string) (string, []common.Hash, error) {
 	var (
-		stateBloomPath string
-		stateBloomRoot common.Hash
+		stateBloomPath  string
+		stateBloomRoots []common.Hash
 	)
 	if err := filepath.Walk(datadir, func(path string, info os.FileInfo, err error) error {
 		if info != nil && !info.IsDir() {
-			ok, root := isBloomFilter(path)
+			ok, roots := isBloomFilter(path)
 			if ok {
 				stateBloomPath = path
-				stateBloomRoot = root
+				stateBloomRoots = roots
 			}
 		}
 		return nil
 	}); err != nil {
-		return "", common.Hash{}, err
+		return "", nil, err
 	}
-	return stateBloomPath, stateBloomRoot, nil
+	return stateBloomPath, stateBloomRoots, nil
 }
 
 const warningLog = `
