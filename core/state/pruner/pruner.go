@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -115,7 +116,20 @@ func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint6
 	}, nil
 }
 
+func readStoredChainConfig(db ethdb.Database) *params.ChainConfig {
+	block0Hash := rawdb.ReadCanonicalHash(db, 0)
+	if block0Hash == (common.Hash{}) {
+		return nil
+	}
+	return rawdb.ReadChainConfig(db, block0Hash)
+}
+
 func removeOtherRoots(db ethdb.Database, rootsList []common.Hash, stateBloom *stateBloom) error {
+	chainConfig := readStoredChainConfig(db)
+	var genesisBlockNum uint64
+	if chainConfig != nil {
+		genesisBlockNum = chainConfig.ArbitrumChainParams.GenesisBlockNum
+	}
 	roots := make(map[common.Hash]struct{})
 	for _, root := range rootsList {
 		roots[root] = struct{}{}
@@ -124,6 +138,7 @@ func removeOtherRoots(db ethdb.Database, rootsList []common.Hash, stateBloom *st
 	if headBlock == nil {
 		return errors.New("failed to load head block")
 	}
+	blockRange := headBlock.NumberU64() - genesisBlockNum
 	threads := runtime.NumCPU()
 	var wg sync.WaitGroup
 	errors := make(chan error, threads)
@@ -132,14 +147,17 @@ func removeOtherRoots(db ethdb.Database, rootsList []common.Hash, stateBloom *st
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			firstBlockNum := headBlock.NumberU64() / uint64(threads) * uint64(thread)
+			firstBlockNum := blockRange/uint64(threads)*uint64(thread+1) + genesisBlockNum
 			if thread == threads-1 {
 				firstBlockNum = headBlock.NumberU64()
 			}
-			var endBlockNum uint64
-			if thread > 0 {
-				endBlockNum = headBlock.NumberU64()/uint64(threads)*uint64(thread-1) + 1
+			endBlockNum := blockRange/uint64(threads)*uint64(thread) + genesisBlockNum
+			if thread != 0 {
+				// endBlockNum is the last block that will be checked
+				endBlockNum++
 			}
+			startedAt := time.Now()
+			lastLog := time.Now()
 			firstBlockHash := rawdb.ReadCanonicalHash(db, firstBlockNum)
 			block := rawdb.ReadBlock(db, firstBlockHash, firstBlockNum)
 			for {
@@ -151,17 +169,32 @@ func removeOtherRoots(db ethdb.Database, rootsList []common.Hash, stateBloom *st
 					errors <- err
 					return
 				}
-				_, rootsContains := roots[block.Root()]
-				if bloomContains && !rootsContains {
-					// This state root is a false positive of the bloom filter
-					err = db.Delete(block.Root().Bytes())
-					if err != nil {
-						errors <- err
-						return
+				if bloomContains {
+					_, rootsContains := roots[block.Root()]
+					if !rootsContains {
+						log.Info(
+							"Found false positive state root bloom filter match",
+							"blockNum", block.Number(),
+							"blockHash", block.Hash(),
+							"stateRoot", block.Root(),
+						)
+						// This state root is a false positive of the bloom filter
+						err = db.Delete(block.Root().Bytes())
+						if err != nil {
+							errors <- err
+							return
+						}
 					}
 				}
 				if block.NumberU64() <= endBlockNum {
 					return
+				}
+				if thread == threads-1 && time.Since(lastLog) >= time.Second*30 {
+					lastLog = time.Now()
+					elapsed := time.Since(startedAt)
+					totalWork := float32(firstBlockNum - endBlockNum)
+					completedBlocks := float32(block.NumberU64() - endBlockNum)
+					log.Info("Removing old state roots", "elapsed", elapsed, "eta", time.Duration(float32(elapsed)*(totalWork/completedBlocks))-elapsed)
 				}
 				block = rawdb.ReadBlock(db, block.ParentHash(), block.NumberU64()-1)
 			}
@@ -392,25 +425,30 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 // Prune deletes all historical state nodes except the nodes belong to the
 // specified state version. If user doesn't specify the state version, use
 // the bottom-most snapshot diff layer as the target.
-func (p *Pruner) Prune(roots []common.Hash) error {
+func (p *Pruner) Prune(inputRoots []common.Hash) error {
 	// If the state bloom filter is already committed previously,
 	// reuse it for pruning instead of generating a new one. It's
 	// mandatory because a part of state may already be deleted,
 	// the recovery procedure is necessary.
-	stateBloomPath, stateBloomRoots, err := findBloomFilter(p.datadir)
+	_, stateBloomRoots, err := findBloomFilter(p.datadir)
 	if err != nil {
 		return err
 	}
 	if len(stateBloomRoots) > 0 {
-		return RecoverPruning(p.datadir, p.db, p.trieCachePath, stateBloomPath, stateBloomRoots)
+		return RecoverPruning(p.datadir, p.db, p.trieCachePath)
 	}
 	// Retrieve all snapshot layers from the current HEAD.
 	// In theory there are 128 difflayers + 1 disk layer present,
 	// so 128 diff layers are expected to be returned.
 	layers := p.snaptree.Snapshots(p.headHeader.Root, -1, true)
-	for _, root := range roots {
+	var roots []common.Hash // replaces zero roots with snapshot roots
+	for _, root := range inputRoots {
 		snapshotTarget := root == common.Hash{}
 		if snapshotTarget {
+			if len(layers) == 0 {
+				log.Warn("No snapshot exists as pruning target")
+				continue
+			}
 			// Use the bottom-most diff layer as the target
 			root = layers[len(layers)-1].Root()
 		}
@@ -447,6 +485,10 @@ func (p *Pruner) Prune(roots []common.Hash) error {
 				log.Info("Selecting user-specified state as the pruning target", "root", root)
 			}
 		}
+		roots = append(roots, root)
+	}
+	if len(roots) == 0 {
+		return errors.New("no pruning target roots found")
 	}
 	// Before start the pruning, delete the clean trie cache first.
 	// It's necessary otherwise in the next restart we will hit the
@@ -491,7 +533,11 @@ func (p *Pruner) Prune(roots []common.Hash) error {
 // pruning can be resumed. What's more if the bloom filter is constructed, the
 // pruning **has to be resumed**. Otherwise a lot of dangling nodes may be left
 // in the disk.
-func RecoverPruning(datadir string, db ethdb.Database, trieCachePath, stateBloomPath string, stateBloomRoots []common.Hash) error {
+func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) error {
+	stateBloomPath, stateBloomRoots, err := findBloomFilter(datadir)
+	if err != nil {
+		return err
+	}
 	if stateBloomPath == "" {
 		return nil // nothing to recover
 	}
