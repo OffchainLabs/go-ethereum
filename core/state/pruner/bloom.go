@@ -130,3 +130,11 @@ func (bloom *stateBloom) Delete(key []byte) error { panic("not supported") }
 func (bloom *stateBloom) Contain(key []byte) (bool, error) {
 	return bloom.bloom.Contains(stateBloomHasher(key)), nil
 }
+
+func (bloom *stateBloom) FalsePosititveProbability() float64 {
+	return bloom.bloom.FalsePosititveProbability()
+}
+
+func (bloom *stateBloom) Size() uint64 {
+	return bloom.bloom.M()
+}

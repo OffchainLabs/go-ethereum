@@ -201,7 +201,12 @@ func removeOtherRoots(db ethdb.Database, rootsList []common.Hash, stateBloom *st
 		}()
 	}
 	wg.Wait()
-	return <-errors
+	select {
+	case err := <-errors:
+		return err
+	default:
+		return nil
+	}
 }
 
 // Arbitrum: snaptree and root are for the final snapshot kept
@@ -221,6 +226,7 @@ func prune(snaptree *snapshot.Tree, allRoots []common.Hash, maindb ethdb.Databas
 		batch  = maindb.NewBatch()
 		iter   = maindb.NewIterator(nil, nil)
 	)
+	log.Info("Loaded state bloom filter", "sizeMB", stateBloom.Size()/(1024*1024), "falsePositiveProbability", stateBloom.FalsePosititveProbability())
 	for iter.Next() {
 		key := iter.Key()
 
