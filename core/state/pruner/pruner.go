@@ -385,35 +385,37 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 			if !bytes.Equal(data.CodeHash, emptyCode) {
 				output.Put(data.CodeHash, nil)
 			}
-			storageTr, err := sdb.OpenStorageTrie(key, data.Root)
-			if err != nil {
-				return err
-			}
-			err = <-results
-			if err != nil {
-				return err
-			}
-			go func() {
-				var err error
-				defer func() {
-					results <- err
-				}()
-				storageIt := storageTr.NodeIterator(nil)
-				for storageIt.Next(true) {
-					storageTrieHash := storageIt.Hash()
-					if storageTrieHash != (common.Hash{}) {
-						// The inner bloomfilter library has a mutex so concurrency is fine here
-						err = output.Put(storageTrieHash.Bytes(), nil)
-						if err != nil {
-							return
+			if data.Root != (common.Hash{}) {
+				storageTr, err := sdb.OpenStorageTrie(key, data.Root)
+				if err != nil {
+					return err
+				}
+				err = <-results
+				if err != nil {
+					return err
+				}
+				go func() {
+					var err error
+					defer func() {
+						results <- err
+					}()
+					storageIt := storageTr.NodeIterator(nil)
+					for storageIt.Next(true) {
+						storageTrieHash := storageIt.Hash()
+						if storageTrieHash != (common.Hash{}) {
+							// The inner bloomfilter library has a mutex so concurrency is fine here
+							err = output.Put(storageTrieHash.Bytes(), nil)
+							if err != nil {
+								return
+							}
 						}
 					}
-				}
-				err = storageIt.Error()
-				if err != nil {
-					return
-				}
-			}()
+					err = storageIt.Error()
+					if err != nil {
+						return
+					}
+				}()
+			}
 		}
 	}
 	if accountIt.Error() != nil {
