@@ -205,6 +205,7 @@ func removeOtherRoots(db ethdb.Database, rootsList []common.Hash, stateBloom *st
 	case err := <-errors:
 		return err
 	default:
+		log.Info("Done removing old state roots")
 		return nil
 	}
 }
