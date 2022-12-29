@@ -25,7 +25,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -43,11 +42,8 @@ import (
 )
 
 const (
-	// stateBloomFilePrefix is the filename prefix of state bloom filter.
-	stateBloomFilePrefix = "statebloom"
-
-	// stateBloomFilePrefix is the filename suffix of state bloom filter.
-	stateBloomFileSuffix = "bf.gz"
+	// stateBloomFileName is the filename of state bloom filter.
+	stateBloomFileName = "statebloom.bf.gz"
 
 	// stateBloomFileTempSuffix is the filename suffix of state bloom filter
 	// while it is being written out to detect write aborts.
@@ -439,11 +435,11 @@ func (p *Pruner) Prune(inputRoots []common.Hash) error {
 	// reuse it for pruning instead of generating a new one. It's
 	// mandatory because a part of state may already be deleted,
 	// the recovery procedure is necessary.
-	_, stateBloomRoots, err := findBloomFilter(p.datadir)
+	bloomExists, err := bloomFilterExists(p.datadir)
 	if err != nil {
 		return err
 	}
-	if len(stateBloomRoots) > 0 {
+	if bloomExists {
 		return RecoverPruning(p.datadir, p.db, p.trieCachePath)
 	}
 	// Retrieve all snapshot layers from the current HEAD.
@@ -525,13 +521,13 @@ func (p *Pruner) Prune(inputRoots []common.Hash) error {
 	if err := extractGenesis(p.db, p.stateBloom); err != nil {
 		return err
 	}
-	filterName := bloomFilterName(p.datadir, roots)
+	filterName := bloomFilterPath(p.datadir)
 
-	log.Info("Writing state bloom to disk", "name", filterName)
-	if err := p.stateBloom.Commit(filterName, filterName+stateBloomFileTempSuffix); err != nil {
+	log.Info("Writing state bloom to disk", "name", filterName, "roots", roots)
+	if err := p.stateBloom.Commit(filterName, filterName+stateBloomFileTempSuffix, roots); err != nil {
 		return err
 	}
-	log.Info("State bloom filter committed", "name", filterName)
+	log.Info("State bloom filter committed", "name", filterName, "roots", roots)
 	return prune(p.snaptree, roots, p.db, p.stateBloom, filterName, start)
 }
 
@@ -543,11 +539,11 @@ func (p *Pruner) Prune(inputRoots []common.Hash) error {
 // pruning **has to be resumed**. Otherwise a lot of dangling nodes may be left
 // in the disk.
 func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) error {
-	stateBloomPath, stateBloomRoots, err := findBloomFilter(datadir)
+	exists, err := bloomFilterExists(datadir)
 	if err != nil {
 		return err
 	}
-	if stateBloomPath == "" {
+	if !exists {
 		return nil // nothing to recover
 	}
 	headBlock := rawdb.ReadHeadBlock(db)
@@ -566,11 +562,12 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 	if err != nil {
 		return err // The relevant snapshot(s) might not exist
 	}
-	stateBloom, err := NewStateBloomFromDisk(stateBloomPath)
+	stateBloomPath := bloomFilterPath(datadir)
+	stateBloom, stateBloomRoots, err := NewStateBloomFromDisk(stateBloomPath)
 	if err != nil {
 		return err
 	}
-	log.Info("Loaded state bloom filter", "path", stateBloomPath)
+	log.Info("Loaded state bloom filter", "path", stateBloomPath, "roots", stateBloomRoots)
 
 	// Before start the pruning, delete the clean trie cache first.
 	// It's necessary otherwise in the next restart we will hit the
@@ -595,45 +592,19 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 	return dumpRawTrieDescendants(db, genesis.Root(), stateBloom)
 }
 
-func bloomFilterName(datadir string, hashes []common.Hash) string {
-	path := filepath.Join(datadir, stateBloomFilePrefix)
-	for _, hash := range hashes {
-		path += "." + hash.String()
-	}
-	return path + "." + stateBloomFileSuffix
+func bloomFilterPath(datadir string) string {
+	return filepath.Join(datadir, stateBloomFileName)
 }
 
-func isBloomFilter(filename string) (bool, []common.Hash) {
-	filename = filepath.Base(filename)
-	if strings.HasPrefix(filename, stateBloomFilePrefix) && strings.HasSuffix(filename, stateBloomFileSuffix) {
-		parts := strings.Split(filename[len(stateBloomFilePrefix)+1:len(filename)-len(stateBloomFileSuffix)-1], ".")
-		var roots []common.Hash
-		for _, part := range parts {
-			roots = append(roots, common.HexToHash(part))
-		}
-		return true, roots
+func bloomFilterExists(datadir string) (bool, error) {
+	_, err := os.Stat(bloomFilterPath(datadir))
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	} else {
+		return true, nil
 	}
-	return false, nil
-}
-
-func findBloomFilter(datadir string) (string, []common.Hash, error) {
-	var (
-		stateBloomPath  string
-		stateBloomRoots []common.Hash
-	)
-	if err := filepath.Walk(datadir, func(path string, info os.FileInfo, err error) error {
-		if info != nil && !info.IsDir() {
-			ok, roots := isBloomFilter(path)
-			if ok {
-				stateBloomPath = path
-				stateBloomRoots = roots
-			}
-		}
-		return nil
-	}); err != nil {
-		return "", nil, err
-	}
-	return stateBloomPath, stateBloomRoots, nil
 }
 
 const warningLog = `
