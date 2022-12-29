@@ -17,6 +17,7 @@
 package pruner
 
 import (
+	"bufio"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -82,8 +83,9 @@ func NewStateBloomFromDisk(filename string) (*stateBloom, []common.Hash, error) 
 		return nil, nil, err
 	}
 	defer f.Close()
+	r := bufio.NewReader(f)
 	version := []byte{0}
-	_, err = io.ReadFull(f, version)
+	_, err = io.ReadFull(r, version)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -91,11 +93,11 @@ func NewStateBloomFromDisk(filename string) (*stateBloom, []common.Hash, error) 
 		return nil, nil, fmt.Errorf("unknown state bloom filter version %v", version[0])
 	}
 	var roots []common.Hash
-	err = rlp.Decode(f, &roots)
+	err = rlp.Decode(r, &roots)
 	if err != nil {
 		return nil, nil, err
 	}
-	bloom, _, err := bloomfilter.ReadFrom(f)
+	bloom, _, err := bloomfilter.ReadFrom(r)
 	if err != nil {
 		return nil, nil, err
 	}
