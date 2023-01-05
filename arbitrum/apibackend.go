@@ -81,29 +81,32 @@ func CreateFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.D
 
 type SyncProgressBackend interface {
 	SyncProgressMap() map[string]interface{}
+	SafeBlockNumber(ctx context.Context) (uint64, error)
+	FinalizedBlockNumber(ctx context.Context) (uint64, error)
 }
 
-func createRegisterAPIBackend(backend *Backend, sync SyncProgressBackend, fallbackClientUrl string, fallbackClientTimeout time.Duration) error {
+func createRegisterAPIBackend(backend *Backend, sync SyncProgressBackend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration) (*filters.FilterSystem, error) {
 	fallbackClient, err := CreateFallbackClient(fallbackClientUrl, fallbackClientTimeout)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	backend.apiBackend = &APIBackend{
 		b:              backend,
 		fallbackClient: fallbackClient,
 		sync:           sync,
 	}
-	backend.stack.RegisterAPIs(backend.apiBackend.GetAPIs())
-	return nil
+	filterSystem := filters.NewFilterSystem(backend.apiBackend, filterConfig)
+	backend.stack.RegisterAPIs(backend.apiBackend.GetAPIs(filterSystem))
+	return filterSystem, nil
 }
 
-func (a *APIBackend) GetAPIs() []rpc.API {
+func (a *APIBackend) GetAPIs(filterSystem *filters.FilterSystem) []rpc.API {
 	apis := ethapi.GetAPIs(a)
 
 	apis = append(apis, rpc.API{
 		Namespace: "eth",
 		Version:   "1.0",
-		Service:   filters.NewFilterAPI(a, false, 5*time.Minute),
+		Service:   filters.NewFilterAPI(filterSystem, false),
 		Public:    true,
 	})
 
@@ -309,34 +312,54 @@ func (a *APIBackend) SetHead(number uint64) {
 }
 
 func (a *APIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
-	return HeaderByNumber(a.blockChain(), number), nil
+	return a.headerByNumberImpl(ctx, number)
 }
 
 func (a *APIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
 	return a.blockChain().GetHeaderByHash(hash), nil
 }
 
-func HeaderByNumber(blockchain *core.BlockChain, number rpc.BlockNumber) *types.Header {
+func (a *APIBackend) blockNumberToUint(ctx context.Context, number rpc.BlockNumber) (uint64, error) {
 	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
-		return blockchain.CurrentBlock().Header()
+		return a.blockChain().CurrentBlock().Number().Uint64(), nil
 	}
-	return blockchain.GetHeaderByNumber(uint64(number.Int64()))
+	if number == rpc.SafeBlockNumber {
+		return a.sync.SafeBlockNumber(ctx)
+	}
+	if number == rpc.FinalizedBlockNumber {
+		return a.sync.FinalizedBlockNumber(ctx)
+	}
+	if number < 0 {
+		return 0, errors.New("block number not supported")
+	}
+	return uint64(number.Int64()), nil
 }
 
-func HeaderByNumberOrHash(blockchain *core.BlockChain, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
+func (a *APIBackend) headerByNumberImpl(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
+	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
+		return a.blockChain().CurrentBlock().Header(), nil
+	}
+	numUint, err := a.blockNumberToUint(ctx, number)
+	if err != nil {
+		return nil, err
+	}
+	return a.blockChain().GetHeaderByNumber(numUint), nil
+}
+
+func (a *APIBackend) headerByNumberOrHashImpl(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
 	number, isnum := blockNrOrHash.Number()
 	if isnum {
-		return HeaderByNumber(blockchain, number), nil
+		return a.headerByNumberImpl(ctx, number)
 	}
 	hash, ishash := blockNrOrHash.Hash()
 	if ishash {
-		return blockchain.GetHeaderByHash(hash), nil
+		return a.blockChain().GetHeaderByHash(hash), nil
 	}
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
 func (a *APIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
-	return HeaderByNumberOrHash(a.blockChain(), blockNrOrHash)
+	return a.headerByNumberOrHashImpl(ctx, blockNrOrHash)
 }
 
 func (a *APIBackend) CurrentHeader() *types.Header {
@@ -351,7 +374,11 @@ func (a *APIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) 
 	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
 		return a.blockChain().CurrentBlock(), nil
 	}
-	return a.blockChain().GetBlockByNumber(uint64(number.Int64())), nil
+	numUint, err := a.blockNumberToUint(ctx, number)
+	if err != nil {
+		return nil, err
+	}
+	return a.blockChain().GetBlockByNumber(numUint), nil
 }
 
 func (a *APIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
@@ -491,16 +518,8 @@ func (a *APIBackend) BloomStatus() (uint64, uint64) {
 	return a.b.config.BloomBitsBlocks, sections
 }
 
-func (a *APIBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {
-	receipts := a.blockChain().GetReceiptsByHash(blockHash)
-	if receipts == nil {
-		return nil, nil
-	}
-	logs := make([][]*types.Log, len(receipts))
-	for i, receipt := range receipts {
-		logs[i] = receipt.Logs
-	}
-	return logs, nil
+func (a *APIBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {
+	return rawdb.ReadLogs(a.ChainDb(), hash, number, a.ChainConfig()), nil
 }
 
 func (a *APIBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {

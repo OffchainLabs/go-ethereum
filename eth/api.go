@@ -157,7 +157,7 @@ func (api *AdminAPI) ExportChain(file string, first *uint64, last *uint64) (bool
 	}
 	if _, err := os.Stat(file); err == nil {
 		// File already exists. Allowing overwrite could be a DoS vector,
-		// since the 'file' may point to arbitrary paths on the drive
+		// since the 'file' may point to arbitrary paths on the drive.
 		return false, errors.New("location would overwrite an existing file")
 	}
 	// Make sure we can create the file to export into
@@ -260,6 +260,11 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		OnlyWithAddresses: true,
 		Max:               AccountRangeMaxResults, // Sanity limit over RPC
 	}
+	// arbitrum: in case of ArbEthereum, miner in not available here
+	// use current block instead of pending
+	if blockNr == rpc.PendingBlockNumber && api.eth.miner == nil {
+		blockNr = rpc.LatestBlockNumber
+	}
 	if blockNr == rpc.PendingBlockNumber {
 		// If we're dumping the pending state, we need to request
 		// both the pending block as well as the pending state from
@@ -320,7 +325,7 @@ func (api *DebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) 
 		} else {
 			blockRlp = fmt.Sprintf("%#x", rlpBytes)
 		}
-		if blockJSON, err = ethapi.RPCMarshalBlock(block, true, true, api.eth.APIBackend.ChainConfig()); err != nil {
+		if blockJSON, err = ethapi.RPCMarshalBlock(block, true, true, api.eth.blockchain.Config()); err != nil {
 			blockJSON = map[string]interface{}{"error": err.Error()}
 		}
 		results = append(results, &BadBlockArgs{
@@ -341,6 +346,11 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 	var err error
 
 	if number, ok := blockNrOrHash.Number(); ok {
+		// arbitrum: in case of ArbEthereum, miner in not available here
+		// use current block instead of pending
+		if number == rpc.PendingBlockNumber && api.eth.miner == nil {
+			number = rpc.LatestBlockNumber
+		}
 		if number == rpc.PendingBlockNumber {
 			// If we're dumping the pending state, we need to request
 			// both the pending block as well as the pending state from
@@ -506,11 +516,11 @@ func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]c
 	}
 	triedb := api.eth.BlockChain().StateCache().TrieDB()
 
-	oldTrie, err := trie.NewSecure(common.Hash{}, startBlock.Root(), triedb)
+	oldTrie, err := trie.NewStateTrie(common.Hash{}, startBlock.Root(), triedb)
 	if err != nil {
 		return nil, err
 	}
-	newTrie, err := trie.NewSecure(common.Hash{}, endBlock.Root(), triedb)
+	newTrie, err := trie.NewStateTrie(common.Hash{}, endBlock.Root(), triedb)
 	if err != nil {
 		return nil, err
 	}
@@ -586,5 +596,5 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 			return uint64(i), nil
 		}
 	}
-	return 0, fmt.Errorf("no state found")
+	return 0, errors.New("no state found")
 }

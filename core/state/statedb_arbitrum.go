@@ -19,6 +19,7 @@ package state
 
 import (
 	"errors"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -26,6 +27,25 @@ import (
 
 func (s *StateDB) GetCurrentTxLogs() []*types.Log {
 	return s.logs[s.thash]
+}
+
+// GetUnexpectedBalanceDelta returns the total unexpected change in balances since the last commit to the database.
+func (s *StateDB) GetUnexpectedBalanceDelta() *big.Int {
+	return new(big.Int).Set(s.unexpectedBalanceDelta)
+}
+
+func (s *StateDB) GetSuicides() []common.Address {
+	suicides := []common.Address{}
+	for addr := range s.journal.dirties {
+		obj, exist := s.stateObjects[addr]
+		if !exist {
+			continue
+		}
+		if obj.suicided {
+			suicides = append(suicides, addr)
+		}
+	}
+	return suicides
 }
 
 func (s *StateDB) StartRecording() {

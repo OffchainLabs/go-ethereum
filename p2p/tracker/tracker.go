@@ -121,7 +121,7 @@ func (t *Tracker) Track(peer string, version uint, reqCode uint64, resCode uint6
 }
 
 // clean is called automatically when a preset time passes without a response
-// being dleivered for the first network request.
+// being delivered for the first network request.
 func (t *Tracker) clean() {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -197,9 +197,7 @@ func (t *Tracker) Fulfil(peer string, version uint, code uint64, id uint64) {
 
 	h := fmt.Sprintf("%s/%s/%d/%#02x", waitHistName, t.protocol, req.version, req.reqCode)
 	sampler := func() metrics.Sample {
-		return metrics.ResettingSample(
-			metrics.NewExpDecaySample(1028, 0.015),
-		)
+		return metrics.NewBoundedHistogramSample()
 	}
 	metrics.GetOrRegisterHistogramLazy(h, nil, sampler).Update(time.Since(req.time).Microseconds())
 }

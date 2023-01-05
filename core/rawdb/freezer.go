@@ -67,8 +67,6 @@ type Freezer struct {
 	frozen uint64 // Number of blocks already frozen
 	tail   uint64 // Number of the first stored item in the freezer
 
-	datadir string // Path of root directory of ancient store
-
 	// This lock synchronizes writers and the truncate operation, as well as
 	// the "atomic" (batched) read operations.
 	writeLock  sync.RWMutex
@@ -110,7 +108,6 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 		readonly:     readonly,
 		tables:       make(map[string]*freezerTable),
 		instanceLock: lock,
-		datadir:      datadir,
 	}
 
 	// Create the tables.
@@ -428,7 +425,7 @@ func (f *Freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	// Set up new dir for the migrated table, the content of which
 	// we'll at the end move over to the ancients dir.
 	migrationPath := filepath.Join(ancientsPath, "migration")
-	newTable, err := NewFreezerTable(migrationPath, kind, table.noCompression, false)
+	newTable, err := newFreezerTable(migrationPath, kind, table.noCompression, false)
 	if err != nil {
 		return err
 	}
@@ -485,11 +482,5 @@ func (f *Freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	if err := os.Remove(migrationPath); err != nil {
 		return err
 	}
-
 	return nil
-}
-
-// AncientDatadir returns the root directory path of the ancient store.
-func (f *Freezer) AncientDatadir() (string, error) {
-	return f.datadir, nil
 }

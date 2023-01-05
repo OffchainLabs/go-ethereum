@@ -27,6 +27,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -42,6 +43,9 @@ import (
 
 // Node is a container on which services can be registered.
 type Node struct {
+	// Arbitrum: we support stopping the RPC early
+	rpcRunning int32
+
 	eventmux      *event.TypeMux
 	config        *Config
 	accman        *accounts.Manager
@@ -278,6 +282,8 @@ func (n *Node) openEndpoints() error {
 	if err != nil {
 		n.stopRPC()
 		n.server.Stop()
+	} else {
+		atomic.StoreInt32(&n.rpcRunning, 1)
 	}
 	return err
 }
@@ -505,7 +511,17 @@ func (n *Node) wsServerForPort(port int, authenticated bool) *httpServer {
 	return wsServer
 }
 
+// Arbitrum: we support stopping the RPC early.
+// This function can be called multiple times, or before startRPC.
+func (n *Node) StopRPC() {
+	n.stopRPC()
+}
+
 func (n *Node) stopRPC() {
+	if atomic.SwapInt32(&n.rpcRunning, 0) == 0 {
+		// The RPC was already stopped or was never started
+		return
+	}
 	n.http.stop()
 	n.ws.stop()
 	n.httpAuth.stop()
@@ -703,7 +719,7 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 // also attaching a chain freezer to it that moves ancient chain data from the
 // database to immutable append-only files. If the node is an ephemeral one, a
 // memory database is returned.
-func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer, namespace string, readonly bool) (ethdb.Database, error) {
+func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if n.state == closedState {
@@ -715,14 +731,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
 	} else {
-		root := n.ResolvePath(name)
-		switch {
-		case freezer == "":
-			freezer = filepath.Join(root, "ancient")
-		case !filepath.IsAbs(freezer):
-			freezer = n.ResolvePath(freezer)
-		}
-		db, err = rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace, readonly)
+		db, err = rawdb.NewLevelDBDatabaseWithFreezer(n.ResolvePath(name), cache, handles, n.ResolveAncient(name, ancient), namespace, readonly)
 	}
 
 	if err == nil {
@@ -734,6 +743,17 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 // ResolvePath returns the absolute path of a resource in the instance directory.
 func (n *Node) ResolvePath(x string) string {
 	return n.config.ResolvePath(x)
+}
+
+// ResolveAncient returns the absolute path of the root ancient directory.
+func (n *Node) ResolveAncient(name string, ancient string) string {
+	switch {
+	case ancient == "":
+		ancient = filepath.Join(n.ResolvePath(name), "ancient")
+	case !filepath.IsAbs(ancient):
+		ancient = n.ResolvePath(ancient)
+	}
+	return ancient
 }
 
 // closeTrackingDB wraps the Close method of a database. When the database is closed by the
