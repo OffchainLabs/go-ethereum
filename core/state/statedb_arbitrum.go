@@ -70,14 +70,14 @@ func (s *StateDB) RecordedPrograms() [][]byte {
 }
 
 // TODO: move to ArbDB
-var machines = make(map[common.Address][]byte)
+var modules = make(map[common.Address][]byte)
 
-func (s *StateDB) AddPolyMachine(version uint64, program common.Address, source []byte) {
-	machines[program] = source
+func (s *StateDB) AddUserModule(version uint32, program common.Address, source []byte) {
+	modules[program] = source
 }
 
-func (s *StateDB) GetPolyMachine(version uint64, program common.Address) ([]byte, error) {
-	machine, ok := machines[program]
+func (s *StateDB) GetUserModule(version uint32, program common.Address) ([]byte, error) {
+	machine, ok := modules[program]
 	if !ok {
 		return nil, errors.New("no program for given address")
 	}

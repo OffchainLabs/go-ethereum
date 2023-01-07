@@ -26,8 +26,8 @@ import (
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
 	// Arbitrum: add support for WASM programs
-	AddPolyMachine(uint64, common.Address, []byte)
-	GetPolyMachine(uint64, common.Address) ([]byte, error)
+	AddUserModule(uint32, common.Address, []byte)
+	GetUserModule(uint32, common.Address) ([]byte, error)
 
 	CreateAccount(common.Address)
 
