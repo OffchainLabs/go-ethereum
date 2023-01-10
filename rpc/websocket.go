@@ -29,6 +29,7 @@ import (
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/golang-jwt/jwt"
 	"github.com/gorilla/websocket"
 )
 
@@ -184,9 +185,16 @@ func parseOriginURL(origin string) (string, string, string, error) {
 // DialWebsocketWithDialer creates a new RPC client that communicates with a JSON-RPC server
 // that is listening on the given endpoint using the provided dialer.
 func DialWebsocketWithDialer(ctx context.Context, endpoint, origin string, dialer websocket.Dialer) (*Client, error) {
+	return DialWebsocketWithDialerAndExtraHeaders(ctx, endpoint, origin, dialer, nil)
+}
+
+func DialWebsocketWithDialerAndExtraHeaders(ctx context.Context, endpoint, origin string, dialer websocket.Dialer, headers http.Header) (*Client, error) {
 	endpoint, header, err := wsClientHeaders(endpoint, origin)
 	if err != nil {
 		return nil, err
+	}
+	for headerType, content := range headers {
+		header[headerType] = append(header[headerType], content...)
 	}
 	return newClient(ctx, func(ctx context.Context) (ServerCodec, error) {
 		conn, resp, err := dialer.DialContext(ctx, endpoint, header)
@@ -213,6 +221,29 @@ func DialWebsocket(ctx context.Context, endpoint, origin string) (*Client, error
 		WriteBufferPool: wsBufferPool,
 	}
 	return DialWebsocketWithDialer(ctx, endpoint, origin, dialer)
+}
+
+type jwtClaim map[string]interface{}
+
+func (jwtClaim) Valid() error {
+	return nil
+}
+
+func DialWebsocketJWT(ctx context.Context, endpoint, origin string, jwtSecret []byte) (*Client, error) {
+	dialer := websocket.Dialer{
+		ReadBufferSize:  wsReadBuffer,
+		WriteBufferSize: wsWriteBuffer,
+		WriteBufferPool: wsBufferPool,
+	}
+	claims := jwtClaim(make(map[string]interface{}))
+	claims["iat"] = time.Now().Unix()
+	jwtToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(jwtSecret)
+	if err != nil {
+		return nil, err
+	}
+	extraHeaders := http.Header(make(map[string][]string))
+	extraHeaders["Authorization"] = []string{fmt.Sprintf("Bearer %s", jwtToken)}
+	return DialWebsocketWithDialerAndExtraHeaders(ctx, endpoint, origin, dialer, extraHeaders)
 }
 
 func wsClientHeaders(endpoint, origin string) (string, http.Header, error) {
