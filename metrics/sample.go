@@ -673,6 +673,7 @@ func (s *SlidingTimeWindowArraySample) Count() int64 {
 func (s *SlidingTimeWindowArraySample) Max() int64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+	s.trim()
 	return SampleMax(s.measurements.Values())
 }
 
@@ -680,6 +681,7 @@ func (s *SlidingTimeWindowArraySample) Max() int64 {
 func (s *SlidingTimeWindowArraySample) Mean() float64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+	s.trim()
 	return SampleMean(s.measurements.Values())
 }
 
@@ -688,6 +690,7 @@ func (s *SlidingTimeWindowArraySample) Mean() float64 {
 func (s *SlidingTimeWindowArraySample) Min() int64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+	s.trim()
 	return SampleMin(s.measurements.Values())
 }
 
@@ -695,6 +698,7 @@ func (s *SlidingTimeWindowArraySample) Min() int64 {
 func (s *SlidingTimeWindowArraySample) Percentile(p float64) float64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+	s.trim()
 	return SamplePercentile(s.measurements.Values(), p)
 }
 
@@ -703,6 +707,7 @@ func (s *SlidingTimeWindowArraySample) Percentile(p float64) float64 {
 func (s *SlidingTimeWindowArraySample) Percentiles(ps []float64) []float64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+	s.trim()
 	return SamplePercentiles(s.measurements.Values(), ps)
 }
 
@@ -759,6 +764,7 @@ func (s *SlidingTimeWindowArraySample) Snapshot() Sample {
 func (s *SlidingTimeWindowArraySample) StdDev() float64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+	s.trim()
 	return SampleStdDev(s.measurements.Values())
 }
 
@@ -766,6 +772,7 @@ func (s *SlidingTimeWindowArraySample) StdDev() float64 {
 func (s *SlidingTimeWindowArraySample) Sum() int64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+	s.trim()
 	return SampleSum(s.measurements.Values())
 }
 
@@ -790,6 +797,7 @@ func (s *SlidingTimeWindowArraySample) Update(v int64) {
 func (s *SlidingTimeWindowArraySample) Values() []int64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+	s.trim()
 	origValues := s.measurements.Values()
 	values := make([]int64, len(origValues))
 	copy(values, origValues)
@@ -800,6 +808,7 @@ func (s *SlidingTimeWindowArraySample) Values() []int64 {
 func (s *SlidingTimeWindowArraySample) Variance() float64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+	s.trim()
 	return SampleVariance(s.measurements.Values())
 }
 
