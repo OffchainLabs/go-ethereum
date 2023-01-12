@@ -25,6 +25,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+func (s *StateDB) Deterministic() bool {
+	return s.deterministic
+}
+
 func (s *StateDB) GetCurrentTxLogs() []*types.Log {
 	return s.logs[s.thash]
 }

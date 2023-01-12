@@ -28,6 +28,7 @@ type StateDB interface {
 	// Arbitrum: add support for WASM programs
 	AddUserModule(uint32, common.Address, []byte)
 	GetUserModule(uint32, common.Address) ([]byte, error)
+	Deterministic() bool
 
 	CreateAccount(common.Address)
 
