@@ -86,7 +86,6 @@ func (s *StateDB) RecordProgram(program common.Address, version uint32) {
 			NonconsensusHash: hash,
 			CompressedWasm:   s.GetCode(program),
 		}
-		println("RECORDED PROGRAM ", version, program.Hex(), hash.Hex())
 	}
 }
 
