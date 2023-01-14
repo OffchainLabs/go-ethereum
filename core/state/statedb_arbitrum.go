@@ -18,11 +18,13 @@
 package state
 
 import (
+	"encoding/binary"
 	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func (s *StateDB) Deterministic() bool {
@@ -52,25 +54,44 @@ func (s *StateDB) GetSuicides() []common.Address {
 	return suicides
 }
 
+type UserWasms map[WasmCall]*UserWasm
+type UserWasm struct {
+	NonconsensusHash common.Hash
+	CompressedWasm   []byte
+	Wasm             []byte
+}
+type WasmCall struct {
+	Version uint32
+	Address common.Address
+}
+
 func (s *StateDB) StartRecording() {
-	s.programs = []common.Address{}
+	s.userWasms = make(UserWasms)
 }
 
-func (s *StateDB) RecordProgram(program common.Address) {
-	if s.programs != nil {
-		s.programs = append(s.programs, program)
-		println("RECORDED PROGRAM ", program.Hex())
-	}
-}
-
-func (s *StateDB) RecordedPrograms() [][]byte {
-	programs := [][]byte{}
-	if s.programs != nil {
-		for _, program := range s.programs {
-			programs = append(programs, s.GetCode(program))
+func (s *StateDB) RecordProgram(program common.Address, version uint32) {
+	if s.userWasms != nil {
+		call := WasmCall{
+			Version: version,
+			Address: program,
 		}
+		if _, ok := s.userWasms[call]; ok {
+			return
+		}
+
+		prefix := make([]byte, 4)
+		binary.BigEndian.PutUint32(prefix, version)
+		hash := crypto.Keccak256Hash(prefix, s.GetCodeHash(program).Bytes())
+		s.userWasms[call] = &UserWasm{
+			NonconsensusHash: hash,
+			CompressedWasm:   s.GetCode(program),
+		}
+		println("RECORDED PROGRAM ", version, program.Hex(), hash.Hex())
 	}
-	return programs
+}
+
+func (s *StateDB) UserWasms() UserWasms {
+	return s.userWasms
 }
 
 // TODO: move to ArbDB
