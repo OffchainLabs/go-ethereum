@@ -56,7 +56,7 @@ func (s *StateDB) GetSuicides() []common.Address {
 
 type UserWasms map[WasmCall]*UserWasm
 type UserWasm struct {
-	NonconsensusHash common.Hash
+	NoncanonicalHash common.Hash
 	CompressedWasm   []byte
 	Wasm             []byte
 }
@@ -78,15 +78,17 @@ func (s *StateDB) RecordProgram(program common.Address, version uint32) {
 		if _, ok := s.userWasms[call]; ok {
 			return
 		}
-
-		prefix := make([]byte, 4)
-		binary.BigEndian.PutUint32(prefix, version)
-		hash := crypto.Keccak256Hash(prefix, s.GetCodeHash(program).Bytes())
 		s.userWasms[call] = &UserWasm{
-			NonconsensusHash: hash,
+			NoncanonicalHash: s.NoncanonicalProgramHash(program, version),
 			CompressedWasm:   s.GetCode(program),
 		}
 	}
+}
+
+func (s *StateDB) NoncanonicalProgramHash(program common.Address, version uint32) common.Hash {
+	prefix := make([]byte, 4)
+	binary.BigEndian.PutUint32(prefix, version)
+	return crypto.Keccak256Hash(prefix, s.GetCodeHash(program).Bytes())
 }
 
 func (s *StateDB) UserWasms() UserWasms {
