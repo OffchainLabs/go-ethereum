@@ -34,6 +34,7 @@ type Config struct {
 
 	ClassicRedirect        string        `koanf:"classic-redirect"`
 	ClassicRedirectTimeout time.Duration `koanf:"classic-redirect-timeout"`
+	MaxRecreateStateDepth  uint64        `koanf:"max-recreate-state-depth"`
 }
 
 type ArbDebugConfig struct {
@@ -51,7 +52,7 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.Duration(prefix+".classic-redirect-timeout", DefaultConfig.ClassicRedirectTimeout, "timeout for forwarded classic requests, where 0 = no timeout")
 	f.Int(prefix+".filter-log-cache-size", DefaultConfig.FilterLogCacheSize, "log filter system maximum number of cached blocks")
 	f.Duration(prefix+".filter-timeout", DefaultConfig.FilterTimeout, "log filter system maximum time filters stay active")
-
+	f.Uint64(prefix+".max-recreate-state-depth", DefaultConfig.MaxRecreateStateDepth, "maximum depth for recreating state, measured in l2 gas (0=infinite)")
 	arbDebug := DefaultConfig.ArbDebug
 	f.Uint64(prefix+".arbdebug.block-range-bound", arbDebug.BlockRangeBound, "bounds the number of blocks arbdebug calls may return")
 	f.Uint64(prefix+".arbdebug.timeout-queue-bound", arbDebug.TimeoutQueueBound, "bounds the length of timeout queues arbdebug calls may return")
@@ -67,6 +68,7 @@ var DefaultConfig = Config{
 	FilterTimeout:           5 * time.Minute,
 	FeeHistoryMaxBlockCount: 1024,
 	ClassicRedirect:         "",
+	MaxRecreateStateDepth:   0, // TODO
 	ArbDebug: ArbDebugConfig{
 		BlockRangeBound:   256,
 		TimeoutQueueBound: 512,
