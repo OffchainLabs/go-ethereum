@@ -218,8 +218,6 @@ func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected comm
 	return nil
 }
 
-//type StateBuildingLogFunction func(targetHeader, header *types.Header, hasState bool)
-
 func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeader *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
 	_, err := r.GetOrRecreateState(ctx, lastBlockHeader, logFunc)
 	if err != nil {
