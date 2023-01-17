@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 func (s *StateDB) Deterministic() bool {
@@ -79,9 +80,15 @@ func (s *StateDB) RecordProgram(program common.Address, version uint32) {
 		if _, ok := s.userWasms[call]; ok {
 			return
 		}
+		rawCode := s.GetCode(program)
+		compressedWasm, err := vm.StripStylusPrefix(rawCode)
+		if err != nil {
+			log.Error("Could not strip stylus program prefix from raw code: %v", err)
+			return
+		}
 		s.userWasms[call] = &UserWasm{
 			NoncanonicalHash: s.NoncanonicalProgramHash(program, version),
-			CompressedWasm:   s.GetCode(program),
+			CompressedWasm:   compressedWasm,
 		}
 	}
 }

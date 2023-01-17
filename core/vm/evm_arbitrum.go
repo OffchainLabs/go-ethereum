@@ -118,7 +118,7 @@ func IsStylusProgram(b []byte) bool {
 	return b[0] == stylusEOFMagic && b[1] == stylusEOFVersion && b[2] == stylusEOFSectionHeader
 }
 
-// StripStylusPrefix if the specified input is a polyglot program.
+// StripStylusPrefix if the specified input is a stylus program.
 func StripStylusPrefix(b []byte) ([]byte, error) {
 	if !IsStylusProgram(b) {
 		return nil, errors.New("specified bytecode is not a Stylus program")
