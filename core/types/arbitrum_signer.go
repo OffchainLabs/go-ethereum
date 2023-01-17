@@ -10,8 +10,11 @@ var ArbosAddress = common.HexToAddress("0xa4b05")
 var ArbSysAddress = common.HexToAddress("0x64")
 var ArbGasInfoAddress = common.HexToAddress("0x6c")
 var ArbRetryableTxAddress = common.HexToAddress("0x6e")
+var ArbOwnerAddress = common.HexToAddress("0x70")
+var ArbWasmAddress = common.HexToAddress("0x71")
 var NodeInterfaceAddress = common.HexToAddress("0xc8")
 var NodeInterfaceDebugAddress = common.HexToAddress("0xc9")
+var ArbDebugAddress = common.HexToAddress("0xff")
 
 type arbitrumSigner struct{ Signer }
 

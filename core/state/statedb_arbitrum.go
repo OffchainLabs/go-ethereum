@@ -18,13 +18,19 @@
 package state
 
 import (
+	"encoding/binary"
 	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 )
+
+func (s *StateDB) Deterministic() bool {
+	return s.deterministic
+}
 
 func (s *StateDB) GetCurrentTxLogs() []*types.Log {
 	return s.logs[s.thash]
@@ -49,30 +55,45 @@ func (s *StateDB) GetSuicides() []common.Address {
 	return suicides
 }
 
+type UserWasms map[WasmCall]*UserWasm
+type UserWasm struct {
+	NoncanonicalHash common.Hash
+	CompressedWasm   []byte
+	Wasm             []byte
+}
+type WasmCall struct {
+	Version uint32
+	Address common.Address
+}
+
 func (s *StateDB) StartRecording() {
-	s.programs = []common.Address{}
+	s.userWasms = make(UserWasms)
 }
 
-func (s *StateDB) RecordProgram(program common.Address) {
-	if s.programs != nil {
-		s.programs = append(s.programs, program)
-		println("RECORDED PROGRAM ", program.Hex())
-	}
-}
-
-func (s *StateDB) RecordedPrograms() [][]byte {
-	programs := [][]byte{}
-	if s.programs != nil {
-		for _, program := range s.programs {
-			wasmRaw := s.GetCode(program)
-			wasmProgram, err := vm.StripStylusPrefix(wasmRaw)
-			if err != nil {
-				panic(err)
-			}
-			programs = append(programs, wasmProgram)
+func (s *StateDB) RecordProgram(program common.Address, version uint32) {
+	if s.userWasms != nil {
+		call := WasmCall{
+			Version: version,
+			Address: program,
+		}
+		if _, ok := s.userWasms[call]; ok {
+			return
+		}
+		s.userWasms[call] = &UserWasm{
+			NoncanonicalHash: s.NoncanonicalProgramHash(program, version),
+			CompressedWasm:   s.GetCode(program),
 		}
 	}
-	return programs
+}
+
+func (s *StateDB) NoncanonicalProgramHash(program common.Address, version uint32) common.Hash {
+	prefix := make([]byte, 4)
+	binary.BigEndian.PutUint32(prefix, version)
+	return crypto.Keccak256Hash(prefix, s.GetCodeHash(program).Bytes())
+}
+
+func (s *StateDB) UserWasms() UserWasms {
+	return s.userWasms
 }
 
 // TODO: move to ArbDB

@@ -67,7 +67,7 @@ func (n *proofList) Delete(key []byte) error {
 type StateDB struct {
 	// Arbitrum: track the total balance change across all accounts
 	unexpectedBalanceDelta *big.Int
-	programs               []common.Address
+	userWasms              UserWasms
 
 	db         Database
 	prefetcher *triePrefetcher
