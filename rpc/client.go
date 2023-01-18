@@ -74,7 +74,7 @@ type BatchElem struct {
 
 // Client represents a connection to an RPC server.
 type Client struct {
-	RequestHook atomic.Pointer[RequestHook]
+	requestHook RequestHook
 
 	idgen    func() ID // for subscriptions
 	isHTTP   bool      // connection type: http, ws or ipc
@@ -302,7 +302,7 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 	}
 	op := &requestOp{ids: []json.RawMessage{msg.ID}, resp: make(chan *jsonrpcMessage, 1)}
 
-	resultHook := c.requestHook(msg)
+	resultHook := c.onRequest(msg)
 	if c.isHTTP {
 		err = c.sendHTTP(ctx, op, msg)
 	} else {
@@ -374,7 +374,7 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 	resultHooks := make([]ResultHook, len(msgs))
 	responsesForHooks := make([]interface{}, len(msgs))
 	for i, msg := range msgs {
-		resultHooks[i] = c.requestHook(msg)
+		resultHooks[i] = c.onRequest(msg)
 	}
 
 	var err error
