@@ -17,8 +17,8 @@
 package vm
 
 import (
-	"math/big"
 	"errors"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -33,6 +33,7 @@ var (
 	// with EVM contracts, but match against these prefix bytes when loading code
 	// to execute the WASMs through Stylus rather than the EVM.
 	stylusEOFMagic         = byte(0xEF)
+	stylusEOFMagicSuffix   = byte(0x00)
 	stylusEOFVersion       = byte(0x00)
 	stylusEOFSectionHeader = byte(0x00)
 )
@@ -109,13 +110,13 @@ func (p DefaultTxProcessor) GasPriceOp(evm *EVM) *big.Int {
 func (p DefaultTxProcessor) FillReceiptInfo(*types.Receipt) {}
 
 // IsStylusProgram checks if a specified bytecode is a user-submitted WASM program.
-// Stylus differentiates WASMs from EVM bytecode via the prefix 0xEF0000 which will safely fail
+// Stylus differentiates WASMs from EVM bytecode via the prefix 0xEF000000 which will safely fail
 // to pass through EVM-bytecode EOF validation rules.
 func IsStylusProgram(b []byte) bool {
-	if len(b) < 3 {
+	if len(b) < 4 {
 		return false
 	}
-	return b[0] == stylusEOFMagic && b[1] == stylusEOFVersion && b[2] == stylusEOFSectionHeader
+	return b[0] == stylusEOFMagic && b[1] == stylusEOFMagicSuffix && b[2] == stylusEOFVersion && b[3] == stylusEOFSectionHeader
 }
 
 // StripStylusPrefix if the specified input is a stylus program.
@@ -123,5 +124,5 @@ func StripStylusPrefix(b []byte) ([]byte, error) {
 	if !IsStylusProgram(b) {
 		return nil, errors.New("specified bytecode is not a Stylus program")
 	}
-	return b[3:], nil
+	return b[4:], nil
 }
