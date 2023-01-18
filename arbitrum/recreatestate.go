@@ -45,7 +45,7 @@ func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor S
 			logFunc(header, currentHeader, false)
 		}
 		if currentHeader.Number.Uint64() <= genesis {
-			return nil, previousHeader, errors.Wrap(ErrInvalidBlockHash, fmt.Sprintf("moved beyond genesis looking for state %d, genesis %d, err %w", header.Number.Uint64(), genesis, err))
+			return nil, previousHeader, errors.Wrap(ErrInvalidBlockHash, fmt.Sprintf("moved beyond genesis looking for state %d, genesis %d", header.Number.Uint64(), genesis))
 		}
 		currentHeader = bc.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64()-1)
 		if currentHeader == nil {
