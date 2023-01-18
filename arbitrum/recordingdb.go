@@ -157,6 +157,9 @@ type RecordingDatabase struct {
 	bc         *core.BlockChain
 	mutex      sync.Mutex // protects StateFor and Dereference
 	references int64
+	// prevents two goroutines from trying to recreate state at the same time
+	// not necessary for correctness but prevents unnecessary duplicated work
+	recreateStateMutex sync.Mutex
 }
 
 func NewRecordingDatabase(ethdb ethdb.Database, blockchain *core.BlockChain) *RecordingDatabase {
@@ -274,6 +277,8 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 	if err == nil {
 		return stateDb, nil
 	}
+	r.recreateStateMutex.Lock()
+	defer r.recreateStateMutex.Unlock()
 	returnedBlockNumber := header.Number.Uint64()
 	genesis := r.bc.Config().ArbitrumChainParams.GenesisBlockNum
 	currentHeader := header
