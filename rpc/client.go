@@ -74,6 +74,8 @@ type BatchElem struct {
 
 // Client represents a connection to an RPC server.
 type Client struct {
+	RequestHook atomic.Pointer[RequestHook]
+
 	idgen    func() ID // for subscriptions
 	isHTTP   bool      // connection type: http, ws or ipc
 	services *serviceRegistry
@@ -300,25 +302,32 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 	}
 	op := &requestOp{ids: []json.RawMessage{msg.ID}, resp: make(chan *jsonrpcMessage, 1)}
 
+	resultHook := c.requestHook(msg)
 	if c.isHTTP {
 		err = c.sendHTTP(ctx, op, msg)
 	} else {
 		err = c.send(ctx, op, msg)
 	}
 	if err != nil {
+		resultHook.OnResult(nil, err)
 		return err
 	}
 
 	// dispatch has accepted the request and will close the channel when it quits.
 	switch resp, err := op.wait(ctx, c); {
 	case err != nil:
+		resultHook.OnResult(resp, err)
 		return err
 	case resp.Error != nil:
+		resultHook.OnResult(resp, resp.Error)
 		return resp.Error
 	case len(resp.Result) == 0:
+		resultHook.OnResult(resp, ErrNoResult)
 		return ErrNoResult
 	default:
-		return json.Unmarshal(resp.Result, &result)
+		err := json.Unmarshal(resp.Result, &result)
+		resultHook.OnResult(resp, err)
+		return err
 	}
 }
 
@@ -362,6 +371,12 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 		byID[string(msg.ID)] = i
 	}
 
+	resultHooks := make([]ResultHook, len(msgs))
+	responsesForHooks := make([]interface{}, len(msgs))
+	for i, msg := range msgs {
+		resultHooks[i] = c.requestHook(msg)
+	}
+
 	var err error
 	if c.isHTTP {
 		err = c.sendBatchHTTP(ctx, op, msgs)
@@ -379,7 +394,9 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 		// Find the element corresponding to this response.
 		// The element is guaranteed to be present because dispatch
 		// only sends valid IDs to our channel.
-		elem := &b[byID[string(resp.ID)]]
+		idx := byID[string(resp.ID)]
+		responsesForHooks[idx] = resp
+		elem := &b[idx]
 		if resp.Error != nil {
 			elem.Error = resp.Error
 			continue
@@ -389,6 +406,9 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 			continue
 		}
 		elem.Error = json.Unmarshal(resp.Result, elem.Result)
+	}
+	for i, hook := range resultHooks {
+		hook.OnResult(responsesForHooks[i], err)
 	}
 	return err
 }
