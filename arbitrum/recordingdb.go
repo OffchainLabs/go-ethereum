@@ -285,9 +285,10 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 		if currentHeader.Number.Uint64() <= genesis {
 			return nil, fmt.Errorf("moved beyond genesis looking for state looking for %d, genesis %d, err %w", returnedBlockNumber, genesis, err)
 		}
+		lastHeader := currentHeader
 		currentHeader = r.bc.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64()-1)
 		if currentHeader == nil {
-			return nil, fmt.Errorf("chain doesn't contain parent of block %d hash %v", currentHeader.Number, currentHeader.Hash())
+			return nil, fmt.Errorf("chain doesn't contain parent of block %d hash %v (expected parent hash %v)", lastHeader.Number, lastHeader.Hash(), lastHeader.ParentHash)
 		}
 		stateDb, err = r.StateFor(currentHeader)
 		if err == nil {
