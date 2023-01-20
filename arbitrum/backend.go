@@ -55,7 +55,6 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 	if err != nil {
 		return nil, nil, err
 	}
-	backend.shutdownTracker.MarkStartup()
 	return backend, filterSystem, nil
 }
 
@@ -86,6 +85,7 @@ func (b *Backend) ArbInterface() ArbInterface {
 // TODO: this is used when registering backend as lifecycle in stack
 func (b *Backend) Start() error {
 	b.startBloomHandlers(b.config.BloomBitsBlocks)
+	b.shutdownTracker.MarkStartup()
 	b.shutdownTracker.Start()
 
 	return nil
