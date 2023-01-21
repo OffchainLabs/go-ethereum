@@ -19,7 +19,6 @@ package state
 
 import (
 	"encoding/binary"
-	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -95,17 +94,20 @@ func (s *StateDB) UserWasms() UserWasms {
 	return s.userWasms
 }
 
-// TODO: move to ArbDB
-var modules = make(map[common.Address][]byte)
-
-func (s *StateDB) AddUserModule(version uint32, program common.Address, source []byte) {
-	modules[program] = source
+func (s *StateDB) AddUserModule(version uint32, program common.Address, source []byte) error {
+	diskDB := s.db.TrieDB().DiskDB()
+	key := userModuleKey(version, program)
+	return diskDB.Put(key, source)
 }
 
 func (s *StateDB) GetUserModule(version uint32, program common.Address) ([]byte, error) {
-	machine, ok := modules[program]
-	if !ok {
-		return nil, errors.New("no program for given address")
-	}
-	return machine, nil
+	diskDB := s.db.TrieDB().DiskDB()
+	key := userModuleKey(version, program)
+	return diskDB.Get(key)
+}
+
+func userModuleKey(version uint32, program common.Address) []byte {
+	prefix := make([]byte, 4)
+	binary.BigEndian.PutUint32(prefix, version)
+	return append(prefix, program.Bytes()...)
 }

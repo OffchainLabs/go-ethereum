@@ -20,16 +20,18 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
 	// Arbitrum: add support for WASM programs
-	AddUserModule(uint32, common.Address, []byte)
+	AddUserModule(uint32, common.Address, []byte) error
 	GetUserModule(uint32, common.Address) ([]byte, error)
 	NoncanonicalProgramHash(common.Address, uint32) common.Hash
 	Deterministic() bool
+	Database() state.Database
 
 	CreateAccount(common.Address)
 
