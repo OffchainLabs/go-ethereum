@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/core/state"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -501,7 +502,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		err = ErrInvalidCode
 		// Arbitrum: We do not reject Stylus programs and instead store them in the DB
 		// alongside normal EVM bytecode.
-		if evm.chainRules.IsArbitrum && IsStylusProgram(ret) {
+		if evm.chainRules.IsArbitrum && state.IsStylusProgram(ret) {
 			err = nil
 		}
 	}
