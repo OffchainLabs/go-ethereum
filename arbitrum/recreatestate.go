@@ -13,8 +13,6 @@ import (
 )
 
 var (
-	ErrInvalidBlockHash   = errors.New("invalid block hash")
-	ErrBlockNotFound      = errors.New("block not found")
 	ErrDepthLimitExceeded = errors.New("state recreation l2 gas depth limit exceeded")
 )
 
@@ -32,7 +30,7 @@ func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor S
 		if maxDepthInL2Gas > 0 {
 			receipts := bc.GetReceiptsByHash(currentHeader.Hash())
 			if receipts == nil {
-				return nil, lastHeader, errors.Wrap(ErrInvalidBlockHash, fmt.Sprintf("failed to get receipts for hash %v", currentHeader.Hash()))
+				return nil, lastHeader, fmt.Errorf("failed to get receipts for hash %v", currentHeader.Hash())
 			}
 			for _, receipt := range receipts {
 				l2GasUsed += receipt.GasUsed - receipt.GasUsedForL1
@@ -45,11 +43,11 @@ func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor S
 			logFunc(header, currentHeader, false)
 		}
 		if currentHeader.Number.Uint64() <= genesis {
-			return nil, lastHeader, errors.Wrap(ErrInvalidBlockHash, fmt.Sprintf("moved beyond genesis looking for state %d, genesis %d", header.Number.Uint64(), genesis))
+			return nil, lastHeader, errors.Wrap(err, fmt.Sprintf("moved beyond genesis looking for state %d, genesis %d", header.Number.Uint64(), genesis))
 		}
 		currentHeader = bc.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64()-1)
 		if currentHeader == nil {
-			return nil, lastHeader, errors.Wrap(ErrBlockNotFound, fmt.Sprintf("chain doesn't contain parent of block %d hash %v", lastHeader.Number, lastHeader.Hash()))
+			return nil, lastHeader, fmt.Errorf("chain doesn't contain parent of block %d hash %v", lastHeader.Number, lastHeader.Hash())
 		}
 		stateDb, err = stateFor(currentHeader)
 		if err == nil {
