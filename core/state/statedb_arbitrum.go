@@ -23,12 +23,12 @@ import (
 
 	"errors"
 
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
-	"fmt"
 )
 
 var (
@@ -43,6 +43,8 @@ var (
 	stylusEOFMagicSuffix   = byte(0x00)
 	stylusEOFVersion       = byte(0x00)
 	stylusEOFSectionHeader = byte(0x00)
+
+	StylusPrefix = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersion, stylusEOFSectionHeader}
 )
 
 // IsStylusProgram checks if a specified bytecode is a user-submitted WASM program.
@@ -61,6 +63,21 @@ func StripStylusPrefix(b []byte) ([]byte, error) {
 		return nil, errors.New("specified bytecode is not a Stylus program")
 	}
 	return b[4:], nil
+}
+
+func (s *StateDB) GetCompiledWasmCode(addr common.Address) []byte {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.CompiledWasmCode(s.db)
+	}
+	return nil
+}
+
+func (s *StateDB) SetCompiledWasmCode(addr common.Address, code []byte) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetWasmCode(crypto.Keccak256Hash(code), code)
+	}
 }
 
 func (s *StateDB) Deterministic() bool {

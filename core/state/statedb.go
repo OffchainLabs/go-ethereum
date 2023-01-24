@@ -967,6 +967,13 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				rawdb.WriteCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.code)
 				obj.dirtyCode = false
 			}
+
+			// Arbitrum Only
+			if obj.compiledWasmCode != nil && obj.dirtyCompiledWasmCode {
+				rawdb.WriteCompiledWasmCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.compiledWasmCode)
+				obj.dirtyCompiledWasmCode = false
+			}
+
 			// Write any storage changes in the state object to its storage trie
 			set, err := obj.CommitTrie(s.db)
 			if err != nil {

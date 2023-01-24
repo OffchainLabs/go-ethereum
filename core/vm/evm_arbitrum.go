@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"github.com/ethereum/go-ethereum/core/vm"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -50,6 +51,7 @@ type TxProcessingHook interface {
 	L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error)
 	GasPriceOp(evm *EVM) *big.Int
 	FillReceiptInfo(receipt *types.Receipt)
+	ExecuteWASM(contract *vm.Contract, input []byte, readOnly bool, txContext TxContext, blockContext BlockContext) ([]byte, error)
 }
 
 type DefaultTxProcessor struct {

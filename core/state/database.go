@@ -57,6 +57,11 @@ type Database interface {
 
 	// TrieDB retrieves the low level trie database used for data storage.
 	TrieDB() *trie.Database
+
+	// Arbitrum Only
+
+	// CompiledWasmContractCode retrieves a particular contract's user wasm code.
+	CompiledWasmContractCode(addrHash, codeHash common.Hash) ([]byte, error)
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -142,6 +147,9 @@ type cachingDB struct {
 	db            *trie.Database
 	codeSizeCache *lru.Cache
 	codeCache     *fastcache.Cache
+
+	// Arbitrum Only
+	userWasmCache *fastcache.Cache
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
@@ -156,6 +164,9 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 // fastcache chunks are not mannaged by GC.
 func (db *cachingDB) finalizer() {
 	db.codeCache.Reset()
+
+	// Arbitrum Only
+	db.userWasmCache.Reset()
 }
 
 // OpenStorageTrie opens the storage trie of an account.

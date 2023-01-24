@@ -85,6 +85,10 @@ type StateDB interface {
 	GetCurrentTxLogs() []*types.Log
 
 	ForEachStorage(common.Address, func(common.Hash, common.Hash) bool) error
+
+	// Arbitrum Only
+	GetCompiledWasmCode(common.Address) []byte
+	SetCompiledWasmCode(addr common.Address, code []byte)
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM

@@ -93,6 +93,14 @@ type stateObject struct {
 	dirtyCode bool // true if the code was updated
 	suicided  bool
 	deleted   bool
+
+	// Arbitrum Only
+
+	// Write caches.
+	compiledWasmCode Code // original use provided wasm for the contract
+
+	// Cache flags.
+	dirtyCompiledWasmCode bool // true if the compiledWasmCode was updated
 }
 
 // empty returns whether the account is considered empty.
@@ -455,6 +463,11 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject.suicided = s.suicided
 	stateObject.dirtyCode = s.dirtyCode
 	stateObject.deleted = s.deleted
+
+	// Arbitrum Only
+	stateObject.compiledWasmCode = s.compiledWasmCode
+	stateObject.dirtyCompiledWasmCode = s.dirtyCompiledWasmCode
+
 	return stateObject
 }
 
