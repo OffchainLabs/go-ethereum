@@ -521,14 +521,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if err == nil {
 		createDataGas := uint64(len(ret)) * params.CreateDataGas
 		if contract.UseGas(createDataGas) {
-			// If this is a stylus program leave the code as a stylus stub since we haven't compiled
-			// and save the user wasm program in the database
-			if evm.chainRules.IsArbitrum && state.IsStylusProgram(ret) {
-				evm.StateDB.SetCompiledWasmCode(address, ret)
-				evm.StateDB.SetCode(address, state.StylusPrefix)
-			} else {
-				evm.StateDB.SetCode(address, ret)
-			}
+			evm.StateDB.SetCode(address, ret)
 		} else {
 			err = ErrCodeStoreOutOfGas
 		}
