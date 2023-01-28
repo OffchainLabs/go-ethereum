@@ -8,12 +8,12 @@ import (
 
 // CompiledWasmContractCode retrieves a particular contract's compiled wasm code.
 func (db *cachingDB) CompiledWasmContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
-	if code := db.userWasmCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
+	if code := db.compiledWasmCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
 		return code, nil
 	}
 	code := rawdb.ReadCompiledWasmCode(db.db.DiskDB(), codeHash)
 	if len(code) > 0 {
-		db.userWasmCache.Set(codeHash.Bytes(), code)
+		db.compiledWasmCache.Set(codeHash.Bytes(), code)
 		return code, nil
 	}
 	return nil, errors.New("not found")

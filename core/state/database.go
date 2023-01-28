@@ -36,6 +36,11 @@ const (
 
 	// Cache size granted for caching clean code.
 	codeCacheSize = 64 * 1024 * 1024
+
+	// Arbitrum only
+
+	// Cache size granted for caching clean compiled wasm code.
+	compiledWasmCodeCacheSize = 64 * 1024 * 1024
 )
 
 // Database wraps access to tries and contract code.
@@ -138,6 +143,9 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 		db:            trie.NewDatabaseWithConfig(db, config),
 		codeSizeCache: csc,
 		codeCache:     fastcache.New(codeCacheSize),
+
+		// Arbitrum only
+		compiledWasmCache: fastcache.New(compiledWasmCodeCacheSize),
 	}
 	runtime.SetFinalizer(cdb, (*cachingDB).finalizer)
 	return cdb
@@ -149,7 +157,7 @@ type cachingDB struct {
 	codeCache     *fastcache.Cache
 
 	// Arbitrum Only
-	userWasmCache *fastcache.Cache
+	compiledWasmCache *fastcache.Cache
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
@@ -166,7 +174,7 @@ func (db *cachingDB) finalizer() {
 	db.codeCache.Reset()
 
 	// Arbitrum Only
-	db.userWasmCache.Reset()
+	db.compiledWasmCache.Reset()
 }
 
 // OpenStorageTrie opens the storage trie of an account.
