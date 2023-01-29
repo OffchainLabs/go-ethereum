@@ -47,7 +47,7 @@ func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 		// Retrieving code
 		copy(hash[:], key[len(rawdb.CodePrefix):])
 		res, err = db.inner.DiskDB().Get(key)
-	} else if len(key) == len(rawdb.CompiledWasmCodePrefix)+32 && bytes.HasPrefix(key, rawdb.CompiledWasmCodePrefix) {
+	} else if ok, _, _ := rawdb.IsCompiledWasmCodeKey(key); ok {
 		// Just return the compiled wasm without recording it since it's not in consensus and the replay will regenerate it
 		return db.inner.DiskDB().Get(key)
 	} else {

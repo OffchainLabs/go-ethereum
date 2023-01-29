@@ -85,8 +85,8 @@ type StateDB interface {
 	ForEachStorage(common.Address, func(common.Hash, common.Hash) bool) error
 
 	// Arbitrum Only
-	GetCompiledWasmCode(addr common.Address, previouslyExists bool) []byte
-	SetCompiledWasmCode(addr common.Address, code []byte, previouslyExists bool)
+	GetCompiledWasmCode(addr common.Address, version uint32) []byte
+	SetCompiledWasmCode(addr common.Address, code []byte, version uint32)
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM

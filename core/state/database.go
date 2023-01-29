@@ -66,7 +66,7 @@ type Database interface {
 	// Arbitrum Only
 
 	// CompiledWasmContractCode retrieves a particular contract's user wasm code.
-	CompiledWasmContractCode(addrHash, codeHash common.Hash) ([]byte, error)
+	CompiledWasmContractCode(codeHash common.Hash, version uint32) ([]byte, error)
 }
 
 // Trie is a Ethereum Merkle Patricia trie.

@@ -96,11 +96,8 @@ type stateObject struct {
 
 	// Arbitrum Only
 
-	// Write caches.
-	compiledWasmCode Code // original use provided wasm for the contract
-
-	// Cache flags.
-	dirtyCompiledWasmCode bool // true if the compiledWasmCode was updated
+	// Write caches and cache flags
+	compiledWasmCode CompiledWasms // compiled wasm bytecode which gets set when wasm is loaded
 }
 
 // empty returns whether the account is considered empty.
@@ -127,6 +124,8 @@ func newObject(db *StateDB, address common.Address, data types.StateAccount) *st
 		originStorage:  make(Storage),
 		pendingStorage: make(Storage),
 		dirtyStorage:   make(Storage),
+
+		compiledWasmCode: make(CompiledWasms),
 	}
 }
 
@@ -465,8 +464,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject.deleted = s.deleted
 
 	// Arbitrum Only
-	stateObject.compiledWasmCode = s.compiledWasmCode
-	stateObject.dirtyCompiledWasmCode = s.dirtyCompiledWasmCode
+	stateObject.compiledWasmCode = s.compiledWasmCode.Copy()
 
 	return stateObject
 }

@@ -80,10 +80,7 @@ func GenerateTrie(snaptree *Tree, root common.Hash, src ethdb.Database, dst ethd
 			}
 			rawdb.WriteCode(dst, codeHash, code)
 
-			compiledWasmCode := rawdb.ReadCompiledWasmCode(src, codeHash)
-			if len(compiledWasmCode) != 0 {
-				rawdb.WriteCompiledWasmCode(dst, codeHash, compiledWasmCode)
-			}
+			// TODO: How do we migrate the compiled wasm code
 		}
 		// Then migrate all storage trie nodes into the tmp db.
 		storageIt, err := snaptree.StorageIterator(root, accountHash, common.Hash{})
