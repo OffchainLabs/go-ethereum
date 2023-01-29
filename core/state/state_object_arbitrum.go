@@ -8,18 +8,18 @@ import (
 
 // CompiledWasmCode returns the user wasm contract code associated with this object, if any.
 func (s *stateObject) CompiledWasmCode(db Database) []byte {
-	if s.code != nil {
-		return s.code
+	if s.compiledWasmCode != nil {
+		return s.compiledWasmCode
 	}
 	if bytes.Equal(s.CodeHash(), emptyCodeHash) {
 		return nil
 	}
-	code, err := db.CompiledWasmContractCode(s.addrHash, common.BytesToHash(s.CodeHash()))
+	compiledWasmCode, err := db.CompiledWasmContractCode(s.addrHash, common.BytesToHash(s.CodeHash()))
 	if err != nil {
 		s.setError(fmt.Errorf("can't load code hash %x: %v", s.CodeHash(), err))
 	}
-	s.code = code
-	return code
+	s.compiledWasmCode = compiledWasmCode
+	return compiledWasmCode
 }
 
 func (s *stateObject) SetWasmCode(codeHash common.Hash, code []byte) {
