@@ -22,18 +22,16 @@ func (s *stateObject) CompiledWasmCode(db Database) []byte {
 	return compiledWasmCode
 }
 
-func (s *stateObject) SetWasmCode(codeHash common.Hash, code []byte) {
+func (s *stateObject) SetCompiledWasmCode(code []byte) {
 	prevcode := s.CompiledWasmCode(s.db.db)
 	s.db.journal.append(wasmCodeChange{
 		account:  &s.address,
-		prevhash: s.CodeHash(),
 		prevcode: prevcode,
 	})
-	s.setWASMCode(codeHash, code)
+	s.setWASMCode(code)
 }
 
-func (s *stateObject) setWASMCode(codeHash common.Hash, code []byte) {
+func (s *stateObject) setWASMCode(code []byte) {
 	s.compiledWasmCode = code
-	s.data.CodeHash = codeHash[:]
 	s.dirtyCompiledWasmCode = true
 }

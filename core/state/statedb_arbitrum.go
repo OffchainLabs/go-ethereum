@@ -74,7 +74,7 @@ func (s *StateDB) GetCompiledWasmCode(addr common.Address) []byte {
 func (s *StateDB) SetCompiledWasmCode(addr common.Address, code []byte) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
-		stateObject.SetWasmCode(crypto.Keccak256Hash(code), code)
+		stateObject.SetCompiledWasmCode(code)
 	}
 }
 

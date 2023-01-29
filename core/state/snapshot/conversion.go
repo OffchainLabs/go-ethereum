@@ -79,6 +79,11 @@ func GenerateTrie(snaptree *Tree, root common.Hash, src ethdb.Database, dst ethd
 				return common.Hash{}, errors.New("failed to read contract code")
 			}
 			rawdb.WriteCode(dst, codeHash, code)
+
+			compiledWasmCode := rawdb.ReadCompiledWasmCode(src, codeHash)
+			if len(code) != 0 {
+				rawdb.WriteCompiledWasmCode(dst, codeHash, compiledWasmCode)
+			}
 		}
 		// Then migrate all storage trie nodes into the tmp db.
 		storageIt, err := snaptree.StorageIterator(root, accountHash, common.Hash{})
