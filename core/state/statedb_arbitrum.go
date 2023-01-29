@@ -63,18 +63,18 @@ func StripStylusPrefix(b []byte) ([]byte, error) {
 	return b[4:], nil
 }
 
-func (s *StateDB) GetCompiledWasmCode(addr common.Address) []byte {
+func (s *StateDB) GetCompiledWasmCode(addr common.Address, previouslyExists bool) []byte {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.CompiledWasmCode(s.db)
+		return stateObject.CompiledWasmCode(s.db, previouslyExists)
 	}
 	return nil
 }
 
-func (s *StateDB) SetCompiledWasmCode(addr common.Address, code []byte) {
+func (s *StateDB) SetCompiledWasmCode(addr common.Address, code []byte, previouslyExists bool) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
-		stateObject.SetCompiledWasmCode(code)
+		stateObject.SetCompiledWasmCode(code, previouslyExists)
 	}
 }
 
