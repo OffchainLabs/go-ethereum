@@ -81,7 +81,7 @@ func GenerateTrie(snaptree *Tree, root common.Hash, src ethdb.Database, dst ethd
 			rawdb.WriteCode(dst, codeHash, code)
 
 			compiledWasmCode := rawdb.ReadCompiledWasmCode(src, codeHash)
-			if len(code) != 0 {
+			if len(compiledWasmCode) != 0 {
 				rawdb.WriteCompiledWasmCode(dst, codeHash, compiledWasmCode)
 			}
 		}
