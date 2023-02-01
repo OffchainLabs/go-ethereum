@@ -39,8 +39,8 @@ func compiledWasmCodeKey(hash common.Hash, version uint32) []byte {
 // if so return the raw code hash and version as well.
 func IsCompiledWasmCodeKey(key []byte) (bool, []byte, uint32) {
 	if bytes.HasPrefix(key, CompiledWasmCodePrefix) && len(key) == common.HashLength+4+len(CompiledWasmCodePrefix) {
-		endOfHashOffset := len(CodePrefix) + common.HashLength
-		codeHash := key[len(CodePrefix):endOfHashOffset]
+		endOfHashOffset := len(CompiledWasmCodePrefix) + common.HashLength
+		codeHash := key[len(CompiledWasmCodePrefix):endOfHashOffset]
 		version := binary.BigEndian.Uint32(key[endOfHashOffset:])
 		return true, codeHash, version
 	}
