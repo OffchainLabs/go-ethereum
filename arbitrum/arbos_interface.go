@@ -8,7 +8,7 @@ import (
 )
 
 type ArbInterface interface {
-	PublishTransaction(ctx context.Context, tx *types.Transaction) error
+	PublishTransaction(ctx context.Context, tx *types.Transaction, options *ConditionalOptions) error
 	BlockChain() *core.BlockChain
 	ArbNode() interface{}
 }

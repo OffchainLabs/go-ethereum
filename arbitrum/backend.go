@@ -66,8 +66,8 @@ func (b *Backend) ChainDb() ethdb.Database {
 	return b.chainDb
 }
 
-func (b *Backend) EnqueueL2Message(ctx context.Context, tx *types.Transaction) error {
-	return b.arb.PublishTransaction(ctx, tx)
+func (b *Backend) EnqueueL2Message(ctx context.Context, tx *types.Transaction, options *ConditionalOptions) error {
+	return b.arb.PublishTransaction(ctx, tx, options)
 }
 
 func (b *Backend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {

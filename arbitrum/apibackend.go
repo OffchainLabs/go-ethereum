@@ -111,6 +111,13 @@ func (a *APIBackend) GetAPIs(filterSystem *filters.FilterSystem) []rpc.API {
 	})
 
 	apis = append(apis, rpc.API{
+		Namespace: "eth",
+		Version:   "1.0",
+		Service:   NewArbTransactionAPI(a),
+		Public:    true,
+	})
+
+	apis = append(apis, rpc.API{
 		Namespace: "net",
 		Version:   "1.0",
 		Service:   NewPublicNetAPI(a.ChainConfig().ChainID.Uint64()),
@@ -470,7 +477,11 @@ func (a *APIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) even
 
 // Transaction pool API
 func (a *APIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
-	return a.b.EnqueueL2Message(ctx, signedTx)
+	return a.b.EnqueueL2Message(ctx, signedTx, nil)
+}
+
+func (a *APIBackend) SendConditionalTx(ctx context.Context, signedTx *types.Transaction, options *ConditionalOptions) error {
+	return a.b.EnqueueL2Message(ctx, signedTx, options)
 }
 
 func (a *APIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
