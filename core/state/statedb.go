@@ -37,11 +37,11 @@ import (
 )
 
 type revision struct {
-	// Arbitrum: track the total balance change across all accounts
-	unexpectedBalanceDelta *big.Int
-
 	id           int
 	journalIndex int
+
+	// Arbitrum: track the total balance change across all accounts
+	unexpectedBalanceDelta *big.Int
 }
 
 var (
