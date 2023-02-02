@@ -31,20 +31,21 @@ import (
 )
 
 const (
+	// Arbitrum: Cache size granted for caching clean compiled wasm code.
+	compiledWasmCodeCacheSize = 64 * 1024 * 1024
+
 	// Number of codehash->size associations to keep.
 	codeSizeCacheSize = 100000
 
 	// Cache size granted for caching clean code.
 	codeCacheSize = 64 * 1024 * 1024
-
-	// Arbitrum only
-
-	// Cache size granted for caching clean compiled wasm code.
-	compiledWasmCodeCacheSize = 64 * 1024 * 1024
 )
 
 // Database wraps access to tries and contract code.
 type Database interface {
+	// Arbitrum: CompiledWasmContractCode retrieves a particular contract's user wasm code.
+	CompiledWasmContractCode(codeHash common.Hash, version uint32) ([]byte, error)
+
 	// OpenTrie opens the main account trie.
 	OpenTrie(root common.Hash) (Trie, error)
 
@@ -62,11 +63,6 @@ type Database interface {
 
 	// TrieDB retrieves the low level trie database used for data storage.
 	TrieDB() *trie.Database
-
-	// Arbitrum Only
-
-	// CompiledWasmContractCode retrieves a particular contract's user wasm code.
-	CompiledWasmContractCode(codeHash common.Hash, version uint32) ([]byte, error)
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -152,12 +148,12 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 }
 
 type cachingDB struct {
+	// Arbitrum
+	compiledWasmCache *fastcache.Cache
+
 	db            *trie.Database
 	codeSizeCache *lru.Cache
 	codeCache     *fastcache.Cache
-
-	// Arbitrum Only
-	compiledWasmCache *fastcache.Cache
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
