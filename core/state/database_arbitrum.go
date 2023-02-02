@@ -2,6 +2,7 @@ package state
 
 import (
 	"errors"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 )
@@ -11,7 +12,7 @@ func (db *cachingDB) CompiledWasmContractCode(codeHash common.Hash, version uint
 	if code := db.compiledWasmCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
 		return code, nil
 	}
-	code := rawdb.ReadCompiledWasmCode(db.db.DiskDB(), codeHash, version)
+	code := rawdb.ReadCompiledWasmCode(db.db.DiskDB(), version, codeHash)
 	if len(code) > 0 {
 		db.compiledWasmCache.Set(codeHash.Bytes(), code)
 		return code, nil

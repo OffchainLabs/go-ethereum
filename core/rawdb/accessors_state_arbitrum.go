@@ -23,14 +23,14 @@ import (
 )
 
 // ReadCompiledWasmCode retrieves the compiled wasm contract code of the provided code hash.
-func ReadCompiledWasmCode(db ethdb.KeyValueReader, hash common.Hash, version uint32) []byte {
-	data, _ := db.Get(compiledWasmCodeKey(hash, version))
+func ReadCompiledWasmCode(db ethdb.KeyValueReader, version uint32, hash common.Hash) []byte {
+	data, _ := db.Get(compiledWasmCodeKey(version, hash))
 	return data
 }
 
 // WriteCompiledWasmCode writes the provided contract compiled wasm code database.
-func WriteCompiledWasmCode(db ethdb.KeyValueWriter, hash common.Hash, version uint32, code []byte) {
-	if err := db.Put(compiledWasmCodeKey(hash, version), code); err != nil {
+func WriteCompiledWasmCode(db ethdb.KeyValueWriter, version uint32, hash common.Hash, code []byte) {
+	if err := db.Put(compiledWasmCodeKey(version, hash), code); err != nil {
 		log.Crit("Failed to store compiled wasm contract code", "err", err)
 	}
 }

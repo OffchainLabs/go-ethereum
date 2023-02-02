@@ -21,28 +21,32 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
 var (
-	CompiledWasmCodePrefix = []byte("w") // CompiledWasmCodePrefix + code hash -> account compiled wasm code
+	CompiledWasmCodePrefix = []byte{0x00, 'w'} // (prefix, version, code_hash) -> account compiled wasm code
 )
 
-// compiledWasmCodeKey = CompiledWasmCodePrefix + hash
-func compiledWasmCodeKey(hash common.Hash, version uint32) []byte {
+// compiledWasmCodeKey = CompiledWasmCodePrefix + version + hash
+func compiledWasmCodeKey(version uint32, hash common.Hash) []byte {
 	var versionBytes [4]byte
 	binary.BigEndian.PutUint32(versionBytes[:], version)
-	return append(append(CompiledWasmCodePrefix, hash.Bytes()...), versionBytes[:]...)
+	return append(append(CompiledWasmCodePrefix, versionBytes[:]...), hash.Bytes()...)
 }
 
 // IsCompiledWasmCodeKey reports whether the given byte slice is the key of compiled wasm contract code,
 // if so return the raw code hash and version as well.
-func IsCompiledWasmCodeKey(key []byte) (bool, []byte, uint32) {
-	if bytes.HasPrefix(key, CompiledWasmCodePrefix) && len(key) == common.HashLength+4+len(CompiledWasmCodePrefix) {
-		endOfHashOffset := len(CompiledWasmCodePrefix) + common.HashLength
-		codeHash := key[len(CompiledWasmCodePrefix):endOfHashOffset]
-		version := binary.BigEndian.Uint32(key[endOfHashOffset:])
+func IsCompiledWasmCodeKey(key []byte) (bool, common.Hash, uint32) {
+
+	wasmKeyLen := len(CompiledWasmCodePrefix) + 4 + common.HashLength
+	start := len(CompiledWasmCodePrefix)
+
+	if bytes.HasPrefix(key, CompiledWasmCodePrefix) && len(key) == wasmKeyLen {
+		version := binary.BigEndian.Uint32(key[start : start+4])
+		codeHash := common.BytesToHash(key[start+4:])
 		return true, codeHash, version
 	}
-	return false, nil, 0
+	return false, common.Hash{}, 0
 }
