@@ -39,6 +39,7 @@ import (
 type revision struct {
 	id           int
 	journalIndex int
+
 	// Arbitrum: track the total balance change across all accounts
 	unexpectedBalanceDelta *big.Int
 }
@@ -65,9 +66,10 @@ func (n *proofList) Delete(key []byte) error {
 // * Contracts
 // * Accounts
 type StateDB struct {
-	// Arbitrum: track the total balance change across all accounts
-	unexpectedBalanceDelta *big.Int
-	userWasms              UserWasms
+	// Arbitrum
+	unexpectedBalanceDelta *big.Int  // total balance change across all accounts
+	userWasms              UserWasms // user wasms encountered during execution
+	deterministic          bool      // whether the order in which deletes are committed should be deterministic
 
 	db         Database
 	prefetcher *triePrefetcher
@@ -132,8 +134,6 @@ type StateDB struct {
 	StorageUpdated int
 	AccountDeleted int
 	StorageDeleted int
-
-	deterministic bool
 }
 
 // New creates a new state from a given trie.
@@ -165,15 +165,6 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 			sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
 		}
 	}
-	return sdb, nil
-}
-
-func NewDeterministic(root common.Hash, db Database) (*StateDB, error) {
-	sdb, err := New(root, db, nil)
-	if err != nil {
-		return nil, err
-	}
-	sdb.deterministic = true
 	return sdb, nil
 }
 
@@ -967,6 +958,16 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				rawdb.WriteCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.code)
 				obj.dirtyCode = false
 			}
+
+			// Arbitrum Only
+			for version, wasm := range obj.compiledWasmCode {
+				if wasm.dirty {
+					codeHash := common.BytesToHash(obj.CodeHash())
+					rawdb.WriteCompiledWasmCode(codeWriter, version, codeHash, wasm.code)
+					wasm.dirty = false
+				}
+			}
+
 			// Write any storage changes in the state object to its storage trie
 			set, err := obj.CommitTrie(s.db)
 			if err != nil {

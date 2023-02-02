@@ -31,6 +31,9 @@ import (
 )
 
 const (
+	// Arbitrum: Cache size granted for caching clean compiled wasm code.
+	compiledWasmCodeCacheSize = 64 * 1024 * 1024
+
 	// Number of codehash->size associations to keep.
 	codeSizeCacheSize = 100000
 
@@ -40,6 +43,9 @@ const (
 
 // Database wraps access to tries and contract code.
 type Database interface {
+	// Arbitrum: CompiledWasmContractCode retrieves a particular contract's user wasm code.
+	CompiledWasmContractCode(version uint32, codeHash common.Hash) ([]byte, error)
+
 	// OpenTrie opens the main account trie.
 	OpenTrie(root common.Hash) (Trie, error)
 
@@ -133,12 +139,18 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 		db:            trie.NewDatabaseWithConfig(db, config),
 		codeSizeCache: csc,
 		codeCache:     fastcache.New(codeCacheSize),
+
+		// Arbitrum only
+		compiledWasmCache: fastcache.New(compiledWasmCodeCacheSize),
 	}
 	runtime.SetFinalizer(cdb, (*cachingDB).finalizer)
 	return cdb
 }
 
 type cachingDB struct {
+	// Arbitrum
+	compiledWasmCache *fastcache.Cache
+
 	db            *trie.Database
 	codeSizeCache *lru.Cache
 	codeCache     *fastcache.Cache
@@ -156,6 +168,9 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 // fastcache chunks are not mannaged by GC.
 func (db *cachingDB) finalizer() {
 	db.codeCache.Reset()
+
+	// Arbitrum Only
+	db.compiledWasmCache.Reset()
 }
 
 // OpenStorageTrie opens the storage trie of an account.

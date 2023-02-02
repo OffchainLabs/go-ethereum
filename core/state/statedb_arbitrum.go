@@ -19,15 +19,73 @@ package state
 
 import (
 	"encoding/binary"
-	"errors"
 	"math/big"
+
+	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 )
+
+var (
+	// Defines prefix bytes for Stylus WASM program bytecode
+	// when deployed on-chain via a user-initiated transaction.
+	// These byte prefixes are meant to conflict with the L1 contract EOF
+	// validation rules so they can be sufficiently differentiated from EVM bytecode.
+	// This allows us to store WASM programs as code in the stateDB side-by-side
+	// with EVM contracts, but match against these prefix bytes when loading code
+	// to execute the WASMs through Stylus rather than the EVM.
+	stylusEOFMagic         = byte(0xEF)
+	stylusEOFMagicSuffix   = byte(0x00)
+	stylusEOFVersion       = byte(0x00)
+	stylusEOFSectionHeader = byte(0x00)
+
+	StylusPrefix = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersion, stylusEOFSectionHeader}
+)
+
+// IsStylusProgram checks if a specified bytecode is a user-submitted WASM program.
+// Stylus differentiates WASMs from EVM bytecode via the prefix 0xEF000000 which will safely fail
+// to pass through EVM-bytecode EOF validation rules.
+func IsStylusProgram(b []byte) bool {
+	if len(b) < 4 {
+		return false
+	}
+	return b[0] == stylusEOFMagic && b[1] == stylusEOFMagicSuffix && b[2] == stylusEOFVersion && b[3] == stylusEOFSectionHeader
+}
+
+// StripStylusPrefix if the specified input is a stylus program.
+func StripStylusPrefix(b []byte) ([]byte, error) {
+	if !IsStylusProgram(b) {
+		return nil, errors.New("specified bytecode is not a Stylus program")
+	}
+	return b[4:], nil
+}
+
+func (s *StateDB) GetCompiledWasmCode(addr common.Address, version uint32) []byte {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.CompiledWasmCode(s.db, version)
+	}
+	return nil
+}
+
+func (s *StateDB) SetCompiledWasmCode(addr common.Address, code []byte, version uint32) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetCompiledWasmCode(code, version)
+	}
+}
+
+func NewDeterministic(root common.Hash, db Database) (*StateDB, error) {
+	sdb, err := New(root, db, nil)
+	if err != nil {
+		return nil, err
+	}
+	sdb.deterministic = true
+	return sdb, nil
+}
 
 func (s *StateDB) Deterministic() bool {
 	return s.deterministic
@@ -81,7 +139,7 @@ func (s *StateDB) RecordProgram(program common.Address, version uint32) {
 			return
 		}
 		rawCode := s.GetCode(program)
-		compressedWasm, err := vm.StripStylusPrefix(rawCode)
+		compressedWasm, err := StripStylusPrefix(rawCode)
 		if err != nil {
 			log.Error("Could not strip stylus program prefix from raw code: %v", err)
 			return
@@ -101,19 +159,4 @@ func (s *StateDB) NoncanonicalProgramHash(program common.Address, version uint32
 
 func (s *StateDB) UserWasms() UserWasms {
 	return s.userWasms
-}
-
-// TODO: move to ArbDB
-var modules = make(map[common.Address][]byte)
-
-func (s *StateDB) AddUserModule(version uint32, program common.Address, source []byte) {
-	modules[program] = source
-}
-
-func (s *StateDB) GetUserModule(version uint32, program common.Address) ([]byte, error) {
-	machine, ok := modules[program]
-	if !ok {
-		return nil, errors.New("no program for given address")
-	}
-	return machine, nil
 }
