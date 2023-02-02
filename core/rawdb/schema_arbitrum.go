@@ -29,8 +29,8 @@ var (
 	CompiledWasmCodePrefix = []byte{0x00, 'w'} // (prefix, version, code_hash) -> account compiled wasm code
 )
 
-// compiledWasmCodeKey = CompiledWasmCodePrefix + version + hash
-func compiledWasmCodeKey(version uint32, hash common.Hash) []byte {
+// CompiledWasmCodeKey = CompiledWasmCodePrefix + version + hash
+func CompiledWasmCodeKey(version uint32, hash common.Hash) []byte {
 	var versionBytes [4]byte
 	binary.BigEndian.PutUint32(versionBytes[:], version)
 	return append(append(CompiledWasmCodePrefix, versionBytes[:]...), hash.Bytes()...)

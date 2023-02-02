@@ -22,15 +22,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// ReadCompiledWasmCode retrieves the compiled wasm contract code of the provided code hash.
-func ReadCompiledWasmCode(db ethdb.KeyValueReader, version uint32, hash common.Hash) []byte {
-	data, _ := db.Get(compiledWasmCodeKey(version, hash))
-	return data
-}
-
 // WriteCompiledWasmCode writes the provided contract compiled wasm code database.
 func WriteCompiledWasmCode(db ethdb.KeyValueWriter, version uint32, hash common.Hash, code []byte) {
-	if err := db.Put(compiledWasmCodeKey(version, hash), code); err != nil {
+	if err := db.Put(CompiledWasmCodeKey(version, hash), code); err != nil {
 		log.Crit("Failed to store compiled wasm contract code", "err", err)
 	}
 }

@@ -45,7 +45,7 @@ func (s *stateObject) CompiledWasmCode(db Database, version uint32) []byte {
 	if version == 0 {
 		return nil
 	}
-	compiledWasmCode, err := db.CompiledWasmContractCode(common.BytesToHash(s.CodeHash()), version)
+	compiledWasmCode, err := db.CompiledWasmContractCode(version, common.BytesToHash(s.CodeHash()))
 	if err != nil {
 		s.setError(fmt.Errorf("can't load code hash %x: %v", s.CodeHash(), err))
 	}
