@@ -26,9 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
-	"fmt"
 )
 
 var (
@@ -43,6 +41,8 @@ var (
 	stylusEOFMagicSuffix   = byte(0x00)
 	stylusEOFVersion       = byte(0x00)
 	stylusEOFSectionHeader = byte(0x00)
+
+	StylusPrefix = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersion, stylusEOFSectionHeader}
 )
 
 // IsStylusProgram checks if a specified bytecode is a user-submitted WASM program.
@@ -61,6 +61,30 @@ func StripStylusPrefix(b []byte) ([]byte, error) {
 		return nil, errors.New("specified bytecode is not a Stylus program")
 	}
 	return b[4:], nil
+}
+
+func (s *StateDB) GetCompiledWasmCode(addr common.Address, version uint32) []byte {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.CompiledWasmCode(s.db, version)
+	}
+	return nil
+}
+
+func (s *StateDB) SetCompiledWasmCode(addr common.Address, code []byte, version uint32) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetCompiledWasmCode(code, version)
+	}
+}
+
+func NewDeterministic(root common.Hash, db Database) (*StateDB, error) {
+	sdb, err := New(root, db, nil)
+	if err != nil {
+		return nil, err
+	}
+	sdb.deterministic = true
+	return sdb, nil
 }
 
 func (s *StateDB) Deterministic() bool {
@@ -135,29 +159,4 @@ func (s *StateDB) NoncanonicalProgramHash(program common.Address, version uint32
 
 func (s *StateDB) UserWasms() UserWasms {
 	return s.userWasms
-}
-
-func (s *StateDB) AddUserModule(version uint32, program common.Address, source []byte) error {
-	diskDB := s.db.TrieDB().DiskDB()
-	// TODO: Key should encompass version, but doing this will prevent the recording db
-	// from successfully reading the user module. Recording DB expects the key to be the
-	// hash of the contents at this time.
-	log.Info(fmt.Sprintf("Adding user module with version=%d, program=%#x", version, program))
-	key := crypto.Keccak256Hash(source)
-	return diskDB.Put(key.Bytes(), source)
-}
-
-func (s *StateDB) GetUserModule(version uint32, program common.Address) ([]byte, error) {
-	diskDB := s.db.TrieDB().DiskDB()
-	// TODO: In order for proving to work, the recording DB expects the key
-	// of the module in the database to be exactly the keccak hash of its serialized bytes.
-	// However, we do not have access to this at this time. Hardcoding to prove the test will pass.
-	key, _ := hexutil.Decode("0xd99286ed0bdecb16c4c41ba88fbbecb49645f82a187bf780932a5d3f35408a13")
-	return diskDB.Get(key)
-}
-
-func userModuleKey(version uint32, program common.Address) []byte {
-	prefix := make([]byte, 4)
-	binary.BigEndian.PutUint32(prefix, version)
-	return crypto.Keccak256Hash(prefix, program.Bytes()).Bytes()
 }

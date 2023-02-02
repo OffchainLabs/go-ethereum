@@ -24,9 +24,9 @@ import (
 	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/core/state"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -240,7 +240,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
 			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code)
-			ret, err = evm.interpreter.Run(contract, input, false)
+			ret, err = evm.runInterpreter(contract, input, false)
 			gas = contract.Gas
 		}
 	}
@@ -305,7 +305,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
 		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
-		ret, err = evm.interpreter.Run(contract, input, false)
+		ret, err = evm.runInterpreter(contract, input, false)
 		gas = contract.Gas
 	}
 	if err != nil {
@@ -315,6 +315,13 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		}
 	}
 	return ret, gas, err
+}
+
+func (evm *EVM) runInterpreter(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
+	if evm.chainRules.IsArbitrum && state.IsStylusProgram(contract.Code) {
+		return evm.ProcessingHook.ExecuteWASM(contract, input, readOnly, evm.TxContext, evm.Context)
+	}
+	return evm.interpreter.Run(contract, input, readOnly)
 }
 
 // DelegateCall executes the contract associated with the addr with the given input
@@ -354,7 +361,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		// Initialise a new contract and make initialise the delegate values
 		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
 		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
-		ret, err = evm.interpreter.Run(contract, input, false)
+		ret, err = evm.runInterpreter(contract, input, false)
 		gas = contract.Gas
 	}
 	if err != nil {
@@ -418,7 +425,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		// When an error was returned by the EVM or when setting the creation code
 		// above we revert to the snapshot and consume any gas remaining. Additionally
 		// when we're in Homestead this also counts for code storage gas errors.
-		ret, err = evm.interpreter.Run(contract, input, true)
+		ret, err = evm.runInterpreter(contract, input, true)
 		gas = contract.Gas
 	}
 	if err != nil {
