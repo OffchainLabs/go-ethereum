@@ -71,12 +71,7 @@ func (r *RootHashOrSlots) UnmarshalJSON(data []byte) error {
 		r.RootHash = &hash
 		return nil
 	}
-	var slotValue map[common.Hash]common.Hash
-	if err = json.Unmarshal(data, &slotValue); err != nil {
-		return err
-	}
-	r.SlotValue = slotValue
-	return nil
+	return json.Unmarshal(data, &r.SlotValue)
 }
 
 func (r RootHashOrSlots) MarshalJSON() ([]byte, error) {
