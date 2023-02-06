@@ -2,9 +2,9 @@ package arbitrum
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 
+	"github.com/ethereum/go-ethereum/arbitrum_types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -22,7 +22,7 @@ func NewArbTransactionAPI(b *APIBackend) *ArbTransactionAPI {
 	return &ArbTransactionAPI{b}
 }
 
-func (s *ArbTransactionAPI) SendRawTransactionConditional(ctx context.Context, input hexutil.Bytes, options *ConditionalOptions) (common.Hash, error) {
+func (s *ArbTransactionAPI) SendRawTransactionConditional(ctx context.Context, input hexutil.Bytes, options *arbitrum_types.ConditionalOptions) (common.Hash, error) {
 	tx := new(types.Transaction)
 	if err := tx.UnmarshalBinary(input); err != nil {
 		return common.Hash{}, err
@@ -30,7 +30,7 @@ func (s *ArbTransactionAPI) SendRawTransactionConditional(ctx context.Context, i
 	return SubmitConditionalTransaction(ctx, s.b, tx, options)
 }
 
-func SubmitConditionalTransaction(ctx context.Context, b *APIBackend, tx *types.Transaction, options *ConditionalOptions) (common.Hash, error) {
+func SubmitConditionalTransaction(ctx context.Context, b *APIBackend, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) (common.Hash, error) {
 	// If the transaction fee cap is already specified, ensure the
 	// fee of the given transaction is _reasonable_.
 	if err := ethapi.CheckTxFee(tx.GasPrice(), tx.Gas(), b.RPCTxFeeCap()); err != nil {
@@ -59,38 +59,7 @@ func SubmitConditionalTransaction(ctx context.Context, b *APIBackend, tx *types.
 	return tx.Hash(), nil
 }
 
-type RootHashOrSlots struct {
-	RootHash  *common.Hash
-	SlotValue map[common.Hash]common.Hash
-}
-
-func (r *RootHashOrSlots) UnmarshalJSON(data []byte) error {
-	var hash common.Hash
-	var err error
-	if err = json.Unmarshal(data, &hash); err == nil {
-		r.RootHash = &hash
-		return nil
-	}
-	return json.Unmarshal(data, &r.SlotValue)
-}
-
-func (r RootHashOrSlots) MarshalJSON() ([]byte, error) {
-	if r.RootHash != nil {
-		return json.Marshal(*r.RootHash)
-	}
-	if len(r.SlotValue) > 0 {
-		slotValue := r.SlotValue
-		return json.Marshal(slotValue)
-	}
-	return nil, nil
-}
-
-// TODO rename to just "Options" ?
-type ConditionalOptions struct {
-	KnownAccounts map[common.Address]RootHashOrSlots `json:"knownAccounts"`
-}
-
-func SendConditionalTransactionRPC(ctx context.Context, rpc *rpc.Client, tx *types.Transaction, options *ConditionalOptions) error {
+func SendConditionalTransactionRPC(ctx context.Context, rpc *rpc.Client, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {
 	data, err := tx.MarshalBinary()
 	if err != nil {
 		return err

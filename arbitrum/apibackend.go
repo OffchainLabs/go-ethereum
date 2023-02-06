@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/arbitrum_types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
@@ -480,7 +481,7 @@ func (a *APIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) er
 	return a.b.EnqueueL2Message(ctx, signedTx, nil)
 }
 
-func (a *APIBackend) SendConditionalTx(ctx context.Context, signedTx *types.Transaction, options *ConditionalOptions) error {
+func (a *APIBackend) SendConditionalTx(ctx context.Context, signedTx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {
 	return a.b.EnqueueL2Message(ctx, signedTx, options)
 }
 
