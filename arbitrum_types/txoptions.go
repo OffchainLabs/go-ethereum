@@ -25,11 +25,7 @@ func (r RootHashOrSlots) MarshalJSON() ([]byte, error) {
 	if r.RootHash != nil {
 		return json.Marshal(*r.RootHash)
 	}
-	if len(r.SlotValue) > 0 {
-		slotValue := r.SlotValue
-		return json.Marshal(slotValue)
-	}
-	return nil, nil
+	return json.Marshal(r.SlotValue)
 }
 
 // TODO rename to just "Options" ?
