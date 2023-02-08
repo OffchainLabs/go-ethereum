@@ -7,7 +7,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/pkg/errors"
 )
 
 type RootHashOrSlots struct {
@@ -48,13 +47,9 @@ func (o *ConditionalOptions) Check(statedb *state.StateDB) error {
 				return fmt.Errorf("Storage root hash condition not met for address: %s", address.String())
 			}
 		} else if len(rootHashOrSlots.SlotValue) > 0 {
-			trie := statedb.StorageTrie(address)
 			for slot, value := range rootHashOrSlots.SlotValue {
-				stored, err := trie.TryGet(slot.Bytes())
-				if err != nil {
-					return errors.Wrap(err, fmt.Sprintf("Storage slot not found, address: %s, slot: %s, error", address.String(), slot.String()))
-				}
-				if !bytes.Equal(common.BytesToHash(stored).Bytes(), value.Bytes()) {
+				stored := statedb.GetState(address, slot)
+				if !bytes.Equal(stored.Bytes(), value.Bytes()) {
 					return fmt.Errorf("Storage slot value condition not met for address: %s, slot: %s", address.String(), slot.String())
 				}
 			}
