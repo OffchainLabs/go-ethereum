@@ -29,7 +29,7 @@ import (
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/websocket"
 )
 
@@ -223,20 +223,15 @@ func DialWebsocket(ctx context.Context, endpoint, origin string) (*Client, error
 	return DialWebsocketWithDialer(ctx, endpoint, origin, dialer)
 }
 
-type jwtClaim map[string]interface{}
-
-func (jwtClaim) Valid() error {
-	return nil
-}
-
 func DialWebsocketJWT(ctx context.Context, endpoint, origin string, jwtSecret []byte) (*Client, error) {
 	dialer := websocket.Dialer{
 		ReadBufferSize:  wsReadBuffer,
 		WriteBufferSize: wsWriteBuffer,
 		WriteBufferPool: wsBufferPool,
 	}
-	claims := jwtClaim(make(map[string]interface{}))
-	claims["iat"] = time.Now().Unix()
+	claims := jwt.StandardClaims{
+		IssuedAt: time.Now().Unix(),
+	}
 	jwtToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(jwtSecret)
 	if err != nil {
 		return nil, err
