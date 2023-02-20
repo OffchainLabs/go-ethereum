@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -134,6 +135,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	// Don't bother with the execution if there's no code.
 	if len(contract.Code) == 0 {
 		return nil, nil
+	}
+
+	// Arbitrum: handle Stylus programs
+	if in.evm.chainRules.IsArbitrum && state.IsStylusProgram(contract.Code) {
+		return in.evm.ProcessingHook.ExecuteWASM(contract, input, in)
 	}
 
 	var (
