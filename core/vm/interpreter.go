@@ -137,11 +137,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		return nil, nil
 	}
 
-	// Arbitrum: handle Stylus programs
-	if in.evm.chainRules.IsArbitrum && state.IsStylusProgram(contract.Code) {
-		return in.evm.ProcessingHook.ExecuteWASM(contract, input, in)
-	}
-
 	var (
 		op          OpCode        // current opcode
 		mem         = NewMemory() // bound memory
@@ -181,6 +176,13 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 		}()
 	}
+
+	// Arbitrum: handle Stylus programs
+	if in.evm.chainRules.IsArbitrum && state.IsStylusProgram(contract.Code) {
+		ret, err = in.evm.ProcessingHook.ExecuteWASM(callContext, input, in)
+		return
+	}
+
 	// The Interpreter main run loop (contextual). This loop runs until either an
 	// explicit STOP, RETURN or SELFDESTRUCT is executed, an error occurred during
 	// the execution of one of the operations or until the done flag is set by the
