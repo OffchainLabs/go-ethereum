@@ -315,7 +315,7 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 		if logFunc != nil {
 			logFunc(header, block.Header(), true)
 		}
-		_, _, _, err := r.bc.Processor().Process(block, stateDb, vm.Config{})
+		_, _, _, err := r.bc.Processor().Process(block, block.Header().ExcessDataGas, stateDb, vm.Config{})
 		if err != nil {
 			return nil, fmt.Errorf("failed recreating state for block %d : %w", blockToRecreate, err)
 		}
