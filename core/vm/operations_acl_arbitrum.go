@@ -18,24 +18,29 @@ package vm
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// Computes the cost of doing a state load as of The Merge
+// Computes the cost of doing a state load as of The Merge, updating access lists in the process
 // Note: the code here is adapted from gasSLoadEIP2929
 func StateLoadCost(db StateDB, account common.Address, key common.Hash) uint64 {
 	// Check slot presence in the access list
-	if _, slotPresent := db.SlotInAccessList(account, key); !slotPresent {
+	if addrPresent, slotPresent := db.SlotInAccessList(account, key); !slotPresent {
 		// If the caller cannot afford the cost, this change will be rolled back
 		// If he does afford it, we can skip checking the same thing later on, during execution
-		db.AddSlotToAccessList(account, key)
+		if addrPresent {
+			db.AddSlotToAccessList(account, key)
+		} else {
+			log.Error("account not present in access list", "account", account)
+		}
 		return params.ColdSloadCostEIP2929
 	}
 	return params.WarmStorageReadCostEIP2929
 }
 
-// Computes the cost of doing a state store as of The Merge
-// Note: the code here is adapted from makeGasSStoreFunc with the most recent parameters as of The Merge
+// Computes the cost of doing a state store as of The Merge, updating access lists in the process
+// Note: the code here is adapted from makeGasSStoreFunc
 // Note: the sentry check must be done by the caller
 func StateStoreCost(db StateDB, account common.Address, key, value common.Hash) uint64 {
 	clearingRefund := params.SstoreClearsScheduleRefundEIP3529
@@ -46,10 +51,12 @@ func StateStoreCost(db StateDB, account common.Address, key, value common.Hash) 
 	// Check slot presence in the access list
 	if addrPresent, slotPresent := db.SlotInAccessList(account, key); !slotPresent {
 		cost = params.ColdSloadCostEIP2929
-		// If the caller cannot afford the cost, this change will be rolled back
-		db.AddSlotToAccessList(account, key)
-		if !addrPresent {
-			panic("impossible case: address was not present in access list")
+
+		if addrPresent {
+			// If the caller cannot afford the cost, this change will be rolled back
+			db.AddSlotToAccessList(account, key)
+		} else {
+			log.Error("account not present in access list", "account", account)
 		}
 	}
 

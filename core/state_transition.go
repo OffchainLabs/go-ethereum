@@ -358,7 +358,18 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	// Set up the initial access list.
 	if rules.IsBerlin {
-		st.state.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
+		// Arbitrum: add ArbOS state to the access list
+		accessList := msg.AccessList()
+
+		if st.evm.ChainConfig().IsArbitrum() {
+			arbos := types.AccessTuple{
+				Address:     types.ArbosStateAddress,
+				StorageKeys: []common.Hash{{}},
+			}
+			accessList = append(accessList, arbos)
+		}
+
+		st.state.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules), accessList)
 	}
 	var (
 		ret   []byte
