@@ -1053,9 +1053,14 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 // - Add the contents of the optional tx access list (2930)
 //
 // This method should only be called if Berlin/2929+2930 is applicable at the current number.
-func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
-	// Clear out any leftover from previous executions
-	s.accessList = newAccessList()
+func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList, arbitrum bool) {
+
+	// Arbitrum: we cleared the list earlier and have populated slots as we touched ArbOS state,
+	// so keep the current set exactly as is.
+	if !arbitrum {
+		// Clear out any leftover from previous executions
+		s.accessList = newAccessList()
+	}
 
 	s.AddAddressToAccessList(sender)
 	if dst != nil {

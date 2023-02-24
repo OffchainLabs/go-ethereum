@@ -46,3 +46,7 @@ func (s *StateDB) GetSuicides() []common.Address {
 	}
 	return suicides
 }
+
+func (s *StateDB) ResetAccessList() {
+	s.accessList = newAccessList()
+}
