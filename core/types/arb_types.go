@@ -3,6 +3,7 @@ package types
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -11,6 +12,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum/go-ethereum/common"
+)
+
+const (
+	ArbitrumExtendedTxFlagEnableTip uint64 = (1 << 0)
 )
 
 type fallbackError struct {
@@ -459,4 +464,35 @@ func DeserializeHeaderExtraInformation(header *Header) (HeaderInfo, error) {
 	extra.L1BlockNumber = binary.BigEndian.Uint64(header.MixDigest[8:16])
 	extra.ArbOSFormatVersion = binary.BigEndian.Uint64(header.MixDigest[16:24])
 	return extra, nil
+}
+
+type ArbitrumExtendedTxData struct {
+	DynamicFeeTx
+	Flags uint64
+}
+
+func NewArbitrumExtendedTx(origTx *Transaction, flags uint64) (*Transaction, error) {
+	if origTx.Type() != DynamicFeeTxType {
+		return nil, errors.New("attempt to arbitrum-wrap into extended transaction a transaction that is not a dynamic fee transaction")
+	}
+	dynamicPtr := origTx.GetInner().(*DynamicFeeTx)
+	inner := ArbitrumExtendedTxData{
+		DynamicFeeTx: *dynamicPtr,
+		Flags:        flags,
+	}
+	return NewTx(&inner), nil
+}
+
+func (tx *ArbitrumExtendedTxData) copy() TxData {
+	dynamicCopy := tx.DynamicFeeTx.copy().(*DynamicFeeTx)
+	return &ArbitrumExtendedTxData{
+		DynamicFeeTx: *dynamicCopy,
+		Flags:        tx.Flags,
+	}
+}
+
+func (tx *ArbitrumExtendedTxData) txType() byte { return ArbitrumExtendedTxType }
+
+func (tx *ArbitrumExtendedTxData) EnableTipFlag() bool {
+	return (tx.Flags & ArbitrumExtendedTxFlagEnableTip) != 0
 }
