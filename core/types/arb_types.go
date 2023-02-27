@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	ArbitrumExtendedTxFlagEnableTip uint64 = (1 << 0)
+	ArbitrumTippingTxFlagEnableTip uint64 = (1 << 0)
 )
 
 type fallbackError struct {
@@ -466,33 +466,26 @@ func DeserializeHeaderExtraInformation(header *Header) (HeaderInfo, error) {
 	return extra, nil
 }
 
-type ArbitrumExtendedTxData struct {
+type ArbitrumTippingTx struct {
 	DynamicFeeTx
-	Flags uint64
 }
 
-func NewArbitrumExtendedTx(origTx *Transaction, flags uint64) (*Transaction, error) {
-	if origTx.Type() != DynamicFeeTxType {
+func NewArbitrumTippingTx(origTx *Transaction) (*Transaction, error) {
+	dynamicPtr, ok := origTx.GetInner().(*DynamicFeeTx)
+	if origTx.Type() != DynamicFeeTxType || !ok {
 		return nil, errors.New("attempt to arbitrum-wrap into extended transaction a transaction that is not a dynamic fee transaction")
 	}
-	dynamicPtr := origTx.GetInner().(*DynamicFeeTx)
-	inner := ArbitrumExtendedTxData{
+	inner := ArbitrumTippingTx{
 		DynamicFeeTx: *dynamicPtr,
-		Flags:        flags,
 	}
 	return NewTx(&inner), nil
 }
 
-func (tx *ArbitrumExtendedTxData) copy() TxData {
+func (tx *ArbitrumTippingTx) copy() TxData {
 	dynamicCopy := tx.DynamicFeeTx.copy().(*DynamicFeeTx)
-	return &ArbitrumExtendedTxData{
+	return &ArbitrumTippingTx{
 		DynamicFeeTx: *dynamicCopy,
-		Flags:        tx.Flags,
 	}
 }
 
-func (tx *ArbitrumExtendedTxData) txType() byte { return ArbitrumExtendedTxType }
-
-func (tx *ArbitrumExtendedTxData) EnableTipFlag() bool {
-	return (tx.Flags & ArbitrumExtendedTxFlagEnableTip) != 0
-}
+func (tx *ArbitrumTippingTx) txType() byte { return ArbitrumTippingTxType }

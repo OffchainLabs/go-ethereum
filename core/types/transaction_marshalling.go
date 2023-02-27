@@ -62,7 +62,6 @@ type txJSON struct {
 	MaxSubmissionFee    *hexutil.Big    `json:"maxSubmissionFee,omitempty"`    // SubmitRetryable
 	EffectiveGasPrice   *hexutil.Uint64 `json:"effectiveGasPrice,omitempty"`   // ArbLegacy
 	L1BlockNumber       *hexutil.Uint64 `json:"l1BlockNumber,omitempty"`       // ArbLegacy
-	Flags               *hexutil.Uint64 `json:"flags,omitempty"`               // ArbExtendedTx
 
 	// Only used for encoding - and for ArbLegacy
 	Hash common.Hash `json:"hash"`
@@ -123,7 +122,8 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
-	case *ArbitrumExtendedTxData:
+	//	TODO could we collapse it to: `case *DynamicFeeTx, *ArbitrumTippingTx:`
+	case *ArbitrumTippingTx:
 		enc.ChainID = (*hexutil.Big)(tx.ChainID)
 		enc.AccessList = &tx.AccessList
 		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
@@ -136,7 +136,6 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
-		enc.Flags = (*hexutil.Uint64)(&tx.Flags)
 	case *ArbitrumLegacyTxData:
 		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
 		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
@@ -319,64 +318,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			}
 		}
 
-	case DynamicFeeTxType:
-		var itx DynamicFeeTx
-		inner = &itx
-		// Access list is optional for now.
-		if dec.AccessList != nil {
-			itx.AccessList = *dec.AccessList
-		}
-		if dec.ChainID == nil {
-			return errors.New("missing required field 'chainId' in transaction")
-		}
-		itx.ChainID = (*big.Int)(dec.ChainID)
-		if dec.To != nil {
-			itx.To = dec.To
-		}
-		if dec.Nonce == nil {
-			return errors.New("missing required field 'nonce' in transaction")
-		}
-		itx.Nonce = uint64(*dec.Nonce)
-		if dec.MaxPriorityFeePerGas == nil {
-			return errors.New("missing required field 'maxPriorityFeePerGas' for txdata")
-		}
-		itx.GasTipCap = (*big.Int)(dec.MaxPriorityFeePerGas)
-		if dec.MaxFeePerGas == nil {
-			return errors.New("missing required field 'maxFeePerGas' for txdata")
-		}
-		itx.GasFeeCap = (*big.Int)(dec.MaxFeePerGas)
-		if dec.Gas == nil {
-			return errors.New("missing required field 'gas' for txdata")
-		}
-		itx.Gas = uint64(*dec.Gas)
-		if dec.Value == nil {
-			return errors.New("missing required field 'value' in transaction")
-		}
-		itx.Value = (*big.Int)(dec.Value)
-		if dec.Data == nil {
-			return errors.New("missing required field 'input' in transaction")
-		}
-		itx.Data = *dec.Data
-		if dec.V == nil {
-			return errors.New("missing required field 'v' in transaction")
-		}
-		itx.V = (*big.Int)(dec.V)
-		if dec.R == nil {
-			return errors.New("missing required field 'r' in transaction")
-		}
-		itx.R = (*big.Int)(dec.R)
-		if dec.S == nil {
-			return errors.New("missing required field 's' in transaction")
-		}
-		itx.S = (*big.Int)(dec.S)
-		withSignature := itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0
-		if withSignature {
-			if err := sanityCheckSignature(itx.V, itx.R, itx.S, false); err != nil {
-				return err
-			}
-		}
-
-	case ArbitrumExtendedTxType:
+	case DynamicFeeTxType, ArbitrumTippingTxType:
 		var itx DynamicFeeTx
 		// Access list is optional for now.
 		if dec.AccessList != nil {
@@ -431,12 +373,12 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 				return err
 			}
 		}
-		if dec.Flags == nil {
-			return errors.New("missing required field 'Flags' in transaction")
-		}
-		inner = &ArbitrumExtendedTxData{
-			DynamicFeeTx: itx,
-			Flags:        uint64(*dec.Flags),
+		if dec.Type == ArbitrumTippingTxType {
+			inner = &ArbitrumTippingTx{
+				DynamicFeeTx: itx,
+			}
+		} else {
+			inner = &itx
 		}
 
 	case ArbitrumLegacyTxType:
