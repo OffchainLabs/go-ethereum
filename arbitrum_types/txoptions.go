@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/state"
 )
 
@@ -33,10 +35,29 @@ func (r RootHashOrSlots) MarshalJSON() ([]byte, error) {
 
 // TODO rename to just "Options" ?
 type ConditionalOptions struct {
-	KnownAccounts map[common.Address]RootHashOrSlots `json:"knownAccounts"`
+	KnownAccounts  map[common.Address]RootHashOrSlots `json:"knownAccounts"`
+	BlockNumberMin *hexutil.Uint64                    `json:"blockNumberMin,omitempty"`
+	BlockNumberMax *hexutil.Uint64                    `json:"blockNumberMax,omitempty"`
+	TimestampMin   *hexutil.Uint64                    `json:"timestampMin,omitempty"`
+	TimestampMax   *hexutil.Uint64                    `json:"timestampMax,omitempty"`
 }
 
-func (o *ConditionalOptions) Check(statedb *state.StateDB) error {
+func (o *ConditionalOptions) Check(blockNumber uint64, statedb *state.StateDB) error {
+	if o.TimestampMin != nil || o.TimestampMax != nil {
+		now := uint64(time.Now().Unix())
+		if o.TimestampMin != nil && now < uint64(*o.TimestampMin) {
+			return fmt.Errorf("TimestampMin condition not met, want: %d, have: %d", *o.TimestampMin, now)
+		}
+		if o.TimestampMax != nil && now > uint64(*o.TimestampMax) {
+			return fmt.Errorf("TimestampMax condition not met, want: %d, have: %d", *o.TimestampMax, now)
+		}
+	}
+	if o.BlockNumberMin != nil && blockNumber < uint64(*o.BlockNumberMin) {
+		return fmt.Errorf("BlockNumberMin condition not met, want: %d, have: %d", *o.BlockNumberMin, blockNumber)
+	}
+	if o.BlockNumberMax != nil && blockNumber > uint64(*o.BlockNumberMax) {
+		return fmt.Errorf("BlockNumberMax condition not met, want: %d, have: %d", *o.BlockNumberMax, blockNumber)
+	}
 	for address, rootHashOrSlots := range o.KnownAccounts {
 		if rootHashOrSlots.RootHash != nil {
 			trie := statedb.StorageTrie(address)
