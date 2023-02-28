@@ -111,7 +111,7 @@ type arbLegacyStoredReceiptRLP struct {
 	L1GasUsed         uint64
 	Status            uint64
 	ContractAddress   common.Address
-	Logs              []*LogForStorage
+	Logs              []*Log
 }
 
 // v4StoredReceiptRLP is the storage encoding of a receipt used in database version 4.
@@ -331,13 +331,7 @@ func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 	if err := decodeStoredReceiptRLP(r, blob); err == nil {
 		return nil
 	}
-	if err := decodeArbitrumLegacyStoredReceiptRLP(r, blob); err == nil {
-		return nil
-	}
-	if err := decodeV3StoredReceiptRLP(r, blob); err == nil {
-		return nil
-	}
-	return decodeV4StoredReceiptRLP(r, blob)
+	return decodeArbitrumLegacyStoredReceiptRLP(r, blob)
 }
 
 func decodeArbitrumLegacyStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
