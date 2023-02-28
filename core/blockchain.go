@@ -1409,7 +1409,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 
 	// Full but not archive node, do proper garbage collection
-	triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
+	bc.triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
 	bc.triegc.Push(trieGcEntry{root, block.Header().Time}, -int64(block.NumberU64()))
 
 	blockLimit := int64(block.NumberU64()) - int64(bc.cacheConfig.TriesInMemory)   // only cleared if below that
@@ -1418,28 +1418,28 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if blockLimit > 0 && timeLimit > 0 {
 		// If we exceeded our memory allowance, flush matured singleton nodes to disk
 		var (
-			nodes, imgs = triedb.Size()
+			nodes, imgs = bc.triedb.Size()
 			limit       = common.StorageSize(bc.cacheConfig.TrieDirtyLimit) * 1024 * 1024
 		)
 		if nodes > limit || imgs > 4*1024*1024 {
-			triedb.Cap(limit - ethdb.IdealBatchSize)
+			bc.triedb.Cap(limit - ethdb.IdealBatchSize)
 		}
 		var prevEntry *trieGcEntry
 		var prevNum uint64
 		// Garbage collect anything below our required write retention
 		for !bc.triegc.Empty() {
-			tmp, number := bc.triegc.Pop()
-			triegcEntry := tmp.(trieGcEntry)
-			if uint64(-number) > uint64(blockLimit) || triegcEntry.Timestamp > uint64(timeLimit) {
-				bc.triegc.Push(triegcEntry, number)
+			root, number := bc.triegc.Pop()
+			if uint64(-number) > uint64(blockLimit) || root.Timestamp > uint64(timeLimit) {
+				bc.triegc.Push(root, number)
 				break
 			}
 			if prevEntry != nil {
-				triedb.Dereference(prevEntry.Root)
+				bc.triedb.Dereference(prevEntry.Root)
 			}
-			prevEntry = &triegcEntry
+			prevEntry = &root
 			prevNum = uint64(-number)
 		}
+		flushInterval := time.Duration(atomic.LoadInt64(&bc.flushInterval))
 		// If we exceeded out time allowance, flush an entire trie to disk
 		if bc.gcproc > bc.cacheConfig.TrieTimeLimit && prevEntry != nil {
 			// If the header is missing (canonical chain behind), we're reorging a low
@@ -1450,17 +1450,17 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			} else {
 				// If we're exceeding limits but haven't reached a large enough memory gap,
 				// warn the user that the system is becoming unstable.
-				if chosen < bc.lastWrite+bc.cacheConfig.TriesInMemory && bc.gcproc >= 2*flushInterval {
-					log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", flushInterval, "optimum", float64(prevNum-bc.lastWrite)/bc.cacheConfig.TriesInMemory)
+				if blockLimit < int64(bc.lastWrite+bc.cacheConfig.TriesInMemory) && bc.gcproc >= 2*flushInterval {
+					log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", flushInterval, "optimum", float64(prevNum-bc.lastWrite)/float64(bc.cacheConfig.TriesInMemory))
 				}
 				// Flush an entire trie and restart the counters
-				triedb.Commit(header.Root, true, nil)
+				bc.triedb.Commit(header.Root, true)
 				bc.lastWrite = prevNum
 				bc.gcproc = 0
 			}
 		}
 		if prevEntry != nil {
-			triedb.Dereference(prevEntry.Root)
+			bc.triedb.Dereference(prevEntry.Root)
 		}
 	}
 	return nil
