@@ -19,7 +19,6 @@ package state
 import (
 	"errors"
 	"fmt"
-	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -143,7 +142,6 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		triedb:        trie.NewDatabaseWithConfig(db, config),
 	}
-	runtime.SetFinalizer(cdb, (*cachingDB).finalizer)
 	return cdb
 }
 
@@ -155,7 +153,6 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		triedb:        triedb,
 	}
-	runtime.SetFinalizer(cdb, (*cachingDB).finalizer)
 	return cdb
 }
 
@@ -173,11 +170,6 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 		return nil, err
 	}
 	return tr, nil
-}
-
-// fastcache chunks are not mannaged by GC.
-func (db *cachingDB) finalizer() {
-	db.codeCache.Reset()
 }
 
 // OpenStorageTrie opens the storage trie of an account.
