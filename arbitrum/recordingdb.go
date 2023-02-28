@@ -187,7 +187,7 @@ func (r *RecordingDatabase) Dereference(header *types.Header) {
 
 func (r *RecordingDatabase) WriteStateToDatabase(header *types.Header) error {
 	if header != nil {
-		return r.db.TrieDB().Commit(header.Root, true, nil)
+		return r.db.TrieDB().Commit(header.Root, true)
 	}
 	return nil
 }
