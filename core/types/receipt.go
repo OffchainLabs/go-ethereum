@@ -357,7 +357,7 @@ func decodeArbitrumLegacyStoredReceiptRLP(r *ReceiptForStorage, blob []byte) err
 
 func decodeStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
 	var stored storedReceiptRLP
-	if err := s.Decode(&stored); err != nil {
+	if err := rlp.DecodeBytes(blob, &stored); err != nil {
 		return err
 	}
 	if err := (*Receipt)(r).setStatus(stored.PostStateOrStatus); err != nil {
