@@ -91,7 +91,8 @@ type ExecutionResult struct {
 	ReturnData []byte // Returned data from evm(function result or data supplied with revert opcode)
 
 	// Arbitrum: a tx may yield others that need to run afterward (see retryables)
-	ScheduledTxes types.Transactions
+	ScheduledTxes    types.Transactions
+	TopLevelDeployed *common.Address
 }
 
 // Unwrap returns the internal evm error which allows us for further
@@ -360,12 +361,14 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if rules.IsBerlin {
 		st.state.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
 	}
+	var deployedContract *common.Address
 	var (
 		ret   []byte
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
 	if contractCreation {
-		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
+		deployedContract = &common.Address{}
+		ret, *deployedContract, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
@@ -410,10 +413,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	return &ExecutionResult{
-		UsedGas:       st.gasUsed(),
-		Err:           vmerr,
-		ReturnData:    ret,
-		ScheduledTxes: st.evm.ProcessingHook.ScheduledTxes(),
+		UsedGas:          st.gasUsed(),
+		Err:              vmerr,
+		ReturnData:       ret,
+		ScheduledTxes:    st.evm.ProcessingHook.ScheduledTxes(),
+		TopLevelDeployed: deployedContract,
 	}, nil
 }
 
