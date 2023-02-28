@@ -113,6 +113,24 @@ func (t *muxTracer) CaptureTxEnd(restGas uint64) {
 	}
 }
 
+func (t *muxTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {
+	for _, t := range t.tracers {
+		t.CaptureArbitrumStorageGet(key, depth, before)
+	}
+}
+
+func (t *muxTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {
+	for _, t := range t.tracers {
+		t.CaptureArbitrumStorageSet(key, value, depth, before)
+	}
+}
+
+func (t *muxTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
+	for _, t := range t.tracers {
+		t.CaptureArbitrumTransfer(env, from, to, value, before, purpose)
+	}
+}
+
 // GetResult returns an empty json object.
 func (t *muxTracer) GetResult() (json.RawMessage, error) {
 	resObject := make(map[string]json.RawMessage)

@@ -18,6 +18,8 @@ package native
 
 import (
 	"math/big"
+	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -58,18 +60,28 @@ func (*noopTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address
 }
 func (*prestateTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
 }
-func (*revertReasonTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
-}
 
-func (*callTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)         {}
-func (*fourByteTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}
-func (*noopTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)         {}
-func (*prestateTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}
-func (*revertReasonTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {}
+func (*callTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}
+func (*fourByteTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {}
+func (*noopTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}
+func (*prestateTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {}
 
 func (*callTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)     {}
 func (*fourByteTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
 func (*noopTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)     {}
 func (*prestateTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
-func (*revertReasonTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {
+
+func bigToHex(n *big.Int) string {
+	if n == nil {
+		return ""
+	}
+	return "0x" + n.Text(16)
+}
+
+func uintToHex(n uint64) string {
+	return "0x" + strconv.FormatUint(n, 16)
+}
+
+func addrToHex(a common.Address) string {
+	return strings.ToLower(a.Hex())
 }
