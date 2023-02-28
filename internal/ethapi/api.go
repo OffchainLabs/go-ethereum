@@ -847,6 +847,10 @@ func (s *BlockChainAPI) GetCode(ctx context.Context, address common.Address, blo
 // block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
 // numbers are also allowed.
 func (s *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Address, hexKey string, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+	key, err := decodeHash(hexKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode storage key: %s", err)
+	}
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		if client := fallbackClientFor(s.b, err); client != nil {
@@ -855,10 +859,6 @@ func (s *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Address
 			return res, err
 		}
 		return nil, err
-	}
-	key, err := decodeHash(hexKey)
-	if err != nil {
-		return nil, fmt.Errorf("unable to decode storage key: %s", err)
 	}
 	res := state.GetState(address, key)
 	return res[:], state.Error()
