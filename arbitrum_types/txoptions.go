@@ -3,13 +3,32 @@ package arbitrum_types
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/state"
 )
+
+type rejectedError struct {
+	msg string
+}
+
+func NewRejectedError(msg string) *rejectedError {
+	return &rejectedError{msg: msg}
+}
+func (e rejectedError) Error() string { return e.msg }
+func (rejectedError) ErrorCode() int  { return -32003 }
+
+type limitExceededError struct {
+	msg string
+}
+
+func NewLimitExceededError(msg string) *limitExceededError {
+	return &limitExceededError{msg: msg}
+}
+func (e limitExceededError) Error() string { return e.msg }
+func (limitExceededError) ErrorCode() int  { return -32005 }
 
 type RootHashOrSlots struct {
 	RootHash  *common.Hash
@@ -46,32 +65,32 @@ func (o *ConditionalOptions) Check(blockNumber uint64, statedb *state.StateDB) e
 	if o.TimestampMin != nil || o.TimestampMax != nil {
 		now := uint64(time.Now().Unix())
 		if o.TimestampMin != nil && now < uint64(*o.TimestampMin) {
-			return fmt.Errorf("TimestampMin condition not met, want: %d, have: %d", *o.TimestampMin, now)
+			return NewRejectedError("TimestampMin condition not met")
 		}
 		if o.TimestampMax != nil && now > uint64(*o.TimestampMax) {
-			return fmt.Errorf("TimestampMax condition not met, want: %d, have: %d", *o.TimestampMax, now)
+			return NewRejectedError("TimestampMax condition not met")
 		}
 	}
 	if o.BlockNumberMin != nil && blockNumber < uint64(*o.BlockNumberMin) {
-		return fmt.Errorf("BlockNumberMin condition not met, want: %d, have: %d", *o.BlockNumberMin, blockNumber)
+		return NewRejectedError("BlockNumberMin condition not met")
 	}
 	if o.BlockNumberMax != nil && blockNumber > uint64(*o.BlockNumberMax) {
-		return fmt.Errorf("BlockNumberMax condition not met, want: %d, have: %d", *o.BlockNumberMax, blockNumber)
+		return NewRejectedError("BlockNumberMax condition not met")
 	}
 	for address, rootHashOrSlots := range o.KnownAccounts {
 		if rootHashOrSlots.RootHash != nil {
 			trie := statedb.StorageTrie(address)
 			if trie == nil {
-				return fmt.Errorf("Storage trie not found for address key in knownAccounts option, address: %s", address.String())
+				return NewRejectedError("Storage trie not found for address key in knownAccounts option")
 			}
 			if trie.Hash() != *rootHashOrSlots.RootHash {
-				return fmt.Errorf("Storage root hash condition not met for address: %s", address.String())
+				return NewRejectedError("Storage root hash condition not met")
 			}
 		} else if len(rootHashOrSlots.SlotValue) > 0 {
 			for slot, value := range rootHashOrSlots.SlotValue {
 				stored := statedb.GetState(address, slot)
 				if !bytes.Equal(stored.Bytes(), value.Bytes()) {
-					return fmt.Errorf("Storage slot value condition not met for address: %s, slot: %s", address.String(), slot.String())
+					return NewRejectedError("Storage slot value condition not met")
 				}
 			}
 		} // else rootHashOrSlots.SlotValue is empty - ignore it and check the rest of conditions
