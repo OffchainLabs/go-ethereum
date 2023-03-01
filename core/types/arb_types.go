@@ -14,10 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-const (
-	ArbitrumTippingTxFlagEnableTip uint64 = (1 << 0)
-)
-
 type fallbackError struct {
 }
 
