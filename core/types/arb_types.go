@@ -469,7 +469,7 @@ type ArbitrumTippingTx struct {
 func NewArbitrumTippingTx(origTx *Transaction) (*Transaction, error) {
 	dynamicPtr, ok := origTx.GetInner().(*DynamicFeeTx)
 	if origTx.Type() != DynamicFeeTxType || !ok {
-		return nil, errors.New("attempt to arbitrum-wrap into extended transaction a transaction that is not a dynamic fee transaction")
+		return nil, errors.New("attempt to arbitrum-wrap into tipping transaction a transaction that is not a dynamic fee transaction")
 	}
 	inner := ArbitrumTippingTx{
 		DynamicFeeTx: *dynamicPtr,
