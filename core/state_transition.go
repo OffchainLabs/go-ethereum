@@ -91,7 +91,8 @@ type ExecutionResult struct {
 	ReturnData []byte // Returned data from evm(function result or data supplied with revert opcode)
 
 	// Arbitrum: a tx may yield others that need to run afterward (see retryables)
-	ScheduledTxes    types.Transactions
+	ScheduledTxes types.Transactions
+	// Arbitrum: the contract deployed from the top-level transaction, or nil if not a contract creation tx
 	TopLevelDeployed *common.Address
 }
 
