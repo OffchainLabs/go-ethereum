@@ -343,3 +343,11 @@ func (b *backendMock) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent)
 }
 
 func (b *backendMock) Engine() consensus.Engine { return nil }
+
+func (b *backendMock) FallbackClient() types.FallbackClient {
+	return nil
+}
+
+func (b *backendMock) SyncProgressMap() map[string]interface{} {
+	return nil
+}
