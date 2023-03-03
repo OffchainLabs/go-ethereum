@@ -1669,7 +1669,7 @@ func TestTrieForkGC(t *testing.T) {
 		Config:  params.TestChainConfig,
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
-	genDb, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2*TriesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+	genDb, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2*DefaultTriesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
 
 	// Generate a bunch of fork blocks, each side forking from the canonical chain
 	forks := make([]*types.Block, len(blocks))
@@ -1716,8 +1716,8 @@ func TestLargeReorgTrieGC(t *testing.T) {
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
 	genDb, shared, _ := GenerateChainWithGenesis(genesis, engine, 64, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
-	original, _ := GenerateChain(genesis.Config, shared[len(shared)-1], engine, genDb, 2*TriesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) })
-	competitor, _ := GenerateChain(genesis.Config, shared[len(shared)-1], engine, genDb, 2*TriesInMemory+1, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{3}) })
+	original, _ := GenerateChain(genesis.Config, shared[len(shared)-1], engine, genDb, 2*DefaultTriesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) })
+	competitor, _ := GenerateChain(genesis.Config, shared[len(shared)-1], engine, genDb, 2*DefaultTriesInMemory+1, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{3}) })
 
 	// Import the shared chain and the original canonical one
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, genesis, nil, engine, vm.Config{}, nil, nil)
@@ -1751,7 +1751,7 @@ func TestLargeReorgTrieGC(t *testing.T) {
 	if _, err := chain.InsertChain(competitor[len(competitor)-2:]); err != nil {
 		t.Fatalf("failed to finalize competitor chain: %v", err)
 	}
-	for i, block := range competitor[:len(competitor)-TriesInMemory] {
+	for i, block := range competitor[:len(competitor)-DefaultTriesInMemory] {
 		if node, _ := chain.stateCache.TrieDB().Node(block.Root()); node != nil {
 			t.Fatalf("competitor %d: competing chain state missing", i)
 		}
@@ -1895,7 +1895,7 @@ func TestLowDiffLongChain(t *testing.T) {
 	}
 	// We must use a pretty long chain to ensure that the fork doesn't overtake us
 	// until after at least 128 blocks post tip
-	genDb, blocks, _ := GenerateChainWithGenesis(genesis, engine, 6*TriesInMemory, func(i int, b *BlockGen) {
+	genDb, blocks, _ := GenerateChainWithGenesis(genesis, engine, 6*DefaultTriesInMemory, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{1})
 		b.OffsetTime(-9)
 	})
@@ -1912,7 +1912,7 @@ func TestLowDiffLongChain(t *testing.T) {
 	}
 	// Generate fork chain, starting from an early block
 	parent := blocks[10]
-	fork, _ := GenerateChain(genesis.Config, parent, engine, genDb, 8*TriesInMemory, func(i int, b *BlockGen) {
+	fork, _ := GenerateChain(genesis.Config, parent, engine, genDb, 8*DefaultTriesInMemory, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{2})
 	})
 
@@ -1978,7 +1978,7 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 		// Set the terminal total difficulty in the config
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
 	}
-	genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 2*TriesInMemory, func(i int, gen *BlockGen) {
+	genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 2*DefaultTriesInMemory, func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(nonce, common.HexToAddress("deadbeef"), big.NewInt(100), 21000, big.NewInt(int64(i+1)*params.GWei), nil), signer, key)
 		if err != nil {
 			t.Fatalf("failed to create tx: %v", err)
@@ -1993,9 +1993,9 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 
-	lastPrunedIndex := len(blocks) - TriesInMemory - 1
+	lastPrunedIndex := len(blocks) - DefaultTriesInMemory - 1
 	lastPrunedBlock := blocks[lastPrunedIndex]
-	firstNonPrunedBlock := blocks[len(blocks)-TriesInMemory]
+	firstNonPrunedBlock := blocks[len(blocks)-DefaultTriesInMemory]
 
 	// Verify pruning of lastPrunedBlock
 	if chain.HasBlockAndState(lastPrunedBlock.Hash(), lastPrunedBlock.NumberU64()) {
@@ -2024,7 +2024,7 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 	// Generate fork chain, make it longer than canon
 	parentIndex := lastPrunedIndex + blocksBetweenCommonAncestorAndPruneblock
 	parent := blocks[parentIndex]
-	fork, _ := GenerateChain(gspec.Config, parent, engine, genDb, 2*TriesInMemory, func(i int, b *BlockGen) {
+	fork, _ := GenerateChain(gspec.Config, parent, engine, genDb, 2*DefaultTriesInMemory, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{2})
 		if int(b.header.Number.Uint64()) >= mergeBlock {
 			b.SetPoS()
@@ -2822,7 +2822,7 @@ func TestSideImportPrunedBlocks(t *testing.T) {
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
 	// Generate and import the canonical chain
-	_, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2*TriesInMemory, nil)
+	_, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2*DefaultTriesInMemory, nil)
 
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, genesis, nil, engine, vm.Config{}, nil, nil)
 	if err != nil {
@@ -2834,14 +2834,14 @@ func TestSideImportPrunedBlocks(t *testing.T) {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 
-	lastPrunedIndex := len(blocks) - TriesInMemory - 1
+	lastPrunedIndex := len(blocks) - DefaultTriesInMemory - 1
 	lastPrunedBlock := blocks[lastPrunedIndex]
 
 	// Verify pruning of lastPrunedBlock
 	if chain.HasBlockAndState(lastPrunedBlock.Hash(), lastPrunedBlock.NumberU64()) {
 		t.Errorf("Block %d not pruned", lastPrunedBlock.NumberU64())
 	}
-	firstNonPrunedBlock := blocks[len(blocks)-TriesInMemory]
+	firstNonPrunedBlock := blocks[len(blocks)-DefaultTriesInMemory]
 	// Verify firstNonPrunedBlock is not pruned
 	if !chain.HasBlockAndState(firstNonPrunedBlock.Hash(), firstNonPrunedBlock.NumberU64()) {
 		t.Errorf("Block %d pruned", firstNonPrunedBlock.NumberU64())
@@ -3672,7 +3672,7 @@ func TestSetCanonical(t *testing.T) {
 		engine = ethash.NewFaker()
 	)
 	// Generate and import the canonical chain
-	_, canon, _ := GenerateChainWithGenesis(gspec, engine, 2*TriesInMemory, func(i int, gen *BlockGen) {
+	_, canon, _ := GenerateChainWithGenesis(gspec, engine, 2*DefaultTriesInMemory, func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(gen.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, gen.header.BaseFee, nil), signer, key)
 		if err != nil {
 			panic(err)
@@ -3690,7 +3690,7 @@ func TestSetCanonical(t *testing.T) {
 	}
 
 	// Generate the side chain and import them
-	_, side, _ := GenerateChainWithGenesis(gspec, engine, 2*TriesInMemory, func(i int, gen *BlockGen) {
+	_, side, _ := GenerateChainWithGenesis(gspec, engine, 2*DefaultTriesInMemory, func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(gen.TxNonce(address), common.Address{0x00}, big.NewInt(1), params.TxGas, gen.header.BaseFee, nil), signer, key)
 		if err != nil {
 			panic(err)
@@ -3729,8 +3729,8 @@ func TestSetCanonical(t *testing.T) {
 	verify(side[len(side)-1])
 
 	// Reset the chain head to original chain
-	chain.SetCanonical(canon[TriesInMemory-1])
-	verify(canon[TriesInMemory-1])
+	chain.SetCanonical(canon[DefaultTriesInMemory-1])
+	verify(canon[DefaultTriesInMemory-1])
 }
 
 // TestCanonicalHashMarker tests all the canonical hash markers are updated/deleted
