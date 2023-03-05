@@ -73,6 +73,8 @@ type Receipt struct {
 	BlockHash        common.Hash `json:"blockHash,omitempty"`
 	BlockNumber      *big.Int    `json:"blockNumber,omitempty"`
 	TransactionIndex uint        `json:"transactionIndex"`
+
+	Subtype uint8 `json:"type,omitempty"`
 }
 
 type receiptMarshaling struct {
@@ -170,6 +172,9 @@ func (r *Receipt) EncodeRLP(w io.Writer) error {
 // encodeTyped writes the canonical encoding of a typed receipt to w.
 func (r *Receipt) encodeTyped(data *receiptRLP, w *bytes.Buffer) error {
 	w.WriteByte(r.Type)
+	if r.Type == ArbitrumSubtypedTxType {
+		w.WriteByte(r.Subtype)
+	}
 	return rlp.Encode(w, data)
 }
 
@@ -240,6 +245,19 @@ func (r *Receipt) decodeTyped(b []byte) error {
 		}
 		r.Type = b[0]
 		return r.setFromRLP(data)
+	case ArbitrumSubtypedTxType:
+		if len(b) <= 2 {
+			return errShortTypedReceipt
+		}
+		var data receiptRLP
+		err := rlp.DecodeBytes(b[2:], &data)
+		if err != nil {
+			return err
+		}
+		r.Type = b[0]
+		r.Subtype = b[1]
+		return r.setFromRLP(data)
+
 	default:
 		return ErrTxTypeNotSupported
 	}

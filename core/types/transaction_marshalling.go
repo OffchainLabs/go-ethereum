@@ -47,6 +47,7 @@ type txJSON struct {
 	AccessList *AccessList  `json:"accessList,omitempty"`
 
 	// Arbitrum fields:
+	Subtype             *hexutil.Uint64 `json:"subtype,omitempty"`             // ArbitrumSubtypedTx
 	From                *common.Address `json:"from,omitempty"`                // Contract SubmitRetryable Unsigned Retry
 	RequestId           *common.Hash    `json:"requestId,omitempty"`           // Contract SubmitRetryable Deposit
 	TicketId            *common.Hash    `json:"ticketId,omitempty"`            // Retry
@@ -110,20 +111,6 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
 	case *DynamicFeeTx:
-		enc.ChainID = (*hexutil.Big)(tx.ChainID)
-		enc.AccessList = &tx.AccessList
-		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
-		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
-		enc.MaxPriorityFeePerGas = (*hexutil.Big)(tx.GasTipCap)
-		enc.Value = (*hexutil.Big)(tx.Value)
-		enc.Data = (*hexutil.Bytes)(&tx.Data)
-		enc.To = t.To()
-		enc.V = (*hexutil.Big)(tx.V)
-		enc.R = (*hexutil.Big)(tx.R)
-		enc.S = (*hexutil.Big)(tx.S)
-	//	TODO could we collapse it to: `case *DynamicFeeTx, *ArbitrumTippingTx:`
-	case *ArbitrumTippingTx:
 		enc.ChainID = (*hexutil.Big)(tx.ChainID)
 		enc.AccessList = &tx.AccessList
 		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
@@ -206,6 +193,29 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		data := tx.data()
 		enc.Data = (*hexutil.Bytes)(&data)
 		enc.To = t.To()
+	case *ArbitrumSubtypedTx:
+		subtype := uint64(tx.TxSubtype())
+		enc.Subtype = (*hexutil.Uint64)(&subtype)
+		switch subtype {
+		case ArbitrumTippingTxSubtype:
+			enc.ChainID = (*hexutil.Big)(tx.chainID())
+			accessList := tx.accessList()
+			enc.AccessList = &accessList
+			nonce := tx.nonce()
+			enc.Nonce = (*hexutil.Uint64)(&nonce)
+			gas := tx.gas()
+			enc.Gas = (*hexutil.Uint64)(&gas)
+			enc.MaxFeePerGas = (*hexutil.Big)(tx.gasFeeCap())
+			enc.MaxPriorityFeePerGas = (*hexutil.Big)(tx.gasTipCap())
+			enc.Value = (*hexutil.Big)(tx.value())
+			data := tx.data()
+			enc.Data = (*hexutil.Bytes)(&data)
+			enc.To = t.To()
+			v, r, s := tx.rawSignatureValues()
+			enc.V = (*hexutil.Big)(v)
+			enc.R = (*hexutil.Big)(r)
+			enc.S = (*hexutil.Big)(s)
+		}
 	}
 	return json.Marshal(&enc)
 }
@@ -219,7 +229,15 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 
 	// Decode / verify fields according to transaction type.
 	var inner TxData
-	switch dec.Type {
+	decType := uint64(dec.Type)
+	if decType == ArbitrumSubtypedTxType {
+		if dec.Subtype != nil {
+			decType = uint64(*dec.Subtype) + arbitrumSubtypeOffset
+		} else {
+			return errors.New("missing required field 'subtype' in transaction")
+		}
+	}
+	switch decType {
 	case LegacyTxType:
 		var itx LegacyTx
 		inner = &itx
@@ -318,7 +336,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			}
 		}
 
-	case DynamicFeeTxType, ArbitrumTippingTxType:
+	case DynamicFeeTxType, ArbitrumTippingTxSubtype + arbitrumSubtypeOffset:
 		var itx DynamicFeeTx
 		// Access list is optional for now.
 		if dec.AccessList != nil {
@@ -373,9 +391,11 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 				return err
 			}
 		}
-		if dec.Type == ArbitrumTippingTxType {
-			inner = &ArbitrumTippingTx{
-				DynamicFeeTx: itx,
+		if dec.Type == ArbitrumTippingTxSubtype+arbitrumSubtypeOffset {
+			inner = &ArbitrumSubtypedTx{
+				TxData: &ArbitrumTippingTx{
+					DynamicFeeTx: itx,
+				},
 			}
 		} else {
 			inner = &itx

@@ -193,7 +193,7 @@ func NewLondonSigner(chainId *big.Int) Signer {
 }
 
 func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
-	if tx.Type() != DynamicFeeTxType && tx.Type() != ArbitrumTippingTxType {
+	if tx.Type() != DynamicFeeTxType && !signSubtypedLikeDynamicFeeTx(tx) {
 		return s.eip2930Signer.Sender(tx)
 	}
 	V, R, S := tx.RawSignatureValues()
@@ -216,8 +216,8 @@ func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 	var ok bool
 	txdata, ok = tx.inner.(*DynamicFeeTx)
 	if !ok {
-		txdata, ok = tx.inner.(*ArbitrumTippingTx)
-		if !ok {
+		txdata, ok = tx.inner.(*ArbitrumSubtypedTx)
+		if !ok || !signSubtypedLikeDynamicFeeTx(tx) {
 			return s.eip2930Signer.SignatureValues(tx, sig)
 		}
 	}
@@ -234,7 +234,23 @@ func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s londonSigner) Hash(tx *Transaction) common.Hash {
-	if tx.Type() != DynamicFeeTxType && tx.Type() != ArbitrumTippingTxType {
+	if signSubtypedLikeDynamicFeeTx(tx) {
+		return prefixedRlpHash(
+			tx.Type(),
+			[]interface{}{
+				tx.inner.(*ArbitrumSubtypedTx).TxSubtype(),
+				s.chainId,
+				tx.Nonce(),
+				tx.GasTipCap(),
+				tx.GasFeeCap(),
+				tx.Gas(),
+				tx.To(),
+				tx.Value(),
+				tx.Data(),
+				tx.AccessList(),
+			})
+	}
+	if tx.Type() != DynamicFeeTxType {
 		return s.eip2930Signer.Hash(tx)
 	}
 	return prefixedRlpHash(

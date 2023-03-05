@@ -14,6 +14,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+const (
+	arbitrumSubtypeOffset    = 0xff
+	ArbitrumInvalidSubtype   = 0
+	ArbitrumTippingTxSubtype = 1
+)
+
 type fallbackError struct {
 }
 
@@ -462,6 +468,32 @@ func DeserializeHeaderExtraInformation(header *Header) (HeaderInfo, error) {
 	return extra, nil
 }
 
+type ArbitrumSubtypedTx struct {
+	TxData
+}
+
+func (tx *ArbitrumSubtypedTx) copy() TxData {
+	return &ArbitrumSubtypedTx{
+		TxData: tx.TxData.copy(),
+	}
+}
+
+func (tx *ArbitrumSubtypedTx) txType() byte    { return ArbitrumSubtypedTxType }
+func (tx *ArbitrumSubtypedTx) TxSubtype() byte { return tx.TxData.txType() }
+
+func signSubtypedLikeDynamicFeeTx(tx *Transaction) bool {
+	return GetArbitrumTxSubtype(tx) == ArbitrumTippingTxSubtype
+}
+
+func GetArbitrumTxSubtype(tx *Transaction) byte {
+	switch inner := tx.inner.(type) {
+	case *ArbitrumSubtypedTx:
+		return inner.TxSubtype()
+	default:
+		return ArbitrumInvalidSubtype
+	}
+}
+
 type ArbitrumTippingTx struct {
 	DynamicFeeTx `rlp:"flat"`
 }
@@ -471,9 +503,10 @@ func NewArbitrumTippingTx(origTx *Transaction) (*Transaction, error) {
 	if origTx.Type() != DynamicFeeTxType || !ok {
 		return nil, errors.New("attempt to arbitrum-wrap into tipping transaction a transaction that is not a dynamic fee transaction")
 	}
-	inner := ArbitrumTippingTx{
-		DynamicFeeTx: *dynamicPtr,
-	}
+	inner := ArbitrumSubtypedTx{
+		TxData: &ArbitrumTippingTx{
+			DynamicFeeTx: *dynamicPtr,
+		}}
 	return NewTx(&inner), nil
 }
 
@@ -484,4 +517,4 @@ func (tx *ArbitrumTippingTx) copy() TxData {
 	}
 }
 
-func (tx *ArbitrumTippingTx) txType() byte { return ArbitrumTippingTxType }
+func (tx *ArbitrumTippingTx) txType() byte { return ArbitrumTippingTxSubtype }
