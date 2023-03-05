@@ -76,7 +76,7 @@ type Decoder interface {
 // Note that Decode does not set an input limit for all readers and may be vulnerable to
 // panics cause by huge value sizes. If you need an input limit, use
 //
-//     NewStream(r, limit).Decode(val)
+//	NewStream(r, limit).Decode(val)
 func Decode(r io.Reader, val interface{}) error {
 	stream := streamPool.Get().(*Stream)
 	defer streamPool.Put(stream)
@@ -172,7 +172,7 @@ func makeDecoder(typ reflect.Type, tags rlpstruct.Tags) (dec decoder, err error)
 	case kind == reflect.Slice || kind == reflect.Array:
 		return makeListDecoder(typ, tags)
 	case kind == reflect.Struct:
-		return makeStructDecoder(typ)
+		return makeStructDecoder(typ, tags.Flat)
 	case kind == reflect.Interface:
 		return decodeInterface, nil
 	default:
@@ -376,7 +376,7 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 	return nil
 }
 
-func makeStructDecoder(typ reflect.Type) (decoder, error) {
+func makeStructDecoder(typ reflect.Type, flat bool) (decoder, error) {
 	fields, err := structFields(typ)
 	if err != nil {
 		return nil, err
@@ -387,8 +387,10 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 		}
 	}
 	dec := func(s *Stream, val reflect.Value) (err error) {
-		if _, err := s.List(); err != nil {
-			return wrapStreamError(err, typ)
+		if !flat {
+			if _, err := s.List(); err != nil {
+				return wrapStreamError(err, typ)
+			}
 		}
 		for i, f := range fields {
 			err := f.info.decoder(s, val.Field(f.index))
@@ -404,6 +406,9 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 			} else if err != nil {
 				return addErrorContext(err, "."+typ.Field(f.index).Name)
 			}
+		}
+		if flat {
+			return nil
 		}
 		return wrapStreamError(s.ListEnd(), typ)
 	}

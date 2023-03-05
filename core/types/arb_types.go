@@ -463,7 +463,7 @@ func DeserializeHeaderExtraInformation(header *Header) (HeaderInfo, error) {
 }
 
 type ArbitrumTippingTx struct {
-	DynamicFeeTx
+	DynamicFeeTx `rlp:"flat"`
 }
 
 func NewArbitrumTippingTx(origTx *Transaction) (*Transaction, error) {
