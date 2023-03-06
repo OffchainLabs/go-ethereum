@@ -104,6 +104,7 @@ type storedReceiptRLP struct {
 	CumulativeGasUsed uint64
 	L1GasUsed         uint64
 	Logs              []*LogForStorage
+	ContractAddress   *common.Address `rlp:"optional"` // set on new versions if an Arbitrum tx type
 }
 
 type arbLegacyStoredReceiptRLP struct {
@@ -331,6 +332,9 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 		}
 	}
 	w.ListEnd(logList)
+	if r.Type >= ArbitrumDepositTxType && r.Type != ArbitrumLegacyTxType && r.ContractAddress != (common.Address{}) {
+		w.WriteBytes(r.ContractAddress[:])
+	}
 	w.ListEnd(outerList)
 	return w.Flush()
 }
@@ -397,6 +401,9 @@ func decodeStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
 		r.Logs[i] = (*Log)(log)
 	}
 	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
+	if stored.ContractAddress != nil {
+		r.ContractAddress = *stored.ContractAddress
+	}
 
 	return nil
 }
@@ -482,7 +489,7 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 
 		if rs[i].Type != ArbitrumLegacyTxType {
 			// The contract address can be derived from the transaction itself
-			if txs[i].To() == nil {
+			if txs[i].To() == nil && rs[i].ContractAddress == (common.Address{}) {
 				// Deriving the signer is expensive, only do if it's actually needed
 				from, _ := Sender(signer, txs[i])
 				rs[i].ContractAddress = crypto.CreateAddress(from, txs[i].Nonce())
