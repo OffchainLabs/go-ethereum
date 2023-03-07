@@ -391,7 +391,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 				return err
 			}
 		}
-		if dec.Type == ArbitrumTippingTxSubtype+arbitrumSubtypeOffset {
+		if decType == ArbitrumTippingTxSubtype+arbitrumSubtypeOffset {
 			inner = &ArbitrumSubtypedTx{
 				TxData: &ArbitrumTippingTx{
 					DynamicFeeTx: itx,
