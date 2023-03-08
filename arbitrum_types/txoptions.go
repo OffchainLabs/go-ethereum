@@ -3,7 +3,6 @@ package arbitrum_types
 import (
 	"bytes"
 	"encoding/json"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -61,22 +60,23 @@ type ConditionalOptions struct {
 	TimestampMax   *hexutil.Uint64                    `json:"timestampMax,omitempty"`
 }
 
-func (o *ConditionalOptions) Check(blockNumber uint64, statedb *state.StateDB) error {
-	if o.TimestampMin != nil || o.TimestampMax != nil {
-		now := uint64(time.Now().Unix())
-		if o.TimestampMin != nil && now < uint64(*o.TimestampMin) {
-			return NewRejectedError("TimestampMin condition not met")
-		}
-		if o.TimestampMax != nil && now > uint64(*o.TimestampMax) {
-			return NewRejectedError("TimestampMax condition not met")
-		}
+func (o *ConditionalOptions) Check(l1BlockNumber uint64, l1Timestamp uint64, statedb *state.StateDB) error {
+	if o.TimestampMin != nil && l1Timestamp < uint64(*o.TimestampMin) {
+		return NewRejectedError("TimestampMin condition not met")
 	}
-	if o.BlockNumberMin != nil && blockNumber < uint64(*o.BlockNumberMin) {
+	if o.TimestampMax != nil && l1Timestamp > uint64(*o.TimestampMax) {
+		return NewRejectedError("TimestampMax condition not met")
+	}
+	if o.BlockNumberMin != nil && l1BlockNumber < uint64(*o.BlockNumberMin) {
 		return NewRejectedError("BlockNumberMin condition not met")
 	}
-	if o.BlockNumberMax != nil && blockNumber > uint64(*o.BlockNumberMax) {
+	if o.BlockNumberMax != nil && l1BlockNumber > uint64(*o.BlockNumberMax) {
 		return NewRejectedError("BlockNumberMax condition not met")
 	}
+	return o.CheckOnlyStorage(statedb)
+}
+
+func (o *ConditionalOptions) CheckOnlyStorage(statedb *state.StateDB) error {
 	for address, rootHashOrSlots := range o.KnownAccounts {
 		if rootHashOrSlots.RootHash != nil {
 			trie := statedb.StorageTrie(address)
