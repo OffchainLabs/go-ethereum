@@ -27,6 +27,10 @@ func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor S
 	var l2GasUsed uint64
 	for ctx.Err() == nil {
 		lastHeader := currentHeader
+		stateDb, err = stateFor(currentHeader)
+		if err == nil {
+			break
+		}
 		if maxDepthInL2Gas > 0 {
 			receipts := bc.GetReceiptsByHash(currentHeader.Hash())
 			if receipts == nil {
@@ -49,12 +53,8 @@ func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor S
 		if currentHeader == nil {
 			return nil, lastHeader, fmt.Errorf("chain doesn't contain parent of block %d hash %v", lastHeader.Number, lastHeader.Hash())
 		}
-		stateDb, err = stateFor(currentHeader)
-		if err == nil {
-			break
-		}
 	}
-	return stateDb, currentHeader, nil
+	return stateDb, currentHeader, ctx.Err()
 }
 
 func RecreateBlock(ctx context.Context, bc *core.BlockChain, header *types.Header, stateDb *state.StateDB, blockToRecreate uint64, prevBlockHash common.Hash, logFunc StateBuildingLogFunction) (*types.Block, error) {

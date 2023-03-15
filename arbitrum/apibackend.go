@@ -408,16 +408,15 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 		return nil, header, types.ErrUseFallback
 	}
 	bc := a.blockChain()
-	stateDB, err := bc.StateAt(header.Root)
-	if err == nil {
-		return stateDB, header, nil
-	}
 	stateFor := func(header *types.Header) (*state.StateDB, error) {
 		return bc.StateAt(header.Root)
 	}
 	stateDB, lastHeader, err := FindLastAvailableState(ctx, bc, stateFor, header, nil, a.b.config.MaxRecreateStateDepth)
 	if err != nil {
 		return nil, nil, err
+	}
+	if lastHeader == header {
+		return stateDB, header, nil
 	}
 	stateDB, err = RecreateBlocks(ctx, bc, header, lastHeader, stateDB, nil)
 	if err != nil {

@@ -267,13 +267,12 @@ func (r *RecordingDatabase) PreimagesFromRecording(chainContextIf core.ChainCont
 }
 
 func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, error) {
-	stateDb, err := r.StateFor(header)
-	if err == nil {
-		return stateDb, nil
-	}
 	stateDb, currentHeader, err := FindLastAvailableState(ctx, r.bc, r.StateFor, header, logFunc, 0)
 	if err != nil {
 		return nil, err
+	}
+	if currentHeader == header {
+		return stateDb, nil
 	}
 	lastRoot := currentHeader.Root
 	defer func() {
