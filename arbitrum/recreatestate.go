@@ -57,7 +57,7 @@ func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor S
 	return stateDb, currentHeader, ctx.Err()
 }
 
-func RecreateBlock(ctx context.Context, bc *core.BlockChain, header *types.Header, stateDb *state.StateDB, blockToRecreate uint64, prevBlockHash common.Hash, logFunc StateBuildingLogFunction) (*types.Block, error) {
+func AdvanceStateByBlock(ctx context.Context, bc *core.BlockChain, header *types.Header, stateDb *state.StateDB, blockToRecreate uint64, prevBlockHash common.Hash, logFunc StateBuildingLogFunction) (*types.Block, error) {
 	block := bc.GetBlockByNumber(blockToRecreate)
 	if block == nil {
 		return nil, fmt.Errorf("block not found while recreating: %d", blockToRecreate)
@@ -80,7 +80,7 @@ func RecreateBlocks(ctx context.Context, bc *core.BlockChain, header *types.Head
 	blockToRecreate := lastAvailableHeader.Number.Uint64() + 1
 	prevHash := lastAvailableHeader.Hash()
 	for ctx.Err() == nil {
-		block, err := RecreateBlock(ctx, bc, header, stateDb, blockToRecreate, prevHash, logFunc)
+		block, err := AdvanceStateByBlock(ctx, bc, header, stateDb, blockToRecreate, prevHash, logFunc)
 		if err != nil {
 			return nil, err
 		}
