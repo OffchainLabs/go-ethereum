@@ -411,18 +411,18 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 	stateFor := func(header *types.Header) (*state.StateDB, error) {
 		return bc.StateAt(header.Root)
 	}
-	stateDB, lastHeader, err := FindLastAvailableState(ctx, bc, stateFor, header, nil, a.b.config.MaxRecreateStateDepth)
+	state, lastHeader, err := FindLastAvailableState(ctx, bc, stateFor, header, nil, a.b.config.MaxRecreateStateDepth)
 	if err != nil {
 		return nil, nil, err
 	}
 	if lastHeader == header {
-		return stateDB, header, nil
+		return state, header, nil
 	}
-	stateDB, err = RecreateBlocks(ctx, bc, header, lastHeader, stateDB, nil)
+	state, err = AdvanceStateUpToBlock(ctx, bc, state, header, lastHeader, nil)
 	if err != nil {
 		return nil, nil, err
 	}
-	return stateDB, header, err
+	return state, header, err
 }
 
 func (a *APIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {

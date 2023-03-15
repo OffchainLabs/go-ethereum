@@ -267,12 +267,12 @@ func (r *RecordingDatabase) PreimagesFromRecording(chainContextIf core.ChainCont
 }
 
 func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, error) {
-	stateDb, currentHeader, err := FindLastAvailableState(ctx, r.bc, r.StateFor, header, logFunc, 0)
+	state, currentHeader, err := FindLastAvailableState(ctx, r.bc, r.StateFor, header, logFunc, 0)
 	if err != nil {
 		return nil, err
 	}
 	if currentHeader == header {
-		return stateDb, nil
+		return state, nil
 	}
 	lastRoot := currentHeader.Root
 	defer func() {
@@ -284,12 +284,12 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 	prevHash := currentHeader.Hash()
 	returnedBlockNumber := header.Number.Uint64()
 	for ctx.Err() == nil {
-		block, err := AdvanceStateByBlock(ctx, r.bc, header, stateDb, blockToRecreate, prevHash, logFunc)
+		state, block, err := AdvanceStateByBlock(ctx, r.bc, state, header, blockToRecreate, prevHash, logFunc)
 		if err != nil {
 			return nil, err
 		}
 		prevHash = block.Hash()
-		err = r.addStateVerify(stateDb, block.Root())
+		err = r.addStateVerify(state, block.Root())
 		if err != nil {
 			return nil, fmt.Errorf("failed commiting state for block %d : %w", blockToRecreate, err)
 		}
@@ -301,7 +301,7 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 			}
 			// don't dereference this one
 			lastRoot = common.Hash{}
-			return stateDb, nil
+			return state, nil
 		}
 		blockToRecreate++
 	}
