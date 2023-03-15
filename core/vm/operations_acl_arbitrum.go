@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -49,7 +51,7 @@ func WasmStateStoreCost(db StateDB, program common.Address, key, value common.Ha
 		// If the caller cannot afford the cost, this change will be rolled back
 		db.AddSlotToAccessList(program, key)
 		if !addrPresent {
-			panic("impossible case: address was not present in access list")
+			panic(fmt.Sprintf("impossible case: address %v was not present in access list", program))
 		}
 	}
 
