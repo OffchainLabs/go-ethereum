@@ -85,7 +85,7 @@ type SyncProgressBackend interface {
 	FinalizedBlockNumber(ctx context.Context) (uint64, error)
 }
 
-func createRegisterAPIBackend(backend *Backend, sync SyncProgressBackend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration) (*filters.FilterSystem, error) {
+func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration) (*filters.FilterSystem, error) {
 	fallbackClient, err := CreateFallbackClient(fallbackClientUrl, fallbackClientTimeout)
 	if err != nil {
 		return nil, err
@@ -93,11 +93,18 @@ func createRegisterAPIBackend(backend *Backend, sync SyncProgressBackend, filter
 	backend.apiBackend = &APIBackend{
 		b:              backend,
 		fallbackClient: fallbackClient,
-		sync:           sync,
 	}
 	filterSystem := filters.NewFilterSystem(backend.apiBackend, filterConfig)
 	backend.stack.RegisterAPIs(backend.apiBackend.GetAPIs(filterSystem))
 	return filterSystem, nil
+}
+
+func (a *APIBackend) SetSyncBackend(sync SyncProgressBackend) error {
+	if a.sync != nil && sync != nil {
+		return errors.New("sync progress monitor already set")
+	}
+	a.sync = sync
+	return nil
 }
 
 func (a *APIBackend) GetAPIs(filterSystem *filters.FilterSystem) []rpc.API {
@@ -139,11 +146,16 @@ func (a *APIBackend) GetArbitrumNode() interface{} {
 
 // General Ethereum API
 func (a *APIBackend) SyncProgressMap() map[string]interface{} {
+	if a.sync == nil {
+		res := make(map[string]interface{})
+		res["error"] = "sync object not set in apibackend"
+		return res
+	}
 	return a.sync.SyncProgressMap()
 }
 
 func (a *APIBackend) SyncProgress() ethereum.SyncProgress {
-	progress := a.sync.SyncProgressMap()
+	progress := a.SyncProgressMap()
 
 	if progress == nil || len(progress) == 0 {
 		return ethereum.SyncProgress{}
@@ -324,9 +336,15 @@ func (a *APIBackend) blockNumberToUint(ctx context.Context, number rpc.BlockNumb
 		return a.BlockChain().CurrentBlock().Number().Uint64(), nil
 	}
 	if number == rpc.SafeBlockNumber {
+		if a.sync == nil {
+			return 0, errors.New("block number not supported: object not set")
+		}
 		return a.sync.SafeBlockNumber(ctx)
 	}
 	if number == rpc.FinalizedBlockNumber {
+		if a.sync == nil {
+			return 0, errors.New("block number not supported: object not set")
+		}
 		return a.sync.FinalizedBlockNumber(ctx)
 	}
 	if number < 0 {
