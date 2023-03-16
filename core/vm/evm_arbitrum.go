@@ -51,7 +51,7 @@ type TxProcessingHook interface {
 	L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error)
 	GasPriceOp(evm *EVM) *big.Int
 	FillReceiptInfo(receipt *types.Receipt)
-	ExecuteWASM(contract *Contract, input []byte, readOnly bool, txContext TxContext, blockContext BlockContext) ([]byte, error)
+	ExecuteWASM(scope *ScopeContext, input []byte, interpreter *EVMInterpreter) ([]byte, error)
 }
 
 type DefaultTxProcessor struct {
@@ -96,7 +96,7 @@ func (p DefaultTxProcessor) GasPriceOp(evm *EVM) *big.Int {
 
 func (p DefaultTxProcessor) FillReceiptInfo(*types.Receipt) {}
 
-func (p DefaultTxProcessor) ExecuteWASM(contract *Contract, input []byte, readOnly bool, txContext TxContext, blockContext BlockContext) ([]byte, error) {
+func (p DefaultTxProcessor) ExecuteWASM(scope *ScopeContext, input []byte, interpreter *EVMInterpreter) ([]byte, error) {
 	log.Crit("tried to execute WASM with default processing hook")
 	return nil, nil
 }
