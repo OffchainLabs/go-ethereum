@@ -80,6 +80,7 @@ func newCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, e
 	// and is populated on start and end.
 	return &callTracer{
 		callstack:          make([]callFrame, 1),
+		config:             config,
 		beforeEVMTransfers: []arbitrumTransfer{},
 		afterEVMTransfers:  []arbitrumTransfer{},
 	}, nil
