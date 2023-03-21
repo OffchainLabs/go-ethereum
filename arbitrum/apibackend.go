@@ -164,7 +164,6 @@ func (a *APIBackend) FeeHistory(
 	newestBlock rpc.BlockNumber,
 	rewardPercentiles []float64,
 ) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
-
 	if core.GetArbOSSpeedLimitPerSecond == nil {
 		return nil, nil, nil, nil, errors.New("ArbOS not installed")
 	}
@@ -269,7 +268,6 @@ func (a *APIBackend) FeeHistory(
 			fullnessAnalogue = 1.0
 		}
 		gasUsed[block-oldestBlock] = fullnessAnalogue
-
 	}
 	if newestBlock == latestBlock {
 		basefees[blocks] = basefees[blocks-1] // guess the basefee won't change

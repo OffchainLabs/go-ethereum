@@ -423,7 +423,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 }
 
 func (st *StateTransition) refundGas(refundQuotient uint64) {
-
 	st.gas += st.evm.ProcessingHook.ForceRefundGas()
 
 	nonrefundable := st.evm.ProcessingHook.NonrefundableGas()
