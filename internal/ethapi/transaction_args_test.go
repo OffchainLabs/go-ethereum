@@ -338,5 +338,7 @@ func (b *backendMock) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Su
 func (b *backendMock) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return nil
 }
-
 func (b *backendMock) Engine() consensus.Engine { return nil }
+
+func (b *backendMock) FallbackClient() types.FallbackClient    { return nil }
+func (b *backendMock) SyncProgressMap() map[string]interface{} { return nil }
