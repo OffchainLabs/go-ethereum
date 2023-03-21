@@ -321,7 +321,7 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 		}
 		err = r.addStateVerify(stateDb, block.Root())
 		if err != nil {
-			return nil, fmt.Errorf("failed commiting state for block %d : %w", blockToRecreate, err)
+			return nil, fmt.Errorf("failed committing state for block %d : %w", blockToRecreate, err)
 		}
 		r.dereferenceRoot(lastRoot)
 		lastRoot = block.Root()

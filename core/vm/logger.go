@@ -29,7 +29,7 @@ import (
 // Note that reference types are actual VM data structures; make copies
 // if you need to retain them beyond the current call.
 type EVMLogger interface {
-	// Arbitrum: capture a transfer, mint, or burn that happens outside of EVM exectuion
+	// Arbitrum: capture a transfer, mint, or burn that happens outside of EVM execution
 	CaptureArbitrumTransfer(env *EVM, from, to *common.Address, value *big.Int, before bool, purpose string)
 	CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)
 	CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)

@@ -1377,7 +1377,7 @@ func (s *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inc
 		if err != nil {
 			log.Error("error trying to fill legacy l1BlockNumber", "err", err)
 		} else {
-			fields["l1BlockNumber"] = hexutil.Uint64(l1BlockNumber)
+			fields["l1BlockNumber"] = l1BlockNumber
 		}
 	}
 	return fields, err

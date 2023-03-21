@@ -202,7 +202,7 @@ func (a *APIBackend) FeeHistory(
 
 	// use the most recent average compute rate for all blocks
 	// note: while we could query this value for each block, it'd be prohibitively expensive
-	state, _, err := a.StateAndHeaderByNumber(ctx, rpc.BlockNumber(newestBlock))
+	state, _, err := a.StateAndHeaderByNumber(ctx, newestBlock)
 	if err != nil {
 		return common.Big0, nil, nil, nil, err
 	}

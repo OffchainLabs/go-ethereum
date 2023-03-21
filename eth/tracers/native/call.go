@@ -52,7 +52,7 @@ type callFrame struct {
 }
 
 type callTracer struct {
-	// Arbitrum: capture transfers occuring outside of evm execution
+	// Arbitrum: capture transfers occurring outside of evm execution
 	beforeEVMTransfers []arbitrumTransfer
 	afterEVMTransfers  []arbitrumTransfer
 
