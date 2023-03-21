@@ -131,7 +131,7 @@ func (s *EthereumAPI) FeeHistory(ctx context.Context, blockCount rpc.DecimalOrHe
 func (s *EthereumAPI) Syncing() (interface{}, error) {
 	progress := s.b.SyncProgressMap()
 
-	if progress == nil || len(progress) == 0 {
+	if len(progress) == 0 {
 		return false, nil
 	}
 	return progress, nil

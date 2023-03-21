@@ -67,7 +67,7 @@ func CreateFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.D
 	var fallbackClient types.FallbackClient
 	var err error
 	fallbackClient, err = rpc.Dial(fallbackClientUrl)
-	if fallbackClient == nil || err != nil {
+	if err != nil {
 		return nil, fmt.Errorf("failed creating fallback connection: %w", err)
 	}
 	if fallbackClientTimeout != 0 {
@@ -145,7 +145,7 @@ func (a *APIBackend) SyncProgressMap() map[string]interface{} {
 func (a *APIBackend) SyncProgress() ethereum.SyncProgress {
 	progress := a.sync.SyncProgressMap()
 
-	if progress == nil || len(progress) == 0 {
+	if len(progress) == 0 {
 		return ethereum.SyncProgress{}
 	}
 	return ethereum.SyncProgress{
