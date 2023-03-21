@@ -347,13 +347,13 @@ func TestEth2DeepReorg(t *testing.T) {
 	// TODO (MariusVanDerWijden) TestEth2DeepReorg is currently broken, because it tries to reorg
 	// before the totalTerminalDifficulty threshold
 	/*
-		genesis, preMergeBlocks := generatePreMergeChain(core.TriesInMemory * 2)
+		genesis, preMergeBlocks := generatePreMergeChain(core.DefaultTriesInMemory * 2)
 		n, ethservice := startEthService(t, genesis, preMergeBlocks)
 		defer n.Close()
 
 		var (
 			api    = NewConsensusAPI(ethservice, nil)
-			parent = preMergeBlocks[len(preMergeBlocks)-core.TriesInMemory-1]
+			parent = preMergeBlocks[len(preMergeBlocks)-core.DefaultTriesInMemory-1]
 			head   = ethservice.BlockChain().CurrentBlock().NumberU64()
 		)
 		if ethservice.BlockChain().HasBlockAndState(parent.Hash(), parent.NumberU64()) {
