@@ -3,10 +3,13 @@ package arbitrum_types
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/pkg/errors"
 )
 
 type rejectedError struct {
@@ -28,6 +31,20 @@ func NewLimitExceededError(msg string) *limitExceededError {
 }
 func (e limitExceededError) Error() string { return e.msg }
 func (limitExceededError) ErrorCode() int  { return -32005 }
+
+func WrapOptionsCheckError(err error, msg string) error {
+	wrappedMsg := func(e rpc.Error, msg string) string {
+		return strings.Join([]string{msg, e.Error()}, ":")
+	}
+	switch e := err.(type) {
+	case *rejectedError:
+		return NewRejectedError(wrappedMsg(e, msg))
+	case *limitExceededError:
+		return NewLimitExceededError(wrappedMsg(e, msg))
+	default:
+		return errors.Wrap(err, msg)
+	}
+}
 
 type RootHashOrSlots struct {
 	RootHash  *common.Hash
