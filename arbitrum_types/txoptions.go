@@ -77,30 +77,29 @@ type ConditionalOptions struct {
 	TimestampMax   *hexutil.Uint64                    `json:"timestampMax,omitempty"`
 }
 
-func (o *ConditionalOptions) Check(l1BlockNumber uint64, l1Timestamp uint64, statedb *state.StateDB) error {
+func (o *ConditionalOptions) Check(l1BlockNumber uint64, l2Timestamp uint64, statedb *state.StateDB) error {
 	if o.BlockNumberMin != nil && l1BlockNumber < uint64(*o.BlockNumberMin) {
 		return NewRejectedError("BlockNumberMin condition not met")
 	}
 	if o.BlockNumberMax != nil && l1BlockNumber > uint64(*o.BlockNumberMax) {
 		return NewRejectedError("BlockNumberMax condition not met")
 	}
-	if o.TimestampMin != nil && l1Timestamp < uint64(*o.TimestampMin) {
+	if o.TimestampMin != nil && l2Timestamp < uint64(*o.TimestampMin) {
 		return NewRejectedError("TimestampMin condition not met")
 	}
-	if o.TimestampMax != nil && l1Timestamp > uint64(*o.TimestampMax) {
+	if o.TimestampMax != nil && l2Timestamp > uint64(*o.TimestampMax) {
 		return NewRejectedError("TimestampMax condition not met")
 	}
 	return o.CheckOnlyStorage(statedb)
 }
 
-func (o *ConditionalOptions) PreCheck(l1BlockNumberLowerBound uint64, statedb *state.StateDB) error {
+func (o *ConditionalOptions) PreCheck(l1BlockNumberLowerBound, l2TimestampLowerBound uint64, statedb *state.StateDB) error {
 	if o.BlockNumberMax != nil && l1BlockNumberLowerBound > uint64(*o.BlockNumberMax) {
 		return NewRejectedError("BlockNumberMax condition not met")
 	}
-	// TODO can we get a timestamp LowerBound?
-	//if o.TimestampMin != nil && l1TimestampLowerBound > uint64(*o.TimestampMax) {
-	//	return NewRejectedError("TimestampMax condition not met")
-	//}
+	if o.TimestampMax != nil && l2TimestampLowerBound > uint64(*o.TimestampMax) {
+		return NewRejectedError("TimestampMax condition not met")
+	}
 	return o.CheckOnlyStorage(statedb)
 }
 
