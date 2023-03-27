@@ -229,9 +229,8 @@ func DialWebsocketJWT(ctx context.Context, endpoint, origin string, jwtSecret []
 		WriteBufferSize: wsWriteBuffer,
 		WriteBufferPool: wsBufferPool,
 	}
-	claims := jwt.StandardClaims{
-		IssuedAt: time.Now().Unix(),
-	}
+
+	claims := jwt.RegisteredClaims{IssuedAt: jwt.NewNumericDate(time.Now())}
 	jwtToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(jwtSecret)
 	if err != nil {
 		return nil, err
