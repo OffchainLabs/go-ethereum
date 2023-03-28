@@ -267,7 +267,7 @@ func (r *RecordingDatabase) PreimagesFromRecording(chainContextIf core.ChainCont
 }
 
 func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, error) {
-	state, currentHeader, err := FindLastAvailableState(ctx, r.bc, r.StateFor, header, logFunc, 0)
+	state, currentHeader, err := FindLastAvailableState(ctx, r.bc, r.StateFor, header, logFunc, -1)
 	if err != nil {
 		return nil, err
 	}

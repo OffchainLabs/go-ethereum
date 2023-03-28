@@ -19,7 +19,11 @@ var (
 type StateBuildingLogFunction func(targetHeader, header *types.Header, hasState bool)
 type StateForHeaderFunction func(header *types.Header) (*state.StateDB, error)
 
-func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor StateForHeaderFunction, targetHeader *types.Header, logFunc StateBuildingLogFunction, maxDepthInL2Gas uint64) (*state.StateDB, *types.Header, error) {
+// finds last available state and header checking it first for targetHeader then looking backwards
+// if maxDepthInL2Gas is positive, it constitutes a limit for cumulative l2 gas used of the traversed blocks
+// else if maxDepthInL2Gas is -1, the traversal depth is not limited
+// otherwise only targetHeader state is checked and no search is performed
+func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor StateForHeaderFunction, targetHeader *types.Header, logFunc StateBuildingLogFunction, maxDepthInL2Gas int64) (*state.StateDB, *types.Header, error) {
 	genesis := bc.Config().ArbitrumChainParams.GenesisBlockNum
 	currentHeader := targetHeader
 	var state *state.StateDB
@@ -39,9 +43,11 @@ func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor S
 			for _, receipt := range receipts {
 				l2GasUsed += receipt.GasUsed - receipt.GasUsedForL1
 			}
-			if l2GasUsed > maxDepthInL2Gas {
+			if l2GasUsed > uint64(maxDepthInL2Gas) {
 				return nil, lastHeader, ErrDepthLimitExceeded
 			}
+		} else if maxDepthInL2Gas != InfiniteMaxRecreateStateDepth {
+			return nil, lastHeader, err
 		}
 		if logFunc != nil {
 			logFunc(targetHeader, currentHeader, false)
