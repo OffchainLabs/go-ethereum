@@ -32,6 +32,10 @@ func (in *EVMInterpreter) ReadOnly() bool {
 	return in.readOnly
 }
 
+func (in *EVMInterpreter) GetReturnData() []byte {
+	return in.returnData
+}
+
 func (in *EVMInterpreter) SetReturnData(data []byte) {
 	in.returnData = data
 }

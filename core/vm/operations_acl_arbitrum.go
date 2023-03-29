@@ -18,6 +18,7 @@ package vm
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
@@ -96,4 +97,48 @@ func WasmStateStoreCost(db StateDB, program common.Address, key, value common.Ha
 	// EIP-2200 original clause:
 	//return params.SloadGasEIP2200, nil // dirty update (2.2)
 	return cost + params.WarmStorageReadCostEIP2929 // dirty update (2.2)
+}
+
+// Computes the cost of starting a call from wasm
+//
+// The code here is adapted from the following functions with the most recent parameters as of The Merge
+//   - operations_acl.go makeCallVariantGasCallEIP2929()
+//   - gas_table.go      gasCall()
+func WasmCallCost(db StateDB, contract common.Address, value *big.Int, budget uint64) (uint64, error) {
+
+	total := uint64(0)
+	apply := func(amount uint64) bool {
+		total += amount
+		return total > budget
+	}
+
+	// EIP 2929: the static cost
+	if apply(params.WarmStorageReadCostEIP2929) {
+		return total, ErrOutOfGas
+	}
+
+	// EIP 2929: first dynamic cost if cold (makeCallVariantGasCallEIP2929)
+	warmAccess := db.AddressInAccessList(contract)
+	coldCost := params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
+	if !warmAccess {
+		db.AddAddressToAccessList(contract)
+
+		if apply(coldCost) {
+			return total, ErrOutOfGas
+		}
+	}
+
+	// gasCall()
+	transfersValue := value.Sign() != 0
+	if transfersValue && db.Empty(contract) {
+		if apply(params.CallNewAccountGas) {
+			return total, ErrOutOfGas
+		}
+	}
+	if transfersValue {
+		if apply(params.CallValueTransferGas) {
+			return total, ErrOutOfGas
+		}
+	}
+	return total, nil
 }
