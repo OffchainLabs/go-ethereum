@@ -139,6 +139,9 @@ type CacheConfig struct {
 	TriesInMemory uint64        // Height difference before which a trie may not be garbage-collected
 	TrieRetention time.Duration // Time limit before which a trie may not be garbage-collected
 
+	MaxNumberOfBlocksToSkipStateSaving uint32
+	MaxAmountOfGasToSkipStateSaving    uint64
+
 	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
 
@@ -147,8 +150,10 @@ type CacheConfig struct {
 var defaultCacheConfig = &CacheConfig{
 
 	// Arbitrum Config Options
-	TriesInMemory: DefaultTriesInMemory,
-	TrieRetention: 30 * time.Minute,
+	TriesInMemory:                      DefaultTriesInMemory,
+	TrieRetention:                      30 * time.Minute,
+	MaxNumberOfBlocksToSkipStateSaving: 128,
+	MaxAmountOfGasToSkipStateSaving:    15 * 1000 * 1000,
 
 	TrieCleanLimit: 256,
 	TrieDirtyLimit: 256,
@@ -225,6 +230,9 @@ type BlockChain struct {
 	processor  Processor // Block transaction processor interface
 	forker     *ForkChoice
 	vmConfig   vm.Config
+
+	numberOfBlocksToSkipStateSaving      uint32
+	amountOfGasInBlocksToSkipStateSaving uint64
 }
 
 type trieGcEntry struct {
@@ -1338,7 +1346,25 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// If we're running an archive node, always flush
 	if bc.cacheConfig.TrieDirtyDisabled {
-		return triedb.Commit(root, false, nil)
+		var skipCommitingState bool
+		if bc.cacheConfig.MaxNumberOfBlocksToSkipStateSaving != 0 && bc.numberOfBlocksToSkipStateSaving > 1 {
+			bc.numberOfBlocksToSkipStateSaving--
+			skipCommitingState = true
+		}
+		if bc.cacheConfig.MaxAmountOfGasToSkipStateSaving != 0 && bc.amountOfGasInBlocksToSkipStateSaving > block.GasUsed() {
+			bc.amountOfGasInBlocksToSkipStateSaving -= block.GasUsed()
+			skipCommitingState = true
+		}
+		if !skipCommitingState {
+			bc.numberOfBlocksToSkipStateSaving = bc.cacheConfig.MaxNumberOfBlocksToSkipStateSaving
+			bc.amountOfGasInBlocksToSkipStateSaving = bc.cacheConfig.MaxAmountOfGasToSkipStateSaving
+			// TODO remove log
+			log.Debug("Saving state", "blockNumber", block.Number(), "blockHash", block.Hash(), "leftBlocks", bc.numberOfBlocksToSkipStateSaving, "leftGas", bc.amountOfGasInBlocksToSkipStateSaving)
+			return triedb.Commit(root, false, nil)
+		} else {
+			// TODO remove log
+			log.Debug("Skipping saving state", "blockNumber", block.Number(), "blockHash", block.Hash(), "leftBlocks", bc.numberOfBlocksToSkipStateSaving, "leftGas", bc.amountOfGasInBlocksToSkipStateSaving)
+		}
 	} else {
 		// Full but not archive node, do proper garbage collection
 		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
