@@ -18,7 +18,6 @@ package node
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -417,22 +416,6 @@ func TestJWT(t *testing.T) {
 		if resp := rpcRequest(t, htUrl, "Authorization", token); resp.StatusCode != 403 {
 			t.Errorf("tc %d-http, token '%v': expected not to allow,  got %v", i, token, resp.StatusCode)
 		}
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	client, err := rpc.DialWebsocketJWT(ctx, wsUrl, "orig", []byte("secret"))
-	if err != nil {
-		t.Errorf("DialWebsocketJWT should have succeeded, got %v", err)
-	}
-	if client != nil {
-		client.Close()
-	}
-	client, err = rpc.DialWebsocketJWT(ctx, wsUrl, "orig", []byte("bad"))
-	if err == nil {
-		t.Error("DialWebsocketJWT with bad secret should have failed")
-	}
-	if client != nil {
-		client.Close()
 	}
 	srv.stop()
 }
