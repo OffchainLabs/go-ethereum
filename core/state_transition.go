@@ -95,6 +95,8 @@ type ExecutionResult struct {
 
 	// Arbitrum: a tx may yield others that need to run afterward (see retryables)
 	ScheduledTxes types.Transactions
+	// Arbitrum: the contract deployed from the top-level transaction, or nil if not a contract creation tx
+	TopLevelDeployed *common.Address
 }
 
 // Unwrap returns the internal evm error which allows us for further
@@ -384,12 +386,15 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// - reset transient storage(eip 1153)
 	st.state.Prepare(rules, msg.From(), st.evm.Context.Coinbase, msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
 
+	var deployedContract *common.Address
+
 	var (
 		ret   []byte
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
 	if contractCreation {
-		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
+		deployedContract = &common.Address{}
+		ret, *deployedContract, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
@@ -434,10 +439,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	return &ExecutionResult{
-		UsedGas:       st.gasUsed(),
-		Err:           vmerr,
-		ReturnData:    ret,
-		ScheduledTxes: st.evm.ProcessingHook.ScheduledTxes(),
+		UsedGas:          st.gasUsed(),
+		Err:              vmerr,
+		ReturnData:       ret,
+		ScheduledTxes:    st.evm.ProcessingHook.ScheduledTxes(),
+		TopLevelDeployed: deployedContract,
 	}, nil
 }
 
