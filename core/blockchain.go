@@ -1428,15 +1428,15 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		var prevNum uint64
 		// Garbage collect anything below our required write retention
 		for !bc.triegc.Empty() {
-			root, number := bc.triegc.Pop()
-			if uint64(-number) > uint64(blockLimit) || root.Timestamp > uint64(timeLimit) {
-				bc.triegc.Push(root, number)
+			triegcEntry, number := bc.triegc.Pop()
+			if uint64(-number) > uint64(blockLimit) || triegcEntry.Timestamp > uint64(timeLimit) {
+				bc.triegc.Push(triegcEntry, number)
 				break
 			}
 			if prevEntry != nil {
 				bc.triedb.Dereference(prevEntry.Root)
 			}
-			prevEntry = &root
+			prevEntry = &triegcEntry
 			prevNum = uint64(-number)
 		}
 		flushInterval := time.Duration(atomic.LoadInt64(&bc.flushInterval))
