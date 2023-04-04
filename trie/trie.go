@@ -24,7 +24,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -283,12 +282,6 @@ func (t *Trie) tryUpdate(key, value []byte) error {
 		t.root = n
 	}
 	return nil
-}
-
-// Arbitrum TODO: This was removed upstream, we should fix our code and remove it.
-// DiskDB retrieves the persistent storage backing the trie database.
-func (db *Database) DiskDB() ethdb.KeyValueStore {
-	return db.diskdb
 }
 
 func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error) {
