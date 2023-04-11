@@ -68,7 +68,6 @@ func (r RootHashOrSlots) MarshalJSON() ([]byte, error) {
 	return json.Marshal(r.SlotValue)
 }
 
-// TODO rename to just "Options" ?
 type ConditionalOptions struct {
 	KnownAccounts  map[common.Address]RootHashOrSlots `json:"knownAccounts"`
 	BlockNumberMin *hexutil.Uint64                    `json:"blockNumberMin,omitempty"`
@@ -90,20 +89,6 @@ func (o *ConditionalOptions) Check(l1BlockNumber uint64, l2Timestamp uint64, sta
 	if o.TimestampMax != nil && l2Timestamp > uint64(*o.TimestampMax) {
 		return NewRejectedError("TimestampMax condition not met")
 	}
-	return o.CheckOnlyStorage(statedb)
-}
-
-func (o *ConditionalOptions) PreCheck(l1BlockNumberLowerBound, l2TimestampLowerBound uint64, statedb *state.StateDB) error {
-	if o.BlockNumberMax != nil && l1BlockNumberLowerBound > uint64(*o.BlockNumberMax) {
-		return NewRejectedError("BlockNumberMax condition not met")
-	}
-	if o.TimestampMax != nil && l2TimestampLowerBound > uint64(*o.TimestampMax) {
-		return NewRejectedError("TimestampMax condition not met")
-	}
-	return o.CheckOnlyStorage(statedb)
-}
-
-func (o *ConditionalOptions) CheckOnlyStorage(statedb *state.StateDB) error {
 	for address, rootHashOrSlots := range o.KnownAccounts {
 		if rootHashOrSlots.RootHash != nil {
 			trie := statedb.StorageTrie(address)
