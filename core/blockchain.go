@@ -1346,16 +1346,24 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// If we're running an archive node, always flush
 	if bc.cacheConfig.TrieDirtyDisabled {
-		var skipCommitingState bool
-		if bc.cacheConfig.MaxNumberOfBlocksToSkipStateSaving != 0 && bc.numberOfBlocksToSkipStateSaving > 1 {
-			bc.numberOfBlocksToSkipStateSaving--
-			skipCommitingState = true
+		var maySkipCommiting, blockLimitReached, gasLimitReached bool
+		if bc.cacheConfig.MaxNumberOfBlocksToSkipStateSaving != 0 {
+			maySkipCommiting = true
+			if bc.numberOfBlocksToSkipStateSaving > 0 {
+				bc.numberOfBlocksToSkipStateSaving--
+			} else {
+				blockLimitReached = true
+			}
 		}
-		if bc.cacheConfig.MaxAmountOfGasToSkipStateSaving != 0 && bc.amountOfGasInBlocksToSkipStateSaving > block.GasUsed() {
-			bc.amountOfGasInBlocksToSkipStateSaving -= block.GasUsed()
-			skipCommitingState = true
+		if bc.cacheConfig.MaxAmountOfGasToSkipStateSaving != 0 {
+			maySkipCommiting = true
+			if bc.amountOfGasInBlocksToSkipStateSaving >= block.GasUsed() {
+				bc.amountOfGasInBlocksToSkipStateSaving -= block.GasUsed()
+			} else {
+				gasLimitReached = true
+			}
 		}
-		if !skipCommitingState {
+		if !maySkipCommiting || blockLimitReached || gasLimitReached {
 			bc.numberOfBlocksToSkipStateSaving = bc.cacheConfig.MaxNumberOfBlocksToSkipStateSaving
 			bc.amountOfGasInBlocksToSkipStateSaving = bc.cacheConfig.MaxAmountOfGasToSkipStateSaving
 			// TODO remove log
