@@ -372,6 +372,12 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 	}
 	diff, ok := snap.(*diffLayer)
 	if !ok {
+		if layers == 0 {
+			t.lock.Lock()
+			defer t.lock.Unlock()
+			t.layers = map[common.Hash]snapshot{root: snap.(snapshot)}
+			return nil
+		}
 		return fmt.Errorf("snapshot [%#x] is disk layer", root)
 	}
 	// If the generator is still running, use a more aggressive cap

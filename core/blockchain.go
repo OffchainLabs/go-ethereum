@@ -647,6 +647,13 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 							// if the historical chain pruning is enabled. In that case the logic
 							// needs to be improved here.
 							if !bc.HasState(bc.genesisBlock.Root()) {
+								// Arbitrum: we have a later block with state; use that instead.
+								if lastFullBlock != 0 {
+									blockNumber = lastFullBlock
+									newHeadBlock = bc.GetBlock(lastFullBlockHash, lastFullBlock)
+									log.Debug("Rewound to block with state but not snapshot", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
+									break
+								}
 								if err := CommitGenesisState(bc.db, bc.genesisBlock.Hash()); err != nil {
 									log.Crit("Failed to commit genesis state", "err", err)
 								}
