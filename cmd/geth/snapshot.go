@@ -180,15 +180,19 @@ func pruneState(ctx *cli.Context) error {
 		log.Error("Too many arguments given")
 		return errors.New("too many arguments")
 	}
-	var targetRoot common.Hash
+	var targetRoots []common.Hash
 	if ctx.NArg() == 1 {
-		targetRoot, err = parseRoot(ctx.Args().First())
+		root, err := parseRoot(ctx.Args().First())
 		if err != nil {
 			log.Error("Failed to resolve state root", "err", err)
 			return err
 		}
+		targetRoots = append(targetRoots, root)
+	} else {
+		// Prune to the last snapshot
+		targetRoots = append(targetRoots, common.Hash{})
 	}
-	if err = pruner.Prune(targetRoot); err != nil {
+	if err = pruner.Prune(targetRoots); err != nil {
 		log.Error("Failed to prune state", "err", err)
 		return err
 	}

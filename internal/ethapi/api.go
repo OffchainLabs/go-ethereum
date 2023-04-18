@@ -2303,6 +2303,10 @@ func (s *NetAPI) Version() string {
 	return fmt.Sprintf("%d", s.networkVersion)
 }
 
+func CheckTxFee(gasPrice *big.Int, gas uint64, cap float64) error {
+	return checkTxFee(gasPrice, gas, cap)
+}
+
 // checkTxFee is an internal function used to check whether the fee of
 // the given transaction is _reasonable_(under the cap).
 func checkTxFee(gasPrice *big.Int, gas uint64, cap float64) error {
