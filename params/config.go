@@ -345,7 +345,7 @@ var (
 		Clique:                        nil,
 		ArbitrumChainParams:           DisableArbitrumParams(),
 	}
-	TestRules = TestChainConfig.Rules(new(big.Int), false, 0)
+	TestRules = TestChainConfig.Rules(new(big.Int), false, 0, 0)
 )
 
 // NetworkNames are user friendly names to use in the chain spec banner.
@@ -974,7 +974,7 @@ type Rules struct {
 }
 
 // Rules ensures c's ChainID is not nil.
-func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules {
+func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, currentArbosVersion uint64) Rules {
 	chainID := c.ChainID
 	if chainID == nil {
 		chainID = new(big.Int)
@@ -993,7 +993,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsBerlin:         c.IsBerlin(num),
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          isMerge,
-		IsShanghai:       c.IsShanghai(timestamp),
+		IsShanghai:       currentArbosVersion >= 11,
 		isCancun:         c.IsCancun(timestamp),
 		isPrague:         c.IsPrague(timestamp),
 	}
