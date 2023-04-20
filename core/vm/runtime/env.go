@@ -17,11 +17,16 @@
 package runtime
 
 import (
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 func NewEnv(cfg *Config) *vm.EVM {
+	if cfg.ChainConfig.IsArbitrum() {
+		panic(fmt.Errorf("chain config has arbitrum enabled"))
+	}
 	txContext := vm.TxContext{
 		Origin:   cfg.Origin,
 		GasPrice: cfg.GasPrice,
