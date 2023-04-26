@@ -173,7 +173,11 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update engine.ForkchoiceStateV1, pa
 		if payloadAttributes.Withdrawals != nil {
 			return engine.STATUS_INVALID, engine.InvalidParams.With(fmt.Errorf("withdrawals not supported in V1"))
 		}
-		if api.eth.BlockChain().Config().IsShanghai(payloadAttributes.Timestamp) {
+		headerInfo, err := types.DeserializeHeaderExtraInformation(api.eth.BlockChain().CurrentHeader())
+		if err != nil {
+			return engine.ForkChoiceResponse{}, err
+		}
+		if api.eth.BlockChain().Config().IsShanghai(payloadAttributes.Timestamp, headerInfo.ArbOSFormatVersion) {
 			return engine.STATUS_INVALID, engine.InvalidParams.With(fmt.Errorf("forkChoiceUpdateV1 called post-shanghai"))
 		}
 	}
@@ -191,7 +195,11 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV2(update engine.ForkchoiceStateV1, pa
 }
 
 func (api *ConsensusAPI) verifyPayloadAttributes(attr *engine.PayloadAttributes) error {
-	if !api.eth.BlockChain().Config().IsShanghai(attr.Timestamp) {
+	headerInfo, err := types.DeserializeHeaderExtraInformation(api.eth.BlockChain().CurrentHeader())
+	if err != nil {
+		return err
+	}
+	if !api.eth.BlockChain().Config().IsShanghai(attr.Timestamp, headerInfo.ArbOSFormatVersion) {
 		// Reject payload attributes with withdrawals before shanghai
 		if attr.Withdrawals != nil {
 			return errors.New("withdrawals before shanghai")
@@ -417,7 +425,11 @@ func (api *ConsensusAPI) NewPayloadV1(params engine.ExecutableData) (engine.Payl
 
 // NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
-	if api.eth.BlockChain().Config().IsShanghai(params.Timestamp) {
+	headerInfo, err := types.DeserializeHeaderExtraInformation(api.eth.BlockChain().CurrentHeader())
+	if err != nil {
+		return engine.PayloadStatusV1{}, err
+	}
+	if api.eth.BlockChain().Config().IsShanghai(params.Timestamp, headerInfo.ArbOSFormatVersion) {
 		if params.Withdrawals == nil {
 			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("nil withdrawals post-shanghai"))
 		}

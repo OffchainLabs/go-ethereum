@@ -1312,7 +1312,12 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
 	pool.eip2718 = pool.chainconfig.IsBerlin(next)
 	pool.eip1559 = pool.chainconfig.IsLondon(next)
-	pool.shanghai = pool.chainconfig.IsShanghai(uint64(time.Now().Unix()))
+	newHeadInfo, err := types.DeserializeHeaderExtraInformation(newHead)
+	if err != nil {
+		log.Error(err.Error())
+		return
+	}
+	pool.shanghai = pool.chainconfig.IsShanghai(uint64(time.Now().Unix()), newHeadInfo.ArbOSFormatVersion)
 }
 
 // promoteExecutables moves transactions that have become processable from the
