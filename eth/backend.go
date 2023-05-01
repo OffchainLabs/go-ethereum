@@ -204,7 +204,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if config.OverrideShanghai != nil {
 		overrides.OverrideShanghai = config.OverrideShanghai
 	}
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, nil, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
 	if err != nil {
 		return nil, err
 	}
