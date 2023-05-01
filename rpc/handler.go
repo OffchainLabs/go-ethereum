@@ -92,7 +92,7 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 	return h
 }
 
-const maxBatchResponseSize int = 10_000_000 // 10MB
+var MaxBatchResponseSize int = 10_000_000 // 10MB
 
 // handleBatch executes all messages in a batch and returns the responses.
 func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
@@ -126,8 +126,8 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 					return
 				}
 				totalSize += len(serialized)
-				if totalSize > maxBatchResponseSize {
-					h.conn.writeJSON(cp.ctx, errorMessage(&invalidRequestError{fmt.Sprintf("batch response exceeded limit of %v bytes", maxBatchResponseSize)}))
+				if MaxBatchResponseSize > 0 && totalSize > MaxBatchResponseSize {
+					h.conn.writeJSON(cp.ctx, errorMessage(&invalidRequestError{fmt.Sprintf("batch response exceeded limit of %v bytes", MaxBatchResponseSize)}))
 					return
 				}
 				answers = append(answers, serialized)
