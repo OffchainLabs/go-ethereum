@@ -92,7 +92,7 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 	return h
 }
 
-const maxBatchResponseSize int = 10_000_000 // 10MB
+var MaxBatchResponseSize int = 10_000_000 // 10MB
 
 // batchCallBuffer manages in progress call messages and their responses during a batch
 // call. Calls need to be synchronized between the processing and timeout-triggering
@@ -132,8 +132,8 @@ func (b *batchCallBuffer) pushResponse(answer *jsonrpcMessage) error {
 			return &parseError{"error serializing response: " + err.Error()}
 		}
 		b.totalSize += len(serialized)
-		if b.totalSize > maxBatchResponseSize {
-			return &invalidRequestError{fmt.Sprintf("batch response exceeded limit of %v bytes", maxBatchResponseSize)}
+		if MaxBatchResponseSize > 0 && b.totalSize > MaxBatchResponseSize {
+			return &invalidRequestError{fmt.Sprintf("batch response exceeded limit of %v bytes", MaxBatchResponseSize)}
 		}
 		b.resp = append(b.resp, serialized)
 	}
@@ -206,19 +206,6 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	}
 	// Process calls on a goroutine because they may block indefinitely:
 	h.startCallProc(func(cp *callProc) {
-		/*
-			serialized, err := json.Marshal(answer)
-			if err != nil {
-				h.conn.writeJSON(cp.ctx, errorMessage(&parseError{"error serializing response: " + err.Error()}))
-				return
-			}
-			totalSize += len(serialized)
-			if totalSize > maxBatchResponseSize {
-				h.conn.writeJSON(cp.ctx, errorMessage(&invalidRequestError{fmt.Sprintf("batch response exceeded limit of %v bytes", maxBatchResponseSize)}))
-				return
-			}
-			answers = append(answers, serialized)
-		*/
 		var (
 			timer      *time.Timer
 			cancel     context.CancelFunc
@@ -252,6 +239,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			if err != nil {
 				h.conn.writeJSON(cp.ctx, errorMessage(err), true)
 				return
+
 			}
 		}
 		if timer != nil {
