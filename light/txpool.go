@@ -318,12 +318,7 @@ func (pool *TxPool) setNewHead(head *types.Header) {
 	next := new(big.Int).Add(head.Number, big.NewInt(1))
 	pool.istanbul = pool.config.IsIstanbul(next)
 	pool.eip2718 = pool.config.IsBerlin(next)
-	headInfo, err := types.DeserializeHeaderExtraInformation(head)
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-	pool.shanghai = pool.config.IsShanghai(uint64(time.Now().Unix()), headInfo.ArbOSFormatVersion)
+	pool.shanghai = pool.config.IsShanghai(uint64(time.Now().Unix()), types.DeserializeHeaderExtraInformation(head).ArbOSFormatVersion)
 }
 
 // Stop stops the light transaction pool

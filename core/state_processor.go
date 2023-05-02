@@ -87,11 +87,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	// Fail if Shanghai not enabled and len(withdrawals) is non-zero.
 	withdrawals := block.Withdrawals()
-	headerInfo, err := types.DeserializeHeaderExtraInformation(header)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-	if len(withdrawals) > 0 && !p.config.IsShanghai(block.Time(), headerInfo.ArbOSFormatVersion) {
+	if len(withdrawals) > 0 && !p.config.IsShanghai(block.Time(), types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {
 		return nil, nil, 0, fmt.Errorf("withdrawals before shanghai")
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)

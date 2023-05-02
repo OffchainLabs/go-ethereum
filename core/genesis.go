@@ -466,11 +466,7 @@ func (g *Genesis) ToBlock() *types.Block {
 		}
 	}
 	var withdrawals []*types.Withdrawal
-	headInfo, err := types.DeserializeHeaderExtraInformation(head)
-	if err != nil {
-		return nil
-	}
-	if g.Config != nil && g.Config.IsShanghai(g.Timestamp, headInfo.ArbOSFormatVersion) {
+	if g.Config != nil && g.Config.IsShanghai(g.Timestamp, types.DeserializeHeaderExtraInformation(head).ArbOSFormatVersion) {
 		head.WithdrawalsHash = &types.EmptyWithdrawalsHash
 		withdrawals = make([]*types.Withdrawal, 0)
 	}

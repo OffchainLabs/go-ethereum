@@ -310,11 +310,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
 	}
-	headerInfo, err := types.DeserializeHeaderExtraInformation(header)
-	if err != nil {
-		return err
-	}
-	if chain.Config().IsShanghai(header.Time, headerInfo.ArbOSFormatVersion) {
+	if chain.Config().IsShanghai(header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {
 		return fmt.Errorf("ethash does not support shanghai fork")
 	}
 	// Verify the engine specific seal securing the block

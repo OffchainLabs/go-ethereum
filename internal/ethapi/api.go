@@ -1353,14 +1353,10 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 }
 
 func fillArbitrumNitroHeaderInfo(header *types.Header, fields map[string]interface{}) {
-	info, err := types.DeserializeHeaderExtraInformation(header)
-	if err != nil {
-		log.Error("Expected header to contain arbitrum data", "blockHash", header.Hash())
-	} else {
-		fields["l1BlockNumber"] = hexutil.Uint64(info.L1BlockNumber)
-		fields["sendRoot"] = info.SendRoot
-		fields["sendCount"] = hexutil.Uint64(info.SendCount)
-	}
+	info := types.DeserializeHeaderExtraInformation(header)
+	fields["l1BlockNumber"] = hexutil.Uint64(info.L1BlockNumber)
+	fields["sendRoot"] = info.SendRoot
+	fields["sendCount"] = hexutil.Uint64(info.SendCount)
 }
 
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
@@ -1640,12 +1636,8 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		to = crypto.CreateAddress(args.from(), uint64(*args.Nonce))
 	}
 	isPostMerge := header.Difficulty.Cmp(common.Big0) == 0
-	headerInfo, err := types.DeserializeHeaderExtraInformation(header)
-	if err != nil {
-		return nil, 0, nil, err
-	}
 	// Retrieve the precompiles since they don't need to be added to the access list
-	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number, isPostMerge, header.Time, headerInfo.ArbOSFormatVersion))
+	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number, isPostMerge, header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion))
 
 	// Create an initial tracer
 	prevTracer := logger.NewAccessListTracer(nil, args.from(), to, precompiles)
@@ -1882,12 +1874,7 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 		}
 		if s.b.ChainConfig().IsArbitrumNitro(header.Number) {
 			fields["effectiveGasPrice"] = hexutil.Uint64(header.BaseFee.Uint64())
-			info, err := types.DeserializeHeaderExtraInformation(header)
-			if err != nil {
-				log.Error("Expected header to contain arbitrum data", "blockHash", blockHash)
-			} else {
-				fields["l1BlockNumber"] = hexutil.Uint64(info.L1BlockNumber)
-			}
+			fields["l1BlockNumber"] = hexutil.Uint64(types.DeserializeHeaderExtraInformation(header).L1BlockNumber)
 		} else {
 			inner := tx.GetInner()
 			arbTx, ok := inner.(*types.ArbitrumLegacyTxData)

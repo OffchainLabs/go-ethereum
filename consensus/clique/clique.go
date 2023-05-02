@@ -298,11 +298,7 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	if header.GasLimit > params.MaxGasLimit {
 		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, params.MaxGasLimit)
 	}
-	headerInfo, err := types.DeserializeHeaderExtraInformation(header)
-	if err != nil {
-		return err
-	}
-	if chain.Config().IsShanghai(header.Time, headerInfo.ArbOSFormatVersion) {
+	if chain.Config().IsShanghai(header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {
 		return fmt.Errorf("clique does not support shanghai fork")
 	}
 	// If all checks passed, validate any special fields for hard forks
