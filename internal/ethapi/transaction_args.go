@@ -281,11 +281,12 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, header *types.Header
 
 // Raises the vanilla gas cap by the tx's l1 data costs in l2 terms. This creates a new gas cap that after
 // data payments are made, equals the original vanilla cap for the remaining, L2-specific work the tx does.
-func (args *TransactionArgs) L2OnlyGasCap(gasCap uint64, header *types.Header, state *state.StateDB) (uint64, error) {
+func (args *TransactionArgs) L2OnlyGasCap(gasCap uint64, header *types.Header, state *state.StateDB, runMode types.MessageRunMode) (uint64, error) {
 	msg, err := args.ToMessage(gasCap, header, nil)
 	if err != nil {
 		return 0, err
 	}
+	msg.TxRunMode = runMode
 	core.InterceptRPCGasCap(&gasCap, msg, header, state)
 	return gasCap, nil
 }
