@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/arbitrum_types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
@@ -110,6 +111,13 @@ func (a *APIBackend) GetAPIs(filterSystem *filters.FilterSystem) []rpc.API {
 	})
 
 	apis = append(apis, rpc.API{
+		Namespace: "eth",
+		Version:   "1.0",
+		Service:   NewArbTransactionAPI(a),
+		Public:    true,
+	})
+
+	apis = append(apis, rpc.API{
 		Namespace: "net",
 		Version:   "1.0",
 		Service:   NewPublicNetAPI(a.ChainConfig().ChainID.Uint64()),
@@ -134,6 +142,13 @@ func (a *APIBackend) blockChain() *core.BlockChain {
 
 func (a *APIBackend) GetArbitrumNode() interface{} {
 	return a.b.arb.ArbNode()
+}
+
+func (a *APIBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
+	if body := a.blockChain().GetBody(hash); body != nil {
+		return body, nil
+	}
+	return nil, errors.New("block body not found")
 }
 
 // General Ethereum API
@@ -418,20 +433,20 @@ func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOr
 	return a.stateAndHeaderFromHeader(a.HeaderByNumberOrHash(ctx, blockNrOrHash))
 }
 
-func (a *APIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
+func (a *APIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
 	if !a.blockChain().Config().IsArbitrumNitro(block.Number()) {
-		return nil, types.ErrUseFallback
+		return nil, nil, types.ErrUseFallback
 	}
 	// DEV: This assumes that `StateAtBlock` only accesses the blockchain and chainDb fields
-	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(block, reexec, base, checkLive, preferDisk)
+	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(ctx, block, reexec, base, checkLive, preferDisk)
 }
 
-func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
+func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
 	if !a.blockChain().Config().IsArbitrumNitro(block.Number()) {
-		return nil, vm.BlockContext{}, nil, types.ErrUseFallback
+		return nil, vm.BlockContext{}, nil, nil, types.ErrUseFallback
 	}
 	// DEV: This assumes that `StateAtTransaction` only accesses the blockchain and chainDb fields
-	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtTransaction(block, txIndex, reexec)
+	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtTransaction(ctx, block, txIndex, reexec)
 }
 
 func (a *APIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
@@ -477,7 +492,11 @@ func (a *APIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) even
 
 // Transaction pool API
 func (a *APIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
-	return a.b.EnqueueL2Message(ctx, signedTx)
+	return a.b.EnqueueL2Message(ctx, signedTx, nil)
+}
+
+func (a *APIBackend) SendConditionalTx(ctx context.Context, signedTx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {
+	return a.b.EnqueueL2Message(ctx, signedTx, options)
 }
 
 func (a *APIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {

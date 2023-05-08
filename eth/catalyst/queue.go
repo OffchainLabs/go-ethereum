@@ -20,9 +20,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/miner"
 )
 
 // maxTrackedPayloads is the maximum number of prepared payloads the execution
@@ -79,8 +80,8 @@ func (req *payload) resolve() *types.Block {
 // payloadQueueItem represents an id->payload tuple to store until it's retrieved
 // or evicted.
 type payloadQueueItem struct {
-	id   beacon.PayloadID
-	data *payload
+	id      engine.PayloadID
+	payload *miner.Payload
 }
 
 // payloadQueue tracks the latest handful of constructed payloads to be retrieved
@@ -99,19 +100,19 @@ func newPayloadQueue() *payloadQueue {
 }
 
 // put inserts a new payload into the queue at the given id.
-func (q *payloadQueue) put(id beacon.PayloadID, data *payload) {
+func (q *payloadQueue) put(id engine.PayloadID, payload *miner.Payload) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
 	copy(q.payloads[1:], q.payloads)
 	q.payloads[0] = &payloadQueueItem{
-		id:   id,
-		data: data,
+		id:      id,
+		payload: payload,
 	}
 }
 
 // get retrieves a previously stored payload item or nil if it does not exist.
-func (q *payloadQueue) get(id beacon.PayloadID) *types.Block {
+func (q *payloadQueue) get(id engine.PayloadID) *engine.ExecutionPayloadEnvelope {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
@@ -120,10 +121,26 @@ func (q *payloadQueue) get(id beacon.PayloadID) *types.Block {
 			return nil // no more items
 		}
 		if item.id == id {
-			return item.data.resolve()
+			return item.payload.Resolve()
 		}
 	}
 	return nil
+}
+
+// has checks if a particular payload is already tracked.
+func (q *payloadQueue) has(id engine.PayloadID) bool {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	for _, item := range q.payloads {
+		if item == nil {
+			return false
+		}
+		if item.id == id {
+			return true
+		}
+	}
+	return false
 }
 
 // headerQueueItem represents an hash->header tuple to store until it's retrieved

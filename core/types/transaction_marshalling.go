@@ -77,11 +77,11 @@ type txJSON struct {
 }
 
 // MarshalJSON marshals as JSON with a hash.
-func (t *Transaction) MarshalJSON() ([]byte, error) {
+func (tx *Transaction) MarshalJSON() ([]byte, error) {
 	var enc txJSON
 	// These are set for all tx types.
-	enc.Hash = t.Hash()
-	enc.Type = hexutil.Uint64(t.Type())
+	enc.Hash = tx.Hash()
+	enc.Type = hexutil.Uint64(tx.Type())
 
 	// Arbitrum: set to 0 for compatibility
 	var zero uint64
@@ -95,139 +95,139 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 	enc.S = (*hexutil.Big)(common.Big0)
 
 	// Other fields are set conditionally depending on tx type.
-	switch tx := t.inner.(type) {
+	switch itx := tx.inner.(type) {
 	case *LegacyTx:
-		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
-		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.GasPrice = (*hexutil.Big)(tx.GasPrice)
-		enc.Value = (*hexutil.Big)(tx.Value)
-		enc.Data = (*hexutil.Bytes)(&tx.Data)
-		enc.To = t.To()
-		enc.V = (*hexutil.Big)(tx.V)
-		enc.R = (*hexutil.Big)(tx.R)
-		enc.S = (*hexutil.Big)(tx.S)
+		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
+		enc.GasPrice = (*hexutil.Big)(itx.GasPrice)
+		enc.Value = (*hexutil.Big)(itx.Value)
+		enc.Data = (*hexutil.Bytes)(&itx.Data)
+		enc.To = tx.To()
+		enc.V = (*hexutil.Big)(itx.V)
+		enc.R = (*hexutil.Big)(itx.R)
+		enc.S = (*hexutil.Big)(itx.S)
 	case *AccessListTx:
-		enc.ChainID = (*hexutil.Big)(tx.ChainID)
-		enc.AccessList = &tx.AccessList
-		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
-		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.GasPrice = (*hexutil.Big)(tx.GasPrice)
-		enc.Value = (*hexutil.Big)(tx.Value)
-		enc.Data = (*hexutil.Bytes)(&tx.Data)
-		enc.To = t.To()
-		enc.V = (*hexutil.Big)(tx.V)
-		enc.R = (*hexutil.Big)(tx.R)
-		enc.S = (*hexutil.Big)(tx.S)
+		enc.ChainID = (*hexutil.Big)(itx.ChainID)
+		enc.AccessList = &itx.AccessList
+		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
+		enc.GasPrice = (*hexutil.Big)(itx.GasPrice)
+		enc.Value = (*hexutil.Big)(itx.Value)
+		enc.Data = (*hexutil.Bytes)(&itx.Data)
+		enc.To = tx.To()
+		enc.V = (*hexutil.Big)(itx.V)
+		enc.R = (*hexutil.Big)(itx.R)
+		enc.S = (*hexutil.Big)(itx.S)
 	case *DynamicFeeTx:
-		enc.ChainID = (*hexutil.Big)(tx.ChainID)
-		enc.AccessList = &tx.AccessList
-		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
-		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
-		enc.MaxPriorityFeePerGas = (*hexutil.Big)(tx.GasTipCap)
-		enc.Value = (*hexutil.Big)(tx.Value)
-		enc.Data = (*hexutil.Bytes)(&tx.Data)
-		enc.To = t.To()
-		enc.V = (*hexutil.Big)(tx.V)
-		enc.R = (*hexutil.Big)(tx.R)
-		enc.S = (*hexutil.Big)(tx.S)
+		enc.ChainID = (*hexutil.Big)(itx.ChainID)
+		enc.AccessList = &itx.AccessList
+		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
+		enc.MaxFeePerGas = (*hexutil.Big)(itx.GasFeeCap)
+		enc.MaxPriorityFeePerGas = (*hexutil.Big)(itx.GasTipCap)
+		enc.Value = (*hexutil.Big)(itx.Value)
+		enc.Data = (*hexutil.Bytes)(&itx.Data)
+		enc.To = tx.To()
+		enc.V = (*hexutil.Big)(itx.V)
+		enc.R = (*hexutil.Big)(itx.R)
+		enc.S = (*hexutil.Big)(itx.S)
 	case *ArbitrumLegacyTxData:
-		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
-		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.GasPrice = (*hexutil.Big)(tx.GasPrice)
-		enc.Value = (*hexutil.Big)(tx.Value)
-		enc.Data = (*hexutil.Bytes)(&tx.Data)
-		enc.To = t.To()
-		enc.V = (*hexutil.Big)(tx.V)
-		enc.R = (*hexutil.Big)(tx.R)
-		enc.S = (*hexutil.Big)(tx.S)
-		enc.EffectiveGasPrice = (*hexutil.Uint64)(&tx.EffectiveGasPrice)
-		enc.L1BlockNumber = (*hexutil.Uint64)(&tx.L1BlockNumber)
-		enc.From = tx.Sender
+		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
+		enc.GasPrice = (*hexutil.Big)(itx.GasPrice)
+		enc.Value = (*hexutil.Big)(itx.Value)
+		enc.Data = (*hexutil.Bytes)(&itx.Data)
+		enc.To = tx.To()
+		enc.V = (*hexutil.Big)(itx.V)
+		enc.R = (*hexutil.Big)(itx.R)
+		enc.S = (*hexutil.Big)(itx.S)
+		enc.EffectiveGasPrice = (*hexutil.Uint64)(&itx.EffectiveGasPrice)
+		enc.L1BlockNumber = (*hexutil.Uint64)(&itx.L1BlockNumber)
+		enc.From = itx.Sender
 	case *ArbitrumInternalTx:
-		enc.ChainID = (*hexutil.Big)(tx.ChainId)
-		enc.Data = (*hexutil.Bytes)(&tx.Data)
+		enc.ChainID = (*hexutil.Big)(itx.ChainId)
+		enc.Data = (*hexutil.Bytes)(&itx.Data)
 	case *ArbitrumDepositTx:
-		enc.RequestId = &tx.L1RequestId
-		enc.From = &tx.From
-		enc.ChainID = (*hexutil.Big)(tx.ChainId)
-		enc.Value = (*hexutil.Big)(tx.Value)
-		enc.To = t.To()
+		enc.RequestId = &itx.L1RequestId
+		enc.From = &itx.From
+		enc.ChainID = (*hexutil.Big)(itx.ChainId)
+		enc.Value = (*hexutil.Big)(itx.Value)
+		enc.To = tx.To()
 	case *ArbitrumUnsignedTx:
-		enc.From = (*common.Address)(&tx.From)
-		enc.ChainID = (*hexutil.Big)(tx.ChainId)
-		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
-		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
-		enc.Value = (*hexutil.Big)(tx.Value)
-		enc.Data = (*hexutil.Bytes)(&tx.Data)
-		enc.To = t.To()
+		enc.From = (*common.Address)(&itx.From)
+		enc.ChainID = (*hexutil.Big)(itx.ChainId)
+		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
+		enc.MaxFeePerGas = (*hexutil.Big)(itx.GasFeeCap)
+		enc.Value = (*hexutil.Big)(itx.Value)
+		enc.Data = (*hexutil.Bytes)(&itx.Data)
+		enc.To = tx.To()
 	case *ArbitrumContractTx:
-		enc.RequestId = &tx.RequestId
-		enc.From = (*common.Address)(&tx.From)
-		enc.ChainID = (*hexutil.Big)(tx.ChainId)
-		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
-		enc.Value = (*hexutil.Big)(tx.Value)
-		enc.Data = (*hexutil.Bytes)(&tx.Data)
-		enc.To = t.To()
+		enc.RequestId = &itx.RequestId
+		enc.From = (*common.Address)(&itx.From)
+		enc.ChainID = (*hexutil.Big)(itx.ChainId)
+		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
+		enc.MaxFeePerGas = (*hexutil.Big)(itx.GasFeeCap)
+		enc.Value = (*hexutil.Big)(itx.Value)
+		enc.Data = (*hexutil.Bytes)(&itx.Data)
+		enc.To = tx.To()
 	case *ArbitrumRetryTx:
-		enc.From = (*common.Address)(&tx.From)
-		enc.TicketId = &tx.TicketId
-		enc.RefundTo = &tx.RefundTo
-		enc.ChainID = (*hexutil.Big)(tx.ChainId)
-		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
-		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
-		enc.Value = (*hexutil.Big)(tx.Value)
-		enc.Data = (*hexutil.Bytes)(&tx.Data)
-		enc.MaxRefund = (*hexutil.Big)(tx.MaxRefund)
-		enc.SubmissionFeeRefund = (*hexutil.Big)(tx.SubmissionFeeRefund)
-		enc.To = t.To()
+		enc.From = (*common.Address)(&itx.From)
+		enc.TicketId = &itx.TicketId
+		enc.RefundTo = &itx.RefundTo
+		enc.ChainID = (*hexutil.Big)(itx.ChainId)
+		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
+		enc.MaxFeePerGas = (*hexutil.Big)(itx.GasFeeCap)
+		enc.Value = (*hexutil.Big)(itx.Value)
+		enc.Data = (*hexutil.Bytes)(&itx.Data)
+		enc.MaxRefund = (*hexutil.Big)(itx.MaxRefund)
+		enc.SubmissionFeeRefund = (*hexutil.Big)(itx.SubmissionFeeRefund)
+		enc.To = tx.To()
 	case *ArbitrumSubmitRetryableTx:
-		enc.RequestId = &tx.RequestId
-		enc.From = &tx.From
-		enc.L1BaseFee = (*hexutil.Big)(tx.L1BaseFee)
-		enc.DepositValue = (*hexutil.Big)(tx.DepositValue)
-		enc.Beneficiary = &tx.Beneficiary
-		enc.RefundTo = &tx.FeeRefundAddr
-		enc.MaxSubmissionFee = (*hexutil.Big)(tx.MaxSubmissionFee)
-		enc.ChainID = (*hexutil.Big)(tx.ChainId)
-		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
-		enc.RetryTo = tx.RetryTo
-		enc.RetryValue = (*hexutil.Big)(tx.RetryValue)
-		enc.RetryData = (*hexutil.Bytes)(&tx.RetryData)
-		data := tx.data()
+		enc.RequestId = &itx.RequestId
+		enc.From = &itx.From
+		enc.L1BaseFee = (*hexutil.Big)(itx.L1BaseFee)
+		enc.DepositValue = (*hexutil.Big)(itx.DepositValue)
+		enc.Beneficiary = &itx.Beneficiary
+		enc.RefundTo = &itx.FeeRefundAddr
+		enc.MaxSubmissionFee = (*hexutil.Big)(itx.MaxSubmissionFee)
+		enc.ChainID = (*hexutil.Big)(itx.ChainId)
+		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
+		enc.MaxFeePerGas = (*hexutil.Big)(itx.GasFeeCap)
+		enc.RetryTo = itx.RetryTo
+		enc.RetryValue = (*hexutil.Big)(itx.RetryValue)
+		enc.RetryData = (*hexutil.Bytes)(&itx.RetryData)
+		data := itx.data()
 		enc.Data = (*hexutil.Bytes)(&data)
-		enc.To = t.To()
+		enc.To = tx.To()
 	case *SignedBlobTx:
-		enc.ChainID = (*hexutil.Big)(u256ToBig(&tx.Message.ChainID))
-		enc.AccessList = (*AccessList)(&tx.Message.AccessList)
-		enc.Nonce = (*hexutil.Uint64)(&tx.Message.Nonce)
-		enc.Gas = (*hexutil.Uint64)(&tx.Message.Gas)
-		enc.MaxFeePerGas = (*hexutil.Big)(u256ToBig(&tx.Message.GasFeeCap))
-		enc.MaxPriorityFeePerGas = (*hexutil.Big)(u256ToBig(&tx.Message.GasTipCap))
-		enc.Value = (*hexutil.Big)(u256ToBig(&tx.Message.Value))
-		enc.Data = (*hexutil.Bytes)(&tx.Message.Data)
-		enc.To = t.To()
-		v, r, s := tx.rawSignatureValues()
+		enc.ChainID = (*hexutil.Big)(itx.chainID())
+		enc.AccessList = (*AccessList)(&itx.Message.AccessList)
+		enc.Nonce = (*hexutil.Uint64)(&itx.Message.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&itx.Message.Gas)
+		enc.MaxFeePerGas = (*hexutil.Big)(itx.gasFeeCap())
+		enc.MaxPriorityFeePerGas = (*hexutil.Big)(itx.gasTipCap())
+		enc.Value = (*hexutil.Big)(itx.value())
+		enc.Data = (*hexutil.Bytes)(&itx.Message.Data)
+		v, r, s := itx.rawSignatureValues()
 		enc.V = (*hexutil.Big)(v)
 		enc.R = (*hexutil.Big)(r)
 		enc.S = (*hexutil.Big)(s)
-		enc.MaxFeePerDataGas = (*hexutil.Big)(u256ToBig(&tx.Message.MaxFeePerDataGas))
-		enc.BlobVersionedHashes = tx.Message.BlobVersionedHashes
-		if t.wrapData != nil {
-			enc.Blobs = t.wrapData.blobs()
-			enc.BlobKzgs = t.wrapData.kzgs()
-			enc.KzgAggregatedProof = t.wrapData.aggregatedProof()
+		enc.MaxFeePerDataGas = (*hexutil.Big)(itx.maxFeePerDataGas())
+		enc.BlobVersionedHashes = itx.Message.BlobVersionedHashes
+		if tx.wrapData != nil {
+			enc.Blobs = tx.wrapData.blobs()
+			enc.BlobKzgs = tx.wrapData.kzgs()
+			enc.KzgAggregatedProof = tx.wrapData.aggregatedProof()
 		}
+		enc.To = tx.To()
 	}
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
-func (t *Transaction) UnmarshalJSON(input []byte) error {
+func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	var dec txJSON
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
@@ -511,7 +511,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		itx.Message.BlobVersionedHashes = dec.BlobVersionedHashes
 		// A BlobTx may not contain data
 		if len(dec.Blobs) != 0 || len(dec.BlobKzgs) != 0 {
-			t.wrapData = &BlobTxWrapData{
+			tx.wrapData = &BlobTxWrapData{
 				BlobKzgs:           dec.BlobKzgs,
 				Blobs:              dec.Blobs,
 				KzgAggregatedProof: dec.KzgAggregatedProof,
@@ -725,7 +725,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 	}
 
 	// Now set the inner transaction.
-	t.setDecoded(inner, 0)
+	tx.setDecoded(inner, 0)
 
 	// TODO: check hash here?
 	return nil

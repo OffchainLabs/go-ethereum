@@ -138,16 +138,10 @@ func Transaction(ctx *cli.Context) error {
 		} else {
 			r.Address = sender
 		}
-		// Check intrinsic gas assuming no excess data gas
-		// NOTE: We set excess_data_gas prestate to zero. So this may not accurately compute the
-		// intrinsic gas unless the tool is updated to take in an excess_data_gas parameter.
 
-		rules := core.IntrinsicGasChainRules{
-			Homestead: chainConfig.IsHomestead(new(big.Int)),
-			EIP2028:   chainConfig.IsIstanbul(new(big.Int)),
-			EIP4844:   chainConfig.IsSharding(new(big.Int)),
-		}
-		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, rules); err != nil {
+		// Check intrinsic gas
+		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil,
+			chainConfig.IsHomestead(new(big.Int)), chainConfig.IsIstanbul(new(big.Int)), chainConfig.IsShanghai(0), chainConfig.IsSharding(new(big.Int))); err != nil {
 			r.Error = err
 			results = append(results, r)
 			continue
@@ -177,6 +171,10 @@ func Transaction(ctx *cli.Context) error {
 			r.Error = errors.New("gas * gasPrice exceeds 256 bits")
 		case new(big.Int).Mul(tx.GasFeeCap(), new(big.Int).SetUint64(tx.Gas())).BitLen() > 256:
 			r.Error = errors.New("gas * maxFeePerGas exceeds 256 bits")
+		}
+		// Check whether the init code size has been exceeded.
+		if chainConfig.IsShanghai(0) && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
+			r.Error = errors.New("max initcode size exceeded")
 		}
 		results = append(results, r)
 	}

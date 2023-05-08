@@ -92,7 +92,6 @@ func BenchmarkSlidingWindowArraySample1028(b *testing.B) {
 }
 
 func TestExpDecaySample10(t *testing.T) {
-	rand.Seed(1)
 	s := NewExpDecaySample(100, 0.99)
 	for i := 0; i < 10; i++ {
 		s.Update(int64(i))
@@ -114,7 +113,6 @@ func TestExpDecaySample10(t *testing.T) {
 }
 
 func TestExpDecaySample100(t *testing.T) {
-	rand.Seed(1)
 	s := NewExpDecaySample(1000, 0.01)
 	for i := 0; i < 100; i++ {
 		s.Update(int64(i))
@@ -136,7 +134,6 @@ func TestExpDecaySample100(t *testing.T) {
 }
 
 func TestExpDecaySample1000(t *testing.T) {
-	rand.Seed(1)
 	s := NewExpDecaySample(100, 0.99)
 	for i := 0; i < 1000; i++ {
 		s.Update(int64(i))
@@ -162,7 +159,6 @@ func TestExpDecaySample1000(t *testing.T) {
 // The priority becomes +Inf quickly after starting if this is done,
 // effectively freezing the set of samples until a rescale step happens.
 func TestExpDecaySampleNanosecondRegression(t *testing.T) {
-	rand.Seed(1)
 	s := NewExpDecaySample(100, 0.99)
 	for i := 0; i < 100; i++ {
 		s.Update(10)
@@ -195,8 +191,7 @@ func TestExpDecaySampleRescale(t *testing.T) {
 
 func TestExpDecaySampleSnapshot(t *testing.T) {
 	now := time.Now()
-	rand.Seed(1)
-	s := NewExpDecaySample(100, 0.99)
+	s := NewExpDecaySample(100, 0.99).(*ExpDecaySample).SetRand(rand.New(rand.NewSource(1)))
 	for i := 1; i <= 10000; i++ {
 		s.(*ExpDecaySample).update(now.Add(time.Duration(i)), int64(i))
 	}
@@ -207,8 +202,7 @@ func TestExpDecaySampleSnapshot(t *testing.T) {
 
 func TestExpDecaySampleStatistics(t *testing.T) {
 	now := time.Now()
-	rand.Seed(1)
-	s := NewExpDecaySample(100, 0.99)
+	s := NewExpDecaySample(100, 0.99).(*ExpDecaySample).SetRand(rand.New(rand.NewSource(1)))
 	for i := 1; i <= 10000; i++ {
 		s.(*ExpDecaySample).update(now.Add(time.Duration(i)), int64(i))
 	}
@@ -216,7 +210,6 @@ func TestExpDecaySampleStatistics(t *testing.T) {
 }
 
 func TestUniformSample(t *testing.T) {
-	rand.Seed(1)
 	s := NewUniformSample(100)
 	for i := 0; i < 1000; i++ {
 		s.Update(int64(i))
@@ -238,7 +231,6 @@ func TestUniformSample(t *testing.T) {
 }
 
 func TestUniformSampleIncludesTail(t *testing.T) {
-	rand.Seed(1)
 	s := NewUniformSample(100)
 	max := 100
 	for i := 0; i < max; i++ {
@@ -256,7 +248,7 @@ func TestUniformSampleIncludesTail(t *testing.T) {
 }
 
 func TestUniformSampleSnapshot(t *testing.T) {
-	s := NewUniformSample(100)
+	s := NewUniformSample(100).(*UniformSample).SetRand(rand.New(rand.NewSource(1)))
 	for i := 1; i <= 10000; i++ {
 		s.Update(int64(i))
 	}
@@ -266,8 +258,7 @@ func TestUniformSampleSnapshot(t *testing.T) {
 }
 
 func TestUniformSampleStatistics(t *testing.T) {
-	rand.Seed(1)
-	s := NewUniformSample(100)
+	s := NewUniformSample(100).(*UniformSample).SetRand(rand.New(rand.NewSource(1)))
 	for i := 1; i <= 10000; i++ {
 		s.Update(int64(i))
 	}

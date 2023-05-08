@@ -24,12 +24,13 @@ import (
 
 type RecordingKV struct {
 	inner         *trie.Database
+	diskDb        ethdb.KeyValueStore
 	readDbEntries map[common.Hash][]byte
 	enableBypass  bool
 }
 
-func newRecordingKV(inner *trie.Database) *RecordingKV {
-	return &RecordingKV{inner, make(map[common.Hash][]byte), false}
+func newRecordingKV(inner *trie.Database, diskDb ethdb.KeyValueStore) *RecordingKV {
+	return &RecordingKV{inner, diskDb, make(map[common.Hash][]byte), false}
 }
 
 func (db *RecordingKV) Has(key []byte) (bool, error) {
@@ -46,7 +47,7 @@ func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 	} else if len(key) == len(rawdb.CodePrefix)+32 && bytes.HasPrefix(key, rawdb.CodePrefix) {
 		// Retrieving code
 		copy(hash[:], key[len(rawdb.CodePrefix):])
-		res, err = db.inner.DiskDB().Get(key)
+		res, err = db.diskDb.Get(key)
 	} else {
 		err = fmt.Errorf("recording KV attempted to access non-hash key %v", hex.EncodeToString(key))
 	}
@@ -73,7 +74,7 @@ func (db *RecordingKV) Delete(key []byte) error {
 
 func (db *RecordingKV) NewBatch() ethdb.Batch {
 	if db.enableBypass {
-		return db.inner.DiskDB().NewBatch()
+		return db.diskDb.NewBatch()
 	}
 	log.Error("recording KV: attempted to create batch when bypass not enabled")
 	return nil
@@ -81,7 +82,7 @@ func (db *RecordingKV) NewBatch() ethdb.Batch {
 
 func (db *RecordingKV) NewBatchWithSize(size int) ethdb.Batch {
 	if db.enableBypass {
-		return db.inner.DiskDB().NewBatchWithSize(size)
+		return db.diskDb.NewBatchWithSize(size)
 	}
 	log.Error("recording KV: attempted to create batch when bypass not enabled")
 	return nil
@@ -89,7 +90,7 @@ func (db *RecordingKV) NewBatchWithSize(size int) ethdb.Batch {
 
 func (db *RecordingKV) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 	if db.enableBypass {
-		return db.inner.DiskDB().NewIterator(prefix, start)
+		return db.diskDb.NewIterator(prefix, start)
 	}
 	log.Error("recording KV: attempted to create iterator when bypass not enabled")
 	return nil
@@ -187,7 +188,7 @@ func (r *RecordingDatabase) Dereference(header *types.Header) {
 
 func (r *RecordingDatabase) WriteStateToDatabase(header *types.Header) error {
 	if header != nil {
-		return r.db.TrieDB().Commit(header.Root, true, nil)
+		return r.db.TrieDB().Commit(header.Root, true)
 	}
 	return nil
 }
@@ -228,7 +229,7 @@ func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeade
 	}
 	finalDereference := lastBlockHeader // dereference in case of error
 	defer func() { r.Dereference(finalDereference) }()
-	recordingKeyValue := newRecordingKV(r.db.TrieDB())
+	recordingKeyValue := newRecordingKV(r.db.TrieDB(), r.db.DiskDB())
 
 	recordingStateDatabase := state.NewDatabase(rawdb.NewDatabase(recordingKeyValue))
 	var prevRoot common.Hash

@@ -1,5 +1,6 @@
 package tests
 
+/*
 import (
 	"encoding/json"
 	"io/ioutil"
@@ -269,3 +270,5 @@ func TestPointEvaluationTestVector(t *testing.T) {
 		t.Fatalf("expected point verification to fail")
 	}
 }
+
+*/

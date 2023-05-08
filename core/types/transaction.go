@@ -208,7 +208,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		var inner LegacyTx
 		err := s.Decode(&inner)
 		if err == nil {
-			tx.setDecoded(&inner, int(rlp.ListSize(size)))
+			tx.setDecoded(&inner, rlp.ListSize(size))
 		}
 		return err
 	default:
@@ -219,7 +219,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		}
 		inner, _, err := tx.decodeTyped(b, true)
 		if err == nil {
-			tx.setDecoded(inner, len(b))
+			tx.setDecoded(inner, uint64(len(b)))
 		}
 		return err
 	}
@@ -235,7 +235,7 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 		if err != nil {
 			return err
 		}
-		tx.setDecoded(&data, len(b))
+		tx.setDecoded(&data, uint64(len(b)))
 		return nil
 	}
 	// It's an EIP2718 typed transaction envelope.
@@ -243,7 +243,7 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 	if err != nil {
 		return err
 	}
-	tx.setDecoded(inner, 0)
+	tx.setDecoded(inner, uint64(len(b)))
 	tx.wrapData = wrapData
 	return nil
 }
@@ -328,11 +328,11 @@ func (tx *Transaction) decodeTypedMinimal(b []byte, arbParsing bool) (TxData, er
 }
 
 // setDecoded sets the inner transaction and size after decoding.
-func (tx *Transaction) setDecoded(inner TxData, size int) {
+func (tx *Transaction) setDecoded(inner TxData, size uint64) {
 	tx.inner = inner
 	tx.time = time.Now()
 	if size > 0 {
-		tx.size.Store(common.StorageSize(size))
+		tx.size.Store(size)
 	}
 }
 
@@ -539,17 +539,22 @@ func (tx *Transaction) Hash() common.Hash {
 	return h
 }
 
-// Size returns the true RLP encoded storage size of the transaction, either by
-// encoding and returning it, or returning a previously cached value.
+// Size returns the true encoded storage size of the transaction, either by encoding
+// and returning it, or returning a previously cached value.
 // This *excludes* wrap-data.
-func (tx *Transaction) Size() common.StorageSize {
+func (tx *Transaction) Size() uint64 {
 	if size := tx.size.Load(); size != nil {
-		return size.(common.StorageSize)
+		return size.(uint64)
 	}
 	c := writeCounter(0)
 	rlp.Encode(&c, &tx.inner)
-	tx.size.Store(common.StorageSize(c))
-	return common.StorageSize(c)
+
+	size := uint64(c)
+	if tx.Type() != LegacyTxType {
+		size += 1 // type byte
+	}
+	tx.size.Store(size)
+	return size
 }
 
 func (tx *Transaction) WrapDataSize() common.StorageSize {
@@ -706,6 +711,7 @@ func (s *TxByPriceAndTime) Pop() interface{} {
 	old := *s
 	n := len(old)
 	x := old[n-1]
+	old[n-1] = nil
 	*s = old[0 : n-1]
 	return x
 }
@@ -915,7 +921,7 @@ func (tx *NetworkTransaction) DecodeRLP(s *rlp.Stream) error {
 		err := s.Decode(&inner)
 		if err == nil {
 			tx.Tx = new(Transaction)
-			tx.Tx.setDecoded(&inner, int(rlp.ListSize(size)))
+			tx.Tx.setDecoded(&inner, rlp.ListSize(size))
 		}
 		return err
 	default:

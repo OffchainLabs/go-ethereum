@@ -101,7 +101,8 @@ type storedReceiptRLP struct {
 	PostStateOrStatus []byte
 	CumulativeGasUsed uint64
 	L1GasUsed         uint64
-	Logs              []*LogForStorage
+	Logs              []*Log
+	ContractAddress   *common.Address `rlp:"optional"` // set on new versions if an Arbitrum tx type
 }
 
 type arbLegacyStoredReceiptRLP struct {
@@ -111,7 +112,7 @@ type arbLegacyStoredReceiptRLP struct {
 	L1GasUsed         uint64
 	Status            uint64
 	ContractAddress   common.Address
-	Logs              []*LogForStorage
+	Logs              []*Log
 }
 
 // v4StoredReceiptRLP is the storage encoding of a receipt used in database version 4.
@@ -120,7 +121,7 @@ type v4StoredReceiptRLP struct {
 	CumulativeGasUsed uint64
 	TxHash            common.Hash
 	ContractAddress   common.Address
-	Logs              []*LogForStorage
+	Logs              []*Log
 	GasUsed           uint64
 }
 
@@ -131,7 +132,7 @@ type v3StoredReceiptRLP struct {
 	Bloom             Bloom
 	TxHash            common.Hash
 	ContractAddress   common.Address
-	Logs              []*LogForStorage
+	Logs              []*Log
 	GasUsed           uint64
 }
 
@@ -313,6 +314,9 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 		}
 	}
 	w.ListEnd(logList)
+	if r.Type >= ArbitrumDepositTxType && r.Type != ArbitrumLegacyTxType && r.ContractAddress != (common.Address{}) {
+		w.WriteBytes(r.ContractAddress[:])
+	}
 	w.ListEnd(outerList)
 	return w.Flush()
 }
@@ -333,13 +337,7 @@ func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 	if err := decodeStoredReceiptRLP(r, blob); err == nil {
 		return nil
 	}
-	if err := decodeArbitrumLegacyStoredReceiptRLP(r, blob); err == nil {
-		return nil
-	}
-	if err := decodeV3StoredReceiptRLP(r, blob); err == nil {
-		return nil
-	}
-	return decodeV4StoredReceiptRLP(r, blob)
+	return decodeArbitrumLegacyStoredReceiptRLP(r, blob)
 }
 
 func decodeArbitrumLegacyStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
@@ -357,10 +355,7 @@ func decodeArbitrumLegacyStoredReceiptRLP(r *ReceiptForStorage, blob []byte) err
 	r.GasUsed = stored.GasUsed
 	r.GasUsedForL1 = stored.L1GasUsed
 	r.ContractAddress = stored.ContractAddress
-	r.Logs = make([]*Log, len(stored.Logs))
-	for i, log := range stored.Logs {
-		r.Logs[i] = (*Log)(log)
-	}
+	r.Logs = stored.Logs
 	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
 
 	return nil
@@ -376,53 +371,12 @@ func decodeStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
 	}
 	r.CumulativeGasUsed = stored.CumulativeGasUsed
 	r.GasUsedForL1 = stored.L1GasUsed
-	r.Logs = make([]*Log, len(stored.Logs))
-	for i, log := range stored.Logs {
-		r.Logs[i] = (*Log)(log)
-	}
+	r.Logs = stored.Logs
 	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
+	if stored.ContractAddress != nil {
+		r.ContractAddress = *stored.ContractAddress
+	}
 
-	return nil
-}
-
-func decodeV4StoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
-	var stored v4StoredReceiptRLP
-	if err := rlp.DecodeBytes(blob, &stored); err != nil {
-		return err
-	}
-	if err := (*Receipt)(r).setStatus(stored.PostStateOrStatus); err != nil {
-		return err
-	}
-	r.CumulativeGasUsed = stored.CumulativeGasUsed
-	r.TxHash = stored.TxHash
-	r.ContractAddress = stored.ContractAddress
-	r.GasUsed = stored.GasUsed
-	r.Logs = make([]*Log, len(stored.Logs))
-	for i, log := range stored.Logs {
-		r.Logs[i] = (*Log)(log)
-	}
-	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
-
-	return nil
-}
-
-func decodeV3StoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
-	var stored v3StoredReceiptRLP
-	if err := rlp.DecodeBytes(blob, &stored); err != nil {
-		return err
-	}
-	if err := (*Receipt)(r).setStatus(stored.PostStateOrStatus); err != nil {
-		return err
-	}
-	r.CumulativeGasUsed = stored.CumulativeGasUsed
-	r.Bloom = stored.Bloom
-	r.TxHash = stored.TxHash
-	r.ContractAddress = stored.ContractAddress
-	r.GasUsed = stored.GasUsed
-	r.Logs = make([]*Log, len(stored.Logs))
-	for i, log := range stored.Logs {
-		r.Logs[i] = (*Log)(log)
-	}
 	return nil
 }
 
@@ -469,7 +423,7 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 
 		if rs[i].Type != ArbitrumLegacyTxType {
 			// The contract address can be derived from the transaction itself
-			if txs[i].To() == nil {
+			if txs[i].To() == nil && rs[i].ContractAddress == (common.Address{}) {
 				// Deriving the signer is expensive, only do if it's actually needed
 				from, _ := Sender(signer, txs[i])
 				rs[i].ContractAddress = crypto.CreateAddress(from, txs[i].Nonce())

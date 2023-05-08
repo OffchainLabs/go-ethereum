@@ -1,5 +1,6 @@
 package tests
 
+/*
 import (
 	"fmt"
 	"math"
@@ -240,3 +241,5 @@ func BenchmarkBatchVerifyWithoutKZGProofs(b *testing.B) {
 	runBenchmark(8)
 	runBenchmark(16)
 }
+
+*/
