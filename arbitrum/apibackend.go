@@ -145,6 +145,13 @@ func (a *APIBackend) GetArbitrumNode() interface{} {
 	return a.b.arb.ArbNode()
 }
 
+func (a *APIBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
+	if body := a.blockChain().GetBody(hash); body != nil {
+		return body, nil
+	}
+	return nil, errors.New("block body not found")
+}
+
 // General Ethereum API
 func (a *APIBackend) SyncProgressMap() map[string]interface{} {
 	return a.sync.SyncProgressMap()
@@ -427,20 +434,20 @@ func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOr
 	return a.stateAndHeaderFromHeader(a.HeaderByNumberOrHash(ctx, blockNrOrHash))
 }
 
-func (a *APIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
+func (a *APIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
 	if !a.blockChain().Config().IsArbitrumNitro(block.Number()) {
-		return nil, types.ErrUseFallback
+		return nil, nil, types.ErrUseFallback
 	}
 	// DEV: This assumes that `StateAtBlock` only accesses the blockchain and chainDb fields
-	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(block, reexec, base, checkLive, preferDisk)
+	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(ctx, block, reexec, base, checkLive, preferDisk)
 }
 
-func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
+func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
 	if !a.blockChain().Config().IsArbitrumNitro(block.Number()) {
-		return nil, vm.BlockContext{}, nil, types.ErrUseFallback
+		return nil, vm.BlockContext{}, nil, nil, types.ErrUseFallback
 	}
 	// DEV: This assumes that `StateAtTransaction` only accesses the blockchain and chainDb fields
-	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtTransaction(block, txIndex, reexec)
+	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtTransaction(ctx, block, txIndex, reexec)
 }
 
 func (a *APIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
