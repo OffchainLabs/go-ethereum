@@ -263,7 +263,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 
 	if chainConfig != nil && chainConfig.IsArbitrum() {
 		genesisHash = rawdb.ReadCanonicalHash(db, chainConfig.ArbitrumChainParams.GenesisBlockNum)
-		if (genesisHash == common.Hash{}) {
+		if genesisHash == (common.Hash{}) {
 			return nil, ErrNoGenesis
 		}
 	} else {
