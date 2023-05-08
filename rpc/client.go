@@ -60,6 +60,13 @@ const (
 	maxClientSubscriptionBuffer = 20000
 )
 
+type ClientInterface interface {
+	CallContext(ctx_in context.Context, result interface{}, method string, args ...interface{}) error
+	EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error)
+	BatchCallContext(ctx context.Context, b []BatchElem) error
+	Close()
+}
+
 // BatchElem is an element in a batch request.
 type BatchElem struct {
 	Method string
