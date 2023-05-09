@@ -60,7 +60,7 @@ func InitializeCryptoCtx() {
 // to allow one to create and verify blob proofs.
 // This function is expensive to run if the crypto context isn't initialized, so it is recommended to
 // pre-initialize by calling InitializeCryptoCtx
-func CrpytoCtx() gokzg4844.Context {
+func CryptoCtx() gokzg4844.Context {
 	InitializeCryptoCtx()
 	return gCryptoCtx
 }
@@ -91,7 +91,7 @@ func PointEvaluationPrecompile(input []byte) ([]byte, error) {
 	var quotientKZG gokzg4844.KZGProof
 	copy(quotientKZG[:], input[144:PrecompileInputLength])
 
-	cryptoCtx := CrpytoCtx()
+	cryptoCtx := CryptoCtx()
 	err := cryptoCtx.VerifyKZGProof(dataKZG, x, y, quotientKZG)
 	if err != nil {
 		return nil, fmt.Errorf("verify_kzg_proof error: %v", err)

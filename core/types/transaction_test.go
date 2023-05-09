@@ -81,7 +81,7 @@ var (
 // Returns a wrapper consisting of a single blob of all zeros that passes validation along with its
 // versioned hash.
 func oneEmptyBlobWrapData() (wrap *BlobTxWrapData, versionedHashes VersionedHashesView) {
-	cryptoCtx := kzg.CrpytoCtx()
+	cryptoCtx := kzg.CryptoCtx()
 	blob := Blob{}
 	commitment, _ := cryptoCtx.BlobToKZGCommitment(gokzg4844.Blob(blob), 1)
 	proof, _ := cryptoCtx.ComputeBlobKZGProof(gokzg4844.Blob(blob), commitment, 1)
