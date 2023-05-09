@@ -381,7 +381,7 @@ func (a *APIBackend) CurrentHeader() *types.Header {
 	return a.blockChain().CurrentHeader()
 }
 
-func (a *APIBackend) CurrentBlock() *types.Block {
+func (a *APIBackend) CurrentBlock() *types.Header {
 	return a.blockChain().CurrentBlock()
 }
 
