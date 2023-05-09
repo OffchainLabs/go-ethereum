@@ -1196,7 +1196,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		if state == nil || err != nil {
 			return 0, err
 		}
-		gasCap, err = args.L2OnlyGasCap(gasCap, header, state)
+		gasCap, err = args.L2OnlyGasCap(gasCap, header, state, types.MessageGasEstimationMode)
 		if err != nil {
 			return 0, err
 		}
