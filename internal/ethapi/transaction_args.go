@@ -201,7 +201,7 @@ func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *typ
 // ToMessage converts the transaction arguments to the Message type used by the
 // core evm. This method is used in calls and traces that do not require a real
 // live transaction.
-func (args *TransactionArgs) ToMessage(globalGasCap uint64, header *types.Header, state *state.StateDB) (types.Message, error) {
+func (args *TransactionArgs) ToMessage(globalGasCap uint64, header *types.Header, state *state.StateDB, runMode types.MessageRunMode) (types.Message, error) {
 	baseFee := header.BaseFee
 
 	// Reject invalid combinations of pre- and post-1559 fee styles
@@ -268,13 +268,14 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, header *types.Header
 		accessList = *args.AccessList
 	}
 	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, data, accessList, true)
+	msg.TxRunMode = runMode
 
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	if core.InterceptRPCGasCap != nil && state != nil {
 		// ToMessage recurses once to allow ArbOS to intercept the result for all callers
 		// ArbOS uses this to modify globalGasCap so that the cap will ignore this tx's specific L1 data costs
 		core.InterceptRPCGasCap(&globalGasCap, msg, header, state)
-		return args.ToMessage(globalGasCap, header, nil) // we pass a nil to avoid another recursion
+		return args.ToMessage(globalGasCap, header, nil, runMode) // we pass a nil to avoid another recursion
 	}
 	return msg, nil
 }
@@ -282,11 +283,10 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, header *types.Header
 // Raises the vanilla gas cap by the tx's l1 data costs in l2 terms. This creates a new gas cap that after
 // data payments are made, equals the original vanilla cap for the remaining, L2-specific work the tx does.
 func (args *TransactionArgs) L2OnlyGasCap(gasCap uint64, header *types.Header, state *state.StateDB, runMode types.MessageRunMode) (uint64, error) {
-	msg, err := args.ToMessage(gasCap, header, nil)
+	msg, err := args.ToMessage(gasCap, header, nil, runMode)
 	if err != nil {
 		return 0, err
 	}
-	msg.TxRunMode = runMode
 	core.InterceptRPCGasCap(&gasCap, msg, header, state)
 	return gasCap, nil
 }

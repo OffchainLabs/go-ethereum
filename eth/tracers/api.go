@@ -928,7 +928,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		config.BlockOverrides.Apply(&vmctx)
 	}
 	// Execute the trace
-	msg, err := args.ToMessage(api.backend.RPCGasCap(), block.Header(), statedb)
+	msg, err := args.ToMessage(api.backend.RPCGasCap(), block.Header(), statedb, types.MessageEthcallMode)
 	if err != nil {
 		return nil, err
 	}
