@@ -267,12 +267,12 @@ func (blobs Blobs) ComputeCommitmentsAndProofs() (commitments []KZGCommitment, v
 
 	cryptoCtx := kzg.CrpytoCtx()
 	for i, blob := range blobs {
-		commitment, err := cryptoCtx.BlobToKZGCommitment(gokzg4844.Blob(blob))
+		commitment, err := cryptoCtx.BlobToKZGCommitment(gokzg4844.Blob(blob), 1)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("could not convert blob to commitment: %v", err)
 		}
 
-		proof, err := cryptoCtx.ComputeBlobKZGProof(gokzg4844.Blob(blob), commitment)
+		proof, err := cryptoCtx.ComputeBlobKZGProof(gokzg4844.Blob(blob), commitment, 1)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("could not compute proof for blob: %v", err)
 		}

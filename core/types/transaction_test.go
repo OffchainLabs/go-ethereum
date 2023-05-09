@@ -83,8 +83,8 @@ var (
 func oneEmptyBlobWrapData() (wrap *BlobTxWrapData, versionedHashes VersionedHashesView) {
 	cryptoCtx := kzg.CrpytoCtx()
 	blob := Blob{}
-	commitment, _ := cryptoCtx.BlobToKZGCommitment(gokzg4844.Blob(blob))
-	proof, _ := cryptoCtx.ComputeBlobKZGProof(gokzg4844.Blob(blob), commitment)
+	commitment, _ := cryptoCtx.BlobToKZGCommitment(gokzg4844.Blob(blob), 1)
+	proof, _ := cryptoCtx.ComputeBlobKZGProof(gokzg4844.Blob(blob), commitment, 1)
 	wrapData := &BlobTxWrapData{
 		BlobKzgs: BlobKzgs{KZGCommitment(commitment)},
 		Blobs:    Blobs{Blob(blob)},
