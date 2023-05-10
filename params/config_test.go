@@ -124,15 +124,18 @@ func TestConfigRules(t *testing.T) {
 		ShanghaiTime: newUint64(500),
 	}
 	var stamp uint64
-	if r := c.Rules(big.NewInt(0), true, stamp); r.IsShanghai {
-		t.Errorf("expected %v to not be shanghai", stamp)
+	var currentArbosVersion uint64
+	if r := c.Rules(big.NewInt(0), true, stamp, currentArbosVersion); r.IsShanghai {
+		t.Errorf("expected %v to not be shanghai", currentArbosVersion)
 	}
 	stamp = 500
-	if r := c.Rules(big.NewInt(0), true, stamp); !r.IsShanghai {
-		t.Errorf("expected %v to be shanghai", stamp)
+	currentArbosVersion = 11
+	if r := c.Rules(big.NewInt(0), true, stamp, currentArbosVersion); !r.IsShanghai {
+		t.Errorf("expected %v to be shanghai", currentArbosVersion)
 	}
 	stamp = math.MaxInt64
-	if r := c.Rules(big.NewInt(0), true, stamp); !r.IsShanghai {
-		t.Errorf("expected %v to be shanghai", stamp)
+	currentArbosVersion = math.MaxInt64
+	if r := c.Rules(big.NewInt(0), true, stamp, currentArbosVersion); !r.IsShanghai {
+		t.Errorf("expected %v to be shanghai", currentArbosVersion)
 	}
 }
