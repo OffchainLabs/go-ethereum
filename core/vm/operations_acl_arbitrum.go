@@ -142,3 +142,12 @@ func WasmCallCost(db StateDB, contract common.Address, value *big.Int, budget ui
 	}
 	return total, nil
 }
+
+func GasEip2929AccountCheck(db StateDB, contract common.Address) uint64 {
+	if !db.AddressInAccessList(contract) {
+		return params.ColdAccountAccessCostEIP2929
+	}
+
+	db.AddAddressToAccessList(contract)
+	return params.WarmStorageReadCostEIP2929
+}

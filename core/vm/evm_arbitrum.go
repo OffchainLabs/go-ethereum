@@ -100,3 +100,30 @@ func (p DefaultTxProcessor) ExecuteWASM(scope *ScopeContext, input []byte, inter
 	log.Crit("tried to execute WASM with default processing hook")
 	return nil, nil
 }
+
+func OpBlockHash(evm *EVM, block common.Hash) common.Hash {
+	requested := block.Big()
+	if !requested.IsUint64() {
+		return common.Hash{}
+	}
+	num64 := requested.Uint64()
+	upper, err := evm.ProcessingHook.L1BlockNumber(evm.Context)
+	if err != nil {
+		return common.Hash{}
+	}
+
+	var lower uint64
+	if upper < 257 {
+		lower = 0
+	} else {
+		lower = upper - 256
+	}
+	if num64 >= lower && num64 < upper {
+		hash, err := evm.ProcessingHook.L1BlockHash(evm.Context, num64)
+		if err != nil {
+			return common.Hash{}
+		}
+		return hash
+	}
+	return common.Hash{}
+}
