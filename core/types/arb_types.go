@@ -3,7 +3,6 @@ package types
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -480,19 +479,16 @@ func (info HeaderInfo) UpdateHeaderWithInfo(header *Header) {
 	header.Extra = info.extra()
 }
 
-func DeserializeHeaderExtraInformation(header *Header) (HeaderInfo, error) {
-	if header.BaseFee == nil || header.BaseFee.Sign() == 0 || len(header.Extra) == 0 {
+func DeserializeHeaderExtraInformation(header *Header) HeaderInfo {
+	if header.BaseFee == nil || header.BaseFee.Sign() == 0 || len(header.Extra) != 32 || header.Difficulty.Cmp(common.Big1) != 0 {
 		// imported blocks have no base fee
 		// The genesis block doesn't have an ArbOS encoded extra field
-		return HeaderInfo{}, nil
-	}
-	if len(header.Extra) != 32 {
-		return HeaderInfo{}, fmt.Errorf("unexpected header extra field length %v", len(header.Extra))
+		return HeaderInfo{}
 	}
 	extra := HeaderInfo{}
 	copy(extra.SendRoot[:], header.Extra)
 	extra.SendCount = binary.BigEndian.Uint64(header.MixDigest[:8])
 	extra.L1BlockNumber = binary.BigEndian.Uint64(header.MixDigest[8:16])
 	extra.ArbOSFormatVersion = binary.BigEndian.Uint64(header.MixDigest[16:24])
-	return extra, nil
+	return extra
 }

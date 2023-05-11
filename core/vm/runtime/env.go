@@ -22,6 +22,9 @@ import (
 )
 
 func NewEnv(cfg *Config) *vm.EVM {
+	if cfg.ChainConfig.IsArbitrum() {
+		panic("chain config has arbitrum enabled")
+	}
 	txContext := vm.TxContext{
 		Origin:   cfg.Origin,
 		GasPrice: cfg.GasPrice,
