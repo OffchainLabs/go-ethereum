@@ -959,7 +959,7 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	}
 }
 
-func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64, gasEstimation bool) (*core.ExecutionResult, error) {
+func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64, runMode types.MessageRunMode) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
@@ -982,19 +982,10 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	defer cancel()
 
 	// Get a new instance of the EVM.
-	msg, err := args.ToMessage(globalGasCap, header, state)
+	msg, err := args.ToMessage(globalGasCap, header, state, runMode)
 	if err != nil {
 		return nil, err
 	}
-
-	// Arbitrum: mark the reason for this call
-	var txRunMode types.MessageRunMode
-	if gasEstimation {
-		txRunMode = types.MessageGasEstimationMode
-	} else {
-		txRunMode = types.MessageEthcallMode
-	}
-	msg.TxRunMode = txRunMode
 
 	// Arbitrum: support NodeInterface.sol by swapping out the message if needed
 	var res *core.ExecutionResult
@@ -1002,7 +993,6 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if err != nil || res != nil {
 		return res, err
 	}
-	msg.TxRunMode = txRunMode
 
 	evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
 	if err != nil {
@@ -1032,7 +1022,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 
 	// Arbitrum: a tx can schedule another (see retryables)
 	scheduled := result.ScheduledTxes
-	for gasEstimation && len(scheduled) > 0 {
+	for runMode == types.MessageGasEstimationMode && len(scheduled) > 0 {
 		// make a new EVM for the scheduled Tx (an EVM must never be reused)
 		evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
 		if err != nil {
@@ -1109,7 +1099,7 @@ func (e *revertError) ErrorData() interface{} {
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Bytes, error) {
-	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap(), false)
+	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap(), types.MessageEthcallMode)
 	if err != nil {
 		if client := fallbackClientFor(s.b, err); client != nil {
 			var res hexutil.Bytes
@@ -1196,7 +1186,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		if state == nil || err != nil {
 			return 0, err
 		}
-		gasCap, err = args.L2OnlyGasCap(gasCap, header, state)
+		gasCap, err = args.L2OnlyGasCap(gasCap, header, state, types.MessageGasEstimationMode)
 		if err != nil {
 			return 0, err
 		}
@@ -1213,7 +1203,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
 
-		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, vanillaGasCap, true)
+		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, vanillaGasCap, types.MessageGasEstimationMode)
 		if err != nil {
 			if errors.Is(err, core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
@@ -1353,14 +1343,10 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 }
 
 func fillArbitrumNitroHeaderInfo(header *types.Header, fields map[string]interface{}) {
-	info, err := types.DeserializeHeaderExtraInformation(header)
-	if err != nil {
-		log.Error("Expected header to contain arbitrum data", "blockHash", header.Hash())
-	} else {
-		fields["l1BlockNumber"] = hexutil.Uint64(info.L1BlockNumber)
-		fields["sendRoot"] = info.SendRoot
-		fields["sendCount"] = hexutil.Uint64(info.SendCount)
-	}
+	info := types.DeserializeHeaderExtraInformation(header)
+	fields["l1BlockNumber"] = hexutil.Uint64(info.L1BlockNumber)
+	fields["sendRoot"] = info.SendRoot
+	fields["sendCount"] = hexutil.Uint64(info.SendCount)
 }
 
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
@@ -1641,7 +1627,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	}
 	isPostMerge := header.Difficulty.Cmp(common.Big0) == 0
 	// Retrieve the precompiles since they don't need to be added to the access list
-	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number, isPostMerge, header.Time))
+	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number, isPostMerge, header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion))
 
 	// Create an initial tracer
 	prevTracer := logger.NewAccessListTracer(nil, args.from(), to, precompiles)
@@ -1657,7 +1643,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		statedb := db.Copy()
 		// Set the accesslist to the last al
 		args.AccessList = &accessList
-		msg, err := args.ToMessage(b.RPCGasCap(), header, statedb)
+		msg, err := args.ToMessage(b.RPCGasCap(), header, statedb, types.MessageEthcallMode)
 		if err != nil {
 			return nil, 0, nil, err
 		}
@@ -1878,12 +1864,7 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 		}
 		if s.b.ChainConfig().IsArbitrumNitro(header.Number) {
 			fields["effectiveGasPrice"] = hexutil.Uint64(header.BaseFee.Uint64())
-			info, err := types.DeserializeHeaderExtraInformation(header)
-			if err != nil {
-				log.Error("Expected header to contain arbitrum data", "blockHash", blockHash)
-			} else {
-				fields["l1BlockNumber"] = hexutil.Uint64(info.L1BlockNumber)
-			}
+			fields["l1BlockNumber"] = hexutil.Uint64(types.DeserializeHeaderExtraInformation(header).L1BlockNumber)
 		} else {
 			inner := tx.GetInner()
 			arbTx, ok := inner.(*types.ArbitrumLegacyTxData)

@@ -345,7 +345,7 @@ var (
 		Clique:                        nil,
 		ArbitrumChainParams:           DisableArbitrumParams(),
 	}
-	TestRules = TestChainConfig.Rules(new(big.Int), false, 0)
+	TestRules = TestChainConfig.Rules(new(big.Int), false, 0, 0)
 )
 
 // NetworkNames are user friendly names to use in the chain spec banner.
@@ -650,7 +650,10 @@ func (c *ChainConfig) IsTerminalPoWBlock(parentTotalDiff *big.Int, totalDiff *bi
 }
 
 // IsShanghai returns whether time is either equal to the Shanghai fork time or greater.
-func (c *ChainConfig) IsShanghai(time uint64) bool {
+func (c *ChainConfig) IsShanghai(time uint64, currentArbosVersion uint64) bool {
+	if c.IsArbitrum() {
+		return currentArbosVersion >= 11
+	}
 	return isTimestampForked(c.ShanghaiTime, time)
 }
 
@@ -974,7 +977,7 @@ type Rules struct {
 }
 
 // Rules ensures c's ChainID is not nil.
-func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules {
+func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, currentArbosVersion uint64) Rules {
 	chainID := c.ChainID
 	if chainID == nil {
 		chainID = new(big.Int)
@@ -993,7 +996,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsBerlin:         c.IsBerlin(num),
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          isMerge,
-		IsShanghai:       c.IsShanghai(timestamp),
+		IsShanghai:       c.IsShanghai(timestamp, currentArbosVersion),
 		isCancun:         c.IsCancun(timestamp),
 		isPrague:         c.IsPrague(timestamp),
 	}
