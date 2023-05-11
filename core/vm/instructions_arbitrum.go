@@ -16,14 +16,18 @@
 
 package vm
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"math/big"
 
-func OpBlockHash(evm *EVM, block common.Hash) common.Hash {
-	requested := block.Big()
-	if !requested.IsUint64() {
+	"github.com/ethereum/go-ethereum/common"
+)
+
+// adaptation of opBlockHash that doesn't require an EVM stack
+func BlockHashOp(evm *EVM, block *big.Int) common.Hash {
+	if !block.IsUint64() {
 		return common.Hash{}
 	}
-	num64 := requested.Uint64()
+	num64 := block.Uint64()
 	upper, err := evm.ProcessingHook.L1BlockNumber(evm.Context)
 	if err != nil {
 		return common.Hash{}
