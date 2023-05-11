@@ -389,7 +389,7 @@ func (a *APIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) 
 	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
 		currentHeader := a.blockChain().CurrentBlock()
 		currentBlock := a.blockChain().GetBlock(currentHeader.Hash(), currentHeader.Number.Uint64())
-		if currentBlock != nil {
+		if currentBlock == nil {
 			return nil, errors.New("can't find block for current header")
 		}
 		return currentBlock, nil
