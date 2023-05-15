@@ -682,6 +682,7 @@ type storedReceiptRLP struct {
 	CumulativeGasUsed uint64
 	L1GasUsed         uint64 // Arbitrum specific
 	Logs              []*types.Log
+	ContractAddress   *common.Address `rlp:"optional"` // set on new versions if an Arbitrum tx type
 }
 
 // ReceiptLogs is a barebone version of ReceiptForStorage which only keeps
