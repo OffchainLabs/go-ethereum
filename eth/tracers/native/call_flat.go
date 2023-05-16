@@ -56,6 +56,10 @@ var parityErrorMappingStartingWith = map[string]string{
 
 // flatCallFrame is a standalone callframe.
 type flatCallFrame struct {
+	// Arbitrum: we add these here due to the tracer returning the top frame
+	BeforeEVMTransfers *[]arbitrumTransfer `json:"beforeEVMTransfers,omitempty"`
+	AfterEVMTransfers  *[]arbitrumTransfer `json:"afterEVMTransfers,omitempty"`
+
 	Action              flatCallAction  `json:"action"`
 	BlockHash           *common.Hash    `json:"blockHash"`
 	BlockNumber         uint64          `json:"blockNumber"`
@@ -108,6 +112,10 @@ type flatCallResultMarshaling struct {
 // flatCallTracer reports call frame information of a tx in a flat format, i.e.
 // as opposed to the nested format of `callTracer`.
 type flatCallTracer struct {
+	// Arbitrum: capture transfers occuring outside of evm execution
+	beforeEVMTransfers []arbitrumTransfer
+	afterEVMTransfers  []arbitrumTransfer
+
 	tracer            *callTracer
 	config            flatCallTracerConfig
 	ctx               *tracers.Context // Holds tracer context data
@@ -138,7 +146,13 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 		return nil, errors.New("internal error: embedded tracer has wrong type")
 	}
 
-	return &flatCallTracer{tracer: t, ctx: ctx, config: config}, nil
+	return &flatCallTracer{
+		tracer:             t,
+		ctx:                ctx,
+		config:             config,
+		beforeEVMTransfers: []arbitrumTransfer{},
+		afterEVMTransfers:  []arbitrumTransfer{},
+	}, nil
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
@@ -213,7 +227,12 @@ func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
 		return nil, errors.New("invalid number of calls")
 	}
 
-	flat, err := flatFromNested(&t.tracer.callstack[0], []int{}, t.config.ConvertParityErrors, t.ctx)
+	// Arbitrum: populate the top-level call with additional info
+	call := t.tracer.callstack[0]
+	call.BeforeEVMTransfers = &t.beforeEVMTransfers
+	call.AfterEVMTransfers = &t.afterEVMTransfers
+
+	flat, err := flatFromNested(&call, []int{}, t.config.ConvertParityErrors, t.ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -253,6 +272,8 @@ func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx 
 		return nil, fmt.Errorf("unrecognized call frame type: %s", input.Type)
 	}
 
+	frame.BeforeEVMTransfers = input.BeforeEVMTransfers
+	frame.AfterEVMTransfers = input.AfterEVMTransfers
 	frame.TraceAddress = traceAddress
 	frame.Error = input.Error
 	frame.Subtraces = len(input.Calls)

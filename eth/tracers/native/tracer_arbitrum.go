@@ -60,7 +60,24 @@ func (*noopTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address
 }
 func (*prestateTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
 }
-func (*flatCallTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
+func (t *flatCallTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
+	transfer := arbitrumTransfer{
+		Purpose: purpose,
+		Value:   bigToHex(value),
+	}
+	if from != nil {
+		from := from.String()
+		transfer.From = &from
+	}
+	if to != nil {
+		to := to.String()
+		transfer.To = &to
+	}
+	if before {
+		t.beforeEVMTransfers = append(t.beforeEVMTransfers, transfer)
+	} else {
+		t.afterEVMTransfers = append(t.afterEVMTransfers, transfer)
+	}
 }
 
 func (*callTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}
