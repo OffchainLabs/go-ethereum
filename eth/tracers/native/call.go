@@ -261,7 +261,7 @@ func (t *callTracer) GetResult() (json.RawMessage, error) {
 	call.BeforeEVMTransfers = &t.beforeEVMTransfers
 	call.AfterEVMTransfers = &t.afterEVMTransfers
 
-	res, err := json.Marshal(t.callstack[0])
+	res, err := json.Marshal(call)
 	if err != nil {
 		return nil, err
 	}
