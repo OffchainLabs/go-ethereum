@@ -78,6 +78,10 @@ func (s *StateDB) SetCompiledWasmCode(addr common.Address, code []byte, version 
 	}
 }
 
+func (s *StateDB) GetStylusPages() (*uint16, *uint16) {
+	return &s.openWasmPages, &s.everWasmPages
+}
+
 func NewDeterministic(root common.Hash, db Database) (*StateDB, error) {
 	sdb, err := New(root, db, nil)
 	if err != nil {

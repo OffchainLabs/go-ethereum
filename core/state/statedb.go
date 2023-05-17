@@ -69,6 +69,8 @@ type StateDB struct {
 	// Arbitrum
 	unexpectedBalanceDelta *big.Int  // total balance change across all accounts
 	userWasms              UserWasms // user wasms encountered during execution
+	openWasmPages          uint16    // number of pages currently open
+	everWasmPages          uint16    // largest number of pages ever allocated during this tx's execution
 	deterministic          bool      // whether the order in which deletes are committed should be deterministic
 
 	db         Database

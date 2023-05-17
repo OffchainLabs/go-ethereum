@@ -30,6 +30,9 @@ type StateDB interface {
 	GetCompiledWasmCode(addr common.Address, version uint32) []byte
 	SetCompiledWasmCode(addr common.Address, code []byte, version uint32)
 
+	// Arbitrum: track stylus's memory footprint
+	GetStylusPages() (*uint16, *uint16)
+
 	NoncanonicalProgramHash(common.Address, uint32) common.Hash
 	Deterministic() bool
 	Database() state.Database
