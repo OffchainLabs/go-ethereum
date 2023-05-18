@@ -3,6 +3,7 @@ package arbitrum
 import (
 	"context"
 
+	"github.com/ethereum/go-ethereum/arbitrum_types"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -66,8 +67,8 @@ func (b *Backend) ChainDb() ethdb.Database {
 	return b.chainDb
 }
 
-func (b *Backend) EnqueueL2Message(ctx context.Context, tx *types.Transaction) error {
-	return b.arb.PublishTransaction(ctx, tx)
+func (b *Backend) EnqueueL2Message(ctx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {
+	return b.arb.PublishTransaction(ctx, tx, options)
 }
 
 func (b *Backend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
