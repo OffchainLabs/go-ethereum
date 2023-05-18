@@ -49,8 +49,10 @@ func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 		copy(hash[:], key[len(rawdb.CodePrefix):])
 		res, err = db.diskDb.Get(key)
 	} else if ok, _, _ := rawdb.IsCompiledWasmCodeKey(key); ok {
-		// Just return the compiled wasm without recording it since it's not in consensus and the replay will regenerate it
-		return db.inner.DiskDB().Get(key)
+		// Arbitrum:
+		//     Just return the compiled wasm without recording it since it's not in consensus
+		//     and the replay will regenerate it
+		return db.diskDb.Get(key)
 	} else {
 		err = fmt.Errorf("recording KV attempted to access non-hash key %v", hex.EncodeToString(key))
 	}

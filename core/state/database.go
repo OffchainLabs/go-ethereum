@@ -144,8 +144,8 @@ func NewDatabase(db ethdb.Database) Database {
 func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 	cdb := &cachingDB{
 		// Arbitrum only
-		compiledWasmCache: lru.NewCache[common.Hash, int](compiledWasmCodeCacheSize)
-		
+		compiledWasmCache: lru.NewSizeConstrainedCache[rawdb.WasmKey, []byte](compiledWasmCodeCacheSize),
+
 		disk:          db,
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
@@ -153,11 +153,12 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 	}
 	return cdb
 }
+
 // NewDatabaseWithNodeDB creates a state database with an already initialized node database.
 func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
 	cdb := &cachingDB{
 		// Arbitrum only
-		compiledWasmCache: lru.NewCache[common.Hash, int](compiledWasmCodeCacheSize)
+		compiledWasmCache: lru.NewSizeConstrainedCache[rawdb.WasmKey, []byte](compiledWasmCodeCacheSize),
 
 		disk:          db,
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
@@ -169,7 +170,7 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
 
 type cachingDB struct {
 	// Arbitrum
-	compiledWasmCache *lru.SizeConstrainedCache[common.Hash, []byte]
+	compiledWasmCache *lru.SizeConstrainedCache[rawdb.WasmKey, []byte]
 
 	disk          ethdb.KeyValueStore
 	codeSizeCache *lru.Cache[common.Hash, int]
