@@ -959,7 +959,7 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	}
 }
 
-func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64, runMode types.MessageRunMode) (*core.ExecutionResult, error) {
+func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64, runMode core.MessageRunMode) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
@@ -1017,12 +1017,12 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
 	}
 	if err != nil {
-		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
+		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.GasLimit)
 	}
 
 	// Arbitrum: a tx can schedule another (see retryables)
 	scheduled := result.ScheduledTxes
-	for runMode == types.MessageGasEstimationMode && len(scheduled) > 0 {
+	for runMode == core.MessageGasEstimationMode && len(scheduled) > 0 {
 		// make a new EVM for the scheduled Tx (an EVM must never be reused)
 		evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
 		if err != nil {
@@ -1034,7 +1034,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 		}()
 
 		// This will panic if the scheduled tx is signed, but we only schedule unsigned ones
-		msg, err := scheduled[0].AsMessage(types.NewArbitrumSigner(nil), header.BaseFee)
+		msg, err := core.TransactionToMessage(scheduled[0], types.NewArbitrumSigner(nil), header.BaseFee)
 		if err != nil {
 			return nil, err
 		}
@@ -1099,7 +1099,7 @@ func (e *revertError) ErrorData() interface{} {
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Bytes, error) {
-	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap(), types.MessageEthcallMode)
+	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap(), core.MessageEthcallMode)
 	if err != nil {
 		if client := fallbackClientFor(s.b, err); client != nil {
 			var res hexutil.Bytes
@@ -1186,7 +1186,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		if state == nil || err != nil {
 			return 0, err
 		}
-		gasCap, err = args.L2OnlyGasCap(gasCap, header, state, types.MessageGasEstimationMode)
+		gasCap, err = args.L2OnlyGasCap(gasCap, header, state, core.MessageGasEstimationMode)
 		if err != nil {
 			return 0, err
 		}
@@ -1203,7 +1203,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
 
-		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, vanillaGasCap, types.MessageGasEstimationMode)
+		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, vanillaGasCap, core.MessageGasEstimationMode)
 		if err != nil {
 			if errors.Is(err, core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
@@ -1643,7 +1643,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		statedb := db.Copy()
 		// Set the accesslist to the last al
 		args.AccessList = &accessList
-		msg, err := args.ToMessage(b.RPCGasCap(), header, statedb, types.MessageEthcallMode)
+		msg, err := args.ToMessage(b.RPCGasCap(), header, statedb, core.MessageEthcallMode)
 		if err != nil {
 			return nil, 0, nil, err
 		}
@@ -1655,7 +1655,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		if err != nil {
 			return nil, 0, nil, err
 		}
-		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
+		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit))
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction().Hash(), err)
 		}
