@@ -132,6 +132,7 @@ func toWordSize(size uint64) uint64 {
 type Message struct {
 	// Arbitrum-specific
 	TxRunMode MessageRunMode
+	Tx        *types.Transaction
 
 	To         *common.Address
 	From       common.Address
@@ -161,6 +162,8 @@ const (
 // TransactionToMessage converts a transaction into a Message.
 func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
 	msg := &Message{
+		Tx: tx,
+
 		Nonce:             tx.Nonce(),
 		GasLimit:          tx.Gas(),
 		GasPrice:          new(big.Int).Set(tx.GasPrice()),
