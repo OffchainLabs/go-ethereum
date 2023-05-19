@@ -160,11 +160,6 @@ const (
 
 // TransactionToMessage converts a transaction into a Message.
 func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
-	/* Arbitrum TODO - this was in NewStateTransition, which seems to have been deleted.
-	if ReadyEVMForL2 != nil {
-		ReadyEVMForL2(evm, msg)
-	}
-	*/
 	msg := &Message{
 		Nonce:             tx.Nonce(),
 		GasLimit:          tx.Gas(),
@@ -230,6 +225,10 @@ type StateTransition struct {
 
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg *Message, gp *GasPool) *StateTransition {
+	if ReadyEVMForL2 != nil {
+		ReadyEVMForL2(evm, msg)
+	}
+
 	return &StateTransition{
 		gp:    gp,
 		evm:   evm,
