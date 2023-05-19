@@ -50,6 +50,7 @@ type TxProcessingHook interface {
 	L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error)
 	GasPriceOp(evm *EVM) *big.Int
 	FillReceiptInfo(receipt *types.Receipt)
+	MsgIsNonMutating() bool
 }
 
 type DefaultTxProcessor struct {
@@ -93,3 +94,7 @@ func (p DefaultTxProcessor) GasPriceOp(evm *EVM) *big.Int {
 }
 
 func (p DefaultTxProcessor) FillReceiptInfo(*types.Receipt) {}
+
+func (p DefaultTxProcessor) MsgIsNonMutating() bool {
+	return false
+}
