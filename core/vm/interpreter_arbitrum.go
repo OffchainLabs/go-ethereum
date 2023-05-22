@@ -17,7 +17,7 @@
 package vm
 
 func (in *EVMInterpreter) Config() *Config {
-	return &in.cfg
+	return &in.evm.Config
 }
 
 func (in *EVMInterpreter) Depth() int {
