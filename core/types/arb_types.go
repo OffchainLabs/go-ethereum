@@ -107,6 +107,9 @@ func (tx *ArbitrumUnsignedTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) 
 	return dst.Set(baseFee)
 }
 
+func (tx *ArbitrumUnsignedTx) dataHashes() []common.Hash  { return nil }
+func (tx *ArbitrumUnsignedTx) maxFeePerDataGas() *big.Int { return new(big.Int) }
+
 type ArbitrumContractTx struct {
 	ChainId   *big.Int
 	RequestId common.Hash
@@ -170,6 +173,9 @@ func (tx *ArbitrumContractTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) 
 	}
 	return dst.Set(baseFee)
 }
+
+func (tx *ArbitrumContractTx) dataHashes() []common.Hash  { return nil }
+func (tx *ArbitrumContractTx) maxFeePerDataGas() *big.Int { return new(big.Int) }
 
 type ArbitrumRetryTx struct {
 	ChainId *big.Int
@@ -248,6 +254,9 @@ func (tx *ArbitrumRetryTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *bi
 	}
 	return dst.Set(baseFee)
 }
+
+func (tx *ArbitrumRetryTx) dataHashes() []common.Hash  { return nil }
+func (tx *ArbitrumRetryTx) maxFeePerDataGas() *big.Int { return new(big.Int) }
 
 type ArbitrumSubmitRetryableTx struct {
 	ChainId   *big.Int
@@ -362,6 +371,9 @@ func (tx *ArbitrumSubmitRetryableTx) data() []byte {
 	return data
 }
 
+func (tx *ArbitrumSubmitRetryableTx) dataHashes() []common.Hash  { return nil }
+func (tx *ArbitrumSubmitRetryableTx) maxFeePerDataGas() *big.Int { return new(big.Int) }
+
 type ArbitrumDepositTx struct {
 	ChainId     *big.Int
 	L1RequestId common.Hash
@@ -415,6 +427,9 @@ func (tx *ArbitrumDepositTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *
 	return dst.Set(bigZero)
 }
 
+func (tx *ArbitrumDepositTx) dataHashes() []common.Hash  { return nil }
+func (tx *ArbitrumDepositTx) maxFeePerDataGas() *big.Int { return new(big.Int) }
+
 type ArbitrumInternalTx struct {
 	ChainId *big.Int
 	Data    []byte
@@ -454,6 +469,9 @@ func (d *ArbitrumInternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
 func (tx *ArbitrumInternalTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
 	return dst.Set(bigZero)
 }
+
+func (tx *ArbitrumInternalTx) dataHashes() []common.Hash  { return nil }
+func (tx *ArbitrumInternalTx) maxFeePerDataGas() *big.Int { return new(big.Int) }
 
 type HeaderInfo struct {
 	SendRoot           common.Hash

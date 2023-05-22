@@ -104,6 +104,7 @@ type stTransaction struct {
 	GasPrice             *big.Int            `json:"gasPrice"`
 	MaxFeePerGas         *big.Int            `json:"maxFeePerGas"`
 	MaxPriorityFeePerGas *big.Int            `json:"maxPriorityFeePerGas"`
+	MaxFeePerDataGas     *big.Int            `json:"maxFeePerDataGas"`
 	Nonce                uint64              `json:"nonce"`
 	To                   string              `json:"to"`
 	Data                 []string            `json:"data"`
@@ -245,7 +246,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 
 	// Prepare the EVM.
 	txContext := core.NewEVMTxContext(msg)
-	context := core.NewEVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
+	context := core.NewEVMBlockContext(block.Header(), nil, nil, &t.json.Env.Coinbase)
 	context.GetHash = vmTestBlockHash
 	context.BaseFee = baseFee
 	context.Random = nil
@@ -261,7 +262,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	// Execute the message.
 	snapshot := statedb.Snapshot()
 	gaspool := new(core.GasPool)
-	gaspool.AddGas(block.GasLimit())
+	gaspool.AddGas(block.GasLimit()).AddDataGas(params.MaxDataGasPerBlock)
 	_, err = core.ApplyMessage(evm, msg, gaspool)
 	if err != nil {
 		statedb.RevertToSnapshot(snapshot)

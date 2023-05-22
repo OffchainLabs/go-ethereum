@@ -472,7 +472,7 @@ func (a *APIBackend) GetEVM(ctx context.Context, msg *core.Message, state *state
 		vmConfig = a.blockChain().GetVMConfig()
 	}
 	txContext := core.NewEVMTxContext(msg)
-	context := core.NewEVMBlockContext(header, a.blockChain(), nil)
+	context := core.NewEVMBlockContext(header, header.ExcessDataGas, a.blockChain(), nil)
 	return vm.NewEVM(context, txContext, state, a.blockChain().Config(), *vmConfig), vmError, nil
 }
 

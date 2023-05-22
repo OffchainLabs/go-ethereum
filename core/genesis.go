@@ -59,10 +59,11 @@ type Genesis struct {
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
-	Number     uint64      `json:"number"`
-	GasUsed    uint64      `json:"gasUsed"`
-	ParentHash common.Hash `json:"parentHash"`
-	BaseFee    *big.Int    `json:"baseFeePerGas"`
+	Number        uint64      `json:"number"`
+	GasUsed       uint64      `json:"gasUsed"`
+	ParentHash    common.Hash `json:"parentHash"`
+	BaseFee       *big.Int    `json:"baseFeePerGas"`
+	ExcessDataGas *big.Int    `json:"excessDataGas"`
 }
 
 func ReadGenesis(db ethdb.Database) (*Genesis, error) {
@@ -216,15 +217,16 @@ type GenesisAccount struct {
 
 // field type overrides for gencodec
 type genesisSpecMarshaling struct {
-	Nonce      math.HexOrDecimal64
-	Timestamp  math.HexOrDecimal64
-	ExtraData  hexutil.Bytes
-	GasLimit   math.HexOrDecimal64
-	GasUsed    math.HexOrDecimal64
-	Number     math.HexOrDecimal64
-	Difficulty *math.HexOrDecimal256
-	BaseFee    *math.HexOrDecimal256
-	Alloc      map[common.UnprefixedAddress]GenesisAccount
+	Nonce         math.HexOrDecimal64
+	Timestamp     math.HexOrDecimal64
+	ExtraData     hexutil.Bytes
+	GasLimit      math.HexOrDecimal64
+	GasUsed       math.HexOrDecimal64
+	Number        math.HexOrDecimal64
+	Difficulty    *math.HexOrDecimal256
+	BaseFee       *math.HexOrDecimal256
+	ExcessDataGas *math.HexOrDecimal256
+	Alloc         map[common.UnprefixedAddress]GenesisAccount
 }
 
 type genesisAccountMarshaling struct {
@@ -458,11 +460,19 @@ func (g *Genesis) ToBlock() *types.Block {
 	if g.Difficulty == nil && g.Mixhash == (common.Hash{}) {
 		head.Difficulty = params.GenesisDifficulty
 	}
-	if g.Config != nil && g.Config.IsLondon(common.Big0) {
-		if g.BaseFee != nil {
-			head.BaseFee = g.BaseFee
-		} else {
-			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
+	if g.Config != nil {
+		if g.Config.IsLondon(common.Big0) {
+			if g.BaseFee != nil {
+				head.BaseFee = g.BaseFee
+			} else {
+				head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
+			}
+		}
+		if g.Config.IsShanghai(g.Timestamp, types.DeserializeHeaderExtraInformation(head).ArbOSFormatVersion) {
+			head.WithdrawalsHash = &types.EmptyRootHash
+		}
+		if g.Config.IsCancun(g.Timestamp) {
+			head.SetExcessDataGas(g.ExcessDataGas)
 		}
 	}
 	var withdrawals []*types.Withdrawal
@@ -573,6 +583,16 @@ func DefaultSepoliaGenesisBlock() *Genesis {
 		Timestamp:  1633267481,
 		Alloc:      decodePrealloc(sepoliaAllocData),
 	}
+}
+
+// DefaultSepoliaGenesisBlock returns the Sepolia network genesis block.
+func DefaultEIP4844GenesisBlock() *Genesis {
+	g := new(Genesis)
+	reader := strings.NewReader(eip4844AllocData)
+	if err := json.NewDecoder(reader).Decode(g); err != nil {
+		panic(err)
+	}
+	return g
 }
 
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block.

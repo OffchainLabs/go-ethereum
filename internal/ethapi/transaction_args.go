@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/protolambda/ztyp/view"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -42,6 +44,7 @@ type TransactionArgs struct {
 	GasPrice             *hexutil.Big    `json:"gasPrice"`
 	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
 	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
+	MaxFeePerDataGas     *hexutil.Big    `json:"maxFeePerDataGas"`
 	Value                *hexutil.Big    `json:"value"`
 	Nonce                *hexutil.Uint64 `json:"nonce"`
 
@@ -54,6 +57,8 @@ type TransactionArgs struct {
 	// Introduced by AccessListTxType transaction.
 	AccessList *types.AccessList `json:"accessList,omitempty"`
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
+
+	Blobs []types.Blob `json:"blobs,omitempty"`
 }
 
 // from retrieves the transaction sender address.
@@ -223,9 +228,10 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, header *types.Header
 		gas = globalGasCap
 	}
 	var (
-		gasPrice  *big.Int
-		gasFeeCap *big.Int
-		gasTipCap *big.Int
+		gasPrice         *big.Int
+		gasFeeCap        *big.Int
+		gasTipCap        *big.Int
+		maxFeePerDataGas *big.Int
 	)
 	if baseFee == nil {
 		// If there's no basefee, then it must be a non-1559 execution
@@ -256,6 +262,9 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, header *types.Header
 				gasPrice = math.BigMin(new(big.Int).Add(gasTipCap, baseFee), gasFeeCap)
 			}
 		}
+		if args.MaxFeePerDataGas != nil {
+			maxFeePerDataGas = args.MaxFeePerDataGas.ToInt()
+		}
 	}
 	value := new(big.Int)
 	if args.Value != nil {
@@ -266,7 +275,11 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, header *types.Header
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
-
+	// The values don't matter. Only its cardinality is used for correct gas estimation
+	var fakeDataHashes []common.Hash
+	if args.Blobs != nil {
+		fakeDataHashes = make([]common.Hash, len(args.Blobs))
+	}
 	msg := &core.Message{
 		From:              addr,
 		To:                args.To,
@@ -275,8 +288,10 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, header *types.Header
 		GasPrice:          gasPrice,
 		GasFeeCap:         gasFeeCap,
 		GasTipCap:         gasTipCap,
+		MaxFeePerDataGas:  maxFeePerDataGas,
 		Data:              data,
 		AccessList:        accessList,
+		DataHashes:        fakeDataHashes,
 		SkipAccountChecks: true,
 		TxRunMode:         runMode,
 	}
@@ -305,7 +320,35 @@ func (args *TransactionArgs) L2OnlyGasCap(gasCap uint64, header *types.Header, s
 // This assumes that setDefaults has been called.
 func (args *TransactionArgs) toTransaction() *types.Transaction {
 	var data types.TxData
+	var opts []types.TxOption
 	switch {
+	case args.Blobs != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		msg := types.BlobTxMessage{}
+		msg.To.Address = (*types.AddressSSZ)(args.To)
+		msg.ChainID.SetFromBig((*big.Int)(args.ChainID))
+		msg.Nonce = view.Uint64View(*args.Nonce)
+		msg.Gas = view.Uint64View(*args.Gas)
+		msg.GasFeeCap.SetFromBig((*big.Int)(args.MaxFeePerGas))
+		msg.GasTipCap.SetFromBig((*big.Int)(args.MaxPriorityFeePerGas))
+		msg.MaxFeePerDataGas.SetFromBig((*big.Int)(args.MaxFeePerDataGas))
+		msg.Value.SetFromBig((*big.Int)(args.Value))
+		msg.Data = args.data()
+		msg.AccessList = types.AccessListView(al)
+		commitments, versionedHashes, proofs, err := types.Blobs(args.Blobs).ComputeCommitmentsAndProofs()
+		// XXX if blobs are invalid we will omit the wrap-data (and an error will pop-up later)
+		if err == nil {
+			opts = append(opts, types.WithTxWrapData(&types.BlobTxWrapData{
+				BlobKzgs: commitments,
+				Blobs:    args.Blobs,
+				Proofs:   proofs,
+			}))
+			msg.BlobVersionedHashes = versionedHashes
+		}
+		data = &types.SignedBlobTx{Message: msg}
 	case args.MaxFeePerGas != nil:
 		al := types.AccessList{}
 		if args.AccessList != nil {
@@ -343,7 +386,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			Data:     args.data(),
 		}
 	}
-	return types.NewTx(data)
+	return types.NewTx(data, opts...)
 }
 
 // ToTransaction converts the arguments to a transaction.

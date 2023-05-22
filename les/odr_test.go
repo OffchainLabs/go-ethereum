@@ -142,12 +142,12 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 					SkipAccountChecks: true,
 				}
 
-				context := core.NewEVMBlockContext(header, bc, nil)
+				context := core.NewEVMBlockContext(header, nil, bc, nil)
 				txContext := core.NewEVMTxContext(msg)
 				vmenv := vm.NewEVM(context, txContext, statedb, config, vm.Config{NoBaseFee: true})
 
 				//vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
-				gp := new(core.GasPool).AddGas(math.MaxUint64)
+				gp := new(core.GasPool).AddGas(math.MaxUint64).AddDataGas(math.MaxUint64)
 				result, _ := core.ApplyMessage(vmenv, msg, gp)
 				res = append(res, result.Return()...)
 			}
@@ -166,10 +166,10 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 				Data:              data,
 				SkipAccountChecks: true,
 			}
-			context := core.NewEVMBlockContext(header, lc, nil)
+			context := core.NewEVMBlockContext(header, nil, lc, nil)
 			txContext := core.NewEVMTxContext(msg)
 			vmenv := vm.NewEVM(context, txContext, state, config, vm.Config{NoBaseFee: true})
-			gp := new(core.GasPool).AddGas(math.MaxUint64)
+			gp := new(core.GasPool).AddGas(math.MaxUint64).AddDataGas(math.MaxUint64)
 			result, _ := core.ApplyMessage(vmenv, msg, gp)
 			if state.Error() == nil {
 				res = append(res, result.Return()...)

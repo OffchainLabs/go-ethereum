@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/protolambda/ztyp/view"
 )
 
 // So we can deterministically seed different blockchains
@@ -158,11 +159,12 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 			}
 			return err
 		}
-		statedb, err := state.New(blockchain.GetBlockByHash(block.ParentHash()).Root(), blockchain.stateCache, nil)
+		parent := blockchain.GetBlockByHash(block.ParentHash())
+		statedb, err := state.New(parent.Root(), blockchain.stateCache, nil)
 		if err != nil {
 			return err
 		}
-		receipts, _, usedGas, err := blockchain.processor.Process(block, statedb, vm.Config{})
+		receipts, _, usedGas, err := blockchain.processor.Process(block, parent.Header().ExcessDataGas, statedb, vm.Config{})
 		if err != nil {
 			blockchain.reportBlock(block, receipts, err)
 			return err
@@ -4136,6 +4138,102 @@ func testCreateThenDelete(t *testing.T, config *params.ChainConfig) {
 		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
 			t.Fatalf("block %d: failed to insert into chain: %v", block.NumberU64(), err)
 		}
+	}
+}
+
+// TestDataBlobTxs tests the following:
+//
+// 1. Writes data hash from transaction to storage.
+func TestDataBlobTxs(t *testing.T) {
+	var (
+		one = common.Hash{1}
+		two = common.Hash{2}
+		aa  = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+
+		// Generate a canonical chain to act as the main dataset
+		engine = beacon.NewFaker()
+
+		// A sender who makes transactions, has some funds
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		gspec   = &Genesis{
+			Config: params.AllEthashProtocolChanges,
+			Alloc: GenesisAlloc{
+				addr1: {Balance: funds},
+				// The address 0xAAAA writes dataHashes[1] to storage slot 0x0.
+				aa: {
+					Code: []byte{
+						byte(vm.PUSH1),
+						byte(0x1),
+						byte(vm.DATAHASH),
+						byte(vm.PUSH1),
+						byte(0x0),
+						byte(vm.SSTORE),
+					},
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+			},
+		}
+	)
+
+	// We test the transition from non-cancun to cancun
+	// Genesis (block 0): AllEthhashProtocolChanges
+	// Block 1          : ""
+	// Block 2          : Cancun
+	var time uint64 = 2 * 10 // block time is 10 seconds, so this corresponds to second block.
+	gspec.Config.BerlinBlock = common.Big0
+	gspec.Config.LondonBlock = common.Big0
+	gspec.Config.ShanghaiTime = &time
+	gspec.Config.CancunTime = &time
+	gspec.Config.TerminalTotalDifficulty = common.Big0
+	gspec.Config.TerminalTotalDifficultyPassed = true
+	signer := types.LatestSigner(gspec.Config)
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 2, func(i int, b *BlockGen) {
+		if i == 0 {
+			// i==0 is a non-cancun block
+			return
+		}
+		b.SetCoinbase(common.Address{1})
+		msg := types.BlobTxMessage{
+			Nonce: 0,
+			Gas:   500000,
+		}
+		msg.To.Address = (*types.AddressSSZ)(&aa)
+		msg.ChainID.SetFromBig((*big.Int)(gspec.Config.ChainID))
+		msg.Nonce = view.Uint64View(0)
+		msg.GasFeeCap.SetFromBig(newGwei(5))
+		msg.GasTipCap.SetFromBig(big.NewInt(2))
+		msg.MaxFeePerDataGas.SetFromBig(big.NewInt(params.MinDataGasPrice))
+		// TODO(eip-4844): Add test case for max data fee too low
+		msg.BlobVersionedHashes = []common.Hash{one, two}
+		txdata := &types.SignedBlobTx{Message: msg}
+
+		tx := types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key1)
+
+		b.AddTx(tx)
+	})
+
+	diskdb := rawdb.NewMemoryDatabase()
+	gspec.MustCommit(diskdb)
+
+	chain, err := NewBlockChain(diskdb, nil, nil, gspec, nil, engine, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	state, _ := chain.State()
+
+	// 1. Check that the storage slot is set to dataHashes[1].
+	actual := state.GetState(aa, common.Hash{0})
+	if actual != two {
+		t.Fatalf("incorrect data hash written to state (want: %s, got: %s)", two, actual)
 	}
 }
 

@@ -46,6 +46,8 @@ func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	switch {
 	case evm.chainRules.IsArbitrum:
 		precompiles = PrecompiledContractsArbitrum
+	case evm.chainRules.IsCancun:
+		precompiles = PrecompiledContractsDanksharding
 	case evm.chainRules.IsBerlin:
 		precompiles = PrecompiledContractsBerlin
 	case evm.chainRules.IsIstanbul:
@@ -71,13 +73,14 @@ type BlockContext struct {
 	GetHash GetHashFunc
 
 	// Block information
-	Coinbase    common.Address // Provides information for COINBASE
-	GasLimit    uint64         // Provides information for GASLIMIT
-	BlockNumber *big.Int       // Provides information for NUMBER
-	Time        uint64         // Provides information for TIME
-	Difficulty  *big.Int       // Provides information for DIFFICULTY
-	BaseFee     *big.Int       // Provides information for BASEFEE
-	Random      *common.Hash   // Provides information for PREVRANDAO
+	Coinbase      common.Address // Provides information for COINBASE
+	GasLimit      uint64         // Provides information for GASLIMIT
+	BlockNumber   *big.Int       // Provides information for NUMBER
+	Time          uint64         // Provides information for TIME
+	Difficulty    *big.Int       // Provides information for DIFFICULTY
+	BaseFee       *big.Int       // Provides information for BASEFEE
+	Random        *common.Hash   // Provides information for PREVRANDAO
+	ExcessDataGas *big.Int       // Provides information for EIP-4844 fee calculation
 
 	// Arbitrum information
 	ArbOSVersion uint64
@@ -87,8 +90,9 @@ type BlockContext struct {
 // All fields can change between transactions.
 type TxContext struct {
 	// Message information
-	Origin   common.Address // Provides information for ORIGIN
-	GasPrice *big.Int       // Provides information for GASPRICE
+	Origin     common.Address // Provides information for ORIGIN
+	GasPrice   *big.Int       // Provides information for GASPRICE
+	DataHashes []common.Hash  // Provides versioned data hashes for DATAHASH
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides

@@ -17,7 +17,6 @@
 package txpool
 
 import (
-	"container/heap"
 	"errors"
 	"fmt"
 	"math"
@@ -54,6 +53,10 @@ const (
 	// more expensive to propagate; larger transactions also take more resources
 	// to validate whether they fit into the pool or not.
 	txMaxSize = 4 * txSlotSize // 128KB
+
+	// txWrapDataMax is the maximum size of an ssz encoded BlobTxWrapData (3 4-byte offsets + the
+	// raw data for each blob, each commitment, and each proof)
+	txWrapDataMax = 4 + 4 + 4 + params.MaxBlobsPerBlock*(params.FieldElementsPerBlob*32+48+48)
 )
 
 var (
@@ -88,6 +91,12 @@ var (
 	// than some meaningful limit a user might use. This is not a consensus error
 	// making the transaction invalid, rather a DOS protection.
 	ErrOversizedData = errors.New("oversized data")
+
+	// ErrBadWrapData is returned if wrap data is not valid for the transaction
+	ErrBadWrapData = errors.New("bad wrap data")
+
+	// ErrMissingWrapData is returned if wrap data is missing for the transaction
+	ErrMissingWrapData = errors.New("missing wrap data")
 
 	// ErrFutureReplacePending is returned if a future transaction replaces a pending
 	// transaction. Future transactions should only be able to replace other future transactions.
@@ -256,10 +265,12 @@ type TxPool struct {
 	eip2718  bool // Fork indicator whether we are using EIP-2718 type transactions.
 	eip1559  bool // Fork indicator whether we are using EIP-1559 type transactions.
 	shanghai bool // Fork indicator whether we are in the Shanghai stage.
+	eip4844  bool // Fork indicator whether we are using EIP-4844 type transactions.
 
-	currentState  *state.StateDB // Current state in the blockchain head
-	pendingNonces *noncer        // Pending state tracking virtual nonces
-	currentMaxGas uint64         // Current gas limit for transaction caps
+	currentState         *state.StateDB // Current state in the blockchain head
+	pendingNonces        *noncer        // Pending state tracking virtual nonces
+	currentMaxGas        uint64         // Current gas limit for transaction caps
+	currentExcessDataGas *big.Int       // Current block excess_data_gas
 
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *journal    // Journal of local transaction to back up to disk
@@ -295,22 +306,23 @@ func NewTxPool(config Config, chainconfig *params.ChainConfig, chain blockChain)
 
 	// Create the transaction pool with its initial settings
 	pool := &TxPool{
-		config:          config,
-		chainconfig:     chainconfig,
-		chain:           chain,
-		signer:          types.LatestSigner(chainconfig),
-		pending:         make(map[common.Address]*list),
-		queue:           make(map[common.Address]*list),
-		beats:           make(map[common.Address]time.Time),
-		all:             newLookup(),
-		chainHeadCh:     make(chan core.ChainHeadEvent, chainHeadChanSize),
-		reqResetCh:      make(chan *txpoolResetRequest),
-		reqPromoteCh:    make(chan *accountSet),
-		queueTxEventCh:  make(chan *types.Transaction),
-		reorgDoneCh:     make(chan chan struct{}),
-		reorgShutdownCh: make(chan struct{}),
-		initDoneCh:      make(chan struct{}),
-		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
+		config:               config,
+		chainconfig:          chainconfig,
+		chain:                chain,
+		signer:               types.LatestSigner(chainconfig),
+		pending:              make(map[common.Address]*list),
+		queue:                make(map[common.Address]*list),
+		beats:                make(map[common.Address]time.Time),
+		all:                  newLookup(),
+		chainHeadCh:          make(chan core.ChainHeadEvent, chainHeadChanSize),
+		reqResetCh:           make(chan *txpoolResetRequest),
+		reqPromoteCh:         make(chan *accountSet),
+		queueTxEventCh:       make(chan *types.Transaction),
+		reorgDoneCh:          make(chan chan struct{}),
+		reorgShutdownCh:      make(chan struct{}),
+		initDoneCh:           make(chan struct{}),
+		gasPrice:             new(big.Int).SetUint64(config.PriceLimit),
+		currentExcessDataGas: new(big.Int),
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -596,6 +608,9 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
+//
+// This does NOT validate wrap-data of the transaction, other than ensuring the
+// tx completeness and limited size checks.
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// Accept only legacy transactions until EIP-2718/2930 activates.
 	if !pool.eip2718 && tx.Type() != types.LegacyTxType {
@@ -605,8 +620,16 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if !pool.eip1559 && tx.Type() == types.DynamicFeeTxType {
 		return core.ErrTxTypeNotSupported
 	}
+	// Reject data blob transactions until data blob EIP activates.
+	if !pool.eip4844 && tx.Type() == types.BlobTxType {
+		return core.ErrTxTypeNotSupported
+	}
 	// Reject transactions over defined size to prevent DOS attacks
 	if tx.Size() > txMaxSize {
+		return ErrOversizedData
+	}
+	// Reject transactions that have too much wrap data to prevent DOS attacks.
+	if uint64(tx.WrapDataSize()) > txWrapDataMax {
 		return ErrOversizedData
 	}
 	// Check whether the init code size has been exceeded.
@@ -675,27 +698,31 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if tx.Gas() < intrGas {
 		return core.ErrIntrinsicGas
 	}
+	// TODO: Handle & Check DataGas limits
+	if tx.IsIncomplete() {
+		return ErrMissingWrapData
+	}
 	return nil
 }
 
-// add validates a transaction and inserts it into the non-executable queue for later
-// pending promotion and execution. If the transaction is a replacement for an already
-// pending or queued one, it overwrites the previous transaction if its price is higher.
-//
-// If a newly added transaction is marked as local, its sending account will be
-// be added to the allowlist, preventing any associated transaction from being dropped
-// out of the pool due to pricing constraints.
+// deprecated: use addTxsLocked to add multiple txs at once, batching is encouraged to improve performance.
 func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err error) {
-	// If the transaction is already known, discard it
-	hash := tx.Hash()
-	if pool.all.Get(hash) != nil {
-		log.Trace("Discarding already known transaction", "hash", hash)
-		knownTxMeter.Mark(1)
-		return false, ErrAlreadyKnown
+	// reuse the addTxsLocked staged validation system
+	txs := []*types.Transaction{tx}
+	errs := []error{nil}
+	pool.filterKnownTxsLocked(txs, errs)
+	pool.filterInvalidTxsLocked(txs, errs, local)
+	pool.filterInvalidBlobTxsLocked(txs, errs)
+	if errs[0] == nil {
+		return pool.addValidTx(tx, local)
 	}
-	// Make the local flag. If it's from local source or it's from the network but
-	// the sender is marked as local previously, treat it as the local transaction.
-	isLocal := local || pool.locals.containsTx(tx)
+	return false, errs[0]
+}
+
+func (pool *TxPool) addValidTx(tx *types.Transaction, local bool) (replaced bool, err error) {
+	inLocalPool := pool.locals.containsTx(tx)
+	isLocal := local || inLocalPool
+	hash := tx.Hash()
 
 	// If the transaction fails basic validation, discard it
 	if err := pool.validateTx(tx, isLocal); err != nil {
@@ -750,7 +777,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			// Add all transactions back to the priced queue
 			if replacesPending {
 				for _, dropTx := range drop {
-					heap.Push(&pool.priced.urgent, dropTx)
+					pool.priced.Put(dropTx, false)
 				}
 				log.Trace("Discarding future transaction replacing pending tx", "hash", hash)
 				return false, ErrFutureReplacePending
@@ -796,7 +823,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		return false, err
 	}
 	// Mark local addresses and journal local transactions
-	if local && !pool.locals.contains(from) {
+	if local && !inLocalPool {
 		log.Info("Setting new local account", "address", from)
 		pool.locals.add(from)
 		pool.priced.Removed(pool.all.RemoteToLocals(pool.locals)) // Migrate the remotes if it's marked as local first time.
@@ -1010,18 +1037,88 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 
 // addTxsLocked attempts to queue a batch of transactions if they are valid.
 // The transaction pool lock must be held.
+//
+// It first validates the txs in stages, and then inserts the valid txs into
+// the non-executable queue for later pending promotion and execution.
+//
+// If a transaction is a replacement for an already pending or queued one,
+// it overwrites the previous transaction if its price is higher.
+//
+// If a newly added transaction is marked as local, its sending account will
+// be added to the allowlist, preventing any associated transaction from
+// being dropped out of the pool due to pricing constraints.
 func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) ([]error, *accountSet) {
-	dirty := newAccountSet(pool.signer)
+	// note: the transaction validation and adding happens in stages, so expensive work can be batched.
 	errs := make([]error, len(txs))
+	pool.filterKnownTxsLocked(txs, errs)
+	pool.filterInvalidTxsLocked(txs, errs, local)
+	pool.filterInvalidBlobTxsLocked(txs, errs)
+	dirty := pool.addValidTxsLocked(txs, errs, local)
+	return errs, dirty
+}
+
+// filterKnownTxsLocked marks all known transactions with ErrAlreadyKnown
+func (pool *TxPool) filterKnownTxsLocked(txs []*types.Transaction, errs []error) {
 	for i, tx := range txs {
-		replaced, err := pool.add(tx, local)
+		if pool.Has(tx.Hash()) {
+			log.Trace("Discarding already known transaction", "hash", tx.Hash())
+			knownTxMeter.Mark(1)
+			errs[i] = ErrAlreadyKnown
+		}
+	}
+}
+
+// filterInvalidTxsLocked marks all invalid txs with respective error, this excludes blob validation
+func (pool *TxPool) filterInvalidTxsLocked(txs []*types.Transaction, errs []error, local bool) {
+	for i, tx := range txs {
+		if errs[i] != nil {
+			continue
+		}
+
+		// Make the local flag. If it's from local source or it's from the network but
+		// the sender is marked as local previously, treat it as the local transaction.
+		inLocalPool := pool.locals.containsTx(tx)
+		isLocal := local || inLocalPool
+		err := pool.validateTx(tx, isLocal)
+		if err != nil {
+			log.Trace("Discarding invalid transaction", "hash", tx.Hash(), "err", err)
+			invalidTxMeter.Mark(1)
+			errs[i] = err
+		}
+	}
+}
+
+// filterInvalidBlobTxsLocked marks all blob txs (if any) with an error if the blobs or kzg commitments are invalid
+func (pool *TxPool) filterInvalidBlobTxsLocked(txs []*types.Transaction, errs []error) {
+	for i, tx := range txs {
+		if errs[i] != nil {
+			continue
+		}
+		// all blobs within the tx can still be batched together
+		err := tx.VerifyBlobs()
+		if err != nil {
+			log.Trace("Discarding blob transaction", "hash", tx.Hash(), "err", err)
+			invalidTxMeter.Mark(1)
+			errs[i] = err
+		}
+	}
+}
+
+// addValidTxsLocked adds all transactions to the pool that are not marked with an error.
+func (pool *TxPool) addValidTxsLocked(txs []*types.Transaction, errs []error, local bool) *accountSet {
+	dirty := newAccountSet(pool.signer)
+	for i, tx := range txs {
+		if errs[i] != nil {
+			continue
+		}
+		replaced, err := pool.addValidTx(tx, local)
 		errs[i] = err
 		if err == nil && !replaced {
 			dirty.addTx(tx)
 		}
 	}
 	validTxMeter.Mark(int64(len(dirty.accounts)))
-	return errs, dirty
+	return dirty
 }
 
 // Status returns the status (unknown/pending/queued) of a batch of transactions
@@ -1345,6 +1442,16 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 						log.Error("Unrooted old chain seen by tx pool", "block", oldHead.Number, "hash", oldHead.Hash())
 						return
 					}
+					// transactions that contained blobs might not have the wrapData anymore
+					// if not retrieved from block cache since wrap data is not persisted. Discord those.
+					j := 0
+					for _, tx := range discarded {
+						if !tx.IsIncomplete() {
+							discarded[j] = tx
+							j++
+						}
+					}
+					discarded = discarded[:j]
 					included = append(included, add.Transactions()...)
 					if add = pool.chain.GetBlock(add.ParentHash(), add.NumberU64()-1); add == nil {
 						log.Error("Unrooted new chain seen by tx pool", "block", newHead.Number, "hash", newHead.Hash())
@@ -1367,6 +1474,9 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.currentState = statedb
 	pool.pendingNonces = newNoncer(statedb)
 	pool.currentMaxGas = newHead.GasLimit
+	if newHead.ExcessDataGas != nil {
+		pool.currentExcessDataGas.Set(newHead.ExcessDataGas)
+	}
 
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
@@ -1378,7 +1488,9 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
 	pool.eip2718 = pool.chainconfig.IsBerlin(next)
 	pool.eip1559 = pool.chainconfig.IsLondon(next)
-	pool.shanghai = pool.chainconfig.IsShanghai(uint64(time.Now().Unix()), types.DeserializeHeaderExtraInformation(newHead).ArbOSFormatVersion)
+	now := uint64(time.Now().Unix())
+	pool.shanghai = pool.chainconfig.IsShanghai(now, types.DeserializeHeaderExtraInformation(newHead).ArbOSFormatVersion)
+	pool.eip4844 = pool.chainconfig.IsCancun(now)
 }
 
 // promoteExecutables moves transactions that have become processable from the

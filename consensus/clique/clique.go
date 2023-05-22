@@ -348,6 +348,14 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 		// Verify the header's EIP-1559 attributes.
 		return err
 	}
+	if !chain.Config().IsCancun(header.Time) {
+		if header.ExcessDataGas != nil {
+			return fmt.Errorf("invalid excessDataGas before fork: have %v, want <nil>", header.ExcessDataGas)
+		}
+	} else if err := misc.VerifyEip4844Header(chain.Config(), parent, header); err != nil {
+		// Verify the header's EIP-4844 attributes.
+		return err
+	}
 	// Retrieve the snapshot needed to verify this header and cache it
 	snap, err := c.snapshot(chain, number-1, header.ParentHash, parents)
 	if err != nil {
@@ -571,6 +579,13 @@ func (c *Clique) Finalize(chain consensus.ChainHeaderReader, header *types.Heade
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
+	if chain.Config().IsCancun(header.Time) {
+		if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
+			header.SetExcessDataGas(misc.CalcExcessDataGas(parent.ExcessDataGas, misc.CountBlobs(txs)))
+		} else {
+			header.SetExcessDataGas(new(big.Int))
+		}
+	}
 }
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
@@ -752,6 +767,9 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	}
 	if header.WithdrawalsHash != nil {
 		panic("unexpected withdrawal hash value in clique")
+	}
+	if header.ExcessDataGas != nil {
+		panic("unexpected excessDataGas value in clique")
 	}
 	if err := rlp.Encode(w, enc); err != nil {
 		panic("can't encode: " + err.Error())

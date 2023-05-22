@@ -46,6 +46,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/holiman/uint256"
+	"github.com/protolambda/ztyp/view"
 )
 
 var (
@@ -91,7 +93,6 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 		}
 		config.TerminalTotalDifficulty = totalDifficulty
 	}
-
 	return genesis, blocks
 }
 
@@ -562,8 +563,8 @@ func TestExchangeTransitionConfig(t *testing.T) {
 
 /*
 TestNewPayloadOnInvalidChain sets up a valid chain and tries to feed blocks
-from an invalid chain to test if latestValidHash (LVH) works correctly.
-
+from an invalid chain to test if latestValidHash (LVH) works correctly
+.
 We set up the following chain where P1 ... Pn and P1” are valid while
 P1' is invalid.
 We expect
@@ -754,21 +755,22 @@ func setBlockhash(data *engine.ExecutableData) *engine.ExecutableData {
 	number := big.NewInt(0)
 	number.SetUint64(data.Number)
 	header := &types.Header{
-		ParentHash:  data.ParentHash,
-		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    data.FeeRecipient,
-		Root:        data.StateRoot,
-		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash: data.ReceiptsRoot,
-		Bloom:       types.BytesToBloom(data.LogsBloom),
-		Difficulty:  common.Big0,
-		Number:      number,
-		GasLimit:    data.GasLimit,
-		GasUsed:     data.GasUsed,
-		Time:        data.Timestamp,
-		BaseFee:     data.BaseFeePerGas,
-		Extra:       data.ExtraData,
-		MixDigest:   data.Random,
+		ParentHash:    data.ParentHash,
+		UncleHash:     types.EmptyUncleHash,
+		Coinbase:      data.FeeRecipient,
+		Root:          data.StateRoot,
+		TxHash:        types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
+		ReceiptHash:   data.ReceiptsRoot,
+		Bloom:         types.BytesToBloom(data.LogsBloom),
+		Difficulty:    common.Big0,
+		Number:        number,
+		GasLimit:      data.GasLimit,
+		GasUsed:       data.GasUsed,
+		Time:          data.Timestamp,
+		BaseFee:       data.BaseFeePerGas,
+		ExcessDataGas: data.ExcessDataGas,
+		Extra:         data.ExtraData,
+		MixDigest:     data.Random,
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
 	data.BlockHash = block.Hash()
@@ -1473,6 +1475,177 @@ func TestGetBlockBodiesByRangeInvalidParams(t *testing.T) {
 	}
 }
 
+func TestEIP4844(t *testing.T) {
+	genesis, blocks := generateMergeChain(10, true)
+	lastBlockTime := blocks[len(blocks)-1].Time()
+	nextBlockTime := lastBlockTime + 10 // chainmakers block time is fixed at 10 seconds
+	genesis.Config.ShanghaiTime = &nextBlockTime
+	genesis.Config.CancunTime = &nextBlockTime
+	genesis.Config.TerminalTotalDifficulty.Sub(genesis.Config.TerminalTotalDifficulty, blocks[0].Difficulty())
+
+	n, ethservice := startEthService(t, genesis, blocks)
+	ethservice.Merger().ReachTTD()
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+
+	parent := ethservice.BlockChain().CurrentHeader()
+	params := engine.PayloadAttributes{
+		Timestamp:   parent.Time + 10,
+		Withdrawals: make([]*types.Withdrawal, 0),
+	}
+	fcState := engine.ForkchoiceStateV1{
+		HeadBlockHash: parent.Hash(),
+	}
+	resp, err := api.ForkchoiceUpdatedV2(fcState, &params)
+	if err != nil {
+		t.Fatalf("error preparing payload, err=%v", err)
+	}
+	if resp.PayloadStatus.Status != engine.VALID {
+		t.Fatalf("unexpected status (got: %s, want: %s)", resp.PayloadStatus.Status, engine.VALID)
+	}
+
+	execData, err := api.GetPayloadV3(*resp.PayloadID)
+	if err != nil {
+		t.Fatalf("error getting payload, err=%v", err)
+	}
+	ep := execData.ExecutionPayload
+	if ep.ExcessDataGas == nil {
+		t.Fatal("got nil ExcessDataGas")
+	}
+	if len(ep.Transactions) != 0 {
+		t.Fatal("expected zero transactions")
+	}
+
+	if status, err := api.NewPayloadV3(*ep); err != nil {
+		t.Fatalf("error validating payload: %v", err)
+	} else if status.Status != engine.VALID {
+		t.Fatalf("invalid payload")
+	}
+
+	fcState.HeadBlockHash = ep.BlockHash
+	_, err = api.ForkchoiceUpdatedV2(fcState, nil)
+	if err != nil {
+		t.Fatalf("error preparing payload, err=%v", err)
+	}
+
+	block := ethservice.APIBackend.CurrentBlock()
+	if block.ExcessDataGas == nil {
+		t.Fatal("latest block is missing excessDataGas")
+	}
+}
+
+func TestEIP4844WithBlobTransactions(t *testing.T) {
+	genesis, blocks := generateMergeChain(10, true)
+	lastBlockTime := blocks[len(blocks)-1].Time()
+	nextBlockTime := lastBlockTime + 10 // chainmakers block time is fixed at 10 seconds
+	genesis.Config.ShanghaiTime = &nextBlockTime
+	genesis.Config.CancunTime = &nextBlockTime
+	genesis.Config.TerminalTotalDifficulty.Sub(genesis.Config.TerminalTotalDifficulty, blocks[0].Difficulty())
+
+	n, ethservice := startEthService(t, genesis, blocks)
+	ethservice.Merger().ReachTTD()
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+
+	for i := 0; i < params.MaxBlobsPerBlock+5; i++ {
+		tx := newRandomBlobTx(t, ethservice.BlockChain(), 10+uint64(i))
+		err := ethservice.TxPool().AddLocal(tx)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	parent := ethservice.BlockChain().CurrentHeader()
+	params := engine.PayloadAttributes{
+		Timestamp:   parent.Time + 10,
+		Withdrawals: make([]*types.Withdrawal, 0),
+	}
+	fcState := engine.ForkchoiceStateV1{
+		HeadBlockHash: parent.Hash(),
+	}
+	resp, err := api.ForkchoiceUpdatedV2(fcState, &params)
+	if err != nil {
+		t.Fatalf("error preparing payload, err=%v", err)
+	}
+	if resp.PayloadStatus.Status != engine.VALID {
+		t.Fatalf("unexpected status (got: %s, want: %s)", resp.PayloadStatus.Status, engine.VALID)
+	}
+
+	ep, err := assembleWithTransactions(api, parent.Hash(), &params, 4)
+
+	if err != nil {
+		t.Fatalf("error getting payload, err=%v", err)
+	}
+	if ep.ExcessDataGas == nil {
+		t.Fatal("got nil ExcessDataGas")
+	}
+	if len(ep.Transactions) != 4 {
+		t.Fatalf("unexpected transactions. got %d", len(ep.Transactions))
+	}
+
+	if status, err := api.NewPayloadV3(*ep); err != nil {
+		t.Fatalf("error validating payload: %v", err)
+	} else if status.Status != engine.VALID {
+		t.Fatalf("invalid payload")
+	}
+
+	fcState.HeadBlockHash = ep.BlockHash
+	_, err = api.ForkchoiceUpdatedV2(fcState, nil)
+	if err != nil {
+		t.Fatalf("error preparing payload, err=%v", err)
+	}
+
+	block := ethservice.APIBackend.CurrentBlock()
+	if block.ExcessDataGas == nil {
+		t.Fatal("latest block is missing excessDataGas")
+	}
+}
+
+func TestEIP4844Withdrawals(t *testing.T) {
+	genesis, blocks := generateMergeChain(10, true)
+	lastBlockTime := blocks[len(blocks)-1].Time()
+	nextBlockTime := lastBlockTime + 10 // chainmakers block time is fixed at 10 seconds
+	genesis.Config.ShanghaiTime = &nextBlockTime
+	genesis.Config.TerminalTotalDifficulty.Sub(genesis.Config.TerminalTotalDifficulty, blocks[0].Difficulty())
+
+	n, ethservice := startEthService(t, genesis, blocks)
+	ethservice.Merger().ReachTTD()
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+
+	// 10: Build Shanghai block with no withdrawals.
+	parent := ethservice.BlockChain().CurrentHeader()
+	params := engine.PayloadAttributes{
+		Timestamp:   parent.Time + 10,
+		Withdrawals: make([]*types.Withdrawal, 0),
+	}
+	fcState := engine.ForkchoiceStateV1{
+		HeadBlockHash: parent.Hash(),
+	}
+	resp, err := api.ForkchoiceUpdatedV2(fcState, &params)
+	if err != nil {
+		t.Fatalf("error preparing payload, err=%v", err)
+	}
+	if resp.PayloadStatus.Status != engine.VALID {
+		t.Fatalf("unexpected status (got: %s, want: %s)", resp.PayloadStatus.Status, engine.VALID)
+	}
+
+	execData, err := api.GetPayloadV2(*resp.PayloadID)
+	if err != nil {
+		t.Fatalf("error getting payload, err=%v", err)
+	}
+	ep := execData.ExecutionPayload
+	if ep.StateRoot != parent.Root {
+		t.Fatalf("mismatch state roots (got: %s, want: %s)", ep.StateRoot, blocks[8].Root())
+	}
+	if ep.Withdrawals == nil || len(ep.Withdrawals) != 0 {
+		t.Fatalf("expected empty withdrawals list. got %#v", ep.Withdrawals)
+	}
+}
+
 func equalBody(a *types.Body, b *engine.ExecutionPayloadBodyV1) bool {
 	if a == nil && b == nil {
 		return true
@@ -1489,4 +1662,46 @@ func equalBody(a *types.Body, b *engine.ExecutionPayloadBodyV1) bool {
 		}
 	}
 	return reflect.DeepEqual(a.Withdrawals, b.Withdrawals)
+}
+
+func newRandomBlobTx(t *testing.T, chain *core.BlockChain, nonce uint64) *types.Transaction {
+	var blobs types.Blobs
+	blobs = append(blobs, types.Blob{})
+
+	commitments, versionedHashes, proofs, err := blobs.ComputeCommitmentsAndProofs()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	chainID := chain.Config().ChainID
+
+	recipient := common.HexToAddress("0x9a9070028361F7AAbeB3f2F2Dc07F82C4a98A02a")
+	gasPrice := big.NewInt(1 * params.InitialBaseFee).Uint64()
+	txData := &types.SignedBlobTx{
+		Message: types.BlobTxMessage{
+			ChainID:   view.Uint256View(*uint256.NewInt(chainID.Uint64())),
+			Nonce:     view.Uint64View(nonce),
+			Gas:       view.Uint64View(210000),
+			GasFeeCap: view.Uint256View(*uint256.NewInt(gasPrice)),
+			// fee per data gas needs to be higher than the minimum because this test produces more than one
+			// block and the latter one has non-zero excessDataGas
+			MaxFeePerDataGas:    view.Uint256View(*uint256.NewInt(params.MinDataGasPrice * 2)),
+			GasTipCap:           view.Uint256View(*uint256.NewInt(gasPrice)),
+			Value:               view.Uint256View(*uint256.NewInt(1000)),
+			To:                  types.AddressOptionalSSZ{Address: (*types.AddressSSZ)(&recipient)},
+			BlobVersionedHashes: versionedHashes,
+		},
+	}
+	wrapData := &types.BlobTxWrapData{
+		BlobKzgs: commitments,
+		Blobs:    blobs,
+		Proofs:   proofs,
+	}
+	tx := types.NewTx(txData, types.WithTxWrapData(wrapData))
+	signer := types.NewDankSigner(chainID)
+	tx, err = types.SignTx(tx, signer, testKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tx
 }

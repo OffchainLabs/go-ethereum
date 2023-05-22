@@ -498,7 +498,7 @@ func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsPac
 			continue
 		}
 		// If known, encode and queue for response packet
-		if encoded, err := rlp.EncodeToBytes(tx); err != nil {
+		if encoded, err := rlp.EncodeToBytes(types.NewNetworkTransaction(tx)); err != nil {
 			log.Error("Failed to encode transaction", "err", err)
 		} else {
 			hashes = append(hashes, hash)
@@ -524,6 +524,13 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 		if tx == nil {
 			return fmt.Errorf("%w: transaction %d is nil", errDecode, i)
 		}
+		// TODO(eip-4844): implement penalizing of clients who send unrequested
+		// blob transactions. While we're interop testing we'll go ahead and
+		// accept any that happen to come our way.
+		/*if tx.Tx.Type() == types.BlobTxType {
+			// blob txs should never be broadcast
+			return fmt.Errorf("transaction %v is a blob tx", i)
+		}*/
 		peer.markTransaction(tx.Hash())
 	}
 	return backend.Handle(peer, &txs)

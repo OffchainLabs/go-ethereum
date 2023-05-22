@@ -61,7 +61,7 @@ func (b *BlockGen) SetCoinbase(addr common.Address) {
 		panic("coinbase can only be set once")
 	}
 	b.header.Coinbase = addr
-	b.gasPool = new(GasPool).AddGas(b.header.GasLimit)
+	b.gasPool = new(GasPool).AddGas(b.header.GasLimit).AddDataGas(params.MaxDataGasPerBlock)
 }
 
 // SetExtra sets the extra data field of the generated block.
@@ -98,7 +98,7 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
-	receipt, _, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vmConfig)
+	receipt, _, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, b.parent.Header().ExcessDataGas, tx, &b.header.GasUsed, vmConfig)
 	if err != nil {
 		panic(err)
 	}
@@ -159,6 +159,11 @@ func (b *BlockGen) Number() *big.Int {
 // Timestamp returns the timestamp of the block being generated.
 func (b *BlockGen) Timestamp() uint64 {
 	return b.header.Time
+}
+
+// ExcessDataGas returns the excessDataGas of the block being generated.
+func (b *BlockGen) ExcessDataGas() *big.Int {
+	return b.header.ExcessDataGas
 }
 
 // BaseFee returns the EIP-1559 base fee of the block being generated.
@@ -439,4 +444,9 @@ func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header       
 func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header          { return nil }
 func (cr *fakeChainReader) GetHeader(hash common.Hash, number uint64) *types.Header { return nil }
 func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Block   { return nil }
-func (cr *fakeChainReader) GetTd(hash common.Hash, number uint64) *big.Int          { return nil }
+func (cr *fakeChainReader) GetTd(hash common.Hash, number uint64) *big.Int {
+	if cr.config.TerminalTotalDifficultyPassed {
+		return cr.config.TerminalTotalDifficulty
+	}
+	return nil
+}

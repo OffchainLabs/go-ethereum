@@ -32,6 +32,7 @@ var (
 	SepoliaGenesisHash = common.HexToHash("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9")
 	RinkebyGenesisHash = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
 	GoerliGenesisHash  = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
+	Eip4844GenesisHash = common.HexToHash("0x28389ca4b6b1a3e13068d70daf3dd23a6e4ded1056bb35014f0a2a2080c453a1")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
@@ -974,7 +975,7 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
-	IsMerge, IsShanghai, isCancun, isPrague                 bool
+	IsMerge, IsShanghai, IsCancun, isPrague                 bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -998,7 +999,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, curren
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          isMerge,
 		IsShanghai:       c.IsShanghai(timestamp, currentArbosVersion),
-		isCancun:         c.IsCancun(timestamp),
+		IsCancun:         c.IsCancun(timestamp),
 		isPrague:         c.IsPrague(timestamp),
 	}
 }

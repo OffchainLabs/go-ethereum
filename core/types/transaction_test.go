@@ -28,8 +28,13 @@ import (
 	"testing"
 	"time"
 
+	gokzg4844 "github.com/crate-crypto/go-kzg-4844"
+	"github.com/holiman/uint256"
+	"github.com/protolambda/ztyp/view"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/kzg"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -72,6 +77,21 @@ var (
 		common.Hex2Bytes("c9519f4f2b30335884581971573fadf60c6204f59a911df35ee8a540456b266032f1e8e2c5dd761f9e4f88f41c8310aeaba26a8bfcdacfedfa12ec3862d3752101"),
 	)
 )
+
+// Returns a wrapper consisting of a single blob of all zeros that passes validation along with its
+// versioned hash.
+func oneEmptyBlobWrapData() (wrap *BlobTxWrapData, versionedHashes VersionedHashesView) {
+	cryptoCtx := kzg.CryptoCtx()
+	blob := Blob{}
+	commitment, _ := cryptoCtx.BlobToKZGCommitment(gokzg4844.Blob(blob), 1)
+	proof, _ := cryptoCtx.ComputeBlobKZGProof(gokzg4844.Blob(blob), commitment, 1)
+	wrapData := &BlobTxWrapData{
+		BlobKzgs: BlobKzgs{KZGCommitment(commitment)},
+		Blobs:    Blobs{Blob(blob)},
+		Proofs:   KZGProofs{KZGProof(proof)},
+	}
+	return wrapData, VersionedHashesView{common.Hash(kzg.KZGToVersionedHash(gokzg4844.KZGCommitment(wrapData.BlobKzgs[0])))}
+}
 
 func TestDecodeEmptyTypedTx(t *testing.T) {
 	input := []byte{0x80}
@@ -412,14 +432,15 @@ func TestTransactionCoding(t *testing.T) {
 		t.Fatalf("could not generate key: %v", err)
 	}
 	var (
-		signer    = NewEIP2930Signer(common.Big1)
+		signer    = NewDankSigner(common.Big1)
 		addr      = common.HexToAddress("0x0000000000000000000000000000000000000001")
 		recipient = common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
 		accesses  = AccessList{{Address: addr, StorageKeys: []common.Hash{{0}}}}
 	)
-	for i := uint64(0); i < 500; i++ {
+	for i := uint64(0); i < 700; i++ {
 		var txdata TxData
-		switch i % 5 {
+		var wrapData TxWrapData
+		switch i % 7 {
 		case 0:
 			// Legacy tx.
 			txdata = &LegacyTx{
@@ -467,8 +488,28 @@ func TestTransactionCoding(t *testing.T) {
 				GasPrice:   big.NewInt(10),
 				AccessList: accesses,
 			}
+		case 5:
+			txdata = &DynamicFeeTx{
+				ChainID:    big.NewInt(1),
+				Nonce:      i,
+				Gas:        123457,
+				GasTipCap:  big.NewInt(42),
+				GasFeeCap:  big.NewInt(10),
+				AccessList: accesses,
+			}
+		case 6:
+			msg := BlobTxMessage{
+				ChainID:    view.Uint256View(*uint256.NewInt(1)),
+				Nonce:      view.Uint64View(i),
+				Gas:        view.Uint64View(123457),
+				GasTipCap:  view.Uint256View(*uint256.NewInt(42)),
+				GasFeeCap:  view.Uint256View(*uint256.NewInt(10)),
+				AccessList: AccessListView(accesses),
+			}
+			wrapData, msg.BlobVersionedHashes = oneEmptyBlobWrapData()
+			txdata = &SignedBlobTx{Message: msg}
 		}
-		tx, err := SignNewTx(key, signer, txdata)
+		tx, err := SignNewTx(key, signer, txdata, WithTxWrapData(wrapData))
 		if err != nil {
 			t.Fatalf("could not sign transaction: %v", err)
 		}
@@ -489,6 +530,72 @@ func TestTransactionCoding(t *testing.T) {
 		if err := assertEqual(parsedTx, tx); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+// Make sure deserialized blob transactions never have nil access lists or versioned hash lists,
+// even when empty.
+func TestBlobTransactionEmptyLists(t *testing.T) {
+	txdata := &SignedBlobTx{
+		Message: BlobTxMessage{
+			ChainID:          view.Uint256View(*uint256.NewInt(1)),
+			Nonce:            view.Uint64View(1),
+			Gas:              view.Uint64View(123457),
+			GasTipCap:        view.Uint256View(*uint256.NewInt(42)),
+			GasFeeCap:        view.Uint256View(*uint256.NewInt(10)),
+			MaxFeePerDataGas: view.Uint256View(*uint256.NewInt(10000000)),
+		},
+	}
+	tx := NewTx(txdata)
+	data, err := tx.MarshalMinimal()
+	if err != nil {
+		t.Fatalf("ssz encoding failed: %v", err)
+	}
+	var parsedTx = &Transaction{}
+	if err := parsedTx.UnmarshalMinimal(data); err != nil {
+		t.Fatalf("ssz decoding failed: %v", err)
+	}
+	if parsedTx.AccessList() == nil {
+		t.Fatal("Deserialized blob txs should have non-nil access lists")
+	}
+	if parsedTx.DataHashes() == nil {
+		t.Fatal("Deserialized blob txs should have non-nil versioned hash lists")
+	}
+}
+
+func TestBlobTransactionMinimalCodec(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("could not generate key: %v", err)
+	}
+	var (
+		signer   = NewDankSigner(common.Big1)
+		addr     = common.HexToAddress("0x0000000000000000000000000000000000000001")
+		accesses = AccessList{{Address: addr, StorageKeys: []common.Hash{{0}}}}
+	)
+
+	txdata := &SignedBlobTx{
+		Message: BlobTxMessage{
+			ChainID:             view.Uint256View(*uint256.NewInt(1)),
+			Nonce:               view.Uint64View(1),
+			Gas:                 view.Uint64View(123457),
+			GasTipCap:           view.Uint256View(*uint256.NewInt(42)),
+			GasFeeCap:           view.Uint256View(*uint256.NewInt(10)),
+			AccessList:          AccessListView(accesses),
+			BlobVersionedHashes: VersionedHashesView{common.HexToHash("0x01624652859a6e98ffc1608e2af0147ca4e86e1ce27672d8d3f3c9d4ffd6ef7e")},
+			MaxFeePerDataGas:    view.Uint256View(*uint256.NewInt(10000000)),
+		},
+	}
+	tx, err := SignNewTx(key, signer, txdata)
+	if err != nil {
+		t.Fatalf("could not sign transaction: %v", err)
+	}
+	parsedTx, err := encodeDecodeJSON(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := assertEqual(parsedTx, tx); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -597,5 +704,29 @@ func TestTransactionSizes(t *testing.T) {
 		if have, want := int(utx.Size()), len(bin); have != want {
 			t.Errorf("test %d: (unmarshalled) size wrong, have %d want %d", i, have, want)
 		}
+	}
+}
+
+func TestVerifyBlobTransaction(t *testing.T) {
+	blobs := Blobs{Blob{}}
+	blobs[0][0] = 0xa
+	commitments, hashes, proofs, err := blobs.ComputeCommitmentsAndProofs()
+	if err != nil {
+		t.Fatalf("failed to compute commitments: %v", err)
+	}
+
+	txData := SignedBlobTx{
+		Message: BlobTxMessage{
+			BlobVersionedHashes: hashes,
+		},
+	}
+	wrapData := BlobTxWrapData{
+		BlobKzgs: commitments,
+		Blobs:    blobs,
+		Proofs:   proofs,
+	}
+	tx := NewTx(&txData, WithTxWrapData(&wrapData))
+	if err := tx.VerifyBlobs(); err != nil {
+		t.Fatalf("failed to verify blobs: %v", err)
 	}
 }

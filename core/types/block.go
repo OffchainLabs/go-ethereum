@@ -18,7 +18,9 @@
 package types
 
 import (
+	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -85,6 +87,9 @@ type Header struct {
 	// WithdrawalsHash was added by EIP-4895 and is ignored in legacy headers.
 	WithdrawalsHash *common.Hash `json:"withdrawalsRoot" rlp:"optional"`
 
+	// ExcessDataGas was added by EIP-4844 and is ignored in legacy headers.
+	ExcessDataGas *big.Int `json:"excessDataGas" rlp:"optional"`
+
 	/*
 		TODO (MariusVanDerWijden) Add this field once needed
 		// Random was added during the merge and contains the BeaconState randomness
@@ -94,14 +99,32 @@ type Header struct {
 
 // field type overrides for gencodec
 type headerMarshaling struct {
-	Difficulty *hexutil.Big
-	Number     *hexutil.Big
-	GasLimit   hexutil.Uint64
-	GasUsed    hexutil.Uint64
-	Time       hexutil.Uint64
-	Extra      hexutil.Bytes
-	BaseFee    *hexutil.Big
-	Hash       common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+	Difficulty    *hexutil.Big
+	Number        *hexutil.Big
+	GasLimit      hexutil.Uint64
+	GasUsed       hexutil.Uint64
+	Time          hexutil.Uint64
+	Extra         hexutil.Bytes
+	BaseFee       *hexutil.Big
+	ExcessDataGas *hexutil.Big
+	Hash          common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+}
+
+// TimeBig returns the header's time field as a big int.
+func (h *Header) TimeBig() *big.Int {
+	return new(big.Int).SetUint64(h.Time)
+}
+
+// SetExcessDataGas sets the excess_data_gas field in the header
+func (h *Header) SetExcessDataGas(v *big.Int) {
+	h.ExcessDataGas = new(big.Int)
+	if v != nil {
+		h.ExcessDataGas.Set(v)
+	}
+	if h.WithdrawalsHash == nil {
+		// leaving this nil would result in a buggy encoding
+		h.WithdrawalsHash = &EmptyRootHash
+	}
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
@@ -115,11 +138,18 @@ var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
 // Size returns the approximate memory used by all internal contents. It is used
 // to approximate and limit the memory consumption of various caches.
 func (h *Header) Size() common.StorageSize {
-	var baseFeeBits int
+	var feeBits int
 	if h.BaseFee != nil {
-		baseFeeBits = h.BaseFee.BitLen()
+		feeBits = h.BaseFee.BitLen()
 	}
-	return headerSize + common.StorageSize(len(h.Extra)+(h.Difficulty.BitLen()+h.Number.BitLen()+baseFeeBits)/8)
+	if h.ExcessDataGas != nil {
+		feeBits += h.ExcessDataGas.BitLen()
+	}
+	var withdrawalBytes int
+	if h.WithdrawalsHash != nil {
+		withdrawalBytes = common.HashLength
+	}
+	return headerSize + common.StorageSize(len(h.Extra)+(h.Difficulty.BitLen()+h.Number.BitLen()+feeBits)/8+withdrawalBytes)
 }
 
 // SanityCheck checks a few basic things -- these checks are way beyond what
@@ -141,6 +171,11 @@ func (h *Header) SanityCheck() error {
 	if h.BaseFee != nil {
 		if bfLen := h.BaseFee.BitLen(); bfLen > 256 {
 			return fmt.Errorf("too large base fee: bitlen %d", bfLen)
+		}
+	}
+	if h.ExcessDataGas != nil {
+		if bfLen := h.ExcessDataGas.BitLen(); bfLen > 256 {
+			return fmt.Errorf("too large excess data gas: bitlen %d", bfLen)
 		}
 	}
 	return nil
@@ -185,10 +220,84 @@ type Block struct {
 	ReceivedFrom interface{}
 }
 
+// a view over a transaction to RLP encode/decode it the minimal way
+type minimalTx Transaction
+
+func (tx *minimalTx) DecodeRLP(s *rlp.Stream) error {
+	kind, size, err := s.Kind()
+	switch {
+	case err != nil:
+		return err
+	case kind == rlp.List:
+		// It's a legacy transaction.
+		var inner LegacyTx
+		err := s.Decode(&inner)
+		if err == nil {
+			(*Transaction)(tx).setDecoded(&inner, rlp.ListSize(size))
+		}
+		return err
+	case kind == rlp.String:
+		// It's an EIP-2718 typed TX envelope.
+		var b []byte
+		if b, err = s.Bytes(); err != nil {
+			return err
+		}
+		inner, err := (*Transaction)(tx).decodeTypedMinimal(b, true)
+		if err == nil {
+			(*Transaction)(tx).setDecoded(inner, uint64(len(b)))
+		}
+		return err
+	default:
+		return rlp.ErrExpectedList
+	}
+}
+
+func (tx *minimalTx) EncodeRLP(w io.Writer) error {
+	if (*Transaction)(tx).Type() == LegacyTxType {
+		return rlp.Encode(w, tx.inner)
+	}
+	// It's an EIP-2718 typed TX envelope.
+	buf := encodeBufferPool.Get().(*bytes.Buffer)
+	defer encodeBufferPool.Put(buf)
+	buf.Reset()
+	if err := (*Transaction)(tx).encodeTypedMinimal(buf); err != nil {
+		return err
+	}
+	return rlp.Encode(w, buf.Bytes())
+}
+
+// a view over a regular transactions slice, to RLP decode/encode the transactions all the minimal way
+type extBlockTxs []*Transaction
+
+func (txs *extBlockTxs) DecodeRLP(s *rlp.Stream) error {
+	// we need generics to do this nicely...
+	var out []*minimalTx
+	for i, tx := range *txs {
+		out[i] = (*minimalTx)(tx)
+	}
+	if err := s.Decode(&out); err != nil {
+		return fmt.Errorf("failed to decode list of minimal txs: %v", err)
+	}
+	rawtxs := make([]*Transaction, len(out))
+	for i, tx := range out {
+		rawtxs[i] = (*Transaction)(tx)
+	}
+	*txs = rawtxs
+	return nil
+}
+
+func (txs *extBlockTxs) EncodeRLP(w io.Writer) error {
+	out := make([]*minimalTx, len(*txs))
+	for i, tx := range *txs {
+		out[i] = (*minimalTx)(tx)
+	}
+	return rlp.Encode(w, &out)
+}
+
 // "external" block encoding. used for eth protocol, etc.
 type extblock struct {
 	Header      *Header
-	Txs         []*Transaction
+	Txs         *extBlockTxs
 	Uncles      []*Header
 	Withdrawals []*Withdrawal `rlp:"optional"`
 }
@@ -274,6 +383,9 @@ func CopyHeader(h *Header) *Header {
 	if h.BaseFee != nil {
 		cpy.BaseFee = new(big.Int).Set(h.BaseFee)
 	}
+	if h.ExcessDataGas != nil {
+		cpy.SetExcessDataGas(h.ExcessDataGas)
+	}
 	if len(h.Extra) > 0 {
 		cpy.Extra = make([]byte, len(h.Extra))
 		copy(cpy.Extra, h.Extra)
@@ -287,21 +399,32 @@ func CopyHeader(h *Header) *Header {
 
 // DecodeRLP decodes the Ethereum
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
-	var eb extblock
+	eb := extblock{Txs: new(extBlockTxs)}
 	_, size, _ := s.Kind()
 	if err := s.Decode(&eb); err != nil {
 		return err
 	}
-	b.header, b.uncles, b.transactions, b.withdrawals = eb.Header, eb.Uncles, eb.Txs, eb.Withdrawals
+	for i, tx := range *eb.Txs {
+		if tx.wrapData != nil {
+			return fmt.Errorf("transactions in blocks must not contain wrap-data, tx %d is bad", i)
+		}
+	}
+	b.header, b.uncles, b.transactions, b.withdrawals = eb.Header, eb.Uncles, []*Transaction(*eb.Txs), eb.Withdrawals
 	b.size.Store(rlp.ListSize(size))
 	return nil
 }
 
 // EncodeRLP serializes b into the Ethereum RLP block format.
 func (b *Block) EncodeRLP(w io.Writer) error {
+	if b.header.ExcessDataGas != nil && b.header.WithdrawalsHash == nil {
+		// This situation should not arise, but if it does (due to a bug) you'd silently produce an
+		// encoding that would fail to decode. ref:
+		// https://github.com/ethereum/go-ethereum/pull/26077
+		return errors.New("nil WithdrawalsHash in header with non-nil ExcessDataGas")
+	}
 	return rlp.Encode(w, extblock{
 		Header:      b.header,
-		Txs:         b.transactions,
+		Txs:         (*extBlockTxs)(&b.transactions),
 		Uncles:      b.uncles,
 		Withdrawals: b.withdrawals,
 	})
@@ -348,6 +471,13 @@ func (b *Block) BaseFee() *big.Int {
 
 func (b *Block) Withdrawals() Withdrawals {
 	return b.withdrawals
+}
+
+func (b *Block) ExcessDataGas() *big.Int {
+	if b.header.ExcessDataGas == nil {
+		return nil
+	}
+	return new(big.Int).Set(b.header.ExcessDataGas)
 }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }

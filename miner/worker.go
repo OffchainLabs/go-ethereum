@@ -95,10 +95,11 @@ type environment struct {
 	gasPool   *core.GasPool           // available gas used to pack transactions
 	coinbase  common.Address
 
-	header   *types.Header
-	txs      []*types.Transaction
-	receipts []*types.Receipt
-	uncles   map[common.Hash]*types.Header
+	header        *types.Header
+	excessDataGas *big.Int
+	txs           []*types.Transaction
+	receipts      []*types.Receipt
+	uncles        map[common.Hash]*types.Header
 }
 
 // copy creates a deep copy of environment.
@@ -801,7 +802,7 @@ func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase co
 
 	// Note the passed coinbase may be different with header.Coinbase.
 	env := &environment{
-		signer:    types.MakeSigner(w.chainConfig, header.Number),
+		signer:    types.MakeSigner(w.chainConfig, header.Number, header.Time),
 		state:     state,
 		coinbase:  coinbase,
 		ancestors: mapset.NewSet[common.Hash](),
@@ -819,6 +820,15 @@ func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase co
 	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
+
+	// Initialize the prestate excess_data_gas field used during state transition
+	if w.chainConfig.IsCancun(header.Time) {
+		// TODO(EIP-4844): Unit test this
+		env.excessDataGas = new(big.Int)
+		if parent.ExcessDataGas != nil {
+			env.excessDataGas.Set(parent.ExcessDataGas)
+		}
+	}
 	return env, nil
 }
 
@@ -865,7 +875,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Gas()
 	)
-	receipt, _, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
+	receipt, _, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, env.excessDataGas, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.SetGas(gp)
@@ -880,7 +890,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByPriceAndNonce, interrupt *int32) error {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
-		env.gasPool = new(core.GasPool).AddGas(gasLimit)
+		env.gasPool = new(core.GasPool).AddGas(gasLimit).AddDataGas(params.MaxDataGasPerBlock)
 	}
 	var coalescedLogs []*types.Log
 
@@ -943,6 +953,11 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			// Pop the unsupported transaction without shifting in the next from the account
 			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
 			txs.Pop()
+
+		case errors.Is(err, core.ErrDataGasLimitReached):
+			// Shift, as the next tx from the account may not contain blobs
+			log.Trace("Skipping blob transaction. Reached max number of blobs in current context", "sender", from, "numBlobs", len(tx.DataHashes()))
+			txs.Shift()
 
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the

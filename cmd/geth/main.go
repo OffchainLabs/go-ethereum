@@ -205,7 +205,6 @@ var app = flags.NewApp("the go-ethereum command line interface")
 func init() {
 	// Initialize the CLI app and start Geth
 	app.Action = geth
-	app.HideVersion = true // we have a command to print the version
 	app.Copyright = "Copyright 2013-2023 The go-ethereum Authors"
 	app.Commands = []*cli.Command{
 		// See chaincmd.go:
@@ -283,6 +282,9 @@ func prepare(ctx *cli.Context) {
 	case ctx.IsSet(utils.SepoliaFlag.Name):
 		log.Info("Starting Geth on Sepolia testnet...")
 
+	case ctx.IsSet(utils.Eip4844Flag.Name):
+		log.Info("Starting Geth on EIP4844 testnet...")
+
 	case ctx.IsSet(utils.DeveloperFlag.Name):
 		log.Info("Starting Geth in ephemeral dev mode...")
 		log.Warn(`You are running Geth in --dev mode. Please note the following:
@@ -310,6 +312,7 @@ func prepare(ctx *cli.Context) {
 		if !ctx.IsSet(utils.SepoliaFlag.Name) &&
 			!ctx.IsSet(utils.RinkebyFlag.Name) &&
 			!ctx.IsSet(utils.GoerliFlag.Name) &&
+			!ctx.IsSet(utils.Eip4844Flag.Name) &&
 			!ctx.IsSet(utils.DeveloperFlag.Name) {
 			// Nope, we're really on mainnet. Bump that cache up!
 			log.Info("Bumping default cache on mainnet", "provided", ctx.Int(utils.CacheFlag.Name), "updated", 4096)

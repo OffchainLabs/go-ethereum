@@ -1630,7 +1630,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 	}
 
 	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
-	SenderCacher.RecoverFromBlocks(types.MakeSigner(bc.chainConfig, chain[0].Number()), chain)
+	signer := types.MakeSigner(bc.chainConfig, chain[0].Number(), chain[0].Time())
+	SenderCacher.RecoverFromBlocks(signer, chain)
 
 	var (
 		stats     = insertStats{startTime: mclock.Now()}
@@ -1829,20 +1830,20 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 			if followup, err := it.peek(); followup != nil && err == nil {
 				throwaway, _ := state.New(parent.Root, bc.stateCache, bc.snaps)
 
-				go func(start time.Time, followup *types.Block, throwaway *state.StateDB, interrupt *uint32) {
-					bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)
+				go func(start time.Time, followup *types.Block, throwaway *state.StateDB) {
+					bc.prefetcher.Prefetch(followup, parent.ExcessDataGas, throwaway, bc.vmConfig, &followupInterrupt)
 
 					blockPrefetchExecuteTimer.Update(time.Since(start))
-					if atomic.LoadUint32(interrupt) == 1 {
+					if atomic.LoadUint32(&followupInterrupt) == 1 {
 						blockPrefetchInterruptMeter.Mark(1)
 					}
-				}(time.Now(), followup, throwaway, &followupInterrupt)
+				}(time.Now(), followup, throwaway)
 			}
 		}
 
 		// Process block using the parent state as reference point
 		substart := time.Now()
-		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+		receipts, logs, usedGas, err := bc.processor.Process(block, parent.ExcessDataGas, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)
@@ -2138,7 +2139,7 @@ func (bc *BlockChain) recoverAncestors(block *types.Block) (common.Hash, error) 
 // the processing of a block. These logs are later announced as deleted or reborn.
 func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
 	receipts := rawdb.ReadRawReceipts(bc.db, b.Hash(), b.NumberU64())
-	receipts.DeriveFields(bc.chainConfig, b.Hash(), b.NumberU64(), b.BaseFee(), b.Transactions())
+	receipts.DeriveFields(bc.chainConfig, b.Hash(), b.NumberU64(), b.Time(), b.BaseFee(), b.ExcessDataGas(), b.Transactions())
 
 	var logs []*types.Log
 	for _, receipt := range receipts {

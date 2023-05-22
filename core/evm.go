@@ -36,7 +36,10 @@ type ChainContext interface {
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.
-func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
+//
+// excessDataGas must be set to the excessDataGas value from the *parent* block header, and can be
+// nil if the parent block is not of EIP-4844 type. It is read only.
+func NewEVMBlockContext(header *types.Header, excessDataGas *big.Int, chain ChainContext, author *common.Address) vm.BlockContext {
 	var (
 		beneficiary common.Address
 		baseFee     *big.Int
@@ -55,26 +58,34 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.Difficulty.Cmp(common.Big0) == 0 {
 		random = &header.MixDigest
 	}
+	// In the event excessDataGas is nil (which happens if the parent block is pre-cancun),
+	// we bootstrap BlockContext.ExcessDataGas with the zero value.
+	edg := new(big.Int)
+	if excessDataGas != nil {
+		edg.Set(excessDataGas)
+	}
 	return vm.BlockContext{
-		CanTransfer:  CanTransfer,
-		Transfer:     Transfer,
-		GetHash:      GetHashFn(header, chain),
-		Coinbase:     beneficiary,
-		BlockNumber:  new(big.Int).Set(header.Number),
-		Time:         header.Time,
-		Difficulty:   new(big.Int).Set(header.Difficulty),
-		BaseFee:      baseFee,
-		GasLimit:     header.GasLimit,
-		Random:       random,
-		ArbOSVersion: types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion,
+		CanTransfer:   CanTransfer,
+		Transfer:      Transfer,
+		GetHash:       GetHashFn(header, chain),
+		Coinbase:      beneficiary,
+		BlockNumber:   new(big.Int).Set(header.Number),
+		Time:          header.Time,
+		Difficulty:    new(big.Int).Set(header.Difficulty),
+		BaseFee:       baseFee,
+		GasLimit:      header.GasLimit,
+		Random:        random,
+		ExcessDataGas: edg,
+		ArbOSVersion:  types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion,
 	}
 }
 
 // NewEVMTxContext creates a new transaction context for a single transaction.
 func NewEVMTxContext(msg *Message) vm.TxContext {
 	return vm.TxContext{
-		Origin:   msg.From,
-		GasPrice: new(big.Int).Set(msg.GasPrice),
+		Origin:     msg.From,
+		GasPrice:   new(big.Int).Set(msg.GasPrice),
+		DataHashes: msg.DataHashes,
 	}
 }
 

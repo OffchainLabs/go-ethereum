@@ -268,6 +268,20 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if !shanghai && header.WithdrawalsHash != nil {
 		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
 	}
+	// Verify existence / non-existence of excessDataGas.
+	cancun := chain.Config().IsCancun(header.Time)
+	if cancun {
+		if header.ExcessDataGas == nil {
+			return fmt.Errorf("missing excessDataGas")
+		}
+		// Verify the header's EIP-4844 attributes.
+		if err := misc.VerifyEip4844Header(chain.Config(), parent, header); err != nil {
+			return err
+		}
+	}
+	if !cancun && header.ExcessDataGas != nil {
+		return fmt.Errorf("invalied ExcessDataGas: have %v, expected nil", header.ExcessDataGas)
+	}
 	return nil
 }
 
@@ -344,6 +358,13 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 	// The block reward is no longer handled here. It's done by the
 	// external consensus engine.
 	header.Root = state.IntermediateRoot(true)
+	if chain.Config().IsCancun(header.Time) {
+		if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
+			header.SetExcessDataGas(misc.CalcExcessDataGas(parent.ExcessDataGas, misc.CountBlobs(txs)))
+		} else {
+			header.SetExcessDataGas(new(big.Int))
+		}
+	}
 }
 
 // FinalizeAndAssemble implements consensus.Engine, setting the final state and

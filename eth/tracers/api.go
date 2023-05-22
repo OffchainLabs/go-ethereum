@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"runtime"
 	"sync"
@@ -285,12 +286,19 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 		go func() {
 			defer pend.Done()
 
-			// Fetch and execute the block trace taskCh
+			// Fetch and execute the next block trace taskCh
 			for task := range taskCh {
-				var (
-					signer   = types.MakeSigner(api.backend.ChainConfig(), task.block.Number())
-					blockCtx = core.NewEVMBlockContext(task.block.Header(), api.chainContext(ctx), nil)
-				)
+				signer := types.MakeSigner(api.backend.ChainConfig(), task.block.Number(), task.block.Time())
+				var excessDataGas *big.Int
+				parent, err := api.backend.BlockByHash(ctx, task.block.ParentHash())
+				if err != nil {
+					log.Warn("Tracing failed, could not lookup parent for block", task.block.NumberU64(), "err", err)
+					break
+				}
+				if parent != nil {
+					excessDataGas = parent.Header().ExcessDataGas
+				}
+				blockCtx := core.NewEVMBlockContext(task.block.Header(), excessDataGas, api.chainContext(ctx), nil)
 				// Trace all the transactions contained within
 				for i, tx := range task.block.Transactions() {
 					msg, _ := core.TransactionToMessage(tx, signer, task.block.BaseFee())
@@ -544,9 +552,9 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 
 	var (
 		roots              []common.Hash
-		signer             = types.MakeSigner(api.backend.ChainConfig(), block.Number())
+		signer             = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		chainConfig        = api.backend.ChainConfig()
-		vmctx              = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+		vmctx              = core.NewEVMBlockContext(block.Header(), parent.Header().ExcessDataGas, api.chainContext(ctx), nil)
 		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
 	)
 	for i, tx := range block.Transactions() {
@@ -559,7 +567,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 			vmenv     = vm.NewEVM(vmctx, txContext, statedb, chainConfig, vm.Config{})
 		)
 		statedb.SetTxContext(tx.Hash(), i)
-		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit)); err != nil {
+		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit).AddDataGas(params.MaxDataGasPerBlock)); err != nil {
 			log.Warn("Tracing intermediate roots did not complete", "txindex", i, "txhash", tx.Hash(), "err", err)
 			// We intentionally don't return the error here: if we do, then the RPC server will not
 			// return the roots. Most likely, the caller already knows that a certain transaction fails to
@@ -599,6 +607,10 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	if err != nil {
 		return nil, err
 	}
+	var excessDataGas *big.Int
+	if parent != nil {
+		excessDataGas = parent.Header().ExcessDataGas
+	}
 	reexec := defaultTraceReexec
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
@@ -614,7 +626,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	// in separate worker threads.
 	if config != nil && config.Tracer != nil && *config.Tracer != "" {
 		if isJS := DefaultDirectory.IsJS(*config.Tracer); isJS {
-			return api.traceBlockParallel(ctx, block, statedb, config)
+			return api.traceBlockParallel(ctx, block, excessDataGas, statedb, config)
 		}
 	}
 	// Native tracers have low overhead
@@ -622,8 +634,8 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		txs       = block.Transactions()
 		blockHash = block.Hash()
 		is158     = api.backend.ChainConfig().IsEIP158(block.Number())
-		blockCtx  = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number())
+		blockCtx  = core.NewEVMBlockContext(block.Header(), excessDataGas, api.chainContext(ctx), nil)
+		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		results   = make([]*txTraceResult, len(txs))
 	)
 	for i, tx := range txs {
@@ -650,13 +662,13 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 // traceBlockParallel is for tracers that have a high overhead (read JS tracers). One thread
 // runs along and executes txes without tracing enabled to generate their prestate.
 // Worker threads take the tasks and the prestate and trace them.
-func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, statedb *state.StateDB, config *TraceConfig) ([]*txTraceResult, error) {
+func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, excessDataGas *big.Int, statedb *state.StateDB, config *TraceConfig) ([]*txTraceResult, error) {
 	// Execute all the transaction contained within the block concurrently
 	var (
 		txs       = block.Transactions()
 		blockHash = block.Hash()
-		blockCtx  = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number())
+		blockCtx  = core.NewEVMBlockContext(block.Header(), excessDataGas, api.chainContext(ctx), nil)
+		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		results   = make([]*txTraceResult, len(txs))
 		pend      sync.WaitGroup
 	)
@@ -705,7 +717,7 @@ txloop:
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
 		statedb.SetTxContext(tx.Hash(), i)
 		vmenv := vm.NewEVM(blockCtx, core.NewEVMTxContext(msg), statedb, api.backend.ChainConfig(), vm.Config{})
-		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit)); err != nil {
+		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit).AddDataGas(params.MaxDataGasPerBlock)); err != nil {
 			failed = err
 			break txloop
 		}
@@ -741,6 +753,10 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	if err != nil {
 		return nil, err
 	}
+	var excessDataGas *big.Int
+	if parent != nil {
+		excessDataGas = parent.ExcessDataGas()
+	}
 	reexec := defaultTraceReexec
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
@@ -765,9 +781,9 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	// Execute transaction, either tracing all or just the requested one
 	var (
 		dumps       []string
-		signer      = types.MakeSigner(api.backend.ChainConfig(), block.Number())
+		signer      = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		chainConfig = api.backend.ChainConfig()
-		vmctx       = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+		vmctx       = core.NewEVMBlockContext(block.Header(), excessDataGas, api.chainContext(ctx), nil)
 		canon       = true
 	)
 	// Check if there are any overrides: the caller may wish to enable a future
@@ -813,7 +829,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		// Execute the transaction and flush any traces to disk
 		vmenv := vm.NewEVM(vmctx, txContext, statedb, chainConfig, vmConf)
 		statedb.SetTxContext(tx.Hash(), i)
-		_, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit))
+		_, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit).AddDataGas(params.MaxDataGasPerBlock))
 		if writer != nil {
 			writer.Flush()
 		}
@@ -921,9 +937,17 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	if err != nil {
 		return nil, err
 	}
+	var excessDataGas *big.Int
+	parent, err := api.backend.BlockByHash(ctx, block.ParentHash())
+	if err != nil {
+		return nil, err
+	}
+	if parent != nil {
+		excessDataGas = parent.Header().ExcessDataGas
+	}
 	defer release()
 
-	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+	vmctx := core.NewEVMBlockContext(block.Header(), excessDataGas, api.chainContext(ctx), nil)
 	// Apply the customization rules if required.
 	if config != nil {
 		if err := config.StateOverrides.Apply(statedb); err != nil {
@@ -986,7 +1010,7 @@ func (api *API) traceTx(ctx context.Context, message *core.Message, txctx *Conte
 
 	// Call Prepare to clear out the statedb access list
 	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
-	if _, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.GasLimit)); err != nil {
+	if _, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.GasLimit).AddDataGas(params.MaxDataGasPerBlock)); err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}
 	return tracer.GetResult()

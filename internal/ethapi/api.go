@@ -218,6 +218,7 @@ func (s *TxPoolAPI) Inspect() map[string]map[string]map[string]string {
 
 	// Define a formatter to flatten a transaction into a string
 	var format = func(tx *types.Transaction) string {
+		// TODO: handle data gas for txs with blobs (EIP-4844)
 		if to := tx.To(); to != nil {
 			return fmt.Sprintf("%s: %v wei + %v gas × %v wei", tx.To().Hex(), tx.Value(), tx.Gas(), tx.GasPrice())
 		}
@@ -922,13 +923,14 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 
 // BlockOverrides is a set of header fields to override.
 type BlockOverrides struct {
-	Number     *hexutil.Big
-	Difficulty *hexutil.Big
-	Time       *hexutil.Uint64
-	GasLimit   *hexutil.Uint64
-	Coinbase   *common.Address
-	Random     *common.Hash
-	BaseFee    *hexutil.Big
+	Number        *hexutil.Big
+	Difficulty    *hexutil.Big
+	Time          *hexutil.Uint64
+	GasLimit      *hexutil.Uint64
+	Coinbase      *common.Address
+	Random        *common.Hash
+	BaseFee       *hexutil.Big
+	ExcessDataGas *hexutil.Big
 }
 
 // Apply overrides the given header fields into the given block context.
@@ -956,6 +958,9 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	}
 	if diff.BaseFee != nil {
 		blockCtx.BaseFee = diff.BaseFee.ToInt()
+	}
+	if diff.ExcessDataGas != nil {
+		blockCtx.ExcessDataGas = diff.BaseFee.ToInt()
 	}
 }
 
@@ -1006,7 +1011,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	}()
 
 	// Execute the message.
-	gp := new(core.GasPool).AddGas(math.MaxUint64)
+	gp := new(core.GasPool).AddGas(math.MaxUint64).AddDataGas(params.MaxDataGasPerBlock)
 	result, err := core.ApplyMessage(evm, msg, gp)
 	if err := vmError(); err != nil {
 		return nil, err
@@ -1290,6 +1295,12 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	if head.BaseFee != nil {
 		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee)
 	}
+	if head.WithdrawalsHash != nil {
+		result["withdrawalsRoot"] = *head.WithdrawalsHash
+	}
+	if head.ExcessDataGas != nil {
+		result["excessDataGas"] = (*hexutil.Big)(head.ExcessDataGas)
+	}
 
 	if head.WithdrawalsHash != nil {
 		result["withdrawalsRoot"] = head.WithdrawalsHash
@@ -1323,6 +1334,9 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 			}
 		}
 		fields["transactions"] = transactions
+		// inclTx also expands withdrawals
+		// TODO @MariusVanDerWijden: add a second flag similar to inclTx to enable withdrawals
+		fields["withdrawals"] = block.Withdrawals()
 	}
 	uncles := block.Uncles()
 	uncleHashes := make([]common.Hash, len(uncles))
@@ -1413,25 +1427,27 @@ func (s *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inc
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
 type RPCTransaction struct {
-	BlockHash        *common.Hash      `json:"blockHash"`
-	BlockNumber      *hexutil.Big      `json:"blockNumber"`
-	From             common.Address    `json:"from"`
-	Gas              hexutil.Uint64    `json:"gas"`
-	GasPrice         *hexutil.Big      `json:"gasPrice"`
-	GasFeeCap        *hexutil.Big      `json:"maxFeePerGas,omitempty"`
-	GasTipCap        *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
-	Hash             common.Hash       `json:"hash"`
-	Input            hexutil.Bytes     `json:"input"`
-	Nonce            hexutil.Uint64    `json:"nonce"`
-	To               *common.Address   `json:"to"`
-	TransactionIndex *hexutil.Uint64   `json:"transactionIndex"`
-	Value            *hexutil.Big      `json:"value"`
-	Type             hexutil.Uint64    `json:"type"`
-	Accesses         *types.AccessList `json:"accessList,omitempty"`
-	ChainID          *hexutil.Big      `json:"chainId,omitempty"`
-	V                *hexutil.Big      `json:"v"`
-	R                *hexutil.Big      `json:"r"`
-	S                *hexutil.Big      `json:"s"`
+	BlockHash           *common.Hash      `json:"blockHash"`
+	BlockNumber         *hexutil.Big      `json:"blockNumber"`
+	From                common.Address    `json:"from"`
+	Gas                 hexutil.Uint64    `json:"gas"`
+	GasPrice            *hexutil.Big      `json:"gasPrice"`
+	GasFeeCap           *hexutil.Big      `json:"maxFeePerGas,omitempty"`
+	GasTipCap           *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
+	Hash                common.Hash       `json:"hash"`
+	Input               hexutil.Bytes     `json:"input"`
+	Nonce               hexutil.Uint64    `json:"nonce"`
+	To                  *common.Address   `json:"to"`
+	TransactionIndex    *hexutil.Uint64   `json:"transactionIndex"`
+	Value               *hexutil.Big      `json:"value"`
+	Type                hexutil.Uint64    `json:"type"`
+	Accesses            *types.AccessList `json:"accessList,omitempty"`
+	MaxFeePerDataGas    *hexutil.Big      `json:"maxFeePerDataGas,omitempty"`
+	BlobVersionedHashes []common.Hash     `json:"blobVersionedHashes,omitempty"`
+	ChainID             *hexutil.Big      `json:"chainId,omitempty"`
+	V                   *hexutil.Big      `json:"v"`
+	R                   *hexutil.Big      `json:"r"`
+	S                   *hexutil.Big      `json:"s"`
 
 	// Arbitrum fields:
 	RequestId           *common.Hash    `json:"requestId,omitempty"`           // Contract SubmitRetryable Deposit
@@ -1450,23 +1466,24 @@ type RPCTransaction struct {
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
-func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, index uint64, baseFee *big.Int, config *params.ChainConfig) *RPCTransaction {
-	signer := types.MakeSigner(config, new(big.Int).SetUint64(blockNumber))
+func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, blockTime uint64, index uint64, baseFee *big.Int, config *params.ChainConfig) *RPCTransaction {
+	signer := types.MakeSigner(config, new(big.Int).SetUint64(blockNumber), blockTime)
 	from, _ := types.Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
 	result := &RPCTransaction{
-		Type:     hexutil.Uint64(tx.Type()),
-		From:     from,
-		Gas:      hexutil.Uint64(tx.Gas()),
-		GasPrice: (*hexutil.Big)(tx.GasPrice()),
-		Hash:     tx.Hash(),
-		Input:    hexutil.Bytes(tx.Data()),
-		Nonce:    hexutil.Uint64(tx.Nonce()),
-		To:       tx.To(),
-		Value:    (*hexutil.Big)(tx.Value()),
-		V:        (*hexutil.Big)(v),
-		R:        (*hexutil.Big)(r),
-		S:        (*hexutil.Big)(s),
+		Type:                hexutil.Uint64(tx.Type()),
+		From:                from,
+		Gas:                 hexutil.Uint64(tx.Gas()),
+		GasPrice:            (*hexutil.Big)(tx.GasPrice()),
+		Hash:                tx.Hash(),
+		Input:               hexutil.Bytes(tx.Data()),
+		Nonce:               hexutil.Uint64(tx.Nonce()),
+		To:                  tx.To(),
+		BlobVersionedHashes: tx.DataHashes(),
+		Value:               (*hexutil.Big)(tx.Value()),
+		V:                   (*hexutil.Big)(v),
+		R:                   (*hexutil.Big)(r),
+		S:                   (*hexutil.Big)(s),
 	}
 	if blockHash != (common.Hash{}) {
 		result.BlockHash = &blockHash
@@ -1483,12 +1500,13 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		al := tx.AccessList()
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
-	case types.DynamicFeeTxType:
+	case types.DynamicFeeTxType, types.BlobTxType:
 		al := tx.AccessList()
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
 		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
 		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+		result.MaxFeePerDataGas = (*hexutil.Big)(tx.MaxFeePerDataGas())
 		// if the transaction has been mined, compute the effective gas price
 		if baseFee != nil && blockHash != (common.Hash{}) {
 			// price = min(tip, gasFeeCap - baseFee) + baseFee
@@ -1537,11 +1555,13 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 func NewRPCPendingTransaction(tx *types.Transaction, current *types.Header, config *params.ChainConfig) *RPCTransaction {
 	var baseFee *big.Int
 	blockNumber := uint64(0)
+	var blockTime uint64
 	if current != nil {
 		baseFee = misc.CalcBaseFee(config, current)
 		blockNumber = current.Number.Uint64()
+		blockTime = current.Time
 	}
-	return newRPCTransaction(tx, common.Hash{}, blockNumber, 0, baseFee, config)
+	return newRPCTransaction(tx, common.Hash{}, blockNumber, blockTime, 0, baseFee, config)
 }
 
 // newRPCTransactionFromBlockIndex returns a transaction that will serialize to the RPC representation.
@@ -1550,7 +1570,7 @@ func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, config *param
 	if index >= uint64(len(txs)) {
 		return nil
 	}
-	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), index, b.BaseFee(), config)
+	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), b.Time(), index, b.BaseFee(), config)
 }
 
 // newRPCRawTransactionFromBlockIndex returns the bytes of a transaction given a block and a transaction index.
@@ -1655,7 +1675,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		if err != nil {
 			return nil, 0, nil, err
 		}
-		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit))
+		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit).AddDataGas(params.MaxDataGasPerBlock))
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction().Hash(), err)
 		}
@@ -1767,7 +1787,7 @@ func (s *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common.H
 		if err != nil {
 			return nil, err
 		}
-		return newRPCTransaction(tx, blockHash, blockNumber, index, header.BaseFee, s.b.ChainConfig()), nil
+		return newRPCTransaction(tx, blockHash, blockNumber, header.Time, index, header.BaseFee, s.b.ChainConfig()), nil
 	}
 	// No finalized transaction, try to retrieve it from the pool
 	if tx := s.b.GetPoolTransaction(hash); tx != nil {
@@ -1812,10 +1832,13 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 		return nil, nil
 	}
 	receipt := receipts[index]
-
+	header, err := s.b.HeaderByHash(ctx, blockHash)
+	if err != nil {
+		return nil, err
+	}
 	// Derive the sender.
 	bigblock := new(big.Int).SetUint64(blockNumber)
-	signer := types.MakeSigner(s.b.ChainConfig(), bigblock)
+	signer := types.MakeSigner(s.b.ChainConfig(), bigblock, header.Time)
 	from, _ := types.Sender(signer, tx)
 
 	fields := map[string]interface{}{
@@ -1832,6 +1855,10 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 		"logsBloom":         receipt.Bloom,
 		"type":              hexutil.Uint(tx.Type()),
 		"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
+	}
+	if receipt.DataGasUsed > 0 {
+		fields["dataGasUsed"] = hexutil.Uint64(receipt.DataGasUsed)
+		fields["dataGasPrice"] = (*hexutil.Big)(receipt.DataGasPrice)
 	}
 
 	// Assign receipt status or post state.
@@ -1900,7 +1927,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		return common.Hash{}, err
 	}
 	// Print a log with full tx details for manual investigations and interventions
-	signer := types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number)
+	signer := types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number, b.CurrentBlock().Time)
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return common.Hash{}, err

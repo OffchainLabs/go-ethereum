@@ -42,6 +42,13 @@ type payloadAttributesMarshaling struct {
 	Timestamp hexutil.Uint64
 }
 
+// BlobsBundle holds the blobs of an execution payload
+type BlobsBundle struct {
+	Commitments []types.KZGCommitment `json:"commitments" gencodec:"required"`
+	Blobs       []types.Blob          `json:"blobs"       gencodec:"required"`
+	Proofs      []types.KZGProof      `json:"proofs"      gencodec:"required"`
+}
+
 //go:generate go run github.com/fjl/gencodec -type ExecutableData -field-override executableDataMarshaling -out gen_ed.go
 
 // ExecutableData is the data necessary to execute an EL payload.
@@ -61,6 +68,7 @@ type ExecutableData struct {
 	BlockHash     common.Hash         `json:"blockHash"     gencodec:"required"`
 	Transactions  [][]byte            `json:"transactions"  gencodec:"required"`
 	Withdrawals   []*types.Withdrawal `json:"withdrawals"`
+	ExcessDataGas *big.Int            `json:"excessDataGas"` // New in EIP-4844
 }
 
 // JSON type overrides for executableData.
@@ -70,6 +78,7 @@ type executableDataMarshaling struct {
 	GasUsed       hexutil.Uint64
 	Timestamp     hexutil.Uint64
 	BaseFeePerGas *hexutil.Big
+	ExcessDataGas *hexutil.Big
 	ExtraData     hexutil.Bytes
 	LogsBloom     hexutil.Bytes
 	Transactions  []hexutil.Bytes
@@ -80,6 +89,7 @@ type executableDataMarshaling struct {
 type ExecutionPayloadEnvelope struct {
 	ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
 	BlockValue       *big.Int        `json:"blockValue"  gencodec:"required"`
+	BlobsBundle      *BlobsBundle    `json:"blobsBundle"      gencodec:"omitempty"`
 }
 
 // JSON type overrides for ExecutionPayloadEnvelope.
@@ -132,7 +142,7 @@ type ForkchoiceStateV1 struct {
 func encodeTransactions(txs []*types.Transaction) [][]byte {
 	var enc = make([][]byte, len(txs))
 	for i, tx := range txs {
-		enc[i], _ = tx.MarshalBinary()
+		enc[i], _ = tx.MarshalMinimal()
 	}
 	return enc
 }
@@ -141,7 +151,7 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	var txs = make([]*types.Transaction, len(enc))
 	for i, encTx := range enc {
 		var tx types.Transaction
-		if err := tx.UnmarshalBinary(encTx); err != nil {
+		if err := tx.UnmarshalMinimal(encTx); err != nil {
 			return nil, fmt.Errorf("invalid transaction %d: %v", i, err)
 		}
 		txs[i] = &tx
@@ -182,6 +192,12 @@ func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
 		h := types.DeriveSha(types.Withdrawals(params.Withdrawals), trie.NewStackTrie(nil))
 		withdrawalsRoot = &h
 	}
+	// Check that number of blobs are valid
+	for _, tx := range txs {
+		if tx.Type() == types.BlobTxType && len(tx.DataHashes()) == 0 {
+			return nil, fmt.Errorf("zero blobs within a blob transaction")
+		}
+	}
 	header := &types.Header{
 		ParentHash:      params.ParentHash,
 		UncleHash:       types.EmptyUncleHash,
@@ -199,6 +215,7 @@ func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
 		Extra:           params.ExtraData,
 		MixDigest:       params.Random,
 		WithdrawalsHash: withdrawalsRoot,
+		ExcessDataGas:   params.ExcessDataGas,
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */).WithWithdrawals(params.Withdrawals)
 	if block.Hash() != params.BlockHash {
@@ -226,6 +243,7 @@ func BlockToExecutableData(block *types.Block, fees *big.Int) *ExecutionPayloadE
 		Random:        block.MixDigest(),
 		ExtraData:     block.Extra(),
 		Withdrawals:   block.Withdrawals(),
+		ExcessDataGas: block.ExcessDataGas(),
 	}
 	return &ExecutionPayloadEnvelope{ExecutionPayload: data, BlockValue: fees}
 }
@@ -234,4 +252,26 @@ func BlockToExecutableData(block *types.Block, fees *big.Int) *ExecutionPayloadE
 type ExecutionPayloadBodyV1 struct {
 	TransactionData []hexutil.Bytes     `json:"transactions"`
 	Withdrawals     []*types.Withdrawal `json:"withdrawals"`
+}
+
+func BlockToBlobData(block *types.Block) (*BlobsBundle, error) {
+	blobsBundle := &BlobsBundle{
+		Blobs:       []types.Blob{},
+		Commitments: []types.KZGCommitment{},
+		Proofs:      []types.KZGProof{},
+	}
+	for i, tx := range block.Transactions() {
+		if tx.Type() == types.BlobTxType {
+			versionedHashes, commitments, blobs, proofs := tx.BlobWrapData()
+			if len(versionedHashes) != len(commitments) || len(versionedHashes) != len(blobs) || len(blobs) != len(proofs) {
+				return nil, fmt.Errorf("tx %d in block %s has inconsistent blobs (%d) / commitments (%d)"+
+					" / versioned hashes (%d) / proofs (%d)", i, block.Hash(), len(blobs), len(commitments), len(versionedHashes), len(proofs))
+			}
+
+			blobsBundle.Blobs = append(blobsBundle.Blobs, blobs...)
+			blobsBundle.Commitments = append(blobsBundle.Commitments, commitments...)
+			blobsBundle.Proofs = append(blobsBundle.Proofs, proofs...)
+		}
+	}
+	return blobsBundle, nil
 }

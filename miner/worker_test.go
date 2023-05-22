@@ -129,6 +129,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 			return crypto.Sign(crypto.Keccak256(data), testBankKey)
 		})
 	case *ethash.Ethash:
+	case consensus.Engine:
 	default:
 		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}

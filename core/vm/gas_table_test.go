@@ -90,6 +90,7 @@ func TestEIP2200(t *testing.T) {
 		statedb.Finalise(true) // Push the state into the "original" slot
 
 		vmctx := BlockContext{
+			Time:        0,
 			CanTransfer: func(StateDB, common.Address, *big.Int) bool { return true },
 			Transfer:    func(StateDB, common.Address, common.Address, *big.Int) {},
 		}

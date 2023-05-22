@@ -167,6 +167,81 @@ func TestExecutePayloadV1(t *testing.T) {
 	}
 }
 
+func TestShardingExecutePayloadV1(t *testing.T) {
+	genesis, headers, _, _, postBlocks := generatePreMergeChain(10, 2)
+	n, lesService := startLesService(t, genesis, headers)
+	lesService.Merger().ReachTTD()
+	defer n.Close()
+
+	api := NewConsensusAPI(lesService)
+	fcState := engine.ForkchoiceStateV1{
+		HeadBlockHash:      postBlocks[0].Hash(),
+		SafeBlockHash:      common.Hash{},
+		FinalizedBlockHash: common.Hash{},
+	}
+	if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
+		t.Errorf("Failed to update head %v", err)
+	}
+	block := postBlocks[0]
+
+	fakeBlock := types.NewBlock(&types.Header{
+		ParentHash:    block.ParentHash(),
+		UncleHash:     crypto.Keccak256Hash(nil),
+		Coinbase:      block.Coinbase(),
+		Root:          block.Root(),
+		TxHash:        crypto.Keccak256Hash(nil),
+		ReceiptHash:   crypto.Keccak256Hash(nil),
+		Bloom:         block.Bloom(),
+		Difficulty:    big.NewInt(0),
+		Number:        block.Number(),
+		GasLimit:      block.GasLimit(),
+		GasUsed:       block.GasUsed(),
+		Time:          block.Time(),
+		Extra:         block.Extra(),
+		MixDigest:     block.MixDigest(),
+		Nonce:         types.BlockNonce{},
+		BaseFee:       block.BaseFee(),
+		ExcessDataGas: block.ExcessDataGas(),
+	}, nil, nil, nil, trie.NewStackTrie(nil))
+
+	_, err := api.ExecutePayloadV1(engine.ExecutableData{
+		ParentHash:    fakeBlock.ParentHash(),
+		FeeRecipient:  fakeBlock.Coinbase(),
+		StateRoot:     fakeBlock.Root(),
+		ReceiptsRoot:  fakeBlock.ReceiptHash(),
+		LogsBloom:     fakeBlock.Bloom().Bytes(),
+		Random:        fakeBlock.MixDigest(),
+		Number:        fakeBlock.NumberU64(),
+		GasLimit:      fakeBlock.GasLimit(),
+		GasUsed:       fakeBlock.GasUsed(),
+		Timestamp:     fakeBlock.Time(),
+		ExtraData:     fakeBlock.Extra(),
+		BaseFeePerGas: fakeBlock.BaseFee(),
+		ExcessDataGas: fakeBlock.ExcessDataGas(),
+		BlockHash:     fakeBlock.Hash(),
+		Transactions:  encodeTransactions(fakeBlock.Transactions()),
+	})
+	if err != nil {
+		t.Errorf("Failed to execute payload %v", err)
+	}
+	headHeader := api.les.BlockChain().CurrentHeader()
+	if headHeader.Number.Uint64() != fakeBlock.NumberU64()-1 {
+		t.Fatal("Unexpected chain head update")
+	}
+	fcState = engine.ForkchoiceStateV1{
+		HeadBlockHash:      fakeBlock.Hash(),
+		SafeBlockHash:      common.Hash{},
+		FinalizedBlockHash: common.Hash{},
+	}
+	if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
+		t.Fatal("Failed to update head")
+	}
+	headHeader = api.les.BlockChain().CurrentHeader()
+	if headHeader.Number.Uint64() != fakeBlock.NumberU64() {
+		t.Fatal("Failed to update chain head")
+	}
+}
+
 func TestEth2DeepReorg(t *testing.T) {
 	// TODO (MariusVanDerWijden) TestEth2DeepReorg is currently broken, because it tries to reorg
 	// before the totalTerminalDifficulty threshold

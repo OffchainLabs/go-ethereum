@@ -63,10 +63,15 @@ type Receipt struct {
 	Logs              []*Log `json:"logs"              gencodec:"required"`
 
 	// Implementation fields: These fields are added by geth when processing a transaction.
-	TxHash            common.Hash    `json:"transactionHash" gencodec:"required"`
-	ContractAddress   common.Address `json:"contractAddress"`
-	GasUsed           uint64         `json:"gasUsed" gencodec:"required"`
-	EffectiveGasPrice *big.Int       `json:"effectiveGasPrice"`
+	TxHash          common.Hash    `json:"transactionHash" gencodec:"required"`
+	ContractAddress common.Address `json:"contractAddress"`
+	GasUsed         uint64         `json:"gasUsed" gencodec:"required"`
+	// TODO: EffectiveGasPrice should be a required field:
+	//    https://github.com/ethereum/execution-apis/blob/af82a989bead35e2325ecc49a9023df39c548756/src/schemas/receipt.yaml#L49
+	// Changing it to required is currently breaking cmd/evm/t8n_test.go, so leaving as omitempty for now.
+	EffectiveGasPrice *big.Int `json:"effectiveGasPrice,omitempty"`
+	DataGasUsed       uint64   `json:"dataGasUsed,omitempty"`
+	DataGasPrice      *big.Int `json:"dataGasPrice,omitempty"`
 
 	// Inclusion information: These fields provide information about the inclusion of the
 	// transaction corresponding to this receipt.
@@ -233,7 +238,7 @@ func (r *Receipt) decodeTyped(b []byte) error {
 		return errShortTypedReceipt
 	}
 	switch b[0] {
-	case DynamicFeeTxType, AccessListTxType:
+	case BlobTxType, DynamicFeeTxType, AccessListTxType:
 		var data receiptRLP
 		err := rlp.DecodeBytes(b[1:], &data)
 		if err != nil {
@@ -321,6 +326,8 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 	return w.Flush()
 }
 
+// TODO: might need additional decoding for SSZ receipt?
+
 // DecodeRLP implements rlp.Decoder, and loads both consensus and implementation
 // fields of a receipt from an RLP stream.
 func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
@@ -391,6 +398,9 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 	switch r.Type {
 	case LegacyTxType, ArbitrumLegacyTxType:
 		rlp.Encode(w, data)
+	case BlobTxType:
+		w.WriteByte(BlobTxType)
+		rlp.Encode(w, data)
 	default:
 		w.WriteByte(r.Type)
 		rlp.Encode(w, data)
@@ -399,10 +409,9 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 
 // DeriveFields fills the receipts with their computed fields based on consensus
 // data and contextual infos like containing block and transactions.
-func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, number uint64, baseFee *big.Int, txs []*Transaction) error {
-	signer := MakeSigner(config, new(big.Int).SetUint64(number))
+func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, number uint64, time uint64, baseFee *big.Int, parentExcessDataGas *big.Int, txs []*Transaction) error {
+	signer := MakeSigner(config, new(big.Int).SetUint64(number), time)
 
-	logIndex := uint(0)
 	if len(txs) != len(rs) {
 		return errors.New("transaction and receipt count mismatch")
 	}
@@ -436,13 +445,30 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 			}
 		}
 
+		// Set data gas fields for blob-containing txs
+		if len(txs[i].DataHashes()) > 0 {
+			rs[i].DataGasUsed = GetDataGasUsed(len(txs[i].DataHashes()))
+			rs[i].DataGasPrice = GetDataGasPrice(parentExcessDataGas)
+		}
+	}
+	return rs.DeriveLogFields(hash, number, txs)
+}
+
+// DeriveLogFields fills the receipt logs with their computed fields based on consensus data and
+// contextual infos like containing block and transactions.
+func (rs Receipts) DeriveLogFields(hash common.Hash, number uint64, txs []*Transaction) error {
+	if len(txs) != len(rs) {
+		return errors.New("transaction and receipt count mismatch")
+	}
+	logIndex := uint(0)
+	for i, r := range rs {
 		// The derived log fields can simply be set from the block and transaction
-		for j := 0; j < len(rs[i].Logs); j++ {
-			rs[i].Logs[j].BlockNumber = number
-			rs[i].Logs[j].BlockHash = hash
-			rs[i].Logs[j].TxHash = rs[i].TxHash
-			rs[i].Logs[j].TxIndex = uint(i)
-			rs[i].Logs[j].Index = logIndex
+		for _, l := range r.Logs {
+			l.BlockNumber = number
+			l.BlockHash = hash
+			l.TxHash = txs[i].Hash()
+			l.TxIndex = uint(i)
+			l.Index = logIndex
 			logIndex++
 		}
 	}

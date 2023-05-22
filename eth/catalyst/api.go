@@ -86,8 +86,10 @@ var caps = []string{
 	"engine_exchangeTransitionConfigurationV1",
 	"engine_getPayloadV1",
 	"engine_getPayloadV2",
+	"engine_getPayloadV3",
 	"engine_newPayloadV1",
 	"engine_newPayloadV2",
+	"engine_newPayloadV3",
 	"engine_getPayloadBodiesByHashV1",
 	"engine_getPayloadBodiesByRangeV1",
 }
@@ -419,16 +421,34 @@ func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID) (*engine.Executi
 	return data, nil
 }
 
+// GetPayloadV3 returns a cached payload by id.
+func (api *ConsensusAPI) GetPayloadV3(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
+	pl, err := api.localBlocks.getPayloadWithBlobsBundle(payloadID)
+	if err != nil {
+		return nil, err
+	}
+	if pl == nil {
+		return nil, engine.UnknownPayload
+	}
+	return pl, nil
+}
+
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV1(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
 	if params.Withdrawals != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("withdrawals not supported in V1"))
+	}
+	if params.ExcessDataGas != nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("excessDataGas not supported in V1"))
 	}
 	return api.newPayload(params)
 }
 
 // NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
+	if params.ExcessDataGas != nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("excessDataGas not supported in V2"))
+	}
 	if api.eth.BlockChain().Config().IsShanghai(params.Timestamp, types.DeserializeHeaderExtraInformation(api.eth.BlockChain().CurrentHeader()).ArbOSFormatVersion) {
 		if params.Withdrawals == nil {
 			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("nil withdrawals post-shanghai"))
@@ -436,6 +456,20 @@ func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.Payl
 	} else if params.Withdrawals != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("non-nil withdrawals pre-shanghai"))
 	}
+
+	return api.newPayload(params)
+}
+
+// NewPayloadV3 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
+func (api *ConsensusAPI) NewPayloadV3(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
+	if api.eth.BlockChain().Config().IsCancun(params.Timestamp) {
+		if params.ExcessDataGas == nil {
+			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("nil excessDataGas post-cancun"))
+		}
+	} else if params.ExcessDataGas != nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("non-nil excessDataGas pre-cancun"))
+	}
+
 	return api.newPayload(params)
 }
 
@@ -708,6 +742,8 @@ func (api *ConsensusAPI) heartbeat() {
 					offlineLogged = time.Now()
 				}
 				continue
+			} else {
+				offlineLogged = time.Time{}
 			}
 			if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
 				if lastForkchoiceUpdate.IsZero() && lastNewPayloadUpdate.IsZero() {

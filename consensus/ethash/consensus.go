@@ -306,6 +306,14 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		// Verify the header's EIP-1559 attributes.
 		return err
 	}
+	if !chain.Config().IsCancun(header.Time) {
+		if header.ExcessDataGas != nil {
+			return fmt.Errorf("invalid excessDataGas before fork: have %v, expected 'nil'", header.ExcessDataGas)
+		}
+	} else if err := misc.VerifyEip4844Header(chain.Config(), parent, header); err != nil {
+		// Verify the header's EIP-4844 attributes.
+		return err
+	}
 	// Verify that the block number is parent's +1
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
@@ -604,6 +612,13 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	if chain.Config().IsCancun(header.Time) {
+		if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
+			header.SetExcessDataGas(misc.CalcExcessDataGas(parent.ExcessDataGas, misc.CountBlobs(txs)))
+		} else {
+			header.SetExcessDataGas(new(big.Int))
+		}
+	}
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
@@ -643,6 +658,9 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 	}
 	if header.WithdrawalsHash != nil {
 		panic("withdrawal hash set on ethash")
+	}
+	if header.ExcessDataGas != nil {
+		panic("excessDataGas set on ethash")
 	}
 	rlp.Encode(hasher, enc)
 	hasher.Sum(hash[:0])

@@ -61,6 +61,11 @@ var GoerliBootnodes = []string{
 	"enode://d2b720352e8216c9efc470091aa91ddafc53e222b32780f505c817ceef69e01d5b0b0797b69db254c586f493872352f5a022b4d8479a00fc92ec55f9ad46a27e@88.99.70.182:30303",
 }
 
+var Eip4844Bootnodes = []string{
+	"enode://3e5e464998b0ae5504fea271d9d6d51bf53918ca0f18359e5827761338478f5a03f70dc875fe9338006291bcd0de9ac2c54781d61f06f71b8678d37df5aab3c3@35.222.39.134:0?discport=30304",
+	"enode://98b3bd997b5da1d5ffbcf4b52baa937c604d90e457fa26077dcb02a895a53125f272add9355b6247f16231b1759ac1d1532e0781ec46137e0f7c39b6844525b8@34.170.3.3:0?discport=30304",
+}
+
 var V5Bootnodes = []string{
 	// Teku team's bootnode
 	"enr:-KG4QOtcP9X1FbIMOe17QNMKqDxCpm14jcX5tiOE4_TyMrFqbmhPZHK_ZPG2Gxb1GE2xdtodOfx9-cgvNtxnRyHEmC0ghGV0aDKQ9aX9QgAAAAD__________4JpZIJ2NIJpcIQDE8KdiXNlY3AyNTZrMaEDhpehBDbZjM_L9ek699Y7vhUJ-eAdMyQW_Fil522Y0fODdGNwgiMog3VkcIIjKA",

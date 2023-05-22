@@ -649,6 +649,13 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	from := stateDB.GetOrNewStateObject(call.From)
 	from.SetBalance(math.MaxBig256)
 
+	var excessDataGas *big.Int
+	// Get the last block header
+	ph := b.blockchain.GetHeaderByHash(header.ParentHash)
+	if ph != nil {
+		excessDataGas = ph.ExcessDataGas
+	}
+
 	// Execute the call.
 	msg := &core.Message{
 		From:              call.From,
@@ -666,9 +673,9 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
 	txContext := core.NewEVMTxContext(msg)
-	evmContext := core.NewEVMBlockContext(header, b.blockchain, nil)
+	evmContext := core.NewEVMBlockContext(header, excessDataGas, b.blockchain, nil)
 	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
-	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
+	gasPool := new(core.GasPool).AddGas(math.MaxUint64).AddDataGas(params.MaxDataGasPerBlock)
 
 	return core.ApplyMessage(vmEnv, msg, gasPool)
 }
@@ -684,7 +691,7 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 		return fmt.Errorf("could not fetch parent")
 	}
 	// Check transaction validity
-	signer := types.MakeSigner(b.blockchain.Config(), block.Number())
+	signer := types.MakeSigner(b.blockchain.Config(), block.Number(), block.Time())
 	sender, err := types.Sender(signer, tx)
 	if err != nil {
 		return fmt.Errorf("invalid transaction: %v", err)
