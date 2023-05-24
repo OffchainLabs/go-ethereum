@@ -98,8 +98,7 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 					Origin:   origin,
 					GasPrice: tx.GasPrice(),
 				}
-				difficultyHash = common.BigToHash((*big.Int)(test.Context.Difficulty))
-				context        = vm.BlockContext{
+				context = vm.BlockContext{
 					CanTransfer: core.CanTransfer,
 					Transfer:    core.Transfer,
 					Coinbase:    test.Context.Miner,
@@ -108,7 +107,6 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 					Difficulty:  (*big.Int)(test.Context.Difficulty),
 					GasLimit:    uint64(test.Context.GasLimit),
 					BaseFee:     test.Genesis.BaseFee,
-					Random:      &difficultyHash,
 				}
 				_, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 			)

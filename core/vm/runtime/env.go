@@ -17,7 +17,6 @@
 package runtime
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
@@ -30,7 +29,6 @@ func NewEnv(cfg *Config) *vm.EVM {
 		Origin:   cfg.Origin,
 		GasPrice: cfg.GasPrice,
 	}
-	difficultHash := common.BigToHash(cfg.Difficulty)
 	blockContext := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
@@ -41,7 +39,6 @@ func NewEnv(cfg *Config) *vm.EVM {
 		Difficulty:  cfg.Difficulty,
 		GasLimit:    cfg.GasLimit,
 		BaseFee:     cfg.BaseFee,
-		Random:      &difficultHash,
 	}
 
 	return vm.NewEVM(blockContext, txContext, cfg.State, cfg.ChainConfig, cfg.EVMConfig)

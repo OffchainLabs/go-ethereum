@@ -128,8 +128,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 					Origin:   origin,
 					GasPrice: tx.GasPrice(),
 				}
-				difficultyHash = common.BigToHash((*big.Int)(test.Context.Difficulty))
-				context        = vm.BlockContext{
+				context = vm.BlockContext{
 					CanTransfer: core.CanTransfer,
 					Transfer:    core.Transfer,
 					Coinbase:    test.Context.Miner,
@@ -138,7 +137,6 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 					Difficulty:  (*big.Int)(test.Context.Difficulty),
 					GasLimit:    uint64(test.Context.GasLimit),
 					BaseFee:     test.Genesis.BaseFee,
-					Random:      &difficultyHash,
 				}
 				_, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 			)
@@ -231,7 +229,6 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		Origin:   origin,
 		GasPrice: tx.GasPrice(),
 	}
-	difficultyHash := common.BigToHash((*big.Int)(test.Context.Difficulty))
 	context := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
@@ -240,7 +237,6 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		Time:        uint64(test.Context.Time),
 		Difficulty:  (*big.Int)(test.Context.Difficulty),
 		GasLimit:    uint64(test.Context.GasLimit),
-		Random:      &difficultyHash,
 	}
 	_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 
@@ -287,17 +283,14 @@ func TestZeroValueToNotExitCall(t *testing.T) {
 		Origin:   origin,
 		GasPrice: big.NewInt(1),
 	}
-	difficulty := big.NewInt(0x30000)
-	difficultyHash := common.BigToHash(difficulty)
 	context := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
 		Coinbase:    common.Address{},
 		BlockNumber: new(big.Int).SetUint64(8000000),
 		Time:        5,
-		Difficulty:  difficulty,
+		Difficulty:  big.NewInt(0x30000),
 		GasLimit:    uint64(6000000),
-		Random:      &difficultyHash,
 	}
 	var code = []byte{
 		byte(vm.PUSH1), 0x0, byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1), // in and outs zero
