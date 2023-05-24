@@ -941,6 +941,10 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	}
 	if diff.Difficulty != nil {
 		blockCtx.Difficulty = diff.Difficulty.ToInt()
+		if blockCtx.ArbOSVersion > 0 {
+			difficultHash := common.BigToHash(diff.Difficulty.ToInt())
+			blockCtx.Random = &difficultHash
+		}
 	}
 	if diff.Time != nil {
 		blockCtx.Time = uint64(*diff.Time)
@@ -956,10 +960,6 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	}
 	if diff.BaseFee != nil {
 		blockCtx.BaseFee = diff.BaseFee.ToInt()
-	}
-	if blockCtx.ArbOSVersion > 0 && diff.Difficulty != nil {
-		difficultHash := common.BigToHash(diff.Difficulty.ToInt())
-		blockCtx.Random = &difficultHash
 	}
 }
 
