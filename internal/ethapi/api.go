@@ -941,6 +941,8 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	}
 	if diff.Difficulty != nil {
 		blockCtx.Difficulty = diff.Difficulty.ToInt()
+		difficultHash := common.BigToHash(blockCtx.Difficulty)
+		blockCtx.Random = &difficultHash
 	}
 	if diff.Time != nil {
 		blockCtx.Time = uint64(*diff.Time)
@@ -950,9 +952,6 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	}
 	if diff.Coinbase != nil {
 		blockCtx.Coinbase = *diff.Coinbase
-	}
-	if diff.Random != nil {
-		blockCtx.Random = diff.Random
 	}
 	if diff.BaseFee != nil {
 		blockCtx.BaseFee = diff.BaseFee.ToInt()
