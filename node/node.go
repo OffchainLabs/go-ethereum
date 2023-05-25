@@ -704,6 +704,14 @@ func (n *Node) WSAuthEndpoint() string {
 	return "ws://" + n.wsAuth.listenAddr() + n.wsAuth.wsConfig.prefix
 }
 
+// JWTPath returns the path for JWT secret
+func (n *Node) JWTPath() string {
+	if n.config.JWTSecret == "" {
+		return n.ResolvePath(datadirJWTKey)
+	}
+	return n.config.JWTSecret
+}
+
 // EventMux retrieves the event multiplexer used by all the network services in
 // the current protocol stack.
 func (n *Node) EventMux() *event.TypeMux {
