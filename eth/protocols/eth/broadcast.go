@@ -80,9 +80,10 @@ func (p *Peer) broadcastTransactions() {
 				size        common.StorageSize
 			)
 			for i := 0; i < len(queue) && size < maxTxPacketSize; i++ {
+				// Do not broadcast blob transactions
 				if tx := p.txpool.Get(queue[i]); tx != nil {
 					txs = append(txs, tx.Tx)
-					size += common.StorageSize(tx.Tx.Size())
+					size += common.StorageSize(tx.Size())
 				}
 				hashesCount++
 			}
@@ -152,7 +153,7 @@ func (p *Peer) announceTransactions() {
 				if tx := p.txpool.Get(queue[count]); tx != nil {
 					pending = append(pending, queue[count])
 					pendingTypes = append(pendingTypes, tx.Tx.Type())
-					pendingSizes = append(pendingSizes, uint32(tx.Tx.Size()))
+					pendingSizes = append(pendingSizes, uint32(tx.Size()))
 					size += common.HashLength
 				}
 			}

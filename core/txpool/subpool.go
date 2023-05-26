@@ -37,6 +37,16 @@ type Transaction struct {
 	BlobTxProofs  []kzg4844.Proof      // Proofs needed by the blob pool
 }
 
+func (t *Transaction) Size() uint64 {
+	size := t.Tx.Size()
+	if len(t.BlobTxBlobs) > 0 {
+		size += uint64(len(t.BlobTxBlobs) * len(t.BlobTxBlobs[0]))
+		size += uint64(len(t.BlobTxCommits) * len(t.BlobTxCommits[0]))
+		size += uint64(len(t.BlobTxProofs) * len(t.BlobTxProofs[0]))
+	}
+	return size
+}
+
 // LazyTransaction contains a small subset of the transaction properties that is
 // enough for the miner and other APIs to handle large batches of transactions;
 // and supports pulling up the entire transaction when really needed.
