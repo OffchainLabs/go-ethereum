@@ -55,6 +55,11 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.Difficulty.Cmp(common.Big0) == 0 {
 		random = &header.MixDigest
 	}
+	arbOsVersion := types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion
+	if arbOsVersion > 0 {
+		difficultyHash := common.BigToHash(header.Difficulty)
+		random = &difficultyHash
+	}
 	return vm.BlockContext{
 		CanTransfer:  CanTransfer,
 		Transfer:     Transfer,
@@ -66,7 +71,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		BaseFee:      baseFee,
 		GasLimit:     header.GasLimit,
 		Random:       random,
-		ArbOSVersion: types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion,
+		ArbOSVersion: arbOsVersion,
 	}
 }
 
