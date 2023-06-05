@@ -51,6 +51,7 @@ type TxProcessingHook interface {
 	L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error)
 	GasPriceOp(evm *EVM) *big.Int
 	FillReceiptInfo(receipt *types.Receipt)
+	MsgIsNonMutating() bool
 	ExecuteWASM(scope *ScopeContext, input []byte, interpreter *EVMInterpreter) ([]byte, error)
 }
 
@@ -95,6 +96,10 @@ func (p DefaultTxProcessor) GasPriceOp(evm *EVM) *big.Int {
 }
 
 func (p DefaultTxProcessor) FillReceiptInfo(*types.Receipt) {}
+
+func (p DefaultTxProcessor) MsgIsNonMutating() bool {
+	return false
+}
 
 func (p DefaultTxProcessor) ExecuteWASM(scope *ScopeContext, input []byte, interpreter *EVMInterpreter) ([]byte, error) {
 	log.Crit("tried to execute WASM with default processing hook")
