@@ -7,8 +7,11 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
+
+var _ = (*callFrameMarshaling)(nil)
 
 // MarshalJSON marshals as JSON.
 func (c callFrame) MarshalJSON() ([]byte, error) {
@@ -17,24 +20,25 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 		AfterEVMTransfers  *[]arbitrumTransfer `json:"afterEVMTransfers,omitempty"`
 		Type               vm.OpCode           `json:"-"`
 		From               common.Address      `json:"from"`
-		Gas                uint64              `json:"gas"`
-		GasUsed            uint64              `json:"gasUsed"`
+		Gas                hexutil.Uint64      `json:"gas"`
+		GasUsed            hexutil.Uint64      `json:"gasUsed"`
 		To                 common.Address      `json:"to,omitempty" rlp:"optional"`
-		Input              []byte              `json:"input" rlp:"optional"`
-		Output             []byte              `json:"output,omitempty" rlp:"optional"`
+		Input              hexutil.Bytes       `json:"input" rlp:"optional"`
+		Output             hexutil.Bytes       `json:"output,omitempty" rlp:"optional"`
 		Error              string              `json:"error,omitempty" rlp:"optional"`
 		RevertReason       string              `json:"revertReason,omitempty"`
 		Calls              []callFrame         `json:"calls,omitempty" rlp:"optional"`
 		Logs               []callLog           `json:"logs,omitempty" rlp:"optional"`
-		Value              *big.Int            `json:"value,omitempty" rlp:"optional"`
+		Value              *hexutil.Big        `json:"value,omitempty" rlp:"optional"`
+		TypeString         string              `json:"type"`
 	}
 	var enc callFrame0
 	enc.BeforeEVMTransfers = c.BeforeEVMTransfers
 	enc.AfterEVMTransfers = c.AfterEVMTransfers
 	enc.Type = c.Type
 	enc.From = c.From
-	enc.Gas = c.Gas
-	enc.GasUsed = c.GasUsed
+	enc.Gas = hexutil.Uint64(c.Gas)
+	enc.GasUsed = hexutil.Uint64(c.GasUsed)
 	enc.To = c.To
 	enc.Input = c.Input
 	enc.Output = c.Output
@@ -42,7 +46,8 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 	enc.RevertReason = c.RevertReason
 	enc.Calls = c.Calls
 	enc.Logs = c.Logs
-	enc.Value = c.Value
+	enc.Value = (*hexutil.Big)(c.Value)
+	enc.TypeString = c.TypeString()
 	return json.Marshal(&enc)
 }
 
@@ -53,16 +58,16 @@ func (c *callFrame) UnmarshalJSON(input []byte) error {
 		AfterEVMTransfers  *[]arbitrumTransfer `json:"afterEVMTransfers,omitempty"`
 		Type               *vm.OpCode          `json:"-"`
 		From               *common.Address     `json:"from"`
-		Gas                *uint64             `json:"gas"`
-		GasUsed            *uint64             `json:"gasUsed"`
+		Gas                *hexutil.Uint64     `json:"gas"`
+		GasUsed            *hexutil.Uint64     `json:"gasUsed"`
 		To                 *common.Address     `json:"to,omitempty" rlp:"optional"`
-		Input              []byte              `json:"input" rlp:"optional"`
-		Output             []byte              `json:"output,omitempty" rlp:"optional"`
+		Input              *hexutil.Bytes      `json:"input" rlp:"optional"`
+		Output             *hexutil.Bytes      `json:"output,omitempty" rlp:"optional"`
 		Error              *string             `json:"error,omitempty" rlp:"optional"`
 		RevertReason       *string             `json:"revertReason,omitempty"`
 		Calls              []callFrame         `json:"calls,omitempty" rlp:"optional"`
 		Logs               []callLog           `json:"logs,omitempty" rlp:"optional"`
-		Value              *big.Int            `json:"value,omitempty" rlp:"optional"`
+		Value              *hexutil.Big        `json:"value,omitempty" rlp:"optional"`
 	}
 	var dec callFrame0
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -81,19 +86,19 @@ func (c *callFrame) UnmarshalJSON(input []byte) error {
 		c.From = *dec.From
 	}
 	if dec.Gas != nil {
-		c.Gas = *dec.Gas
+		c.Gas = uint64(*dec.Gas)
 	}
 	if dec.GasUsed != nil {
-		c.GasUsed = *dec.GasUsed
+		c.GasUsed = uint64(*dec.GasUsed)
 	}
 	if dec.To != nil {
 		c.To = *dec.To
 	}
 	if dec.Input != nil {
-		c.Input = dec.Input
+		c.Input = *dec.Input
 	}
 	if dec.Output != nil {
-		c.Output = dec.Output
+		c.Output = *dec.Output
 	}
 	if dec.Error != nil {
 		c.Error = *dec.Error
@@ -108,7 +113,7 @@ func (c *callFrame) UnmarshalJSON(input []byte) error {
 		c.Logs = dec.Logs
 	}
 	if dec.Value != nil {
-		c.Value = dec.Value
+		c.Value = (*big.Int)(dec.Value)
 	}
 	return nil
 }
