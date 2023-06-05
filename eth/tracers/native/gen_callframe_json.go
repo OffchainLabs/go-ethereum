@@ -27,6 +27,7 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 		Calls              []callFrame         `json:"calls,omitempty" rlp:"optional"`
 		Logs               []callLog           `json:"logs,omitempty" rlp:"optional"`
 		Value              *big.Int            `json:"value,omitempty" rlp:"optional"`
+		TypeString	   string              `json:"type"
 	}
 	var enc callFrame0
 	enc.BeforeEVMTransfers = c.BeforeEVMTransfers
@@ -43,6 +44,7 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 	enc.Calls = c.Calls
 	enc.Logs = c.Logs
 	enc.Value = c.Value
+	enc.TypeString = c.TypeString()
 	return json.Marshal(&enc)
 }
 
