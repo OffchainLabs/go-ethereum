@@ -336,7 +336,7 @@ func (a *APIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types
 
 func (a *APIBackend) blockNumberToUint(ctx context.Context, number rpc.BlockNumber) (uint64, error) {
 	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
-		return a.blockChain().CurrentBlock().Number().Uint64(), nil
+		return a.blockChain().CurrentBlock().Number.Uint64(), nil
 	}
 	if number == rpc.SafeBlockNumber {
 		return a.sync.SafeBlockNumber(ctx)
@@ -352,7 +352,7 @@ func (a *APIBackend) blockNumberToUint(ctx context.Context, number rpc.BlockNumb
 
 func (a *APIBackend) headerByNumberImpl(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
-		return a.blockChain().CurrentBlock().Header(), nil
+		return a.blockChain().CurrentBlock(), nil
 	}
 	numUint, err := a.blockNumberToUint(ctx, number)
 	if err != nil {
@@ -381,13 +381,18 @@ func (a *APIBackend) CurrentHeader() *types.Header {
 	return a.blockChain().CurrentHeader()
 }
 
-func (a *APIBackend) CurrentBlock() *types.Block {
+func (a *APIBackend) CurrentBlock() *types.Header {
 	return a.blockChain().CurrentBlock()
 }
 
 func (a *APIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
-		return a.blockChain().CurrentBlock(), nil
+		currentHeader := a.blockChain().CurrentBlock()
+		currentBlock := a.blockChain().GetBlock(currentHeader.Hash(), currentHeader.Number.Uint64())
+		if currentBlock == nil {
+			return nil, errors.New("can't find block for current header")
+		}
+		return currentBlock, nil
 	}
 	numUint, err := a.blockNumberToUint(ctx, number)
 	if err != nil {

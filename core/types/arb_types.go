@@ -100,6 +100,13 @@ func (tx *ArbitrumUnsignedTx) setSignatureValues(chainID, v, r, s *big.Int) {
 
 }
 
+func (tx *ArbitrumUnsignedTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+	if baseFee == nil {
+		return dst.Set(tx.GasFeeCap)
+	}
+	return dst.Set(baseFee)
+}
+
 type ArbitrumContractTx struct {
 	ChainId   *big.Int
 	RequestId common.Hash
@@ -156,6 +163,13 @@ func (tx *ArbitrumContractTx) rawSignatureValues() (v, r, s *big.Int) {
 }
 func (tx *ArbitrumContractTx) setSignatureValues(chainID, v, r, s *big.Int) {}
 func (tx *ArbitrumContractTx) isFake() bool                                 { return true }
+
+func (tx *ArbitrumContractTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+	if baseFee == nil {
+		return dst.Set(tx.GasFeeCap)
+	}
+	return dst.Set(baseFee)
+}
 
 type ArbitrumRetryTx struct {
 	ChainId *big.Int
@@ -227,6 +241,13 @@ func (tx *ArbitrumRetryTx) rawSignatureValues() (v, r, s *big.Int) {
 }
 func (tx *ArbitrumRetryTx) setSignatureValues(chainID, v, r, s *big.Int) {}
 func (tx *ArbitrumRetryTx) isFake() bool                                 { return true }
+
+func (tx *ArbitrumRetryTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+	if baseFee == nil {
+		return dst.Set(tx.GasFeeCap)
+	}
+	return dst.Set(baseFee)
+}
 
 type ArbitrumSubmitRetryableTx struct {
 	ChainId   *big.Int
@@ -302,6 +323,13 @@ func (tx *ArbitrumSubmitRetryableTx) rawSignatureValues() (v, r, s *big.Int) {
 }
 func (tx *ArbitrumSubmitRetryableTx) setSignatureValues(chainID, v, r, s *big.Int) {}
 func (tx *ArbitrumSubmitRetryableTx) isFake() bool                                 { return true }
+
+func (tx *ArbitrumSubmitRetryableTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+	if baseFee == nil {
+		return dst.Set(tx.GasFeeCap)
+	}
+	return dst.Set(baseFee)
+}
 
 func (tx *ArbitrumSubmitRetryableTx) data() []byte {
 	var retryTo common.Address
@@ -383,6 +411,10 @@ func (d *ArbitrumDepositTx) setSignatureValues(chainID, v, r, s *big.Int) {
 
 }
 
+func (tx *ArbitrumDepositTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+	return dst.Set(bigZero)
+}
+
 type ArbitrumInternalTx struct {
 	ChainId *big.Int
 	Data    []byte
@@ -417,6 +449,10 @@ func (d *ArbitrumInternalTx) rawSignatureValues() (v, r, s *big.Int) {
 
 func (d *ArbitrumInternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
 
+}
+
+func (tx *ArbitrumInternalTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+	return dst.Set(bigZero)
 }
 
 type HeaderInfo struct {
