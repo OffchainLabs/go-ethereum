@@ -420,10 +420,12 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 
 		if rs[i].Type != ArbitrumLegacyTxType {
 			// The contract address can be derived from the transaction itself
-			if txs[i].To() == nil && rs[i].ContractAddress == (common.Address{}) {
-				// Deriving the signer is expensive, only do if it's actually needed
-				from, _ := Sender(signer, txs[i])
-				rs[i].ContractAddress = crypto.CreateAddress(from, txs[i].Nonce())
+			if txs[i].To() == nil {
+				if rs[i].ContractAddress == (common.Address{}) {
+					// Deriving the signer is expensive, only do if it's actually needed
+					from, _ := Sender(signer, txs[i])
+					rs[i].ContractAddress = crypto.CreateAddress(from, txs[i].Nonce())
+				}
 			} else {
 				rs[i].ContractAddress = common.Address{}
 			}
