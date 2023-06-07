@@ -1,5 +1,5 @@
 name: CI
-run-name: CI triggered by @${{ github.action }} from @${{ github.actor }} of rev @${{ github.head_ref }}
+run-name: CI triggered from @${{ github.actor }} of ${{ github.head_ref }}
 
 on:
   workflow_dispatch:
