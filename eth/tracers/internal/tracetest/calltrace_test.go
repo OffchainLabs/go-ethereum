@@ -53,8 +53,19 @@ type callLog struct {
 	Data    hexutil.Bytes  `json:"data"`
 }
 
+type arbitrumTransfer struct {
+	Purpose string  `json:"purpose"`
+	From    *string `json:"from"`
+	To      *string `json:"to"`
+	Value   string  `json:"value"`
+}
+
 // callTrace is the result of a callTracer run.
 type callTrace struct {
+	// Arbitrum: we add these here due to the tracer returning the top frame
+	BeforeEVMTransfers *[]arbitrumTransfer `json:"beforeEVMTransfers,omitempty"`
+	AfterEVMTransfers  *[]arbitrumTransfer `json:"afterEVMTransfers,omitempty"`
+
 	From         common.Address  `json:"from"`
 	Gas          *hexutil.Uint64 `json:"gas"`
 	GasUsed      *hexutil.Uint64 `json:"gasUsed"`

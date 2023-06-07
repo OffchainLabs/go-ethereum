@@ -298,6 +298,28 @@
     "withLog": true
   },
   "result": {
+    "beforeEVMTransfers": [
+      {
+        "purpose": "feePayment",
+        "from": "0xBe3aE5Cb97c253DdA67181C6E34E43F5C275E08b",
+        "to": null,
+        "value": "0x136dcc951d8c000"
+      }
+    ],
+    "afterEVMTransfers": [
+      {
+        "purpose": "gasRefund",
+        "from": null,
+        "to": "0xBe3aE5Cb97c253DdA67181C6E34E43F5C275E08b",
+        "value": "0x5489446b9e1a00"
+      },
+      {
+        "purpose": "tip",
+        "from": null,
+        "to": "0xEA674fdDe714fd979de3EdF0F56AA9716B898ec8",
+        "value": "0xe25384e63aa600"
+      }
+    ],
     "from": "0xbe3ae5cb97c253dda67181c6e34e43f5c275e08b",
     "gas": "0x3514c8",
     "gasUsed": "0x26e1ef",
