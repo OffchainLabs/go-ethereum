@@ -175,7 +175,7 @@ func (a *APIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 
 func (a *APIBackend) FeeHistory(
 	ctx context.Context,
-	blocks int,
+	blocks uint64,
 	newestBlock rpc.BlockNumber,
 	rewardPercentiles []float64,
 ) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
@@ -186,7 +186,7 @@ func (a *APIBackend) FeeHistory(
 	nitroGenesis := rpc.BlockNumber(a.ChainConfig().ArbitrumChainParams.GenesisBlockNum)
 	newestBlock, latestBlock := a.blockChain().ClipToPostNitroGenesis(newestBlock)
 
-	maxFeeHistory := int(a.b.config.FeeHistoryMaxBlockCount)
+	maxFeeHistory := a.b.config.FeeHistoryMaxBlockCount
 	if blocks > maxFeeHistory {
 		log.Warn("Sanitizing fee history length", "requested", blocks, "truncated", maxFeeHistory)
 		blocks = maxFeeHistory
@@ -198,9 +198,9 @@ func (a *APIBackend) FeeHistory(
 
 	// don't attempt to include blocks before genesis
 	if rpc.BlockNumber(blocks) > (newestBlock - nitroGenesis) {
-		blocks = int(newestBlock - nitroGenesis + 1)
+		blocks = uint64(newestBlock - nitroGenesis + 1)
 	}
-	oldestBlock := int(newestBlock) + 1 - blocks
+	oldestBlock := uint64(newestBlock) + 1 - blocks
 
 	// inform that tipping has no effect on inclusion
 	rewards := make([][]*big.Int, blocks)
@@ -244,14 +244,14 @@ func (a *APIBackend) FeeHistory(
 		}
 		prevTimestamp = header.Time
 	}
-	for block := oldestBlock; block <= int(baseFeeLookup); block++ {
+	for block := oldestBlock; block <= uint64(baseFeeLookup); block++ {
 		header, err := a.HeaderByNumber(ctx, rpc.BlockNumber(block))
 		if err != nil {
 			return common.Big0, nil, nil, nil, err
 		}
 		basefees[block-oldestBlock] = header.BaseFee
 
-		if block > int(newestBlock) {
+		if block > uint64(newestBlock) {
 			break
 		}
 
