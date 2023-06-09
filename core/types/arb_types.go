@@ -3,7 +3,6 @@ package types
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -101,6 +100,13 @@ func (tx *ArbitrumUnsignedTx) setSignatureValues(chainID, v, r, s *big.Int) {
 
 }
 
+func (tx *ArbitrumUnsignedTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+	if baseFee == nil {
+		return dst.Set(tx.GasFeeCap)
+	}
+	return dst.Set(baseFee)
+}
+
 type ArbitrumContractTx struct {
 	ChainId   *big.Int
 	RequestId common.Hash
@@ -157,6 +163,13 @@ func (tx *ArbitrumContractTx) rawSignatureValues() (v, r, s *big.Int) {
 }
 func (tx *ArbitrumContractTx) setSignatureValues(chainID, v, r, s *big.Int) {}
 func (tx *ArbitrumContractTx) isFake() bool                                 { return true }
+
+func (tx *ArbitrumContractTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+	if baseFee == nil {
+		return dst.Set(tx.GasFeeCap)
+	}
+	return dst.Set(baseFee)
+}
 
 type ArbitrumRetryTx struct {
 	ChainId *big.Int
@@ -228,6 +241,13 @@ func (tx *ArbitrumRetryTx) rawSignatureValues() (v, r, s *big.Int) {
 }
 func (tx *ArbitrumRetryTx) setSignatureValues(chainID, v, r, s *big.Int) {}
 func (tx *ArbitrumRetryTx) isFake() bool                                 { return true }
+
+func (tx *ArbitrumRetryTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+	if baseFee == nil {
+		return dst.Set(tx.GasFeeCap)
+	}
+	return dst.Set(baseFee)
+}
 
 type ArbitrumSubmitRetryableTx struct {
 	ChainId   *big.Int
@@ -303,6 +323,13 @@ func (tx *ArbitrumSubmitRetryableTx) rawSignatureValues() (v, r, s *big.Int) {
 }
 func (tx *ArbitrumSubmitRetryableTx) setSignatureValues(chainID, v, r, s *big.Int) {}
 func (tx *ArbitrumSubmitRetryableTx) isFake() bool                                 { return true }
+
+func (tx *ArbitrumSubmitRetryableTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+	if baseFee == nil {
+		return dst.Set(tx.GasFeeCap)
+	}
+	return dst.Set(baseFee)
+}
 
 func (tx *ArbitrumSubmitRetryableTx) data() []byte {
 	var retryTo common.Address
@@ -384,6 +411,10 @@ func (d *ArbitrumDepositTx) setSignatureValues(chainID, v, r, s *big.Int) {
 
 }
 
+func (tx *ArbitrumDepositTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+	return dst.Set(bigZero)
+}
+
 type ArbitrumInternalTx struct {
 	ChainId *big.Int
 	Data    []byte
@@ -420,6 +451,10 @@ func (d *ArbitrumInternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
 
 }
 
+func (tx *ArbitrumInternalTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+	return dst.Set(bigZero)
+}
+
 type HeaderInfo struct {
 	SendRoot           common.Hash
 	SendCount          uint64
@@ -444,19 +479,16 @@ func (info HeaderInfo) UpdateHeaderWithInfo(header *Header) {
 	header.Extra = info.extra()
 }
 
-func DeserializeHeaderExtraInformation(header *Header) (HeaderInfo, error) {
-	if header.BaseFee == nil || header.BaseFee.Sign() == 0 || len(header.Extra) == 0 {
+func DeserializeHeaderExtraInformation(header *Header) HeaderInfo {
+	if header.BaseFee == nil || header.BaseFee.Sign() == 0 || len(header.Extra) != 32 || header.Difficulty.Cmp(common.Big1) != 0 {
 		// imported blocks have no base fee
 		// The genesis block doesn't have an ArbOS encoded extra field
-		return HeaderInfo{}, nil
-	}
-	if len(header.Extra) != 32 {
-		return HeaderInfo{}, fmt.Errorf("unexpected header extra field length %v", len(header.Extra))
+		return HeaderInfo{}
 	}
 	extra := HeaderInfo{}
 	copy(extra.SendRoot[:], header.Extra)
 	extra.SendCount = binary.BigEndian.Uint64(header.MixDigest[:8])
 	extra.L1BlockNumber = binary.BigEndian.Uint64(header.MixDigest[8:16])
 	extra.ArbOSFormatVersion = binary.BigEndian.Uint64(header.MixDigest[16:24])
-	return extra, nil
+	return extra
 }
