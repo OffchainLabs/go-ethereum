@@ -1024,17 +1024,18 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 		return nil, err
 	}
 
-	// Arbitrum: support NodeInterface.sol by swapping out the message if needed
-	var res *core.ExecutionResult
-	msg, res, err = core.InterceptRPCMessage(msg, ctx, state, header, b)
-	if err != nil || res != nil {
-		return res, err
-	}
-
 	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
 	if blockOverrides != nil {
 		blockOverrides.Apply(&blockCtx)
 	}
+
+	// Arbitrum: support NodeInterface.sol by swapping out the message if needed
+	var res *core.ExecutionResult
+	msg, res, err = core.InterceptRPCMessage(msg, ctx, state, header, b, &blockCtx)
+	if err != nil || res != nil {
+		return res, err
+	}
+
 	evm, vmError := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true}, &blockCtx)
 
 	// Wait for the context to be done and cancel the evm. Even if the

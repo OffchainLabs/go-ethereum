@@ -37,6 +37,7 @@ var InterceptRPCMessage = func(
 	statedb *state.StateDB,
 	header *types.Header,
 	backend NodeInterfaceBackendAPI,
+	blockCtx *vm.BlockContext,
 ) (*Message, *ExecutionResult, error) {
 	return msg, nil, nil
 }
