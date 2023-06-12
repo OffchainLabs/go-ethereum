@@ -173,7 +173,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		Value:             tx.Value(),
 		Data:              tx.Data(),
 		AccessList:        tx.AccessList(),
-		SkipAccountChecks: false,
+		SkipAccountChecks: tx.SkipAccountChecks(),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
