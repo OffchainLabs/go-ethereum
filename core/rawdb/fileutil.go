@@ -19,12 +19,13 @@
 
 package rawdb
 
-import "github.com/prometheus/tsdb/fileutil"
+import "github.com/gofrs/flock"
 
-type Releaser interface {
-	Release() error
+type FileLock interface {
+	Unlock() error
+	TryLock() (bool, error)
 }
 
-func Flock(fileName string) (r Releaser, existed bool, err error) {
-	return fileutil.Flock(fileName)
+func NewFileLock(fileName string) FileLock {
+	return flock.New(fileName)
 }

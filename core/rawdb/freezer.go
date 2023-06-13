@@ -56,10 +56,10 @@ const freezerTableSize = 2 * 1000 * 1000 * 1000
 // Freezer is a memory mapped append-only database to store immutable ordered
 // data into flat files:
 //
-// - The append-only nature ensures that disk writes are minimized.
-// - The memory mapping ensures we can max out system memory for caching without
-//   reserving it for go-ethereum. This would also reduce the memory requirements
-//   of Geth, and thus also GC overhead.
+//   - The append-only nature ensures that disk writes are minimized.
+//   - The memory mapping ensures we can max out system memory for caching without
+//     reserving it for go-ethereum. This would also reduce the memory requirements
+//     of Geth, and thus also GC overhead.
 type Freezer struct {
 	// WARNING: The `frozen` and `tail` fields are accessed atomically. On 32 bit platforms, only
 	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
@@ -74,8 +74,14 @@ type Freezer struct {
 
 	readonly     bool
 	tables       map[string]*freezerTable // Data tables for storing everything
-	instanceLock Releaser                 // File-system lock to prevent double opens
+	instanceLock FileLock                 // File-system lock to prevent double opens
 	closeOnce    sync.Once
+}
+
+// NewChainFreezer is a small utility method around NewFreezer that sets the
+// default parameters for the chain storage.
+func NewChainFreezer(datadir string, namespace string, readonly bool) (*Freezer, error) {
+	return NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerNoSnappy)
 }
 
 // NewFreezer creates a freezer instance for maintaining immutable ordered
@@ -97,11 +103,17 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 			return nil, errSymlinkDatadir
 		}
 	}
+	flockFile := filepath.Join(datadir, "FLOCK")
+	if err := os.MkdirAll(filepath.Dir(flockFile), 0755); err != nil {
+		return nil, err
+	}
 	// Leveldb uses LOCK as the filelock filename. To prevent the
 	// name collision, we use FLOCK as the lock name.
-	lock, _, err := Flock(filepath.Join(datadir, "FLOCK"))
-	if err != nil {
+	lock := NewFileLock(flockFile)
+	if locked, err := lock.TryLock(); err != nil {
 		return nil, err
+	} else if !locked {
+		return nil, errors.New("locking failed")
 	}
 	// Open all the supported data tables
 	freezer := &Freezer{
@@ -117,12 +129,12 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 			for _, table := range freezer.tables {
 				table.Close()
 			}
-			lock.Release()
+			lock.Unlock()
 			return nil, err
 		}
 		freezer.tables[name] = table
 	}
-
+	var err error
 	if freezer.readonly {
 		// In readonly mode only validate, don't truncate.
 		// validate also sets `freezer.frozen`.
@@ -135,7 +147,7 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 		for _, table := range freezer.tables {
 			table.Close()
 		}
-		lock.Release()
+		lock.Unlock()
 		return nil, err
 	}
 
@@ -158,7 +170,7 @@ func (f *Freezer) Close() error {
 				errs = append(errs, err)
 			}
 		}
-		if err := f.instanceLock.Release(); err != nil {
+		if err := f.instanceLock.Unlock(); err != nil {
 			errs = append(errs, err)
 		}
 	})
@@ -187,9 +199,9 @@ func (f *Freezer) Ancient(kind string, number uint64) ([]byte, error) {
 
 // AncientRange retrieves multiple items in sequence, starting from the index 'start'.
 // It will return
-//  - at most 'max' items,
-//  - at least 1 item (even if exceeding the maxByteSize), but will otherwise
-//   return as many items as fit into maxByteSize.
+//   - at most 'max' items,
+//   - at least 1 item (even if exceeding the maxByteSize), but will otherwise
+//     return as many items as fit into maxByteSize.
 func (f *Freezer) AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
 	if table := f.tables[kind]; table != nil {
 		return table.RetrieveItems(start, count, maxBytes)
@@ -317,30 +329,35 @@ func (f *Freezer) Sync() error {
 	return nil
 }
 
-// validate checks that every table has the same length.
+// validate checks that every table has the same boundary.
 // Used instead of `repair` in readonly mode.
 func (f *Freezer) validate() error {
 	if len(f.tables) == 0 {
 		return nil
 	}
 	var (
-		length uint64
-		name   string
+		head uint64
+		tail uint64
+		name string
 	)
-	// Hack to get length of any table
+	// Hack to get boundary of any table
 	for kind, table := range f.tables {
-		length = atomic.LoadUint64(&table.items)
+		head = atomic.LoadUint64(&table.items)
+		tail = atomic.LoadUint64(&table.itemHidden)
 		name = kind
 		break
 	}
-	// Now check every table against that length
+	// Now check every table against those boundaries.
 	for kind, table := range f.tables {
-		items := atomic.LoadUint64(&table.items)
-		if length != items {
-			return fmt.Errorf("freezer tables %s and %s have differing lengths: %d != %d", kind, name, items, length)
+		if head != atomic.LoadUint64(&table.items) {
+			return fmt.Errorf("freezer tables %s and %s have differing head: %d != %d", kind, name, atomic.LoadUint64(&table.items), head)
+		}
+		if tail != atomic.LoadUint64(&table.itemHidden) {
+			return fmt.Errorf("freezer tables %s and %s have differing tail: %d != %d", kind, name, atomic.LoadUint64(&table.itemHidden), tail)
 		}
 	}
-	atomic.StoreUint64(&f.frozen, length)
+	atomic.StoreUint64(&f.frozen, head)
+	atomic.StoreUint64(&f.tail, tail)
 	return nil
 }
 
