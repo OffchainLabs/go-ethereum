@@ -37,7 +37,6 @@ type StateDB interface {
 	SetStylusPagesOpen(open uint16)
 	AddStylusPages(new uint16) (uint16, uint16)
 	AddStylusPagesEver(new uint16)
-	TempRoots() (common.Hash, common.Hash)
 
 	NoncanonicalProgramHash(common.Address, uint32) common.Hash
 	Deterministic() bool
