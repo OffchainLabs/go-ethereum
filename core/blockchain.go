@@ -1472,7 +1472,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			bc.amountOfGasInBlocksToSkipStateSaving = bc.cacheConfig.MaxAmountOfGasToSkipStateSaving
 			// TODO remove log
 			log.Debug("Saving state", "blockNumber", block.Number(), "blockHash", block.Hash(), "leftBlocks", bc.numberOfBlocksToSkipStateSaving, "leftGas", bc.amountOfGasInBlocksToSkipStateSaving)
-			return triedb.Commit(root, false, nil)
+			return bc.triedb.Commit(root, false)
 		}
 		// TODO remove log
 		log.Debug("Skipping saving state", "blockNumber", block.Number(), "blockHash", block.Hash(), "leftBlocks", bc.numberOfBlocksToSkipStateSaving, "leftGas", bc.amountOfGasInBlocksToSkipStateSaving)
