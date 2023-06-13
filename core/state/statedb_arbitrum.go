@@ -78,8 +78,28 @@ func (s *StateDB) SetCompiledWasmCode(addr common.Address, code []byte, version 
 	}
 }
 
-func (s *StateDB) GetStylusPages() (*uint16, *uint16) {
-	return &s.openWasmPages, &s.everWasmPages
+func (s *StateDB) GetStylusPages() (uint16, uint16) {
+	return s.openWasmPages, s.everWasmPages
+}
+
+func (s *StateDB) GetStylusPagesOpen() uint16 {
+	return s.openWasmPages
+}
+
+func (s *StateDB) SetStylusPagesOpen(open uint16) {
+	s.openWasmPages = open
+}
+
+// Tracks that `new` additional pages have been opened, returning the previous counts
+func (s *StateDB) AddStylusPages(new uint16) (uint16, uint16) {
+	open, ever := s.GetStylusPages()
+	s.openWasmPages = common.SaturatingUAdd(open, new)
+	s.everWasmPages = common.MaxInt(ever, s.openWasmPages)
+	return open, ever
+}
+
+func (s *StateDB) AddStylusPagesEver(new uint16) {
+	s.everWasmPages = common.SaturatingUAdd(s.everWasmPages, new)
 }
 
 func NewDeterministic(root common.Hash, db Database) (*StateDB, error) {
