@@ -12,6 +12,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// Returns true if nonce checks should be skipped based on inner's isFake()
+// This also disables requiring that sender is an EOA and not a contract
+func (tx *Transaction) SkipAccountChecks() bool {
+	return tx.inner.isFake()
+}
+
 type fallbackError struct {
 }
 
