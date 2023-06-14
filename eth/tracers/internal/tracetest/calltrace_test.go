@@ -53,8 +53,19 @@ type callLog struct {
 	Data    hexutil.Bytes  `json:"data"`
 }
 
+type arbitrumTransfer struct {
+	Purpose string  `json:"purpose"`
+	From    *string `json:"from"`
+	To      *string `json:"to"`
+	Value   string  `json:"value"`
+}
+
 // callTrace is the result of a callTracer run.
 type callTrace struct {
+	// Arbitrum: we add these here due to the tracer returning the top frame
+	BeforeEVMTransfers *[]arbitrumTransfer `json:"beforeEVMTransfers,omitempty"`
+	AfterEVMTransfers  *[]arbitrumTransfer `json:"afterEVMTransfers,omitempty"`
+
 	From         common.Address  `json:"from"`
 	Gas          *hexutil.Uint64 `json:"gas"`
 	GasUsed      *hexutil.Uint64 `json:"gasUsed"`
@@ -327,7 +338,7 @@ func TestZeroValueToNotExitCall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve trace result: %v", err)
 	}
-	wantStr := `{"from":"0x682a80a6f560eec50d54e63cbeda1c324c5f8d1b","gas":"0x7148","gasUsed":"0x54d8","to":"0x00000000000000000000000000000000deadbeef","input":"0x","calls":[{"from":"0x00000000000000000000000000000000deadbeef","gas":"0x6cbf","gasUsed":"0x0","to":"0x00000000000000000000000000000000000000ff","input":"0x","value":"0x0","type":"CALL"}],"value":"0x0","type":"CALL"}`
+	wantStr := `{"beforeEVMTransfers":[{"purpose":"feePayment","from":"0x682a80a6f560eeC50d54E63CBeDa1c324C5F8d1b","to":null,"value":"0x0"}],"afterEVMTransfers":[{"purpose":"gasRefund","from":null,"to":"0x682a80a6f560eeC50d54E63CBeDa1c324C5F8d1b","value":"0x0"},{"purpose":"tip","from":null,"to":"0x0000000000000000000000000000000000000000","value":"0x0"}],"from":"0x682a80a6f560eec50d54e63cbeda1c324c5f8d1b","gas":"0x7148","gasUsed":"0x54d8","to":"0x00000000000000000000000000000000deadbeef","input":"0x","calls":[{"from":"0x00000000000000000000000000000000deadbeef","gas":"0x6cbf","gasUsed":"0x0","to":"0x00000000000000000000000000000000000000ff","input":"0x","value":"0x0","type":"CALL"}],"value":"0x0","type":"CALL"}`
 	if string(res) != wantStr {
 		t.Fatalf("trace mismatch\n have: %v\n want: %v\n", string(res), wantStr)
 	}

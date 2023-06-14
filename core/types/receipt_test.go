@@ -412,7 +412,7 @@ func clearComputedFieldsOnReceipt(receipt *Receipt) *Receipt {
 	cpy.BlockHash = common.Hash{0xff, 0xff, 0x22}
 	cpy.BlockNumber = big.NewInt(math.MaxUint32)
 	cpy.TransactionIndex = math.MaxUint32
-	cpy.ContractAddress = common.Address{0xff, 0xff, 0x33}
+	cpy.ContractAddress = common.Address{} // Arbitrum: we check address is blank before rederiving
 	cpy.GasUsed = 0xffffffff
 	cpy.Logs = clearComputedFieldsOnLogs(receipt.Logs)
 	return &cpy
