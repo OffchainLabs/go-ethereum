@@ -430,10 +430,12 @@ func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 func (s *StateDB) SetBalance(addr common.Address, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
+		if amount == nil {
+			amount = big.NewInt(0)
+		}
 		prevBalance := stateObject.Balance()
 		s.unexpectedBalanceDelta.Add(s.unexpectedBalanceDelta, amount)
 		s.unexpectedBalanceDelta.Sub(s.unexpectedBalanceDelta, prevBalance)
-
 		stateObject.SetBalance(amount)
 	}
 }

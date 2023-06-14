@@ -132,7 +132,7 @@ func (s *EthereumAPI) FeeHistory(ctx context.Context, blockCount math.HexOrDecim
 func (s *EthereumAPI) Syncing() (interface{}, error) {
 	progress := s.b.SyncProgressMap()
 
-	if progress == nil || len(progress) == 0 {
+	if len(progress) == 0 {
 		return false, nil
 	}
 	return progress, nil
@@ -1409,7 +1409,7 @@ func (s *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inc
 		if err != nil {
 			log.Error("error trying to fill legacy l1BlockNumber", "err", err)
 		} else {
-			fields["l1BlockNumber"] = hexutil.Uint64(l1BlockNumber)
+			fields["l1BlockNumber"] = l1BlockNumber
 		}
 	}
 	return fields, err
