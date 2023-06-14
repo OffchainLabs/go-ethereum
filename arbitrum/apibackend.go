@@ -348,7 +348,7 @@ func (a *APIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types
 
 func (a *APIBackend) blockNumberToUint(ctx context.Context, number rpc.BlockNumber) (uint64, error) {
 	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
-		return a.BlockChain().CurrentBlock().Number().Uint64(), nil
+		return a.BlockChain().CurrentBlock().Number.Uint64(), nil
 	}
 	if number == rpc.SafeBlockNumber {
 		if a.sync == nil {
@@ -370,7 +370,7 @@ func (a *APIBackend) blockNumberToUint(ctx context.Context, number rpc.BlockNumb
 
 func (a *APIBackend) headerByNumberImpl(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
-		return a.BlockChain().CurrentBlock().Header(), nil
+		return a.BlockChain().CurrentBlock(), nil
 	}
 	numUint, err := a.blockNumberToUint(ctx, number)
 	if err != nil {
@@ -399,13 +399,18 @@ func (a *APIBackend) CurrentHeader() *types.Header {
 	return a.BlockChain().CurrentHeader()
 }
 
-func (a *APIBackend) CurrentBlock() *types.Block {
+func (a *APIBackend) CurrentBlock() *types.Header {
 	return a.BlockChain().CurrentBlock()
 }
 
 func (a *APIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
-		return a.BlockChain().CurrentBlock(), nil
+		currentHeader := a.BlockChain().CurrentBlock()
+		currentBlock := a.blockChain().GetBlock(currentHeader.Hash(), currentHeader.Number.Uint64())
+		if currentBlock == nil {
+			return nil, errors.New("can't find block for current header")
+		}
+		return currentBlock, nil
 	}
 	numUint, err := a.blockNumberToUint(ctx, number)
 	if err != nil {
@@ -460,7 +465,7 @@ func (a *APIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexe
 	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(ctx, block, reexec, base, checkLive, preferDisk)
 }
 
-func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
+func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*core.Message, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
 	if !a.BlockChain().Config().IsArbitrumNitro(block.Number()) {
 		return nil, vm.BlockContext{}, nil, nil, types.ErrUseFallback
 	}
@@ -479,7 +484,7 @@ func (a *APIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	return nil
 }
 
-func (a *APIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
+func (a *APIBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	vmError := func() error { return nil }
 	if vmConfig == nil {
 		vmConfig = a.BlockChain().GetVMConfig()
