@@ -406,7 +406,7 @@ func (a *APIBackend) CurrentBlock() *types.Header {
 func (a *APIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	if number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber {
 		currentHeader := a.BlockChain().CurrentBlock()
-		currentBlock := a.blockChain().GetBlock(currentHeader.Hash(), currentHeader.Number.Uint64())
+		currentBlock := a.BlockChain().GetBlock(currentHeader.Hash(), currentHeader.Number.Uint64())
 		if currentBlock == nil {
 			return nil, errors.New("can't find block for current header")
 		}
