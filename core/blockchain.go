@@ -158,8 +158,8 @@ var defaultCacheConfig = &CacheConfig{
 	// Arbitrum Config Options
 	TriesInMemory:                      DefaultTriesInMemory,
 	TrieRetention:                      30 * time.Minute,
-	MaxNumberOfBlocksToSkipStateSaving: 127,
-	MaxAmountOfGasToSkipStateSaving:    15 * 1000 * 1000,
+	MaxNumberOfBlocksToSkipStateSaving: 0,
+	MaxAmountOfGasToSkipStateSaving:    0,
 
 	TrieCleanLimit: 256,
 	TrieDirtyLimit: 256,
