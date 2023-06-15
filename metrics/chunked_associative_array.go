@@ -4,10 +4,11 @@ package metrics
 // https://github.com/dropwizard/metrics/blob/release/4.2.x/metrics-core/src/main/java/com/codahale/metrics/ChunkedAssociativeLongArray.java
 
 import (
-	"github.com/gammazero/deque"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/gammazero/deque"
 )
 
 const (
