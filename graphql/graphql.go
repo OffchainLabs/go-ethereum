@@ -1068,12 +1068,27 @@ func (b *Block) Call(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (*CallResult, error) {
 	if b.numberOrHash == nil {
-		_, err := b.resolve(ctx)
-		if err != nil {
+		if _, err := b.resolve(ctx); err != nil {
 			return nil, err
 		}
 	}
-	result, err := ethapi.DoCall(ctx, b.r.backend, args.Data, *b.numberOrHash, nil, b.r.backend.RPCEVMTimeout(), b.r.backend.RPCGasCap(), core.MessageEthcallMode)
+	state, header, err := b.r.backend.StateAndHeaderByNumberOrHash(ctx, *b.numberOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	result, err := ethapi.DoCall(
+		ctx,
+		&ethapi.DoCallOpts{
+			Backend:      b.r.backend,
+			Args:         args.Data,
+			State:        state,
+			Header:       header,
+			Overrides:    nil,
+			Timeout:      b.r.backend.RPCEVMTimeout(),
+			GlobalGasCap: b.r.backend.RPCGasCap(),
+			RunMode:      core.MessageEthcallMode,
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1143,7 +1158,24 @@ func (p *Pending) Call(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (*CallResult, error) {
 	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
-	result, err := ethapi.DoCall(ctx, p.r.backend, args.Data, pendingBlockNr, nil, p.r.backend.RPCEVMTimeout(), p.r.backend.RPCGasCap(), core.MessageEthcallMode)
+	state, header, err := p.r.backend.StateAndHeaderByNumberOrHash(ctx, pendingBlockNr)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	result, err := ethapi.DoCall(
+		ctx,
+		&ethapi.DoCallOpts{
+			Backend:      p.r.backend,
+			Args:         args.Data,
+			State:        state,
+			Header:       header,
+			Overrides:    nil,
+			Timeout:      p.r.backend.RPCEVMTimeout(),
+			GlobalGasCap: p.r.backend.RPCGasCap(),
+			RunMode:      core.MessageEthcallMode,
+		},
+	)
 	if err != nil {
 		return nil, err
 	}

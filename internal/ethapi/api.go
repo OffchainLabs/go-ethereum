@@ -963,21 +963,28 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	}
 }
 
-func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64, runMode core.MessageRunMode) (*core.ExecutionResult, error) {
+type DoCallOpts struct {
+	Backend      Backend
+	Args         TransactionArgs
+	State        *state.StateDB
+	Header       *types.Header
+	Overrides    *StateOverride
+	Timeout      time.Duration
+	GlobalGasCap uint64
+	RunMode      core.MessageRunMode
+}
+
+func DoCall(ctx context.Context, opts *DoCallOpts) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
-	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-	if state == nil || err != nil {
-		return nil, err
-	}
-	if err := overrides.Apply(state); err != nil {
+	if err := opts.Overrides.Apply(opts.State); err != nil {
 		return nil, err
 	}
 	// Setup context so it may be cancelled the call has completed
 	// or, in case of unmetered gas, setup a context with a timeout.
 	var cancel context.CancelFunc
-	if timeout > 0 {
-		ctx, cancel = context.WithTimeout(ctx, timeout)
+	if opts.Timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 	} else {
 		ctx, cancel = context.WithCancel(ctx)
 	}
@@ -986,19 +993,19 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	defer cancel()
 
 	// Get a new instance of the EVM.
-	msg, err := args.ToMessage(globalGasCap, header, state, runMode)
+	msg, err := opts.Args.ToMessage(opts.GlobalGasCap, opts.Header, opts.State, opts.RunMode)
 	if err != nil {
 		return nil, err
 	}
 
 	// Arbitrum: support NodeInterface.sol by swapping out the message if needed
 	var res *core.ExecutionResult
-	msg, res, err = core.InterceptRPCMessage(msg, ctx, state, header, b)
+	msg, res, err = core.InterceptRPCMessage(msg, ctx, opts.State, opts.Header, opts.Backend)
 	if err != nil || res != nil {
 		return res, err
 	}
 
-	evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
+	evm, vmError, err := opts.Backend.GetEVM(ctx, msg, opts.State, opts.Header, &vm.Config{NoBaseFee: true})
 	if err != nil {
 		return nil, err
 	}
@@ -1018,7 +1025,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 
 	// If the timer caused an abort, return an appropriate error message
 	if evm.Cancelled() {
-		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
+		return nil, fmt.Errorf("execution aborted (timeout = %v)", opts.Timeout)
 	}
 	if err != nil {
 		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.GasLimit)
@@ -1026,9 +1033,9 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 
 	// Arbitrum: a tx can schedule another (see retryables)
 	scheduled := result.ScheduledTxes
-	for runMode == core.MessageGasEstimationMode && len(scheduled) > 0 {
+	for opts.RunMode == core.MessageGasEstimationMode && len(scheduled) > 0 {
 		// make a new EVM for the scheduled Tx (an EVM must never be reused)
-		evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
+		evm, vmError, err := opts.Backend.GetEVM(ctx, msg, opts.State, opts.Header, &vm.Config{NoBaseFee: true})
 		if err != nil {
 			return nil, err
 		}
@@ -1038,7 +1045,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 		}()
 
 		// This will panic if the scheduled tx is signed, but we only schedule unsigned ones
-		msg, err := core.TransactionToMessage(scheduled[0], types.NewArbitrumSigner(nil), header.BaseFee)
+		msg, err := core.TransactionToMessage(scheduled[0], types.NewArbitrumSigner(nil), opts.Header.BaseFee)
 		if err != nil {
 			return nil, err
 		}
@@ -1103,7 +1110,24 @@ func (e *revertError) ErrorData() interface{} {
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Bytes, error) {
-	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap(), core.MessageEthcallMode)
+	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	result, err := DoCall(
+		ctx,
+		&DoCallOpts{
+			Backend:      s.b,
+			Args:         args,
+			State:        state,
+			Header:       header,
+			Overrides:    overrides,
+			Timeout:      s.b.RPCEVMTimeout(),
+			GlobalGasCap: s.b.RPCGasCap(),
+			RunMode:      core.MessageEthcallMode,
+		},
+	)
 	if err != nil {
 		if client := fallbackClientFor(s.b, err); client != nil {
 			var res hexutil.Bytes
@@ -1119,11 +1143,28 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 	return result.Return(), result.Err
 }
 
+func feeCap(gasPrice, maxFeePerGas, maxPriorityFeePerGas *hexutil.Big) (*big.Int, error) {
+	if gasPrice != nil {
+		if maxFeePerGas != nil || maxPriorityFeePerGas != nil {
+			return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) are specified")
+		}
+		return gasPrice.ToInt(), nil
+	}
+	if maxFeePerGas != nil {
+		return maxFeePerGas.ToInt(), nil
+	}
+	return common.Big0, nil
+}
+
 func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {
+	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return 0, err
+	}
 	// Binary search the gas requirement, as it may be higher than the amount used
 	var (
 		lo  uint64 = params.TxGas - 1
-		hi  uint64
+		hi  uint64 = header.GasLimit // use block gas limit for ceiling
 		cap uint64
 	)
 	// Use zero address if sender unspecified.
@@ -1133,34 +1174,16 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	// Determine the highest gas limit can be used during the estimation.
 	if args.Gas != nil && uint64(*args.Gas) >= params.TxGas {
 		hi = uint64(*args.Gas)
-	} else {
-		// Retrieve the block to act as the gas ceiling
-		block, err := b.BlockByNumberOrHash(ctx, blockNrOrHash)
-		if err != nil {
-			return 0, err
-		}
-		if block == nil {
-			return 0, errors.New("block not found")
-		}
-		hi = block.GasLimit()
 	}
+
 	// Normalize the max fee per gas the call is willing to spend.
-	var feeCap *big.Int
-	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
-		return 0, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
-	} else if args.GasPrice != nil {
-		feeCap = args.GasPrice.ToInt()
-	} else if args.MaxFeePerGas != nil {
-		feeCap = args.MaxFeePerGas.ToInt()
-	} else {
-		feeCap = common.Big0
+	feeCap, err := feeCap(args.GasPrice, args.MaxFeePerGas, args.MaxPriorityFeePerGas)
+	if err != nil {
+		return 0, err
 	}
+
 	// Recap the highest gas limit with account's available balance.
 	if feeCap.BitLen() != 0 {
-		state, _, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-		if err != nil {
-			return 0, err
-		}
 		balance := state.GetBalance(*args.From) // from can't be nil
 		available := new(big.Int).Set(balance)
 		if args.Value != nil {
@@ -1186,11 +1209,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	vanillaGasCap := gasCap
 	{
-		state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-		if state == nil || err != nil {
-			return 0, err
-		}
-		gasCap, err = args.L2OnlyGasCap(gasCap, header, state, core.MessageGasEstimationMode)
+		gasCap, err = args.L2OnlyGasCap(gasCap, header, state.Copy(), core.MessageGasEstimationMode)
 		if err != nil {
 			return 0, err
 		}
@@ -1206,8 +1225,17 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
-
-		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, vanillaGasCap, core.MessageGasEstimationMode)
+		result, err := DoCall(ctx,
+			&DoCallOpts{
+				Backend:      b,
+				Args:         args,
+				State:        state.Copy(),
+				Header:       header,
+				Overrides:    nil,
+				Timeout:      0,
+				GlobalGasCap: vanillaGasCap,
+				RunMode:      core.MessageGasEstimationMode,
+			})
 		if err != nil {
 			if errors.Is(err, core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
