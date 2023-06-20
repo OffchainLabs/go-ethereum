@@ -28,16 +28,16 @@ import (
 )
 
 // Installs an Arbitrum TxProcessor, enabling ArbOS for this state transition (see vm/evm_arbitrum.go)
-var ReadyEVMForL2 func(evm *vm.EVM, msg Message)
+var ReadyEVMForL2 func(evm *vm.EVM, msg *Message)
 
 // Allows ArbOS to swap out or return early from an RPC message to support the NodeInterface virtual contract
 var InterceptRPCMessage = func(
-	msg types.Message,
+	msg *Message,
 	ctx context.Context,
 	statedb *state.StateDB,
 	header *types.Header,
 	backend NodeInterfaceBackendAPI,
-) (types.Message, *ExecutionResult, error) {
+) (*Message, *ExecutionResult, error) {
 	return msg, nil, nil
 }
 
@@ -45,15 +45,15 @@ var InterceptRPCMessage = func(
 var GetArbOSSpeedLimitPerSecond func(statedb *state.StateDB) (uint64, error)
 
 // Allows ArbOS to update the gas cap so that it ignores the message's specific L1 poster costs.
-var InterceptRPCGasCap = func(gascap *uint64, msg types.Message, header *types.Header, statedb *state.StateDB) {}
+var InterceptRPCGasCap = func(gascap *uint64, msg *Message, header *types.Header, statedb *state.StateDB) {}
 
 // Renders a solidity error in human-readable form
 var RenderRPCError func(data []byte) error
 
 type NodeInterfaceBackendAPI interface {
 	ChainConfig() *params.ChainConfig
-	CurrentBlock() *types.Block
+	CurrentBlock() *types.Header
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	GetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error)
-	GetEVM(ctx context.Context, msg Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error)
+	GetEVM(ctx context.Context, msg *Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error)
 }
