@@ -1027,6 +1027,11 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	// Arbitrum: a tx can schedule another (see retryables)
 	scheduled := result.ScheduledTxes
 	for runMode == core.MessageGasEstimationMode && len(scheduled) > 0 {
+		// This will panic if the scheduled tx is signed, but we only schedule unsigned ones
+		msg, err := core.TransactionToMessage(scheduled[0], types.NewArbitrumSigner(nil), header.BaseFee)
+		if err != nil {
+			return nil, err
+		}
 		// make a new EVM for the scheduled Tx (an EVM must never be reused)
 		evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
 		if err != nil {
@@ -1037,11 +1042,6 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 			evm.Cancel()
 		}()
 
-		// This will panic if the scheduled tx is signed, but we only schedule unsigned ones
-		msg, err := core.TransactionToMessage(scheduled[0], types.NewArbitrumSigner(nil), header.BaseFee)
-		if err != nil {
-			return nil, err
-		}
 		scheduledTxResult, err := core.ApplyMessage(evm, msg, gp)
 		if err != nil {
 			return nil, err // Bail out
