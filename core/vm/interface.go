@@ -31,7 +31,7 @@ type StateDB interface {
 	GetCompiledWasmCode(addr common.Address, version uint32) []byte
 	SetCompiledWasmCode(addr common.Address, code []byte, version uint32)
 
-	NoncanonicalProgramHash(common.Address, uint32) common.Hash
+	NoncanonicalProgramHash(codeHash common.Hash, version uint32) common.Hash
 	Deterministic() bool
 	Database() state.Database
 

@@ -119,23 +119,34 @@ type UserWasm struct {
 	NoncanonicalHash common.Hash
 	CompressedWasm   []byte
 	Wasm             []byte
+	CodeHash         common.Hash
 }
 type WasmCall struct {
-	Version uint32
-	Address common.Address
+	Version  uint32
+	CodeHash common.Hash
 }
 
 func (s *StateDB) StartRecording() {
 	s.userWasms = make(UserWasms)
 }
 
-func (s *StateDB) RecordProgram(program common.Address, version uint32) {
+func (s *StateDB) RecordProgram(program common.Address, codeHash common.Hash, version uint32) {
 	if s.userWasms != nil {
 		call := WasmCall{
-			Version: version,
-			Address: program,
+			Version:  version,
+			CodeHash: codeHash,
 		}
 		if _, ok := s.userWasms[call]; ok {
+			return
+		}
+		storedCodeHash := s.GetCodeHash(program)
+		if storedCodeHash != codeHash {
+			log.Error(
+				"Wrong recorded codehash for program at addr %#x, got codehash %#x in DB, specified codehash %#x to record",
+				program,
+				storedCodeHash,
+				codeHash,
+			)
 			return
 		}
 		rawCode := s.GetCode(program)
@@ -145,16 +156,17 @@ func (s *StateDB) RecordProgram(program common.Address, version uint32) {
 			return
 		}
 		s.userWasms[call] = &UserWasm{
-			NoncanonicalHash: s.NoncanonicalProgramHash(program, version),
+			NoncanonicalHash: s.NoncanonicalProgramHash(codeHash, version),
 			CompressedWasm:   compressedWasm,
+			CodeHash:         codeHash,
 		}
 	}
 }
 
-func (s *StateDB) NoncanonicalProgramHash(program common.Address, version uint32) common.Hash {
+func (s *StateDB) NoncanonicalProgramHash(codeHash common.Hash, version uint32) common.Hash {
 	prefix := make([]byte, 4)
 	binary.BigEndian.PutUint32(prefix, version)
-	return crypto.Keccak256Hash(prefix, s.GetCodeHash(program).Bytes())
+	return crypto.Keccak256Hash(prefix, codeHash.Bytes())
 }
 
 func (s *StateDB) UserWasms() UserWasms {
