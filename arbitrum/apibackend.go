@@ -68,7 +68,7 @@ func CreateFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.D
 	var fallbackClient types.FallbackClient
 	var err error
 	fallbackClient, err = rpc.Dial(fallbackClientUrl)
-	if fallbackClient == nil || err != nil {
+	if err != nil {
 		return nil, fmt.Errorf("failed creating fallback connection: %w", err)
 	}
 	if fallbackClientTimeout != 0 {
@@ -172,7 +172,7 @@ func (a *APIBackend) SyncProgressMap() map[string]interface{} {
 func (a *APIBackend) SyncProgress() ethereum.SyncProgress {
 	progress := a.SyncProgressMap()
 
-	if progress == nil || len(progress) == 0 {
+	if len(progress) == 0 {
 		return ethereum.SyncProgress{}
 	}
 	return ethereum.SyncProgress{
@@ -191,7 +191,6 @@ func (a *APIBackend) FeeHistory(
 	newestBlock rpc.BlockNumber,
 	rewardPercentiles []float64,
 ) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
-
 	if core.GetArbOSSpeedLimitPerSecond == nil {
 		return nil, nil, nil, nil, errors.New("ArbOS not installed")
 	}
@@ -230,7 +229,7 @@ func (a *APIBackend) FeeHistory(
 
 	// use the most recent average compute rate for all blocks
 	// note: while we could query this value for each block, it'd be prohibitively expensive
-	state, _, err := a.StateAndHeaderByNumber(ctx, rpc.BlockNumber(newestBlock))
+	state, _, err := a.StateAndHeaderByNumber(ctx, newestBlock)
 	if err != nil {
 		return common.Big0, nil, nil, nil, err
 	}
@@ -296,7 +295,6 @@ func (a *APIBackend) FeeHistory(
 			fullnessAnalogue = 1.0
 		}
 		gasUsed[block-oldestBlock] = fullnessAnalogue
-
 	}
 	if newestBlock == latestBlock {
 		basefees[blocks] = basefees[blocks-1] // guess the basefee won't change
