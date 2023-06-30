@@ -472,6 +472,9 @@ func formatLogfmtBigInt(n *big.Int) string {
 // escapeString checks if the provided string needs escaping/quoting, and
 // calls strconv.Quote if needed
 func escapeString(s string) string {
+	// Arbitrum: remove console colors introduced in Arbitrator
+	s = Uncolor(s)
+
 	needsQuoting := false
 	for _, r := range s {
 		// We quote everything below " (0x22) and above~ (0x7E), plus equal-sign
@@ -490,6 +493,9 @@ func escapeString(s string) string {
 // to escapeString. The difference is that this method is more lenient: it allows
 // for spaces and linebreaks to occur without needing quoting.
 func escapeMessage(s string) string {
+	// Arbitrum: remove console colors introduced in Arbitrator
+	s = Uncolor(s)
+
 	needsQuoting := false
 	for _, r := range s {
 		// Allow CR/LF/TAB. This is to make multi-line messages work.

@@ -65,6 +65,8 @@ type StateDB struct {
 	// Arbitrum
 	unexpectedBalanceDelta *big.Int  // total balance change across all accounts
 	userWasms              UserWasms // user wasms encountered during execution
+	openWasmPages          uint16    // number of pages currently open
+	everWasmPages          uint16    // largest number of pages ever allocated during this tx's execution
 	deterministic          bool      // whether the order in which deletes are committed should be deterministic
 
 	db         Database
@@ -144,6 +146,9 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	}
 	sdb := &StateDB{
 		unexpectedBalanceDelta: new(big.Int),
+		userWasms:              make(UserWasms),
+		openWasmPages:          0,
+		everWasmPages:          0,
 
 		db:                   db,
 		trie:                 tr,
@@ -723,6 +728,9 @@ func (s *StateDB) Copy() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
 		unexpectedBalanceDelta: new(big.Int).Set(s.unexpectedBalanceDelta),
+		userWasms:              make(UserWasms, len(s.userWasms)),
+		openWasmPages:          s.openWasmPages,
+		everWasmPages:          s.everWasmPages,
 
 		db:                   s.db,
 		trie:                 s.db.CopyTrie(s.trie),
@@ -793,6 +801,11 @@ func (s *StateDB) Copy() *StateDB {
 	// in the middle of a transaction.
 	state.accessList = s.accessList.Copy()
 	state.transientStorage = s.transientStorage.Copy()
+
+	// Arbitrum: copy wasm calls
+	for call, wasm := range s.userWasms {
+		state.userWasms[call] = wasm
+	}
 
 	// If there's a prefetcher running, make an inactive copy of it that can
 	// only access data but does not actively preload (since the user will not
@@ -987,6 +1000,10 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 	s.thash = thash
 	s.txIndex = ti
+
+	// Arbitrum: clear memory charging state for new tx
+	s.openWasmPages = 0
+	s.everWasmPages = 0
 }
 
 func (s *StateDB) clearJournalAndRefund() {
