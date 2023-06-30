@@ -19,16 +19,20 @@
 
 package rawdb
 
-type Releaser interface {
-	Release() error
+type FileLock interface {
+	Unlock() error
+	TryLock() (bool, error)
 }
 
-func Flock(fileName string) (r Releaser, existed bool, err error) {
-	return mockReleaser{}, false, nil
+func NewFileLock(_ string) FileLock {
+	return mockFileLock{}
 }
 
-type mockReleaser struct{}
+type mockFileLock struct{}
 
-func (r mockReleaser) Release() error {
+func (r mockFileLock) Unlock() error {
 	return nil
+}
+func (r mockFileLock) TryLock() (bool, error) {
+	return true, nil
 }
