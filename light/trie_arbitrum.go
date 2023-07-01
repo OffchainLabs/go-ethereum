@@ -25,3 +25,7 @@ import (
 func (db *odrDatabase) CompiledWasmContractCode(version uint32, codeHash common.Hash) ([]byte, error) {
 	return nil, errors.New("retreiving compiled wasm not supported in light client")
 }
+
+func (db *odrDatabase) SetCompiledWasmContractCode(version uint32, codeHash common.Hash, code []byte) error {
+	return errors.New("setting compiled wasm not supported in light client")
+}

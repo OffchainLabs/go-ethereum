@@ -74,7 +74,7 @@ func (s *StateDB) GetCompiledWasmCode(addr common.Address, version uint32) []byt
 func (s *StateDB) SetCompiledWasmCode(addr common.Address, code []byte, version uint32) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
-		stateObject.SetCompiledWasmCode(code, version)
+		stateObject.SetCompiledWasmCode(s.db, code, version)
 	}
 }
 

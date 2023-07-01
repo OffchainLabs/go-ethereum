@@ -23,3 +23,12 @@ func (db *cachingDB) CompiledWasmContractCode(version uint32, codeHash common.Ha
 	}
 	return nil, errors.New("not found")
 }
+
+func (db *cachingDB) SetCompiledWasmContractCode(version uint32, codeHash common.Hash, code []byte) error {
+	wasmKey := rawdb.CompiledWasmCodeKey(version, codeHash)
+	if code, _ := db.compiledWasmCache.Get(wasmKey); len(code) > 0 {
+		return nil
+	}
+	db.compiledWasmCache.Add(wasmKey, code)
+	return db.disk.Put(wasmKey[:], code)
+}

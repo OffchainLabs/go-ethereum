@@ -48,6 +48,7 @@ func (s *stateObject) CompiledWasmCode(db Database, version uint32) []byte {
 	compiledWasmCode, err := db.CompiledWasmContractCode(version, common.BytesToHash(s.CodeHash()))
 	if err != nil {
 		s.setError(fmt.Errorf("can't load code hash %x: %v", s.CodeHash(), err))
+		return nil
 	}
 	s.compiledWasmCode[version] = CompiledWasmCache{
 		code:  compiledWasmCode,
@@ -56,13 +57,16 @@ func (s *stateObject) CompiledWasmCode(db Database, version uint32) []byte {
 	return compiledWasmCode
 }
 
-func (s *stateObject) SetCompiledWasmCode(code []byte, version uint32) {
+func (s *stateObject) SetCompiledWasmCode(db Database, code []byte, version uint32) {
 	// Can only be compiled once, so if it's being compiled, it was previous empty
 	s.db.journal.append(wasmCodeChange{
 		account: &s.address,
 		version: version,
 	})
 	s.setWASMCode(code, version)
+	if err := db.SetCompiledWasmContractCode(version, common.BytesToHash(s.CodeHash()), code); err != nil {
+		s.setError(fmt.Errorf("cannot set compiled wasm contract code %x: %v", s.CodeHash(), err))
+	}
 }
 
 func (s *stateObject) setWASMCode(code []byte, version uint32) {
