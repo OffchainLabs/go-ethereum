@@ -30,5 +30,5 @@ func (db *cachingDB) SetCompiledWasmContractCode(version uint32, codeHash common
 		return nil
 	}
 	db.compiledWasmCache.Add(wasmKey, code)
-	return db.disk.Put(wasmKey[:], code)
+	return nil
 }
