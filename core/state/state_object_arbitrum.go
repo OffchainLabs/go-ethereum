@@ -39,7 +39,6 @@ func (c CompiledWasms) Copy() CompiledWasms {
 
 // CompiledWasmCode returns the user wasm contract code associated with this object, if any.
 func (s *stateObject) CompiledWasmCode(db Database, version uint32) []byte {
-	fmt.Printf("Getting compiled code for %#x\n", s.address)
 	if wasm, ok := s.compiledWasmCode[version]; ok {
 		return wasm.code
 	}
