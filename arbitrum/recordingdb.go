@@ -118,9 +118,7 @@ func (db *RecordingKV) Close() error {
 	return nil
 }
 
-func (db *RecordingKV) Release() {
-	return
-}
+func (db *RecordingKV) Release() {}
 
 func (db *RecordingKV) GetRecordedEntries() map[common.Hash][]byte {
 	return db.readDbEntries

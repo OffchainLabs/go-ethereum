@@ -132,7 +132,7 @@ func (s *EthereumAPI) FeeHistory(ctx context.Context, blockCount math.HexOrDecim
 func (s *EthereumAPI) Syncing() (interface{}, error) {
 	progress := s.b.SyncProgressMap()
 
-	if progress == nil || len(progress) == 0 {
+	if len(progress) == 0 {
 		return false, nil
 	}
 	return progress, nil
@@ -1027,6 +1027,11 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	// Arbitrum: a tx can schedule another (see retryables)
 	scheduled := result.ScheduledTxes
 	for runMode == core.MessageGasEstimationMode && len(scheduled) > 0 {
+		// This will panic if the scheduled tx is signed, but we only schedule unsigned ones
+		msg, err := core.TransactionToMessage(scheduled[0], types.NewArbitrumSigner(nil), header.BaseFee)
+		if err != nil {
+			return nil, err
+		}
 		// make a new EVM for the scheduled Tx (an EVM must never be reused)
 		evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
 		if err != nil {
@@ -1037,11 +1042,6 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 			evm.Cancel()
 		}()
 
-		// This will panic if the scheduled tx is signed, but we only schedule unsigned ones
-		msg, err := core.TransactionToMessage(scheduled[0], types.NewArbitrumSigner(nil), header.BaseFee)
-		if err != nil {
-			return nil, err
-		}
 		scheduledTxResult, err := core.ApplyMessage(evm, msg, gp)
 		if err != nil {
 			return nil, err // Bail out
@@ -1256,7 +1256,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 // EstimateGas returns an estimate of the amount of gas needed to execute the
 // given transaction against the current pending block.
 func (s *BlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
-	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
+	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
@@ -1409,7 +1409,7 @@ func (s *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inc
 		if err != nil {
 			log.Error("error trying to fill legacy l1BlockNumber", "err", err)
 		} else {
-			fields["l1BlockNumber"] = hexutil.Uint64(l1BlockNumber)
+			fields["l1BlockNumber"] = l1BlockNumber
 		}
 	}
 	return fields, err
@@ -1812,7 +1812,7 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 	if err != nil {
 		return nil, err
 	}
-	if len(receipts) <= int(index) {
+	if uint64(len(receipts)) <= index {
 		return nil, nil
 	}
 	receipt := receipts[index]

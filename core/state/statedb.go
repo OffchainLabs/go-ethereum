@@ -92,8 +92,10 @@ type StateDB struct {
 	// DB error.
 	// State objects are used by the consensus core and VM which are
 	// unable to deal with database-level errors. Any error that occurs
-	// during a database read is memoized here and will eventually be returned
-	// by StateDB.Commit.
+	// during a database read is memoized here and will eventually be
+	// returned by StateDB.Commit. Notably, this error is also shared
+	// by all cached state objects in case the database failure occurs
+	// when accessing state of accounts.
 	dbErr error
 
 	// The refund counter, also used by state transitioning.
@@ -203,6 +205,7 @@ func (s *StateDB) setError(err error) {
 	}
 }
 
+// Error returns the memorized database failure occurred earlier.
 func (s *StateDB) Error() error {
 	return s.dbErr
 }
@@ -427,10 +430,12 @@ func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 func (s *StateDB) SetBalance(addr common.Address, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
+		if amount == nil {
+			amount = big.NewInt(0)
+		}
 		prevBalance := stateObject.Balance()
 		s.unexpectedBalanceDelta.Add(s.unexpectedBalanceDelta, amount)
 		s.unexpectedBalanceDelta.Sub(s.unexpectedBalanceDelta, prevBalance)
-
 		stateObject.SetBalance(amount)
 	}
 }
@@ -508,13 +513,11 @@ func (s *StateDB) SetTransientState(addr common.Address, key, value common.Hash)
 	if prev == value {
 		return
 	}
-
 	s.journal.append(transientStorageChange{
 		account:  &addr,
 		key:      key,
 		prevalue: prev,
 	})
-
 	s.setTransientState(addr, key, value)
 }
 
@@ -1016,6 +1019,7 @@ func (s *StateDB) clearJournalAndRefund() {
 
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
+	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
@@ -1029,8 +1033,8 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		storageTrieNodesUpdated int
 		storageTrieNodesDeleted int
 		nodes                   = trie.NewMergedNodeSet()
+		codeWriter              = s.db.DiskDB().NewBatch()
 	)
-	codeWriter := s.db.DiskDB().NewBatch()
 	for addr := range s.stateObjectsDirty {
 		if obj := s.stateObjects[addr]; !obj.deleted {
 			// Write any contract code associated with the state object
