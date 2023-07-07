@@ -286,6 +286,11 @@ func (h *httpServer) doStop() {
 	h.server, h.listener = nil, nil
 }
 
+// Arbitrum: Allows injection of custom http.Handler functionality.
+var WrapHTTPHandler = func(srv http.Handler) (http.Handler, error) {
+	return srv, nil
+}
+
 // enableRPC turns on JSON-RPC over HTTP on the server.
 func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 	h.mu.Lock()
@@ -300,9 +305,15 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 	if err := RegisterApis(apis, config.Modules, srv); err != nil {
 		return err
 	}
+
+	httpHandler, err := WrapHTTPHandler(srv)
+	if err != nil {
+		return err
+	}
+
 	h.httpConfig = config
 	h.httpHandler.Store(&rpcHandler{
-		Handler: NewHTTPHandlerStack(srv, config.CorsAllowedOrigins, config.Vhosts, config.jwtSecret),
+		Handler: NewHTTPHandlerStack(httpHandler, config.CorsAllowedOrigins, config.Vhosts, config.jwtSecret),
 		server:  srv,
 	})
 	return nil
