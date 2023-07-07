@@ -428,7 +428,6 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 }
 
 func opGasprice(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-
 	// Arbitrum: provide an opportunity to remove the tip from the gas price
 	gasPrice := interpreter.evm.ProcessingHook.GasPriceOp(interpreter.evm)
 

@@ -145,7 +145,7 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Value = (*hexutil.Big)(itx.Value)
 		enc.To = tx.To()
 	case *ArbitrumUnsignedTx:
-		enc.From = (*common.Address)(&itx.From)
+		enc.From = &itx.From
 		enc.ChainID = (*hexutil.Big)(itx.ChainId)
 		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
 		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
@@ -163,7 +163,7 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Data = (*hexutil.Bytes)(&itx.Data)
 		enc.To = tx.To()
 	case *ArbitrumRetryTx:
-		enc.From = (*common.Address)(&itx.From)
+		enc.From = &itx.From
 		enc.TicketId = &itx.TicketId
 		enc.RefundTo = &itx.RefundTo
 		enc.ChainID = (*hexutil.Big)(itx.ChainId)
