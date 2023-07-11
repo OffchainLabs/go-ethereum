@@ -64,7 +64,7 @@ func (s *stateObject) SetCompiledWasmCode(db Database, code []byte, version uint
 	})
 	s.setWASMCode(code, version)
 	if err := db.SetCompiledWasmContractCode(version, common.BytesToHash(s.CodeHash()), code); err != nil {
-		s.setError(fmt.Errorf("cannot set compiled wasm contract code %x: %v", s.CodeHash(), err))
+		s.db.setError(fmt.Errorf("cannot set compiled wasm contract code %x: %v", s.CodeHash(), err))
 	}
 }
 
