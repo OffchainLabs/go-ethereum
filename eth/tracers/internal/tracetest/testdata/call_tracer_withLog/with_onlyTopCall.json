@@ -77,6 +77,28 @@
     "onlyTopCall": true
   },
   "result": {
+    "beforeEVMTransfers": [
+      {
+        "purpose": "feePayment",
+        "from": "0x4F5777744b500616697CB655DCb02ee6CD51DeB5",
+        "to": null,
+        "value": "0x21c166071e51e6"
+      }
+    ],
+    "afterEVMTransfers": [
+      {
+        "purpose": "gasRefund",
+        "from": null,
+        "to": "0x4F5777744b500616697CB655DCb02ee6CD51DeB5",
+        "value": "0x1026111b8570c0"
+      },
+      {
+        "purpose": "tip",
+        "from": null,
+        "to": "0xf8b483DbA2c3B7176a3Da549ad41A48BB3121069",
+        "value": "0x119b54eb98e126"
+      }
+    ],
     "from": "0x4f5777744b500616697cb655dcb02ee6cd51deb5",
     "gas": "0x2dced",
     "gasUsed": "0x1a9e5",

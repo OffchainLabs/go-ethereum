@@ -103,7 +103,7 @@ type callFrameMarshaling struct {
 }
 
 type callTracer struct {
-	// Arbitrum: capture transfers occuring outside of evm execution
+	// Arbitrum: capture transfers occurring outside of evm execution
 	beforeEVMTransfers []arbitrumTransfer
 	afterEVMTransfers  []arbitrumTransfer
 
@@ -133,6 +133,7 @@ func newCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, e
 	// and is populated on start and end.
 	return &callTracer{
 		callstack:          make([]callFrame, 1),
+		config:             config,
 		beforeEVMTransfers: []arbitrumTransfer{},
 		afterEVMTransfers:  []arbitrumTransfer{},
 	}, nil
