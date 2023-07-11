@@ -16,6 +16,10 @@
 
 package vm
 
+import (
+	"github.com/ethereum/go-ethereum/common"
+)
+
 func (in *EVMInterpreter) Config() *Config {
 	return &in.evm.Config
 }
@@ -32,18 +36,13 @@ func (in *EVMInterpreter) ReadOnly() bool {
 	return in.readOnly
 }
 
-func (in *EVMInterpreter) GetReturnData(offset uint32, size uint32) []byte {
-	dataLen := len(in.returnData)
-	if int(offset) > dataLen {
-		offset = uint32(dataLen)
+func (in *EVMInterpreter) GetReturnData(offset int, size int) []byte {
+	if offset >= len(in.returnData) {
+		return []byte{}
 	}
-	end := offset + size
-	if int(end) > dataLen || end < offset {
-		// offset + size larger than data or offset + size overflowed
-		end = uint32(dataLen)
-	}
+	data := in.returnData[offset:]
 
-	return in.returnData[offset:end]
+	return data[:common.MinInt(size, len(data))]
 }
 
 func (in *EVMInterpreter) SetReturnData(data []byte) {
