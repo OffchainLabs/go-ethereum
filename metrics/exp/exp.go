@@ -6,6 +6,7 @@ import (
 	"expvar"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -53,13 +54,28 @@ func ExpHandler(r metrics.Registry) http.Handler {
 	return http.HandlerFunc(e.expHandler)
 }
 
+// HandlerOpt contains Nitro specific path and its' http handler.
+type HandlerOpt struct {
+	Path    string // e.g. /debug/stackTrace
+	Handler http.Handler
+}
+
 // Setup starts a dedicated metrics server at the given address.
 // This function enables metrics reporting separate from pprof.
-func Setup(address string) {
+func Setup(address string, handlers ...*HandlerOpt) {
 	m := http.NewServeMux()
 	m.Handle("/debug/metrics", ExpHandler(metrics.DefaultRegistry))
 	m.Handle("/debug/metrics/prometheus", prometheus.Handler(metrics.DefaultRegistry))
 	log.Info("Starting metrics server", "addr", fmt.Sprintf("http://%s/debug/metrics", address))
+	for _, ho := range handlers {
+		u, err := url.Parse(fmt.Sprintf("http://%s%s", address, ho.Path))
+		if err != nil {
+			log.Warn("Wrong nitro handler path, skipping", "path", ho.Path, "error", err)
+			continue
+		}
+		m.Handle(ho.Path, ho.Handler)
+		log.Info("Installing Nitro handler", "addr", u)
+	}
 	go func() {
 		if err := http.ListenAndServe(address, m); err != nil {
 			log.Error("Failure in running metrics server", "err", err)
