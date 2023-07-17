@@ -149,7 +149,6 @@ type Config struct {
 	// AuthModules is a list of API modules to expose via the Auth RPC interface.
 	// If the module list is empty, all RPC API endpoints designated public will be
 	// exposed.
-	// TODO(magic) what if old config will be deserialized? is it ok to expose all public APIs?
 	AuthModules []string
 
 	// AuthOrigins is the list of domain to accept websocket requests from. Please be
