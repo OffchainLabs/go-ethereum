@@ -146,6 +146,17 @@ type Config struct {
 	// for the authenticated api. This is by default {'localhost'}.
 	AuthVirtualHosts []string `toml:",omitempty"`
 
+	// AuthModules is a list of API modules to expose via the Auth RPC interface.
+	// If the module list is empty, all RPC API endpoints designated public will be
+	// exposed.
+	// TODO(magic) what if old config will be deserialized? is it ok to expose all public APIs?
+	AuthModules []string
+
+	// AuthOrigins is the list of domain to accept websocket requests from. Please be
+	// aware that the server can only act upon the HTTP request the client sends and
+	// cannot verify the validity of the request header.
+	AuthOrigins []string `toml:",omitempty"`
+
 	// WSHost is the host interface on which to start the websocket RPC server. If
 	// this field is empty, no websocket API endpoint will be started.
 	WSHost string
