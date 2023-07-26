@@ -39,6 +39,10 @@ func IsLegacyStoredReceipts(raw []byte) (bool, error) {
 	if err := rlp.DecodeBytes(raw, &v5); err == nil {
 		return false, nil
 	}
+	var arbReceipt []arbLegacyStoredReceiptRLP
+	if err := rlp.DecodeBytes(raw, &arbReceipt); err == nil {
+		return true, nil
+	}
 	return false, errors.New("value is not a valid receipt encoding")
 }
 

@@ -295,18 +295,9 @@ type ReceiptForStorage Receipt
 func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
 	outerList := w.List()
-	if r.Type == ArbitrumLegacyTxType {
-		w.WriteBytes(receiptRootArbitrumLegacy)
-		w.WriteUint64(r.CumulativeGasUsed)
-		w.WriteUint64(r.GasUsed)
-		w.WriteUint64(r.GasUsedForL1)
-		w.WriteUint64(r.Status)
-		rlp.Encode(w, r.ContractAddress)
-	} else {
-		w.WriteBytes((*Receipt)(r).statusEncoding())
-		w.WriteUint64(r.CumulativeGasUsed)
-		w.WriteUint64(r.GasUsedForL1)
-	}
+	w.WriteBytes((*Receipt)(r).statusEncoding())
+	w.WriteUint64(r.CumulativeGasUsed)
+	w.WriteUint64(r.GasUsedForL1)
 	logList := w.List()
 	for _, log := range r.Logs {
 		if err := rlp.Encode(w, log); err != nil {
@@ -314,7 +305,7 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 		}
 	}
 	w.ListEnd(logList)
-	if r.Type >= ArbitrumDepositTxType && r.Type != ArbitrumLegacyTxType && r.ContractAddress != (common.Address{}) {
+	if r.Type >= ArbitrumDepositTxType && r.ContractAddress != (common.Address{}) {
 		w.WriteBytes(r.ContractAddress[:])
 	}
 	w.ListEnd(outerList)
@@ -361,7 +352,10 @@ func decodeArbitrumLegacyStoredReceiptRLP(r *ReceiptForStorage, blob []byte) err
 	r.GasUsed = stored.GasUsed
 	r.GasUsedForL1 = stored.L1GasUsed
 	r.ContractAddress = stored.ContractAddress
-	r.Logs = stored.Logs
+	r.Logs = make([]*Log, len(stored.Logs))
+	for i, log := range stored.Logs {
+		r.Logs[i] = (*Log)(log)
+	}
 	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
 
 	return nil
