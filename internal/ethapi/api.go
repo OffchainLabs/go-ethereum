@@ -1372,7 +1372,7 @@ type RPCTransaction struct {
 	GasPrice            *hexutil.Big      `json:"gasPrice"`
 	GasFeeCap           *hexutil.Big      `json:"maxFeePerGas,omitempty"`
 	GasTipCap           *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
-	MaxFeePerDataGas    *hexutil.Big      `json:"maxFeePerDataGas,omitempty"`
+	MaxFeePerBlobGas    *hexutil.Big      `json:"maxFeePerBlobGas,omitempty"`
 	Hash                common.Hash       `json:"hash"`
 	Input               hexutil.Bytes     `json:"input"`
 	Nonce               hexutil.Uint64    `json:"nonce"`
@@ -1451,7 +1451,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		} else {
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
-		result.MaxFeePerDataGas = (*hexutil.Big)(tx.BlobGasFeeCap())
+		result.MaxFeePerBlobGas = (*hexutil.Big)(tx.BlobGasFeeCap())
 		result.BlobVersionedHashes = tx.BlobHashes()
 	}
 	return result
