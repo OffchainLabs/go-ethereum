@@ -357,11 +357,6 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 			rs[i].GasUsed = rs[i].CumulativeGasUsed - rs[i-1].CumulativeGasUsed
 		}
 
-		if len(txs[i].BlobHashes()) != 0 {
-			rs[i].BlobGasUsed = uint64(len(txs[i].BlobHashes()) * params.BlobTxBlobGasPerBlob)
-			rs[i].BlobGasPrice = blobGasPrice
-		}
-
 		// The derived log fields can simply be set from the block and transaction
 		for j := 0; j < len(rs[i].Logs); j++ {
 			rs[i].Logs[j].BlockNumber = number
