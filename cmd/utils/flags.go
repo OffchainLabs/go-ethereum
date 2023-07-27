@@ -112,8 +112,9 @@ var (
 	}
 	ChaindataFlag = &flags.DirectoryFlag{
 		Name:     "datadir.chaindata",
-		Usage:    "Root directory for chaindata dir (default = inside chaindata)",
+		Usage:    "Root directory for chaindata dir (default = 'chaindata')",
 		Category: flags.EthCategory,
+		Value:    "chaindata",
 	}
 	MinFreeDiskSpaceFlag = &flags.DirectoryFlag{
 		Name:     "datadir.minfreedisk",
