@@ -18,8 +18,15 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	flag "github.com/spf13/pflag"
+)
+
+var (
+	recordingDbSize       = metrics.NewRegisteredGauge("arb/validator/recordingdb/size", nil) // note: only updating when adding state, not when removing - but should be good enough
+	recordingDbReferences = metrics.NewRegisteredGauge("arb/validator/recordingdb/references", nil)
 )
 
 type RecordingKV struct {
@@ -151,17 +158,34 @@ func (r *RecordingChainContext) GetMinBlockNumberAccessed() uint64 {
 	return r.minBlockNumberAccessed
 }
 
+type RecordingDatabaseConfig struct {
+	TrieDirtyCache int `koanf:"trie-dirty-cache"`
+	TrieCleanCache int `koanf:"trie-clean-cache"`
+}
+
+var DefaultRecordingDatabaseConfig = RecordingDatabaseConfig{
+	TrieDirtyCache: 1024,
+	TrieCleanCache: 16,
+}
+
+func RecordingDatabaseConfigAddOptions(prefix string, f *flag.FlagSet) {
+	f.Int(prefix+".trie-dirty-cache", DefaultRecordingDatabaseConfig.TrieDirtyCache, "like trie-dirty-cache for the separate, recording database (used for validation)")
+	f.Int(prefix+".trie-clean-cache", DefaultRecordingDatabaseConfig.TrieCleanCache, "like trie-clean-cache for the separate, recording database (used for validation)")
+}
+
 type RecordingDatabase struct {
+	config     *RecordingDatabaseConfig
 	db         state.Database
 	bc         *core.BlockChain
 	mutex      sync.Mutex // protects StateFor and Dereference
 	references int64
 }
 
-func NewRecordingDatabase(ethdb ethdb.Database, blockchain *core.BlockChain) *RecordingDatabase {
+func NewRecordingDatabase(config *RecordingDatabaseConfig, ethdb ethdb.Database, blockchain *core.BlockChain) *RecordingDatabase {
 	return &RecordingDatabase{
-		db: state.NewDatabaseWithConfig(ethdb, &trie.Config{Cache: 16}), //TODO cache needed? configurable?
-		bc: blockchain,
+		config: config,
+		db:     state.NewDatabaseWithConfig(ethdb, &trie.Config{Cache: config.TrieCleanCache}),
+		bc:     blockchain,
 	}
 }
 
@@ -194,6 +218,7 @@ func (r *RecordingDatabase) WriteStateToDatabase(header *types.Header) error {
 // lock must be held when calling that
 func (r *RecordingDatabase) referenceRootLockHeld(root common.Hash) {
 	r.references++
+	recordingDbReferences.Update(r.references)
 	r.db.TrieDB().Reference(root, common.Hash{})
 }
 
@@ -201,6 +226,7 @@ func (r *RecordingDatabase) dereferenceRoot(root common.Hash) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	r.references--
+	recordingDbReferences.Update(r.references)
 	r.db.TrieDB().Dereference(root)
 }
 
@@ -215,6 +241,16 @@ func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected comm
 		return fmt.Errorf("bad root hash expected: %v got: %v", expected, result)
 	}
 	r.referenceRootLockHeld(result)
+
+	size, _ := r.db.TrieDB().Size()
+	limit := common.StorageSize(r.config.TrieDirtyCache) * 1024 * 1024
+	recordingDbSize.Update(int64(size))
+	if size > limit {
+		log.Info("Recording DB: flushing to disk", "size", size, "limit", limit)
+		r.db.TrieDB().Cap(limit - ethdb.IdealBatchSize)
+		size, _ = r.db.TrieDB().Size()
+		recordingDbSize.Update(int64(size))
+	}
 	return nil
 }
 
