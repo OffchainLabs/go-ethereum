@@ -734,10 +734,30 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64, config *params.C
 	}
 	receipts := []*receiptLogs{}
 	if err := rlp.DecodeBytes(data, &receipts); err != nil {
+		if logs := readLegacyLogs(db, hash, number, config); logs != nil {
+			return logs
+		}
+
 		log.Error("Invalid receipt array RLP", "hash", hash, "err", err)
 		return nil
 	}
 
+	logs := make([][]*types.Log, len(receipts))
+	for i, receipt := range receipts {
+		logs[i] = receipt.Logs
+	}
+	return logs
+}
+
+// readLegacyLogs is a temporary workaround for when trying to read logs
+// from a block which has its receipt stored in the legacy format. It'll
+// be removed after users have migrated their freezer databases.
+// Arbitrum: we are keeping this to handle classic (legacy) receipts
+func readLegacyLogs(db ethdb.Reader, hash common.Hash, number uint64, config *params.ChainConfig) [][]*types.Log {
+	receipts := ReadReceipts(db, hash, number, config)
+	if receipts == nil {
+		return nil
+	}
 	logs := make([][]*types.Log, len(receipts))
 	for i, receipt := range receipts {
 		logs[i] = receipt.Logs
