@@ -15,7 +15,7 @@ import (
 // Returns true if nonce checks should be skipped based on inner's isFake()
 // This also disables requiring that sender is an EOA and not a contract
 func (tx *Transaction) SkipAccountChecks() bool {
-	return tx.inner.isFake()
+	return tx.inner.skipAccountChecks()
 }
 
 type fallbackError struct {
@@ -40,6 +40,16 @@ type FallbackClient interface {
 }
 
 var bigZero = big.NewInt(0)
+
+func (tx *LegacyTx) skipAccountChecks() bool                  { return false }
+func (tx *AccessListTx) skipAccountChecks() bool              { return false }
+func (tx *DynamicFeeTx) skipAccountChecks() bool              { return false }
+func (tx *ArbitrumUnsignedTx) skipAccountChecks() bool        { return false }
+func (tx *ArbitrumContractTx) skipAccountChecks() bool        { return true }
+func (tx *ArbitrumRetryTx) skipAccountChecks() bool           { return true }
+func (tx *ArbitrumSubmitRetryableTx) skipAccountChecks() bool { return true }
+func (d *ArbitrumDepositTx) skipAccountChecks() bool          { return true }
+func (t *ArbitrumInternalTx) skipAccountChecks() bool         { return true }
 
 type ArbitrumUnsignedTx struct {
 	ChainId *big.Int

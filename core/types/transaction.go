@@ -101,6 +101,8 @@ type TxData interface {
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
 
+	skipAccountChecks() bool
+
 	// effectiveGasPrice computes the gas price paid by the transaction, given
 	// the inclusion block baseFee.
 	//

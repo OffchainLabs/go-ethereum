@@ -108,6 +108,7 @@ func (tx *BlobTx) to() *common.Address       { return tx.To }
 func (tx *BlobTx) blobGas() uint64           { return params.BlobTxDataGasPerBlob * uint64(len(tx.BlobHashes)) }
 func (tx *BlobTx) blobGasFeeCap() *big.Int   { return tx.BlobFeeCap.ToBig() }
 func (tx *BlobTx) blobHashes() []common.Hash { return tx.BlobHashes }
+func (tx *BlobTx) skipAccountChecks() bool   { return false }
 
 func (tx *BlobTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
 	if baseFee == nil {
