@@ -18,14 +18,12 @@
 package state
 
 import (
-	"encoding/binary"
 	"math/big"
 
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -140,10 +138,8 @@ func (s *StateDB) GetSuicides() []common.Address {
 
 type UserWasms map[WasmCall]*UserWasm
 type UserWasm struct {
-	NoncanonicalHash common.Hash
-	CompressedWasm   []byte
-	Wasm             []byte
-	CodeHash         common.Hash
+	CompiledHash   common.Hash
+	CompressedWasm []byte
 }
 type WasmCall struct {
 	Version  uint32
@@ -154,7 +150,7 @@ func (s *StateDB) StartRecording() {
 	s.userWasms = make(UserWasms)
 }
 
-func (s *StateDB) RecordProgram(program common.Address, codeHash common.Hash, version uint32) {
+func (s *StateDB) RecordProgram(program common.Address, codeHash common.Hash, version uint32, compiledHash common.Hash) {
 	if s.userWasms != nil {
 		call := WasmCall{
 			Version:  version,
@@ -180,17 +176,10 @@ func (s *StateDB) RecordProgram(program common.Address, codeHash common.Hash, ve
 			return
 		}
 		s.userWasms[call] = &UserWasm{
-			NoncanonicalHash: s.NoncanonicalProgramHash(codeHash, version),
-			CompressedWasm:   compressedWasm,
-			CodeHash:         codeHash,
+			CompiledHash:   compiledHash,
+			CompressedWasm: compressedWasm,
 		}
 	}
-}
-
-func (s *StateDB) NoncanonicalProgramHash(codeHash common.Hash, version uint32) common.Hash {
-	prefix := make([]byte, 4)
-	binary.BigEndian.PutUint32(prefix, version)
-	return crypto.Keccak256Hash(prefix, codeHash.Bytes())
 }
 
 func (s *StateDB) UserWasms() UserWasms {

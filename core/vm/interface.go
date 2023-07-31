@@ -38,7 +38,6 @@ type StateDB interface {
 	AddStylusPages(new uint16) (uint16, uint16)
 	AddStylusPagesEver(new uint16)
 
-	NoncanonicalProgramHash(codeHash common.Hash, version uint32) common.Hash
 	Deterministic() bool
 	Database() state.Database
 
