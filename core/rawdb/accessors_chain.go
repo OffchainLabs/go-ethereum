@@ -754,7 +754,9 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64, config *params.C
 // be removed after users have migrated their freezer databases.
 // Arbitrum: we are keeping this to handle classic (legacy) receipts
 func readLegacyLogs(db ethdb.Reader, hash common.Hash, number uint64, config *params.ChainConfig) [][]*types.Log {
-	receipts := ReadReceipts(db, hash, number, config)
+	// The time can be zero since Arbitrum legacy receipts on Arbitrum One are pre-Cancun,
+	// and the time only affects which fork's signer is picked.
+	receipts := ReadReceipts(db, hash, number, 0, config)
 	if receipts == nil {
 		return nil
 	}
