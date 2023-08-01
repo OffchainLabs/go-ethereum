@@ -649,43 +649,62 @@ type StorageResult struct {
 	Proof []string     `json:"proof"`
 }
 
+// proofList implements ethdb.KeyValueWriter and collects the proofs as
+// hex-strings for delivery to rpc-caller.
+type proofList []string
+
+func (n *proofList) Put(key []byte, value []byte) error {
+	*n = append(*n, hexutil.Encode(value))
+	return nil
+}
+
+func (n *proofList) Delete(key []byte) error {
+	panic("not supported")
+}
+
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
 func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
+	var (
+		keys         = make([]common.Hash, len(storageKeys))
+		storageProof = make([]StorageResult, len(storageKeys))
+		storageTrie  state.Trie
+		storageHash  = types.EmptyRootHash
+		codeHash     = types.EmptyCodeHash
+	)
+	// Greedily deserialize all keys. This prevents state access on invalid input
+	for i, hexKey := range storageKeys {
+		if key, err := decodeHash(hexKey); err != nil {
+			return nil, err
+		} else {
+			keys[i] = key
+		}
+	}
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
 	}
-	storageTrie, err := state.StorageTrie(address)
-	if err != nil {
+	if storageTrie, err = state.StorageTrie(address); err != nil {
 		return nil, err
 	}
-	storageHash := types.EmptyRootHash
-	codeHash := state.GetCodeHash(address)
-	storageProof := make([]StorageResult, len(storageKeys))
-
-	// if we have a storageTrie, (which means the account exists), we can update the storagehash
+	// if we have a storageTrie, the account exists and we must update
+	// the storage root hash and the code hash.
 	if storageTrie != nil {
 		storageHash = storageTrie.Hash()
-	} else {
-		// no storageTrie means the account does not exist, so the codeHash is the hash of an empty bytearray.
-		codeHash = crypto.Keccak256Hash(nil)
+		codeHash = state.GetCodeHash(address)
 	}
-
 	// create the proof for the storageKeys
-	for i, hexKey := range storageKeys {
-		key, err := decodeHash(hexKey)
-		if err != nil {
+	for i, key := range keys {
+		if storageTrie == nil {
+			storageProof[i] = StorageResult{storageKeys[i], &hexutil.Big{}, []string{}}
+			continue
+		}
+		var proof proofList
+		if err := storageTrie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof); err != nil {
 			return nil, err
 		}
-		if storageTrie != nil {
-			proof, storageError := state.GetStorageProof(address, key)
-			if storageError != nil {
-				return nil, storageError
-			}
-			storageProof[i] = StorageResult{hexKey, (*hexutil.Big)(state.GetState(address, key).Big()), toHexSlice(proof)}
-		} else {
-			storageProof[i] = StorageResult{hexKey, &hexutil.Big{}, []string{}}
-		}
+		storageProof[i] = StorageResult{storageKeys[i],
+			(*hexutil.Big)(state.GetState(address, key).Big()),
+			proof}
 	}
 
 	// create the accountProof
@@ -725,8 +744,10 @@ func decodeHash(s string) (common.Hash, error) {
 }
 
 // GetHeaderByNumber returns the requested canonical block header.
-// * When blockNr is -1 the chain head is returned.
-// * When blockNr is -2 the pending chain head is returned.
+//   - When blockNr is -1 the chain pending header is returned.
+//   - When blockNr is -2 the chain latest header is returned.
+//   - When blockNr is -3 the chain finalized header is returned.
+//   - When blockNr is -4 the chain safe header is returned.
 func (s *BlockChainAPI) GetHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (map[string]interface{}, error) {
 	header, err := s.b.HeaderByNumber(ctx, number)
 	if header != nil && err == nil {
@@ -752,8 +773,10 @@ func (s *BlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash) m
 }
 
 // GetBlockByNumber returns the requested canonical block.
-//   - When blockNr is -1 the chain head is returned.
-//   - When blockNr is -2 the pending chain head is returned.
+//   - When blockNr is -1 the chain pending block is returned.
+//   - When blockNr is -2 the chain latest block is returned.
+//   - When blockNr is -3 the chain finalized block is returned.
+//   - When blockNr is -4 the chain safe block is returned.
 //   - When fullTx is true all transactions in the block are returned, otherwise
 //     only the transaction hash is returned.
 func (s *BlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
