@@ -61,7 +61,7 @@ func (ec *Client) Close() {
 }
 
 // Client gets the underlying RPC client.
-func (ec *Client) Client() *rpc.Client {
+func (ec *Client) Client() rpc.ClientInterface {
 	return ec.c
 }
 
