@@ -1360,7 +1360,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.
-func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *params.ChainConfig) (map[string]interface{}, error) {
+func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *params.ChainConfig) map[string]interface{} {
 	fields := RPCMarshalHeader(block.Header())
 	fields["size"] = hexutil.Uint64(block.Size())
 
@@ -1395,7 +1395,7 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 		fields["withdrawals"] = block.Withdrawals()
 	}
 
-	return fields, nil
+	return fields
 }
 
 func fillArbitrumNitroHeaderInfo(header *types.Header, fields map[string]interface{}) {
@@ -1449,10 +1449,7 @@ func (s *BlockChainAPI) arbClassicL1BlockNumber(ctx context.Context, block *type
 // a `BlockchainAPI`.
 func (s *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
 	chainConfig := s.b.ChainConfig()
-	fields, err := RPCMarshalBlock(b, inclTx, fullTx, chainConfig)
-	if err != nil {
-		return nil, err
-	}
+	fields := RPCMarshalBlock(b, inclTx, fullTx, chainConfig)
 	if inclTx {
 		fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, b.Hash()))
 	}
@@ -1460,11 +1457,12 @@ func (s *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inc
 		l1BlockNumber, err := s.arbClassicL1BlockNumber(ctx, b)
 		if err != nil {
 			log.Error("error trying to fill legacy l1BlockNumber", "err", err)
+			return fields, err
 		} else {
 			fields["l1BlockNumber"] = l1BlockNumber
 		}
 	}
-	return fields, err
+	return fields, nil
 }
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction

@@ -109,7 +109,6 @@ type BadBlockArgs struct {
 // and returns them as a JSON list of block hashes.
 func (api *DebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
 	var (
-		err     error
 		blocks  = rawdb.ReadAllBadBlocks(api.eth.chainDb)
 		results = make([]*BadBlockArgs, 0, len(blocks))
 	)
@@ -123,9 +122,7 @@ func (api *DebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) 
 		} else {
 			blockRlp = fmt.Sprintf("%#x", rlpBytes)
 		}
-		if blockJSON, err = ethapi.RPCMarshalBlock(block, true, true, api.eth.APIBackend.ChainConfig()); err != nil {
-			blockJSON = map[string]interface{}{"error": err.Error()}
-		}
+		blockJSON = ethapi.RPCMarshalBlock(block, true, true, api.eth.APIBackend.ChainConfig())
 		results = append(results, &BadBlockArgs{
 			Hash:  block.Hash(),
 			RLP:   blockRlp,
@@ -416,6 +413,8 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 
 // SetTrieFlushInterval configures how often in-memory tries are persisted
 // to disk. The value is in terms of block processing time, not wall clock.
+// If the value is shorter than the block generation time, or even 0 or negative,
+// the node will flush trie after processing each block (effectively archive mode).
 func (api *DebugAPI) SetTrieFlushInterval(interval string) error {
 	t, err := time.ParseDuration(interval)
 	if err != nil {
@@ -423,4 +422,9 @@ func (api *DebugAPI) SetTrieFlushInterval(interval string) error {
 	}
 	api.eth.blockchain.SetTrieFlushInterval(t)
 	return nil
+}
+
+// GetTrieFlushInterval gets the current value of in-memory trie flush interval
+func (api *DebugAPI) GetTrieFlushInterval() string {
+	return api.eth.blockchain.GetTrieFlushInterval().String()
 }
