@@ -162,10 +162,10 @@ func (s *StateDB) RecordProgram(program common.Address, codeHash common.Hash, ve
 		storedCodeHash := s.GetCodeHash(program)
 		if storedCodeHash != codeHash {
 			log.Error(
-				"Wrong recorded codehash for program at addr %#x, got codehash %#x in DB, specified codehash %#x to record",
-				program,
-				storedCodeHash,
-				codeHash,
+				"wrong recorded codehash",
+				"address", program,
+				"stored", storedCodeHash,
+				"recorded", codeHash,
 			)
 			return
 		}
