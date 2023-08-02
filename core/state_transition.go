@@ -144,6 +144,7 @@ type Message struct {
 	GasTipCap  *big.Int
 	Data       []byte
 	AccessList types.AccessList
+	BlobHashes []common.Hash
 
 	// When SkipAccountChecks is true, the message nonce is not checked against the
 	// account nonce in state. It also disables checking that the sender is an EOA.
@@ -173,7 +174,8 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		Value:             tx.Value(),
 		Data:              tx.Data(),
 		AccessList:        tx.AccessList(),
-		SkipAccountChecks: tx.SkipAccountChecks(),
+		SkipAccountChecks: tx.SkipAccountChecks(), // TODO Arbitrum upstream this was init'd to false
+		BlobHashes:        tx.BlobHashes(),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
