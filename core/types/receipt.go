@@ -213,7 +213,7 @@ func (r *Receipt) decodeTyped(b []byte) error {
 		return errShortTypedReceipt
 	}
 	switch b[0] {
-	case DynamicFeeTxType, AccessListTxType:
+	case DynamicFeeTxType, AccessListTxType, BlobTxType:
 		var data receiptRLP
 		err := rlp.DecodeBytes(b[1:], &data)
 		if err != nil {
@@ -368,11 +368,17 @@ func (rs Receipts) Len() int { return len(rs) }
 func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 	r := rs[i]
 	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
+	if r.Type == LegacyTxType || r.Type == ArbitrumLegacyTxType {
+		rlp.Encode(w, data)
+		return
+	}
+	w.WriteByte(r.Type)
 	switch r.Type {
-	case LegacyTxType, ArbitrumLegacyTxType:
+	case AccessListTxType, DynamicFeeTxType, BlobTxType:
 		rlp.Encode(w, data)
 	default:
-		w.WriteByte(r.Type)
+		// Arbitrum: same as above, but this should help prevent future merge conflicts,
+		// by keeping above case statement the same.
 		rlp.Encode(w, data)
 	}
 }
