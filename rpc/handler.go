@@ -158,14 +158,7 @@ func (b *batchCallBuffer) timeout(ctx context.Context, conn jsonWriter) {
 	for _, msg := range b.calls {
 		if !msg.isNotification() {
 			resp := msg.errorResponse(&internalServerError{errcodeTimeout, errMsgTimeout})
-			serialized, err := json.Marshal(resp)
-			if err != nil {
-				conn.writeJSON(ctx, errorMessage(&parseError{"error serializing timeout error: " + err.Error()}), true)
-				b.wrote = true
-				return
-			}
-
-			b.resp = append(b.resp, serialized)
+			b.resp = append(b.resp, resp)
 		}
 	}
 	b.doWrite(ctx, conn, true)
@@ -237,7 +230,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			resp := h.handleCallMsg(cp, msg)
 			err := callBuffer.pushResponse(resp)
 			if err != nil {
-				h.conn.writeJSON(cp.ctx, errorMessage(err), true)
+				h.conn.writeJSON(cp.ctx, errorMessage(err))
 				return
 			}
 		}
