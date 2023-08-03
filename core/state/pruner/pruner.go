@@ -381,7 +381,14 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 				output.Put(data.CodeHash, nil)
 			}
 			if data.Root != (common.Hash{}) {
-				storageTr, err := sdb.OpenStorageTrie(key, common.BytesToHash(accountIt.LeafKey()), data.Root)
+				// Lookup the preimage of account hash
+				preimage := tr.GetKey(accountIt.LeafKey())
+				if preimage == nil {
+					return errors.New("account address is not available")
+				}
+				address := common.BytesToAddress(preimage)
+
+				storageTr, err := sdb.OpenStorageTrie(key, address, data.Root)
 				if err != nil {
 					return err
 				}
