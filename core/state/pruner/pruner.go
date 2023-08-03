@@ -336,7 +336,10 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 	if err != nil {
 		return err
 	}
-	accountIt := tr.NodeIterator(nil)
+	accountIt, err := tr.NodeIterator(nil)
+	if err != nil {
+		return err
+	}
 	startedAt := time.Now()
 	lastLog := time.Now()
 
@@ -392,7 +395,10 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 					defer func() {
 						results <- err
 					}()
-					storageIt := storageTr.NodeIterator(nil)
+					storageIt, err := storageTr.NodeIterator(nil)
+					if err != nil {
+						return
+					}
 					for storageIt.Next(true) {
 						storageTrieHash := storageIt.Hash()
 						if storageTrieHash != (common.Hash{}) {
