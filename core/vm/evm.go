@@ -23,13 +23,10 @@ import (
 	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
-
-// emptyCodeHash is used by create to ensure deployment is disallowed to already
-// deployed contract addresses (relevant after the account abstraction).
-var emptyCodeHash = crypto.Keccak256Hash(nil)
 
 type (
 	// CanTransferFunc is the signature of a transfer guard function
@@ -73,13 +70,14 @@ type BlockContext struct {
 	GetHash GetHashFunc
 
 	// Block information
-	Coinbase    common.Address // Provides information for COINBASE
-	GasLimit    uint64         // Provides information for GASLIMIT
-	BlockNumber *big.Int       // Provides information for NUMBER
-	Time        uint64         // Provides information for TIME
-	Difficulty  *big.Int       // Provides information for DIFFICULTY
-	BaseFee     *big.Int       // Provides information for BASEFEE
-	Random      *common.Hash   // Provides information for PREVRANDAO
+	Coinbase      common.Address // Provides information for COINBASE
+	GasLimit      uint64         // Provides information for GASLIMIT
+	BlockNumber   *big.Int       // Provides information for NUMBER
+	Time          uint64         // Provides information for TIME
+	Difficulty    *big.Int       // Provides information for DIFFICULTY
+	BaseFee       *big.Int       // Provides information for BASEFEE
+	Random        *common.Hash   // Provides information for PREVRANDAO
+	ExcessDataGas *uint64        // ExcessDataGas field in the header, needed to compute the data
 
 	// Arbitrum information
 	ArbOSVersion uint64
@@ -480,7 +478,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(address)
-	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
+	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) {
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}
 	// Create a new account on the state
