@@ -263,7 +263,7 @@ func (b *LesApiBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEven
 }
 
 func (b *LesApiBackend) SyncProgressMap() map[string]interface{} {
-	progress := b.eth.Downloader().Progress()
+	progress := b.SyncProgress()
 	return progress.ToMap()
 }
 
