@@ -230,10 +230,10 @@ func (r *RecordingDatabase) dereferenceRoot(root common.Hash) {
 	r.db.TrieDB().Dereference(root)
 }
 
-func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected common.Hash) error {
+func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected common.Hash, blockNumber uint64) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	result, err := statedb.Commit(true)
+	result, err := statedb.Commit(blockNumber, true)
 	if err != nil {
 		return err
 	}
@@ -354,7 +354,7 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 		if err != nil {
 			return nil, fmt.Errorf("failed recreating state for block %d : %w", blockToRecreate, err)
 		}
-		err = r.addStateVerify(stateDb, block.Root())
+		err = r.addStateVerify(stateDb, block.Root(), block.NumberU64())
 		if err != nil {
 			return nil, fmt.Errorf("failed committing state for block %d : %w", blockToRecreate, err)
 		}
