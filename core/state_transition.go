@@ -24,7 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
@@ -264,18 +264,18 @@ func (st *StateTransition) buyGas() error {
 		balanceCheck.Add(balanceCheck, st.msg.Value)
 	}
 	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber, st.evm.Context.Time) {
-		if dataGas := st.dataGasUsed(); dataGas > 0 {
-			if st.evm.Context.ExcessDataGas == nil {
+		if blobGas := st.blobGasUsed(); blobGas > 0 {
+			if st.evm.Context.ExcessBlobGas == nil {
 				// programming error
 				panic("missing field excess data gas")
 			}
-			// Check that the user has enough funds to cover dataGasUsed * tx.BlobGasFeeCap
-			blobBalanceCheck := new(big.Int).SetUint64(dataGas)
+			// Check that the user has enough funds to cover blobGasUsed * tx.BlobGasFeeCap
+			blobBalanceCheck := new(big.Int).SetUint64(blobGas)
 			blobBalanceCheck.Mul(blobBalanceCheck, st.msg.BlobGasFeeCap)
 			balanceCheck.Add(balanceCheck, blobBalanceCheck)
-			// Pay for dataGasUsed * actual blob fee
-			blobFee := new(big.Int).SetUint64(dataGas)
-			blobFee.Mul(blobFee, misc.CalcBlobFee(*st.evm.Context.ExcessDataGas))
+			// Pay for blobGasUsed * actual blob fee
+			blobFee := new(big.Int).SetUint64(blobGas)
+			blobFee.Mul(blobFee, eip4844.CalcBlobFee(*st.evm.Context.ExcessBlobGas))
 			mgval.Add(mgval, blobFee)
 		}
 	}
@@ -360,10 +360,11 @@ func (st *StateTransition) preCheck() error {
 	}
 
 	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber, st.evm.Context.Time) {
-		if st.dataGasUsed() > 0 {
+		if st.blobGasUsed() > 0 {
 			// Check that the user is paying at least the current blob fee
-			if have, want := st.msg.BlobGasFeeCap, misc.CalcBlobFee(*st.evm.Context.ExcessDataGas); have.Cmp(want) < 0 {
-				return fmt.Errorf("%w: address %v have %v want %v", ErrBlobFeeCapTooLow, st.msg.From.Hex(), have, want)
+			blobFee := eip4844.CalcBlobFee(*st.evm.Context.ExcessBlobGas)
+			if st.msg.BlobGasFeeCap.Cmp(blobFee) < 0 {
+				return fmt.Errorf("%w: address %v have %v want %v", ErrBlobFeeCapTooLow, st.msg.From.Hex(), st.msg.BlobGasFeeCap, blobFee)
 			}
 		}
 	}
@@ -553,7 +554,7 @@ func (st *StateTransition) gasUsed() uint64 {
 	return st.initialGas - st.gasRemaining
 }
 
-// dataGasUsed returns the amount of data gas used by the message.
-func (st *StateTransition) dataGasUsed() uint64 {
-	return uint64(len(st.msg.BlobHashes) * params.BlobTxDataGasPerBlob)
+// blobGasUsed returns the amount of data gas used by the message.
+func (st *StateTransition) blobGasUsed() uint64 {
+	return uint64(len(st.msg.BlobHashes) * params.BlobTxBlobGasPerBlob)
 }

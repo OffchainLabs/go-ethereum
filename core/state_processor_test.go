@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -401,14 +402,14 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	if config.IsCancun(header.Number, header.Time) {
 		var pExcess, pUsed = uint64(0), uint64(0)
-		if parent.ExcessDataGas() != nil {
-			pExcess = *parent.ExcessDataGas()
-			pUsed = *parent.DataGasUsed()
+		if parent.ExcessBlobGas() != nil {
+			pExcess = *parent.ExcessBlobGas()
+			pUsed = *parent.BlobGasUsed()
 		}
-		excess := misc.CalcExcessDataGas(pExcess, pUsed)
-		used := uint64(nBlobs * params.BlobTxDataGasPerBlob)
-		header.ExcessDataGas = &excess
-		header.DataGasUsed = &used
+		excess := eip4844.CalcExcessBlobGas(pExcess, pUsed)
+		used := uint64(nBlobs * params.BlobTxBlobGasPerBlob)
+		header.ExcessBlobGas = &excess
+		header.BlobGasUsed = &used
 	}
 	// Assemble and return the final block for sealing
 	if config.IsShanghai(header.Number, header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {
