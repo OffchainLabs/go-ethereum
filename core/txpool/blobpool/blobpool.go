@@ -956,6 +956,8 @@ func (p *BlobPool) reinject(addr common.Address, tx *types.Transaction) {
 	}
 	p.lookup[meta.hash] = meta.id
 	p.stored += uint64(meta.size)
+
+	p.eventFeed.Send(core.NewTxsEvent{Txs: types.Transactions{tx}})
 }
 
 // SetGasTip implements txpool.SubPool, allowing the blob pool's gas requirements
@@ -1038,7 +1040,6 @@ func (p *BlobPool) validateTx(tx *types.Transaction, blobs []kzg4844.Blob, commi
 	// Ensure the transaction adheres to the stateful pool filters (nonce, balance)
 	stateOpts := &txpool.ValidationOptionsWithState{
 		State: p.state,
-
 		FirstNonceGap: func(addr common.Address) uint64 {
 			// Nonce gaps are not permitted in the blob pool, the first gap will
 			// be the next nonce shifted by however many transactions we already
@@ -1304,6 +1305,7 @@ func (p *BlobPool) add(tx *types.Transaction, blobs []kzg4844.Blob, commits []kz
 	}
 	p.updateStorageMetrics()
 
+	p.eventFeed.Send(core.NewTxsEvent{Txs: types.Transactions{tx}})
 	return nil
 }
 
