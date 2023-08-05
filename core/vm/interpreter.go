@@ -105,14 +105,11 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
 func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
-	// Arbitrum: detect Stylus program
-	stylus := in.evm.chainRules.IsArbitrum && state.IsStylusProgram(contract.Code)
-
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
-	in.evm.ProcessingHook.PushContract(contract, stylus)
+	in.evm.ProcessingHook.PushContract(contract)
 	defer func() { in.evm.depth-- }()
-	defer func() { in.evm.ProcessingHook.PopContract(stylus) }()
+	defer func() { in.evm.ProcessingHook.PopContract() }()
 
 	// Make sure the readOnly is only set if we aren't in readOnly yet.
 	// This also makes sure that the readOnly flag isn't removed for child calls.
@@ -171,7 +168,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	}
 
 	// Arbitrum: handle Stylus programs
-	if stylus {
+	if in.evm.chainRules.IsArbitrum && state.IsStylusProgram(contract.Code) {
 		ret, err = in.evm.ProcessingHook.ExecuteWASM(callContext, input, in)
 		return
 	}
