@@ -40,8 +40,8 @@ func (evm *EVM) DecrementDepth() {
 type TxProcessingHook interface {
 	StartTxHook() (bool, uint64, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
 	GasChargingHook(gasRemaining *uint64) (common.Address, error)
-	PushCaller(addr common.Address)
-	PopCaller()
+	PushContract(contract *Contract, stylus bool)
+	PopContract(stylus bool)
 	ForceRefundGas() uint64
 	NonrefundableGas() uint64
 	DropTip() bool
@@ -67,9 +67,9 @@ func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) (common.Addres
 	return p.evm.Context.Coinbase, nil
 }
 
-func (p DefaultTxProcessor) PushCaller(addr common.Address) {}
+func (p DefaultTxProcessor) PushContract(contract *Contract, stylus bool) {}
 
-func (p DefaultTxProcessor) PopCaller() {}
+func (p DefaultTxProcessor) PopContract(stylus bool) {}
 
 func (p DefaultTxProcessor) ForceRefundGas() uint64 { return 0 }
 
