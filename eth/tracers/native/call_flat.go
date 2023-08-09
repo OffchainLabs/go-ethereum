@@ -112,7 +112,7 @@ type flatCallResultMarshaling struct {
 // flatCallTracer reports call frame information of a tx in a flat format, i.e.
 // as opposed to the nested format of `callTracer`.
 type flatCallTracer struct {
-	// Arbitrum: capture transfers occuring outside of evm execution
+	// Arbitrum: capture transfers occurring outside of evm execution
 	beforeEVMTransfers []arbitrumTransfer
 	afterEVMTransfers  []arbitrumTransfer
 
