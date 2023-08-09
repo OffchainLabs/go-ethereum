@@ -145,7 +145,7 @@ type Message struct {
 	Data       []byte
 	AccessList types.AccessList
 
-	// When SkipAccountCheckss is true, the message nonce is not checked against the
+	// When SkipAccountChecks is true, the message nonce is not checked against the
 	// account nonce in state. It also disables checking that the sender is an EOA.
 	// This field will be set to true for operations like RPC eth_call.
 	SkipAccountChecks bool
@@ -272,8 +272,8 @@ func (st *StateTransition) buyGas() error {
 	st.state.SubBalance(st.msg.From, mgval)
 
 	// Arbitrum: record fee payment
-	if st.evm.Config.Debug {
-		st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, &st.msg.From, nil, mgval, true, "feePayment")
+	if tracer := st.evm.Config.Tracer; tracer != nil {
+		tracer.CaptureArbitrumTransfer(st.evm, &st.msg.From, nil, mgval, true, "feePayment")
 	}
 
 	return nil
@@ -372,10 +372,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, err
 	}
 
-	if st.evm.Config.Debug {
-		st.evm.Config.Tracer.CaptureTxStart(st.initialGas)
+	if tracer := st.evm.Config.Tracer; tracer != nil {
+		tracer.CaptureTxStart(st.initialGas)
 		defer func() {
-			st.evm.Config.Tracer.CaptureTxEnd(st.gasRemaining)
+			tracer.CaptureTxEnd(st.gasRemaining)
 		}()
 	}
 
@@ -456,18 +456,18 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	// Arbitrum: record the tip
-	if st.evm.Config.Debug && !st.evm.ProcessingHook.DropTip() {
-		st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, nil, &tipReceipient, tipAmount, false, "tip")
+	if tracer := st.evm.Config.Tracer; tracer != nil && !st.evm.ProcessingHook.DropTip() {
+		tracer.CaptureArbitrumTransfer(st.evm, nil, &tipReceipient, tipAmount, false, "tip")
 	}
 
 	st.evm.ProcessingHook.EndTxHook(st.gasRemaining, vmerr == nil)
 
 	// Arbitrum: record self destructs
-	if st.evm.Config.Debug {
+	if tracer := st.evm.Config.Tracer; tracer != nil {
 		suicides := st.evm.StateDB.GetSuicides()
 		for i, address := range suicides {
 			balance := st.evm.StateDB.GetBalance(address)
-			st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, &suicides[i], nil, balance, false, "selfDestruct")
+			tracer.CaptureArbitrumTransfer(st.evm, &suicides[i], nil, balance, false, "selfDestruct")
 		}
 	}
 
@@ -498,8 +498,8 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 	st.state.AddBalance(st.msg.From, remaining)
 
 	// Arbitrum: record the gas refund
-	if st.evm.Config.Debug {
-		st.evm.Config.Tracer.CaptureArbitrumTransfer(st.evm, nil, &st.msg.From, remaining, false, "gasRefund")
+	if tracer := st.evm.Config.Tracer; tracer != nil {
+		tracer.CaptureArbitrumTransfer(st.evm, nil, &st.msg.From, remaining, false, "gasRefund")
 	}
 
 	// Also return remaining gas to the block gas counter so it is
