@@ -63,7 +63,6 @@ var (
 		DAOForkBlock:                  big.NewInt(1_920_000),
 		DAOForkSupport:                true,
 		EIP150Block:                   big.NewInt(2_463_000),
-		EIP150Hash:                    common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
 		EIP155Block:                   big.NewInt(2_675_000),
 		EIP158Block:                   big.NewInt(2_675_000),
 		ByzantiumBlock:                big.NewInt(4_370_000),
@@ -140,7 +139,6 @@ var (
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
 		EIP150Block:         big.NewInt(2),
-		EIP150Hash:          common.HexToHash("0x9b095b36c15eaf13044373aef8ee0bd3a382a5abb92e402afa44b8249c3a90e9"),
 		EIP155Block:         big.NewInt(3),
 		EIP158Block:         big.NewInt(3),
 		ByzantiumBlock:      big.NewInt(1_035_301),
@@ -232,7 +230,6 @@ var (
 		DAOForkBlock:                  nil,
 		DAOForkSupport:                false,
 		EIP150Block:                   big.NewInt(0),
-		EIP150Hash:                    common.Hash{},
 		EIP155Block:                   big.NewInt(0),
 		EIP158Block:                   big.NewInt(0),
 		ByzantiumBlock:                big.NewInt(0),
@@ -263,7 +260,6 @@ var (
 		DAOForkBlock:                  nil,
 		DAOForkSupport:                false,
 		EIP150Block:                   big.NewInt(0),
-		EIP150Hash:                    common.Hash{},
 		EIP155Block:                   big.NewInt(0),
 		EIP158Block:                   big.NewInt(0),
 		ByzantiumBlock:                big.NewInt(0),
@@ -294,7 +290,6 @@ var (
 		DAOForkBlock:                  nil,
 		DAOForkSupport:                false,
 		EIP150Block:                   big.NewInt(0),
-		EIP150Hash:                    common.Hash{},
 		EIP155Block:                   big.NewInt(0),
 		EIP158Block:                   big.NewInt(0),
 		ByzantiumBlock:                big.NewInt(0),
@@ -325,7 +320,6 @@ var (
 		DAOForkBlock:                  nil,
 		DAOForkSupport:                false,
 		EIP150Block:                   nil,
-		EIP150Hash:                    common.Hash{},
 		EIP155Block:                   nil,
 		EIP158Block:                   nil,
 		ByzantiumBlock:                nil,
@@ -420,9 +414,7 @@ type ChainConfig struct {
 	DAOForkSupport bool     `json:"daoForkSupport,omitempty"` // Whether the nodes supports or opposes the DAO hard-fork
 
 	// EIP150 implements the Gas price changes (https://github.com/ethereum/EIPs/issues/150)
-	EIP150Block *big.Int    `json:"eip150Block,omitempty"` // EIP150 HF block (nil = no fork)
-	EIP150Hash  common.Hash `json:"eip150Hash,omitempty"`  // EIP150 HF hash (needed for header only clients as only gas pricing changed)
-
+	EIP150Block *big.Int `json:"eip150Block,omitempty"` // EIP150 HF block (nil = no fork)
 	EIP155Block *big.Int `json:"eip155Block,omitempty"` // EIP155 HF block
 	EIP158Block *big.Int `json:"eip158Block,omitempty"` // EIP158 HF block
 
@@ -975,7 +967,7 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
-	IsMerge, IsShanghai, isCancun, isPrague                 bool
+	IsMerge, IsShanghai, IsCancun, IsPrague                 bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -999,7 +991,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, curren
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          isMerge,
 		IsShanghai:       c.IsShanghai(timestamp, currentArbosVersion),
-		isCancun:         c.IsCancun(timestamp),
-		isPrague:         c.IsPrague(timestamp),
+		IsCancun:         c.IsCancun(timestamp),
+		IsPrague:         c.IsPrague(timestamp),
 	}
 }
