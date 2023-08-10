@@ -155,7 +155,7 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.To = tx.To()
 	case *ArbitrumContractTx:
 		enc.RequestId = &itx.RequestId
-		enc.From = (*common.Address)(&itx.From)
+		enc.From = &itx.From
 		enc.ChainID = (*hexutil.Big)(itx.ChainId)
 		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
 		enc.MaxFeePerGas = (*hexutil.Big)(itx.GasFeeCap)

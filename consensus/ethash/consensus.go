@@ -313,6 +313,9 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if chain.Config().IsShanghai(header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {
 		return fmt.Errorf("ethash does not support shanghai fork")
 	}
+	if chain.Config().IsCancun(header.Time) {
+		return fmt.Errorf("ethash does not support cancun fork")
+	}
 	// Verify the engine specific seal securing the block
 	if seal {
 		if err := ethash.verifySeal(chain, header, false); err != nil {
@@ -321,9 +324,6 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	// If all checks passed, validate any special fields for hard forks
 	if err := misc.VerifyDAOHeaderExtraData(chain.Config(), header); err != nil {
-		return err
-	}
-	if err := misc.VerifyForkHashes(chain.Config(), header, uncle); err != nil {
 		return err
 	}
 	return nil
@@ -598,12 +598,10 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 	return nil
 }
 
-// Finalize implements consensus.Engine, accumulating the block and uncle rewards,
-// setting the final state on the header
+// Finalize implements consensus.Engine, accumulating the block and uncle rewards.
 func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, withdrawals []*types.Withdrawal) {
-	// Accumulate any block and uncle rewards and commit the final state root
+	// Accumulate any block and uncle rewards
 	accumulateRewards(chain.Config(), state, header, uncles)
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
@@ -612,9 +610,12 @@ func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	if len(withdrawals) > 0 {
 		return nil, errors.New("ethash does not support withdrawals")
 	}
-
 	// Finalize block
 	ethash.Finalize(chain, header, state, txs, uncles, nil)
+
+	// Assign the final state root to header.
+	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(header, txs, uncles, receipts, trie.NewStackTrie(nil)), nil
 }
