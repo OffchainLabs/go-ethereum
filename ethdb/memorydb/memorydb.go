@@ -28,17 +28,17 @@ import (
 )
 
 var (
-	// ErrMemorydbClosed is returned if a memory database was already closed at the
+	// errMemorydbClosed is returned if a memory database was already closed at the
 	// invocation of a data access operation.
-	ErrMemorydbClosed = errors.New("database closed")
+	errMemorydbClosed = errors.New("database closed")
 
 	// ErrMemorydbNotFound is returned if a key is requested that is not found in
 	// the provided memory database.
 	ErrMemorydbNotFound = errors.New("not found")
 
-	// ErrSnapshotReleased is returned if callers want to retrieve data from a
+	// errSnapshotReleased is returned if callers want to retrieve data from a
 	// released snapshot.
-	ErrSnapshotReleased = errors.New("snapshot released")
+	errSnapshotReleased = errors.New("snapshot released")
 )
 
 // Database is an ephemeral key-value store. Apart from basic data storage
@@ -81,7 +81,7 @@ func (db *Database) Has(key []byte) (bool, error) {
 	defer db.lock.RUnlock()
 
 	if db.db == nil {
-		return false, ErrMemorydbClosed
+		return false, errMemorydbClosed
 	}
 	_, ok := db.db[string(key)]
 	return ok, nil
@@ -93,7 +93,7 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 	defer db.lock.RUnlock()
 
 	if db.db == nil {
-		return nil, ErrMemorydbClosed
+		return nil, errMemorydbClosed
 	}
 	if entry, ok := db.db[string(key)]; ok {
 		return common.CopyBytes(entry), nil
@@ -107,7 +107,7 @@ func (db *Database) Put(key []byte, value []byte) error {
 	defer db.lock.Unlock()
 
 	if db.db == nil {
-		return ErrMemorydbClosed
+		return errMemorydbClosed
 	}
 	db.db[string(key)] = common.CopyBytes(value)
 	return nil
@@ -119,7 +119,7 @@ func (db *Database) Delete(key []byte) error {
 	defer db.lock.Unlock()
 
 	if db.db == nil {
-		return ErrMemorydbClosed
+		return errMemorydbClosed
 	}
 	delete(db.db, string(key))
 	return nil
@@ -356,7 +356,7 @@ func (snap *snapshot) Has(key []byte) (bool, error) {
 	defer snap.lock.RUnlock()
 
 	if snap.db == nil {
-		return false, ErrSnapshotReleased
+		return false, errSnapshotReleased
 	}
 	_, ok := snap.db[string(key)]
 	return ok, nil
@@ -369,7 +369,7 @@ func (snap *snapshot) Get(key []byte) ([]byte, error) {
 	defer snap.lock.RUnlock()
 
 	if snap.db == nil {
-		return nil, ErrSnapshotReleased
+		return nil, errSnapshotReleased
 	}
 	if entry, ok := snap.db[string(key)]; ok {
 		return common.CopyBytes(entry), nil
