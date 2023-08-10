@@ -400,12 +400,11 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	if err != nil {
 		log.Crit(fmt.Sprintf("Failed to generate node key: %v", err))
 	}
-	instanceDir := c.DataDir
-	if err := os.MkdirAll(instanceDir, 0700); err != nil {
+	if err := os.MkdirAll(c.DataDir, 0700); err != nil {
 		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
 		return key
 	}
-	keyfile = filepath.Join(instanceDir, datadirPrivateKey)
+	keyfile = filepath.Join(c.DataDir, datadirPrivateKey)
 	if err := crypto.SaveECDSA(keyfile, key); err != nil {
 		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
 	}
