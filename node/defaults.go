@@ -51,6 +51,8 @@ var DefaultConfig = Config{
 	AuthAddr:            DefaultAuthHost,
 	AuthPort:            DefaultAuthPort,
 	AuthVirtualHosts:    DefaultAuthVhosts,
+	AuthModules:         DefaultAuthModules,
+	AuthOrigins:         DefaultAuthOrigins,
 	HTTPModules:         []string{"net", "web3"},
 	HTTPVirtualHosts:    []string{"localhost"},
 	HTTPTimeouts:        rpc.DefaultHTTPTimeouts,
