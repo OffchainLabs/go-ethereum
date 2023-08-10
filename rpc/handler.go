@@ -239,7 +239,6 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			if err != nil {
 				h.conn.writeJSON(cp.ctx, errorMessage(err), true)
 				return
-
 			}
 		}
 		if timer != nil {
