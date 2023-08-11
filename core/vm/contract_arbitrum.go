@@ -24,3 +24,7 @@ func (c *Contract) BurnGas(amount uint64) error {
 	c.Gas -= amount
 	return nil
 }
+
+func (c *Contract) IsDelegateOrCallcode() bool {
+	return c.delegateOrCallcode
+}
