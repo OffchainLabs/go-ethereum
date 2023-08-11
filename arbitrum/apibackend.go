@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -488,6 +489,10 @@ func (a *APIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) even
 // Transaction pool API
 func (a *APIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	return a.b.EnqueueL2Message(ctx, signedTx, nil)
+}
+
+func (a *APIBackend) SendBlobTx(ctx context.Context, signedTx *types.Transaction, blobTxBlobs []kzg4844.Blob, blobTxCommits []kzg4844.Commitment, blobTxProofs []kzg4844.Proof) error {
+	panic("nitro currently doesn't support eip-4844 blob transactions")
 }
 
 func (a *APIBackend) SendConditionalTx(ctx context.Context, signedTx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {
