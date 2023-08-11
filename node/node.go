@@ -477,7 +477,6 @@ func (n *Node) startRPC() error {
 			Modules:           n.config.AuthModules,
 			Origins:           n.config.AuthOrigins,
 			prefix:            DefaultAuthPrefix,
-			jwtSecret:         secret,
 			rpcEndpointConfig: sharedConfig,
 		}); err != nil {
 			return err
