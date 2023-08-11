@@ -153,6 +153,9 @@ type Message struct {
 	// account nonce in state. It also disables checking that the sender is an EOA.
 	// This field will be set to true for operations like RPC eth_call.
 	SkipAccountChecks bool
+	// L1 charging is disabled when SkipL1Charging is true.
+	// This field might be set to true for operations like RPC eth_call.
+	SkipL1Charging bool
 }
 
 type MessageRunMode uint8

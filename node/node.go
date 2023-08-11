@@ -460,7 +460,7 @@ func (n *Node) startRPC() error {
 		if err := server.enableRPC(allAPIs, httpConfig{
 			CorsAllowedOrigins: DefaultAuthCors,
 			Vhosts:             n.config.AuthVirtualHosts,
-			Modules:            DefaultAuthModules,
+			Modules:            n.config.AuthModules,
 			prefix:             DefaultAuthPrefix,
 			rpcEndpointConfig:  sharedConfig,
 		}); err != nil {
@@ -474,9 +474,10 @@ func (n *Node) startRPC() error {
 			return err
 		}
 		if err := server.enableWS(allAPIs, wsConfig{
-			Modules:           DefaultAuthModules,
-			Origins:           DefaultAuthOrigins,
+			Modules:           n.config.AuthModules,
+			Origins:           n.config.AuthOrigins,
 			prefix:            DefaultAuthPrefix,
+			jwtSecret:         secret,
 			rpcEndpointConfig: sharedConfig,
 		}); err != nil {
 			return err
