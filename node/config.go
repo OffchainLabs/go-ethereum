@@ -385,7 +385,13 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 		return key
 	}
 
-	keyfile := c.ResolvePath(datadirPrivateKey)
+	// Updating default path to nodekey to be $Chain/nodekey
+	var keyfile string
+	if filepath.IsAbs(datadirPrivateKey) {
+		keyfile = datadirPrivateKey
+	} else {
+		keyfile = filepath.Join(c.DataDir, datadirPrivateKey)
+	}
 	if key, err := crypto.LoadECDSA(keyfile); err == nil {
 		return key
 	}
@@ -394,12 +400,11 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	if err != nil {
 		log.Crit(fmt.Sprintf("Failed to generate node key: %v", err))
 	}
-	instanceDir := filepath.Join(c.DataDir, c.name())
-	if err := os.MkdirAll(instanceDir, 0700); err != nil {
+	if err := os.MkdirAll(c.DataDir, 0700); err != nil {
 		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
 		return key
 	}
-	keyfile = filepath.Join(instanceDir, datadirPrivateKey)
+	keyfile = filepath.Join(c.DataDir, datadirPrivateKey)
 	if err := crypto.SaveECDSA(keyfile, key); err != nil {
 		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
 	}
