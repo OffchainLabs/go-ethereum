@@ -1134,7 +1134,7 @@ func (b *kzgPointEvaluation) Run(input []byte) ([]byte, error) {
 	// input kzg point: next 48 bytes
 	var commitment kzg4844.Commitment
 	copy(commitment[:], input[96:])
-	if kZGToVersionedHash(commitment) != versionedHash {
+	if KZGToVersionedHash(commitment) != versionedHash {
 		return nil, errBlobVerifyMismatchedVersion
 	}
 
@@ -1149,8 +1149,8 @@ func (b *kzgPointEvaluation) Run(input []byte) ([]byte, error) {
 	return common.Hex2Bytes(blobPrecompileReturnValue), nil
 }
 
-// kZGToVersionedHash implements kzg_to_versioned_hash from EIP-4844
-func kZGToVersionedHash(kzg kzg4844.Commitment) common.Hash {
+// KZGToVersionedHash implements kzg_to_versioned_hash from EIP-4844
+func KZGToVersionedHash(kzg kzg4844.Commitment) common.Hash {
 	h := sha256.Sum256(kzg[:])
 	h[0] = blobCommitmentVersionKZG
 
