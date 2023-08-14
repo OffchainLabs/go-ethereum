@@ -46,7 +46,7 @@ var (
 )
 
 // IsStylusProgram checks if a specified bytecode is a user-submitted WASM program.
-// Stylus differentiates WASMs from EVM bytecode via the prefix 0xEF000000 which will safely fail
+// Stylus differentiates WASMs from EVM bytecode via the prefix 0xEFF000 which will safely fail
 // to pass through EVM-bytecode EOF validation rules.
 func IsStylusProgram(b []byte) bool {
 	if len(b) < 4 {
