@@ -41,7 +41,7 @@ var (
 	stylusEOFMagicSuffix   = byte(0xF0)
 	stylusEOFVersion       = byte(0x00)
 
-	StylusPrefix = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersion, stylusEOFSectionHeader}
+	StylusPrefix = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersion}
 )
 
 // IsStylusProgram checks if a specified bytecode is a user-submitted WASM program.
@@ -59,7 +59,7 @@ func StripStylusPrefix(b []byte) ([]byte, error) {
 	if !IsStylusProgram(b) {
 		return nil, errors.New("specified bytecode is not a Stylus program")
 	}
-	return b[4:], nil
+	return b[3:], nil
 }
 
 func (s *StateDB) GetCompiledWasmCode(addr common.Address, version uint32) []byte {
