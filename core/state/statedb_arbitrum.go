@@ -38,21 +38,20 @@ var (
 	// with EVM contracts, but match against these prefix bytes when loading code
 	// to execute the WASMs through Stylus rather than the EVM.
 	stylusEOFMagic         = byte(0xEF)
-	stylusEOFMagicSuffix   = byte(0x00)
+	stylusEOFMagicSuffix   = byte(0xF0)
 	stylusEOFVersion       = byte(0x00)
-	stylusEOFSectionHeader = byte(0x00)
 
-	StylusPrefix = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersion, stylusEOFSectionHeader}
+	StylusPrefix = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersion}
 )
 
 // IsStylusProgram checks if a specified bytecode is a user-submitted WASM program.
-// Stylus differentiates WASMs from EVM bytecode via the prefix 0xEF000000 which will safely fail
+// Stylus differentiates WASMs from EVM bytecode via the prefix 0xEFF000 which will safely fail
 // to pass through EVM-bytecode EOF validation rules.
 func IsStylusProgram(b []byte) bool {
-	if len(b) < 4 {
+	if len(b) < 3 {
 		return false
 	}
-	return b[0] == stylusEOFMagic && b[1] == stylusEOFMagicSuffix && b[2] == stylusEOFVersion && b[3] == stylusEOFSectionHeader
+	return b[0] == stylusEOFMagic && b[1] == stylusEOFMagicSuffix && b[2] == stylusEOFVersion
 }
 
 // StripStylusPrefix if the specified input is a stylus program.
@@ -60,7 +59,7 @@ func StripStylusPrefix(b []byte) ([]byte, error) {
 	if !IsStylusProgram(b) {
 		return nil, errors.New("specified bytecode is not a Stylus program")
 	}
-	return b[4:], nil
+	return b[3:], nil
 }
 
 func (s *StateDB) GetCompiledWasmCode(addr common.Address, version uint32) []byte {
