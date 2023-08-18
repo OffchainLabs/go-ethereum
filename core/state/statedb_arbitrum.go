@@ -37,9 +37,9 @@ var (
 	// This allows us to store WASM programs as code in the stateDB side-by-side
 	// with EVM contracts, but match against these prefix bytes when loading code
 	// to execute the WASMs through Stylus rather than the EVM.
-	stylusEOFMagic         = byte(0xEF)
-	stylusEOFMagicSuffix   = byte(0xF0)
-	stylusEOFVersion       = byte(0x00)
+	stylusEOFMagic       = byte(0xEF)
+	stylusEOFMagicSuffix = byte(0xF0)
+	stylusEOFVersion     = byte(0x00)
 
 	StylusPrefix = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersion}
 )
@@ -62,7 +62,7 @@ func StripStylusPrefix(b []byte) ([]byte, error) {
 	return b[3:], nil
 }
 
-func (s *StateDB) GetCompiledWasmCode(addr common.Address, version uint32) []byte {
+func (s *StateDB) GetCompiledWasmCode(addr common.Address, version uint16) []byte {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.CompiledWasmCode(s.db, version)
@@ -70,7 +70,7 @@ func (s *StateDB) GetCompiledWasmCode(addr common.Address, version uint32) []byt
 	return nil
 }
 
-func (s *StateDB) SetCompiledWasmCode(addr common.Address, code []byte, version uint32) {
+func (s *StateDB) SetCompiledWasmCode(addr common.Address, code []byte, version uint16) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetCompiledWasmCode(s.db, code, version)
@@ -145,7 +145,7 @@ type UserWasm struct {
 	CodeHash         common.Hash
 }
 type WasmCall struct {
-	Version  uint32
+	Version  uint16
 	CodeHash common.Hash
 }
 
@@ -153,7 +153,7 @@ func (s *StateDB) StartRecording() {
 	s.userWasms = make(UserWasms)
 }
 
-func (s *StateDB) RecordProgram(program common.Address, codeHash common.Hash, version uint32) {
+func (s *StateDB) RecordProgram(program common.Address, codeHash common.Hash, version uint16) {
 	if s.userWasms != nil {
 		call := WasmCall{
 			Version:  version,
@@ -186,9 +186,9 @@ func (s *StateDB) RecordProgram(program common.Address, codeHash common.Hash, ve
 	}
 }
 
-func (s *StateDB) NoncanonicalProgramHash(codeHash common.Hash, version uint32) common.Hash {
-	prefix := make([]byte, 4)
-	binary.BigEndian.PutUint32(prefix, version)
+func (s *StateDB) NoncanonicalProgramHash(codeHash common.Hash, version uint16) common.Hash {
+	prefix := make([]byte, 2)
+	binary.BigEndian.PutUint16(prefix, version)
 	return crypto.Keccak256Hash(prefix, codeHash.Bytes())
 }
 

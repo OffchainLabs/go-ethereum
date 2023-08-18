@@ -42,9 +42,9 @@ const (
 // Database wraps access to tries and contract code.
 type Database interface {
 	// Arbitrum: CompiledWasmContractCode retrieves a particular contract's user wasm code.
-	CompiledWasmContractCode(version uint32, codeHash common.Hash) ([]byte, error)
+	CompiledWasmContractCode(version uint16, codeHash common.Hash) ([]byte, error)
 	// Arbitrum: SetCompiledWasmContractCode sets a user wasm code.
-	SetCompiledWasmContractCode(version uint32, codeHash common.Hash, code []byte) error
+	SetCompiledWasmContractCode(version uint16, codeHash common.Hash, code []byte) error
 
 	// OpenTrie opens the main account trie.
 	OpenTrie(root common.Hash) (Trie, error)
