@@ -26,7 +26,7 @@ type CompiledWasmCache struct {
 	code  Code
 	dirty bool
 }
-type CompiledWasms map[uint32]CompiledWasmCache
+type CompiledWasms map[uint16]CompiledWasmCache
 
 func (c CompiledWasms) Copy() CompiledWasms {
 	cpy := make(CompiledWasms, len(c))
@@ -38,7 +38,7 @@ func (c CompiledWasms) Copy() CompiledWasms {
 }
 
 // CompiledWasmCode returns the user wasm contract code associated with this object, if any.
-func (s *stateObject) CompiledWasmCode(db Database, version uint32) []byte {
+func (s *stateObject) CompiledWasmCode(db Database, version uint16) []byte {
 	if wasm, ok := s.compiledWasmCode[version]; ok {
 		return wasm.code
 	}
@@ -56,7 +56,7 @@ func (s *stateObject) CompiledWasmCode(db Database, version uint32) []byte {
 	return compiledWasmCode
 }
 
-func (s *stateObject) SetCompiledWasmCode(db Database, code []byte, version uint32) {
+func (s *stateObject) SetCompiledWasmCode(db Database, code []byte, version uint16) {
 	// Can only be compiled once, so if it's being compiled, it was previous empty
 	s.db.journal.append(wasmCodeChange{
 		account: &s.address,
@@ -68,7 +68,7 @@ func (s *stateObject) SetCompiledWasmCode(db Database, code []byte, version uint
 	}
 }
 
-func (s *stateObject) setWASMCode(code []byte, version uint32) {
+func (s *stateObject) setWASMCode(code []byte, version uint16) {
 	s.compiledWasmCode[version] = CompiledWasmCache{
 		code:  code,
 		dirty: true,

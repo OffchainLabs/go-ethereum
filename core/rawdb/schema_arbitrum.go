@@ -35,23 +35,23 @@ const WasmKeyLen = 2 + 4 + 32
 type WasmKey = [WasmKeyLen]byte
 
 // CompiledWasmCodeKey = CompiledWasmCodePrefix + version + hash
-func CompiledWasmCodeKey(version uint32, hash common.Hash) WasmKey {
+func CompiledWasmCodeKey(version uint16, hash common.Hash) WasmKey {
 	var key WasmKey
 	copy(key[:2], CompiledWasmCodePrefix)
-	binary.BigEndian.PutUint32(key[2:6], version)
-	copy(key[6:], hash[:])
+	binary.BigEndian.PutUint16(key[2:4], version)
+	copy(key[4:], hash[:])
 	return key
 }
 
 // IsCompiledWasmCodeKey reports whether the given byte slice is the key of compiled wasm contract code,
 // if so return the raw code hash and version as well.
-func IsCompiledWasmCodeKey(key []byte) (bool, common.Hash, uint32) {
+func IsCompiledWasmCodeKey(key []byte) (bool, common.Hash, uint16) {
 
 	start := len(CompiledWasmCodePrefix)
 
 	if bytes.HasPrefix(key, CompiledWasmCodePrefix) && len(key) == WasmKeyLen {
-		version := binary.BigEndian.Uint32(key[start : start+4])
-		codeHash := common.BytesToHash(key[start+4:])
+		version := binary.BigEndian.Uint16(key[start : start+2])
+		codeHash := common.BytesToHash(key[start+2:])
 		return true, codeHash, version
 	}
 	return false, common.Hash{}, 0
