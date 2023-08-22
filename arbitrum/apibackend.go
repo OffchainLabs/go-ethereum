@@ -316,7 +316,7 @@ func (a *APIBackend) RPCEVMTimeout() time.Duration {
 }
 
 func (a *APIBackend) UnprotectedAllowed() bool {
-	return true // TODO: is that true?
+	return a.b.config.TxAllowUnprotected
 }
 
 // Blockchain API
