@@ -142,7 +142,7 @@ type UserWasm struct {
 	NoncanonicalHash common.Hash
 	CompressedWasm   []byte
 	Wasm             []byte
-	CodeHash         common.Hash
+	CodeHash         common.Hash // TODO: remove this field
 }
 type WasmCall struct {
 	Version  uint16

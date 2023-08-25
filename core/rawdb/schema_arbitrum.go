@@ -30,7 +30,7 @@ var (
 )
 
 // CompiledWasmCodeKey = CompiledWasmCodePrefix + version + hash
-const WasmKeyLen = 2 + 4 + 32
+const WasmKeyLen = 2 + 2 + 32
 
 type WasmKey = [WasmKeyLen]byte
 
