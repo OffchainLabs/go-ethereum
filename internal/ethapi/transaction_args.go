@@ -44,6 +44,7 @@ type TransactionArgs struct {
 	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
 	Value                *hexutil.Big    `json:"value"`
 	Nonce                *hexutil.Uint64 `json:"nonce"`
+	SkipL1Charging       *bool           `json:"skipL1Charging"`
 
 	// We accept "data" and "input" for backwards-compatibility reasons.
 	// "input" is the newer name and should be preferred by clients.
@@ -267,6 +268,11 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, header *types.Header
 		accessList = *args.AccessList
 	}
 
+	skipL1Charging := false
+	if args.SkipL1Charging != nil {
+		skipL1Charging = *args.SkipL1Charging
+	}
+
 	msg := &core.Message{
 		From:              addr,
 		To:                args.To,
@@ -279,6 +285,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, header *types.Header
 		AccessList:        accessList,
 		SkipAccountChecks: true,
 		TxRunMode:         runMode,
+		SkipL1Charging:    skipL1Charging,
 	}
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	if state != nil {
