@@ -23,7 +23,7 @@ import (
 )
 
 // WriteCompiledWasmCode writes the provided contract compiled wasm code database.
-func WriteCompiledWasmCode(db ethdb.KeyValueWriter, version uint32, hash common.Hash, code []byte) {
+func WriteCompiledWasmCode(db ethdb.KeyValueWriter, version uint16, hash common.Hash, code []byte) {
 	key := CompiledWasmCodeKey(version, hash)
 	if err := db.Put(key[:], code); err != nil {
 		log.Crit("Failed to store compiled wasm contract code", "err", err)

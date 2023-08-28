@@ -4,7 +4,7 @@ import "github.com/ethereum/go-ethereum/common"
 
 type wasmCodeChange struct {
 	account *common.Address
-	version uint32
+	version uint16
 }
 
 func (ch wasmCodeChange) revert(s *StateDB) {
