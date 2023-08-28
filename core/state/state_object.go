@@ -330,7 +330,10 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 	if len(keysToDelete) > 0 {
 		sort.Slice(keysToDelete, func(i, j int) bool { return bytes.Compare(keysToDelete[i][:], keysToDelete[j][:]) < 0 })
 		for _, key := range keysToDelete {
-			s.db.setError(tr.DeleteStorage(s.address, key[:]))
+			if err := tr.DeleteStorage(s.address, key[:]); err != nil {
+				s.db.setError(err)
+				return nil, err
+			}
 			s.db.StorageDeleted += 1
 		}
 	}
