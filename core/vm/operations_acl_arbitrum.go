@@ -105,7 +105,6 @@ func WasmStateStoreCost(db StateDB, program common.Address, key, value common.Ha
 //   - operations_acl.go makeCallVariantGasCallEIP2929()
 //   - gas_table.go      gasCall()
 func WasmCallCost(db StateDB, contract common.Address, value *big.Int, budget uint64) (uint64, error) {
-
 	total := uint64(0)
 	apply := func(amount uint64) bool {
 		total += amount

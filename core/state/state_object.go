@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 type Code []byte
@@ -208,7 +208,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 			s.db.setError(err)
 			return common.Hash{}
 		}
-		enc, err = tr.TryGet(key.Bytes())
+		enc, err = tr.GetStorage(s.address, key.Bytes())
 		if metrics.EnabledExpensive {
 			s.db.StorageReads += time.Since(start)
 		}
@@ -260,7 +260,7 @@ func (s *stateObject) finalise(prefetch bool) {
 		}
 	}
 	if s.db.prefetcher != nil && prefetch && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
-		s.db.prefetcher.prefetch(s.addrHash, s.data.Root, slotsToPrefetch)
+		s.db.prefetcher.prefetch(s.addrHash, s.data.Root, s.address, slotsToPrefetch)
 	}
 	if len(s.dirtyStorage) > 0 {
 		s.dirtyStorage = make(Storage)
@@ -305,7 +305,7 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 			if s.db.deterministic {
 				keysToDelete = append(keysToDelete, key)
 			} else {
-				if err := tr.TryDelete(key[:]); err != nil {
+				if err := tr.DeleteStorage(s.address, key[:]); err != nil {
 					s.db.setError(err)
 					return nil, err
 				}
@@ -314,7 +314,7 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-			if err := tr.TryUpdate(key[:], v); err != nil {
+			if err := tr.UpdateStorage(s.address, key[:], v); err != nil {
 				s.db.setError(err)
 				return nil, err
 			}
@@ -336,7 +336,7 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 	if len(keysToDelete) > 0 {
 		sort.Slice(keysToDelete, func(i, j int) bool { return bytes.Compare(keysToDelete[i][:], keysToDelete[j][:]) < 0 })
 		for _, key := range keysToDelete {
-			s.db.setError(tr.TryDelete(key[:]))
+			s.db.setError(tr.DeleteStorage(s.address, key[:]))
 			s.db.StorageDeleted += 1
 		}
 	}
@@ -369,7 +369,7 @@ func (s *stateObject) updateRoot(db Database) {
 
 // commitTrie submits the storage changes into the storage trie and re-computes
 // the root. Besides, all trie changes will be collected in a nodeset and returned.
-func (s *stateObject) commitTrie(db Database) (*trie.NodeSet, error) {
+func (s *stateObject) commitTrie(db Database) (*trienode.NodeSet, error) {
 	tr, err := s.updateTrie(db)
 	if err != nil {
 		return nil, err

@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -259,8 +258,6 @@ func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected comm
 	return nil
 }
 
-type StateBuildingLogFunction func(targetHeader, header *types.Header, hasState bool)
-
 func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeader *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
 	_, err := r.GetOrRecreateState(ctx, lastBlockHeader, logFunc)
 	if err != nil {
@@ -311,32 +308,14 @@ func (r *RecordingDatabase) PreimagesFromRecording(chainContextIf core.ChainCont
 }
 
 func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, error) {
-	stateDb, err := r.StateFor(header)
-	if err == nil {
-		return stateDb, nil
+	state, currentHeader, err := FindLastAvailableState(ctx, r.bc, r.StateFor, header, logFunc, -1)
+	if err != nil {
+		return nil, err
 	}
-	returnedBlockNumber := header.Number.Uint64()
-	genesis := r.bc.Config().ArbitrumChainParams.GenesisBlockNum
-	currentHeader := header
-	var lastRoot common.Hash
-	for ctx.Err() == nil {
-		if logFunc != nil {
-			logFunc(header, currentHeader, false)
-		}
-		if currentHeader.Number.Uint64() <= genesis {
-			return nil, fmt.Errorf("moved beyond genesis looking for state looking for %d, genesis %d, err %w", returnedBlockNumber, genesis, err)
-		}
-		lastHeader := currentHeader
-		currentHeader = r.bc.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64()-1)
-		if currentHeader == nil {
-			return nil, fmt.Errorf("chain doesn't contain parent of block %d hash %v (expected parent hash %v)", lastHeader.Number, lastHeader.Hash(), lastHeader.ParentHash)
-		}
-		stateDb, err = r.StateFor(currentHeader)
-		if err == nil {
-			lastRoot = currentHeader.Root
-			break
-		}
+	if currentHeader == header {
+		return state, nil
 	}
+	lastRoot := currentHeader.Root
 	defer func() {
 		if (lastRoot != common.Hash{}) {
 			r.dereferenceRoot(lastRoot)
@@ -344,23 +323,14 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 	}()
 	blockToRecreate := currentHeader.Number.Uint64() + 1
 	prevHash := currentHeader.Hash()
+	returnedBlockNumber := header.Number.Uint64()
 	for ctx.Err() == nil {
-		block := r.bc.GetBlockByNumber(blockToRecreate)
-		if block == nil {
-			return nil, fmt.Errorf("block not found while recreating: %d", blockToRecreate)
-		}
-		if block.ParentHash() != prevHash {
-			return nil, fmt.Errorf("reorg detected: number %d expectedPrev: %v foundPrev: %v", blockToRecreate, prevHash, block.ParentHash())
+		state, block, err := AdvanceStateByBlock(ctx, r.bc, state, header, blockToRecreate, prevHash, logFunc)
+		if err != nil {
+			return nil, err
 		}
 		prevHash = block.Hash()
-		if logFunc != nil {
-			logFunc(header, block.Header(), true)
-		}
-		_, _, _, err := r.bc.Processor().Process(block, stateDb, vm.Config{})
-		if err != nil {
-			return nil, fmt.Errorf("failed recreating state for block %d : %w", blockToRecreate, err)
-		}
-		err = r.addStateVerify(stateDb, block.Root())
+		err = r.addStateVerify(state, block.Root())
 		if err != nil {
 			return nil, fmt.Errorf("failed committing state for block %d : %w", blockToRecreate, err)
 		}
@@ -372,7 +342,7 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 			}
 			// don't dereference this one
 			lastRoot = common.Hash{}
-			return stateDb, nil
+			return state, nil
 		}
 		blockToRecreate++
 	}
