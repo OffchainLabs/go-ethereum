@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
@@ -70,10 +69,10 @@ func (r RootHashOrSlots) MarshalJSON() ([]byte, error) {
 
 type ConditionalOptions struct {
 	KnownAccounts  map[common.Address]RootHashOrSlots `json:"knownAccounts"`
-	BlockNumberMin *hexutil.Uint64                    `json:"blockNumberMin,omitempty"`
-	BlockNumberMax *hexutil.Uint64                    `json:"blockNumberMax,omitempty"`
-	TimestampMin   *hexutil.Uint64                    `json:"timestampMin,omitempty"`
-	TimestampMax   *hexutil.Uint64                    `json:"timestampMax,omitempty"`
+	BlockNumberMin *common.Uint64OrHex                `json:"blockNumberMin,omitempty"`
+	BlockNumberMax *common.Uint64OrHex                `json:"blockNumberMax,omitempty"`
+	TimestampMin   *common.Uint64OrHex                `json:"timestampMin,omitempty"`
+	TimestampMax   *common.Uint64OrHex                `json:"timestampMax,omitempty"`
 }
 
 func (o *ConditionalOptions) Check(l1BlockNumber uint64, l2Timestamp uint64, statedb *state.StateDB) error {
