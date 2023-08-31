@@ -488,6 +488,7 @@ func (b *Uint64OrHex) UnmarshalJSON(input []byte) error {
 	err = hexVal.UnmarshalJSON(input)
 	if err == nil {
 		*b = Uint64OrHex(hexVal)
+		return nil
 	}
 	return errors.New("json: cannot unmarshal the given input into Go value of type common.Uint64OrHex")
 }
