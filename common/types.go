@@ -462,33 +462,3 @@ func (d *Decimal) UnmarshalJSON(input []byte) error {
 		return err
 	}
 }
-
-// Uint64OrHex marshals as a JSON string with 0x prefix.
-// And unmarshals both hex and decimal to uint64.
-type Uint64OrHex uint64
-
-// MarshalText implements encoding.TextMarshaler.
-func (b Uint64OrHex) MarshalText() ([]byte, error) {
-	buf := make([]byte, 2, 10)
-	copy(buf, `0x`)
-	buf = strconv.AppendUint(buf, uint64(b), 16)
-	return buf, nil
-}
-
-// UnmarshalJSON implements json.Unmarshaler.
-func (b *Uint64OrHex) UnmarshalJSON(input []byte) error {
-	var decVal Decimal
-	err := decVal.UnmarshalJSON(input)
-	if err == nil {
-		*b = Uint64OrHex(decVal)
-		return nil
-	}
-
-	var hexVal hexutil.Uint64
-	err = hexVal.UnmarshalJSON(input)
-	if err == nil {
-		*b = Uint64OrHex(hexVal)
-		return nil
-	}
-	return errors.New("json: cannot unmarshal the given input into Go value of type common.Uint64OrHex")
-}
