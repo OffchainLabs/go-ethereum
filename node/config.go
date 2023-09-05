@@ -75,7 +75,7 @@ type Config struct {
 	// is created by New and destroyed when the node is stopped.
 	KeyStoreDir string `toml:",omitempty"`
 
-	// ExternalSigner specifies an external URI for a clef-type signer
+	// ExternalSigner specifies an external URI for a clef-type signer.
 	ExternalSigner string `toml:",omitempty"`
 
 	// UseLightweightKDF lowers the memory and CPU requirements of the key store
@@ -92,7 +92,7 @@ type Config struct {
 	// USB enables hardware wallet monitoring and connectivity.
 	USB bool `toml:",omitempty"`
 
-	// SmartCardDaemonPath is the path to the smartcard daemon's socket
+	// SmartCardDaemonPath is the path to the smartcard daemon's socket.
 	SmartCardDaemonPath string `toml:",omitempty"`
 
 	// IPCPath is the requested location to place the IPC endpoint. If the path is
@@ -385,7 +385,13 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 		return key
 	}
 
-	keyfile := c.ResolvePath(datadirPrivateKey)
+	// Updating default path to nodekey to be $Chain/nodekey
+	var keyfile string
+	if filepath.IsAbs(datadirPrivateKey) {
+		keyfile = datadirPrivateKey
+	} else {
+		keyfile = filepath.Join(c.DataDir, datadirPrivateKey)
+	}
 	if key, err := crypto.LoadECDSA(keyfile); err == nil {
 		return key
 	}
@@ -394,19 +400,18 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	if err != nil {
 		log.Crit(fmt.Sprintf("Failed to generate node key: %v", err))
 	}
-	instanceDir := filepath.Join(c.DataDir, c.name())
-	if err := os.MkdirAll(instanceDir, 0700); err != nil {
+	if err := os.MkdirAll(c.DataDir, 0700); err != nil {
 		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
 		return key
 	}
-	keyfile = filepath.Join(instanceDir, datadirPrivateKey)
+	keyfile = filepath.Join(c.DataDir, datadirPrivateKey)
 	if err := crypto.SaveECDSA(keyfile, key); err != nil {
 		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
 	}
 	return key
 }
 
-// CheckLegacyFiles inspects the datadir for signs of legacy static-nodes
+// checkLegacyFiles inspects the datadir for signs of legacy static-nodes
 // and trusted-nodes files. If they exist it raises an error.
 func (c *Config) checkLegacyFiles() {
 	c.checkLegacyFile(c.ResolvePath(datadirStaticNodes))
@@ -458,10 +463,10 @@ func (c *Config) KeyDirConfig() (string, error) {
 	return keydir, err
 }
 
-// getKeyStoreDir retrieves the key directory and will create
+// GetKeyStoreDir retrieves the key directory and will create
 // and ephemeral one if necessary.
-func getKeyStoreDir(conf *Config) (string, bool, error) {
-	keydir, err := conf.KeyDirConfig()
+func (c *Config) GetKeyStoreDir() (string, bool, error) {
+	keydir, err := c.KeyDirConfig()
 	if err != nil {
 		return "", false, err
 	}

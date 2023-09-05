@@ -30,7 +30,7 @@ var (
 )
 
 // CompiledWasmCodeKey = CompiledWasmCodePrefix + version + hash
-const WasmKeyLen = 2 + 4 + 32
+const WasmKeyLen = 2 + 2 + 32
 
 type WasmKey = [WasmKeyLen]byte
 
@@ -46,7 +46,6 @@ func CompiledWasmCodeKey(version uint16, hash common.Hash) WasmKey {
 // IsCompiledWasmCodeKey reports whether the given byte slice is the key of compiled wasm contract code,
 // if so return the raw code hash and version as well.
 func IsCompiledWasmCodeKey(key []byte) (bool, common.Hash, uint16) {
-
 	start := len(CompiledWasmCodePrefix)
 
 	if bytes.HasPrefix(key, CompiledWasmCodePrefix) && len(key) == WasmKeyLen {

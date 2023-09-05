@@ -162,11 +162,7 @@ func removeOtherRoots(db ethdb.Database, rootsList []common.Hash, stateBloom *st
 				if block == nil || block.Root() == (common.Hash{}) {
 					return
 				}
-				bloomContains, err := stateBloom.Contain(block.Root().Bytes())
-				if err != nil {
-					errors <- err
-					return
-				}
+				bloomContains := stateBloom.Contain(block.Root().Bytes())
 				if bloomContains {
 					_, rootsContains := roots[block.Root()]
 					if !rootsContains {
@@ -177,7 +173,7 @@ func removeOtherRoots(db ethdb.Database, rootsList []common.Hash, stateBloom *st
 							"stateRoot", block.Root(),
 						)
 						// This state root is a false positive of the bloom filter
-						err = db.Delete(block.Root().Bytes())
+						err := db.Delete(block.Root().Bytes())
 						if err != nil {
 							errors <- err
 							return
@@ -239,9 +235,7 @@ func prune(snaptree *snapshot.Tree, allRoots []common.Hash, maindb ethdb.Databas
 			if isCode {
 				checkKey = codeKey
 			}
-			if ok, err := stateBloom.Contain(checkKey); err != nil {
-				return err
-			} else if ok {
+			if stateBloom.Contain(checkKey) {
 				continue
 			}
 			count += 1
