@@ -16,6 +16,8 @@ type Config struct {
 	// send-transction variants. The unit is ether.
 	RPCTxFeeCap float64 `koanf:"tx-fee-cap"`
 
+	TxAllowUnprotected bool `koanf:"tx-allow-unprotected"`
+
 	// RPCEVMTimeout is the global timeout for eth-call.
 	RPCEVMTimeout time.Duration `koanf:"evm-timeout"`
 
@@ -45,6 +47,7 @@ type ArbDebugConfig struct {
 func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.Uint64(prefix+".gas-cap", DefaultConfig.RPCGasCap, "cap on computation gas that can be used in eth_call/estimateGas (0=infinite)")
 	f.Float64(prefix+".tx-fee-cap", DefaultConfig.RPCTxFeeCap, "cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)")
+	f.Bool(prefix+".tx-allow-unprotected", DefaultConfig.TxAllowUnprotected, "allow transactions that aren't EIP-155 replay protected to be submitted over the RPC")
 	f.Duration(prefix+".evm-timeout", DefaultConfig.RPCEVMTimeout, "timeout used for eth_call (0=infinite)")
 	f.Uint64(prefix+".bloom-bits-blocks", DefaultConfig.BloomBitsBlocks, "number of blocks a single bloom bit section vector holds")
 	f.Uint64(prefix+".bloom-confirms", DefaultConfig.BloomConfirms, "number of confirmation blocks before a bloom section is considered final")
@@ -67,8 +70,9 @@ const (
 )
 
 var DefaultConfig = Config{
-	RPCGasCap:               ethconfig.Defaults.RPCGasCap,     // 50,000,000
-	RPCTxFeeCap:             ethconfig.Defaults.RPCTxFeeCap,   // 1 ether
+	RPCGasCap:               ethconfig.Defaults.RPCGasCap,   // 50,000,000
+	RPCTxFeeCap:             ethconfig.Defaults.RPCTxFeeCap, // 1 ether
+	TxAllowUnprotected:      true,
 	RPCEVMTimeout:           ethconfig.Defaults.RPCEVMTimeout, // 5 seconds
 	BloomBitsBlocks:         params.BloomBitsBlocks * 4,       // we generally have smaller blocks
 	BloomConfirms:           params.BloomConfirms,
