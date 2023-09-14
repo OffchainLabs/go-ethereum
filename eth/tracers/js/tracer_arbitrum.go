@@ -55,3 +55,7 @@ func (jst *jsTracer) CaptureArbitrumTransfer(
 
 func (*jsTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)        {}
 func (*jsTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
+
+func (*jsTracer) CaptureStylusHostio(name string, data []byte, ink uint64) {
+	// todo
+}

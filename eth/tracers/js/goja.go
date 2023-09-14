@@ -115,6 +115,9 @@ type jsTracer struct {
 	enter  goja.Callable
 	exit   goja.Callable
 
+	// Stylus: expose method for hostios
+	hostio goja.Callable
+
 	// Underlying structs being passed into JS
 	log         *steplog
 	frame       *callframe
