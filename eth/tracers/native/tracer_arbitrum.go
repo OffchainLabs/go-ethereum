@@ -90,6 +90,12 @@ func (*noopTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, 
 func (*prestateTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
 func (*flatCallTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
 
+func (*callTracer) CaptureStylusHostio(name string, args, outs []byte, ink uint64)     {}
+func (*fourByteTracer) CaptureStylusHostio(name string, args, outs []byte, ink uint64) {}
+func (*noopTracer) CaptureStylusHostio(name string, args, outs []byte, ink uint64)     {}
+func (*prestateTracer) CaptureStylusHostio(name string, args, outs []byte, ink uint64) {}
+func (*flatCallTracer) CaptureStylusHostio(name string, args, outs []byte, ink uint64) {}
+
 func bigToHex(n *big.Int) string {
 	if n == nil {
 		return ""
