@@ -115,9 +115,6 @@ type jsTracer struct {
 	enter  goja.Callable
 	exit   goja.Callable
 
-	// Stylus: expose method for hostios
-	hostio goja.Callable
-
 	// Underlying structs being passed into JS
 	log         *steplog
 	frame       *callframe
@@ -179,6 +176,7 @@ func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage) (tracer
 	if hasEnter != hasExit {
 		return nil, errors.New("trace object must expose either both or none of enter() and exit()")
 	}
+
 	t.traceFrame = hasEnter
 	t.obj = obj
 	t.step = step
