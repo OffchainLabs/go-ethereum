@@ -136,11 +136,11 @@ var (
 		// invalid encoding
 		{input: "", wantErr: true},
 		{input: "null", wantErr: true},
-		{input: `"0x"`, wantErr: true},
-		{input: `"0xfffffffffffffffff"`, wantErr: true},
+		{input: "\"0x\"", wantErr: true},
+		{input: "\"0xfffffffffffffffff\"", wantErr: true},
 		{input: `"1ab"`, wantErr: true},
-		{input: `"0xx"`, wantErr: true},
-		{input: `"0x1zz01"`, wantErr: true},
+		{input: "\"xx\"", wantErr: true},
+		{input: "\"0x1zz01\"", wantErr: true},
 
 		// valid encoding
 		{input: `""`, want: uint64(0)},
@@ -149,12 +149,12 @@ var (
 		{input: `"100"`, want: uint64(100)},
 		{input: `"12344678"`, want: uint64(12344678)},
 		{input: `"1111111111111111"`, want: uint64(1111111111111111)},
-		{input: `"0x0"`, want: uint64(0)},
-		{input: `"0x2"`, want: uint64(0x2)},
-		{input: `"0x2F2"`, want: uint64(0x2f2)},
-		{input: `"0x1122aaff"`, want: uint64(0x1122aaff)},
-		{input: `"0xbbb"`, want: uint64(0xbbb)},
-		{input: `"0xffffffffffffffff"`, want: uint64(0xffffffffffffffff)},
+		{input: "\"0x0\"", want: uint64(0)},
+		{input: "\"0x2\"", want: uint64(0x2)},
+		{input: "\"0x2F2\"", want: uint64(0x2f2)},
+		{input: "\"0x1122aaff\"", want: uint64(0x1122aaff)},
+		{input: "\"0xbbb\"", want: uint64(0xbbb)},
+		{input: "\"0xffffffffffffffff\"", want: uint64(0xffffffffffffffff)},
 	}
 )
 
