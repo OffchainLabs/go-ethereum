@@ -831,8 +831,9 @@ func TestRuntimeJSTracer(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, _, err = Call(main, nil, &Config{
-				GasLimit: 1000000,
-				State:    statedb,
+				ChainConfig: params.TestChainConfig,
+				GasLimit:    1000000,
+				State:       statedb,
 				EVMConfig: vm.Config{
 					Tracer: tracer,
 				}})
@@ -866,7 +867,8 @@ func TestJSTracerCreateTx(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, _, err = Create(code, &Config{
-		State: statedb,
+		ChainConfig: params.TestChainConfig,
+		State:       statedb,
 		EVMConfig: vm.Config{
 			Tracer: tracer,
 		}})

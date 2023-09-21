@@ -157,6 +157,8 @@ var (
 		Ethash:                        new(EthashConfig),
 		Clique:                        nil,
 		ArbitrumChainParams:           DisableArbitrumParams(),
+		MaxCodeSize:                   newUint64(MaxCodeSize),
+		MaxInitCodeSize:               newUint64(MaxInitCodeSize),
 	}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
@@ -187,6 +189,8 @@ var (
 		Ethash:                        nil,
 		Clique:                        &CliqueConfig{Period: 0, Epoch: 30000},
 		ArbitrumChainParams:           DisableArbitrumParams(),
+		MaxCodeSize:                   newUint64(MaxCodeSize),
+		MaxInitCodeSize:               newUint64(MaxInitCodeSize),
 	}
 
 	// TestChainConfig contains every protocol change (EIPs) introduced
@@ -217,6 +221,8 @@ var (
 		Ethash:                        new(EthashConfig),
 		Clique:                        nil,
 		ArbitrumChainParams:           DisableArbitrumParams(),
+		MaxCodeSize:                   newUint64(MaxCodeSize),
+		MaxInitCodeSize:               newUint64(MaxInitCodeSize),
 	}
 
 	// NonActivatedConfig defines the chain configuration without activating
