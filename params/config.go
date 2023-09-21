@@ -17,6 +17,7 @@
 package params
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -307,6 +308,27 @@ type ChainConfig struct {
 	Clique *CliqueConfig `json:"clique,omitempty"`
 
 	ArbitrumChainParams ArbitrumChainParams `json:"arbitrum,omitempty"`
+
+	MaxCodeSize     *uint64 `json:"maxCodeSize,omitempty,"`    // Maximum bytecode to permit for a contract
+	MaxInitCodeSize *uint64 `json:"maxInitCodeSize,omitempty"` // Maximum initcode to permit in a creation transaction and create instructions
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface by decoding the json
+// string values into the config fields
+func (c *ChainConfig) UnmarshalJSON(data []byte) error {
+	type chainConfigJSON ChainConfig
+	var cfgJSON chainConfigJSON
+	if err := json.Unmarshal(data, &cfgJSON); err != nil {
+		return err
+	}
+	if cfgJSON.MaxCodeSize == nil {
+		cfgJSON.MaxCodeSize = newUint64(MaxCodeSize)
+	}
+	if cfgJSON.MaxInitCodeSize == nil {
+		cfgJSON.MaxInitCodeSize = newUint64(MaxInitCodeSize)
+	}
+	*c = ChainConfig(cfgJSON)
+	return nil
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.

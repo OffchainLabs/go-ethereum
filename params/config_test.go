@@ -17,6 +17,7 @@
 package params
 
 import (
+	"encoding/json"
 	"math/big"
 	"reflect"
 	"testing"
@@ -138,5 +139,35 @@ func TestConfigRules(t *testing.T) {
 	currentArbosVersion = math.MaxInt64
 	if r := c.Rules(big.NewInt(0), true, stamp, currentArbosVersion); !r.IsShanghai {
 		t.Errorf("expected %v to be shanghai", currentArbosVersion)
+	}
+}
+
+type marshalUnMarshalTest struct {
+	input interface{}
+	want  interface{}
+}
+
+var unmarshalChainConfigTests = []marshalUnMarshalTest{
+	{input: `{"maxCodeSize": 10, "maxInitCodeSize": 10}`,
+		want: [2]uint64{10, 10}},
+	{input: `{"maxCodeSize": 10}`,
+		want: [2]uint64{10, MaxInitCodeSize}},
+	{input: `{"maxInitCodeSize": 10}`,
+		want: [2]uint64{MaxCodeSize, 10}},
+	{input: `{}`,
+		want: [2]uint64{MaxCodeSize, MaxInitCodeSize}},
+}
+
+func TestUnmarshalChainConfig(t *testing.T) {
+	var c ChainConfig
+	for _, test := range unmarshalChainConfigTests {
+		if err := json.Unmarshal([]byte(test.input.(string)), &c); err != nil {
+			t.Errorf("failed to unmarshal. Error: %q", err)
+		}
+		expected := test.want.([2]uint64)
+		if *c.MaxCodeSize != expected[0] || *c.MaxInitCodeSize != expected[1] {
+			t.Errorf("failed to unmarshal MaxCodeSize and MaxInitCodeSize correctly. unmarshalled as (%d %d) want (%d %d))",
+				*c.MaxCodeSize, *c.MaxInitCodeSize, expected[0], expected[1])
+		}
 	}
 }
