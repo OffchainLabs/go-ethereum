@@ -106,7 +106,7 @@ func TestNodeKeyPersistency(t *testing.T) {
 	// Create a temporary folder and make sure no key is present
 	dir := t.TempDir()
 
-	keyfile := filepath.Join(dir, "unit-test", datadirPrivateKey)
+	keyfile := filepath.Join(dir, datadirPrivateKey)
 
 	// Configure a node with a preset key and ensure it's not persisted
 	key, err := crypto.GenerateKey()

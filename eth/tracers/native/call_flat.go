@@ -112,7 +112,7 @@ type flatCallResultMarshaling struct {
 // flatCallTracer reports call frame information of a tx in a flat format, i.e.
 // as opposed to the nested format of `callTracer`.
 type flatCallTracer struct {
-	// Arbitrum: capture transfers occuring outside of evm execution
+	// Arbitrum: capture transfers occurring outside of evm execution
 	beforeEVMTransfers []arbitrumTransfer
 	afterEVMTransfers  []arbitrumTransfer
 
@@ -137,7 +137,9 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 		}
 	}
 
-	tracer, err := tracers.DefaultDirectory.New("callTracer", ctx, cfg)
+	// Create inner call tracer with default configuration, don't forward
+	// the OnlyTopCall or WithLog to inner for now
+	tracer, err := tracers.DefaultDirectory.New("callTracer", ctx, nil)
 	if err != nil {
 		return nil, err
 	}
