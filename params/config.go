@@ -157,8 +157,6 @@ var (
 		Ethash:                        new(EthashConfig),
 		Clique:                        nil,
 		ArbitrumChainParams:           DisableArbitrumParams(),
-		MaxCodeSize:                   newUint64(MaxCodeSize),
-		MaxInitCodeSize:               newUint64(MaxInitCodeSize),
 	}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
@@ -189,8 +187,6 @@ var (
 		Ethash:                        nil,
 		Clique:                        &CliqueConfig{Period: 0, Epoch: 30000},
 		ArbitrumChainParams:           DisableArbitrumParams(),
-		MaxCodeSize:                   newUint64(MaxCodeSize),
-		MaxInitCodeSize:               newUint64(MaxInitCodeSize),
 	}
 
 	// TestChainConfig contains every protocol change (EIPs) introduced
@@ -221,8 +217,6 @@ var (
 		Ethash:                        new(EthashConfig),
 		Clique:                        nil,
 		ArbitrumChainParams:           DisableArbitrumParams(),
-		MaxCodeSize:                   newUint64(MaxCodeSize),
-		MaxInitCodeSize:               newUint64(MaxInitCodeSize),
 	}
 
 	// NonActivatedConfig defines the chain configuration without activating
@@ -314,9 +308,6 @@ type ChainConfig struct {
 	Clique *CliqueConfig `json:"clique,omitempty"`
 
 	ArbitrumChainParams ArbitrumChainParams `json:"arbitrum,omitempty"`
-
-	MaxCodeSize     *uint64 `json:"maxCodeSize,omitempty,"`    // Maximum bytecode to permit for a contract
-	MaxInitCodeSize *uint64 `json:"maxInitCodeSize,omitempty"` // Maximum initcode to permit in a creation transaction and create instructions
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface by decoding the json
@@ -327,11 +318,11 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &cfgJSON); err != nil {
 		return err
 	}
-	if cfgJSON.MaxCodeSize == nil {
-		cfgJSON.MaxCodeSize = newUint64(MaxCodeSize)
+	if cfgJSON.ArbitrumChainParams.MaxCodeSize == nil {
+		cfgJSON.ArbitrumChainParams.MaxCodeSize = newUint64(MaxCodeSize)
 	}
-	if cfgJSON.MaxInitCodeSize == nil {
-		cfgJSON.MaxInitCodeSize = newUint64(MaxInitCodeSize)
+	if cfgJSON.ArbitrumChainParams.MaxInitCodeSize == nil {
+		cfgJSON.ArbitrumChainParams.MaxInitCodeSize = newUint64(MaxInitCodeSize)
 	}
 	*c = ChainConfig(cfgJSON)
 	return nil

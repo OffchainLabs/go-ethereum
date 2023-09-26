@@ -148,13 +148,13 @@ type marshalUnMarshalTest struct {
 }
 
 var unmarshalChainConfigTests = []marshalUnMarshalTest{
-	{input: `{"maxCodeSize": 10, "maxInitCodeSize": 10}`,
+	{input: `{"arbitrum": {"maxCodeSize": 10, "maxInitCodeSize": 10} }`,
 		want: [2]uint64{10, 10}},
-	{input: `{"maxCodeSize": 10}`,
+	{input: `{"arbitrum": {"maxCodeSize": 10} }`,
 		want: [2]uint64{10, MaxInitCodeSize}},
-	{input: `{"maxInitCodeSize": 10}`,
+	{input: `{"arbitrum": {"maxInitCodeSize": 10} }`,
 		want: [2]uint64{MaxCodeSize, 10}},
-	{input: `{}`,
+	{input: `{"arbitrum": {} }`,
 		want: [2]uint64{MaxCodeSize, MaxInitCodeSize}},
 }
 
@@ -165,9 +165,9 @@ func TestUnmarshalChainConfig(t *testing.T) {
 			t.Errorf("failed to unmarshal. Error: %q", err)
 		}
 		expected := test.want.([2]uint64)
-		if *c.MaxCodeSize != expected[0] || *c.MaxInitCodeSize != expected[1] {
+		if *c.ArbitrumChainParams.MaxCodeSize != expected[0] || *c.ArbitrumChainParams.MaxInitCodeSize != expected[1] {
 			t.Errorf("failed to unmarshal MaxCodeSize and MaxInitCodeSize correctly. unmarshalled as (%d %d) want (%d %d))",
-				*c.MaxCodeSize, *c.MaxInitCodeSize, expected[0], expected[1])
+				*c.ArbitrumChainParams.MaxCodeSize, *c.ArbitrumChainParams.MaxInitCodeSize, expected[0], expected[1])
 		}
 	}
 }
