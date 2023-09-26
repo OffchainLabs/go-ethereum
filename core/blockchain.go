@@ -1447,7 +1447,10 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if err != nil {
 		return err
 	}
-	// If we're running an archive node, always flush
+	// If we're running an archive node, flush
+	// If MaxNumberOfBlocksToSkipStateSaving or MaxAmountOfGasToSkipStateSaving is not zero, then flushing of some blocks will be skipped:
+	// * at most MaxNumberOfBlocksToSkipStateSaving block state commits will be skipped
+	// * sum of gas used in skipped blocks will be at most MaxAmountOfGasToSkipStateSaving
 	if bc.cacheConfig.TrieDirtyDisabled {
 		var maySkipCommiting, blockLimitReached, gasLimitReached bool
 		if bc.cacheConfig.MaxNumberOfBlocksToSkipStateSaving != 0 {
