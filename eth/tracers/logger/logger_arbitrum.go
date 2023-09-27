@@ -41,3 +41,8 @@ func (*AccessListTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth
 func (*JSONLogger) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)       {}
 func (*StructLogger) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)     {}
 func (*mdLogger) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)         {}
+
+func (*AccessListTracer) CaptureStylusHostio(name string, args, outs []byte, ink uint64) {}
+func (*JSONLogger) CaptureStylusHostio(name string, args, outs []byte, ink uint64)       {}
+func (*StructLogger) CaptureStylusHostio(name string, args, outs []byte, ink uint64)     {}
+func (*mdLogger) CaptureStylusHostio(name string, args, outs []byte, ink uint64)         {}
