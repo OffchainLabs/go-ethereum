@@ -570,6 +570,16 @@ func (t *Transaction) V(ctx context.Context) hexutil.Big {
 	return hexutil.Big(*v)
 }
 
+func (t *Transaction) YParity(ctx context.Context) (*hexutil.Uint64, error) {
+	tx, _ := t.resolve(ctx)
+	if tx == nil || tx.Type() == types.LegacyTxType {
+		return nil, nil
+	}
+	v, _, _ := tx.RawSignatureValues()
+	ret := hexutil.Uint64(v.Int64())
+	return &ret, nil
+}
+
 func (t *Transaction) Raw(ctx context.Context) (hexutil.Bytes, error) {
 	tx, _ := t.resolve(ctx)
 	if tx == nil {
@@ -1255,7 +1265,7 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 	if to < from {
 		return []*Block{}, nil
 	}
-	ret := make([]*Block, 0, to-from+1)
+	var ret []*Block
 	for i := from; i <= to; i++ {
 		numberOrHash := rpc.BlockNumberOrHashWithNumber(i)
 		block := &Block{
@@ -1273,6 +1283,9 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 			break
 		}
 		ret = append(ret, block)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 	}
 	return ret, nil
 }
