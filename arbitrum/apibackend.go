@@ -316,7 +316,7 @@ func (a *APIBackend) RPCEVMTimeout() time.Duration {
 }
 
 func (a *APIBackend) UnprotectedAllowed() bool {
-	return true // TODO: is that true?
+	return a.b.config.TxAllowUnprotected
 }
 
 // Blockchain API
@@ -415,7 +415,7 @@ func (a *APIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
-func (a *APIBackend) stateAndHeaderFromHeader(header *types.Header, err error) (*state.StateDB, *types.Header, error) {
+func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types.Header, err error) (*state.StateDB, *types.Header, error) {
 	if err != nil {
 		return nil, header, err
 	}
@@ -425,16 +425,32 @@ func (a *APIBackend) stateAndHeaderFromHeader(header *types.Header, err error) (
 	if !a.blockChain().Config().IsArbitrumNitro(header.Number) {
 		return nil, header, types.ErrUseFallback
 	}
-	state, err := a.blockChain().StateAt(header.Root)
+	bc := a.blockChain()
+	stateFor := func(header *types.Header) (*state.StateDB, error) {
+		return bc.StateAt(header.Root)
+	}
+	state, lastHeader, err := FindLastAvailableState(ctx, bc, stateFor, header, nil, a.b.config.MaxRecreateStateDepth)
+	if err != nil {
+		return nil, nil, err
+	}
+	if lastHeader == header {
+		return state, header, nil
+	}
+	state, err = AdvanceStateUpToBlock(ctx, bc, state, header, lastHeader, nil)
+	if err != nil {
+		return nil, nil, err
+	}
 	return state, header, err
 }
 
 func (a *APIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
-	return a.stateAndHeaderFromHeader(a.HeaderByNumber(ctx, number))
+	header, err := a.HeaderByNumber(ctx, number)
+	return a.stateAndHeaderFromHeader(ctx, header, err)
 }
 
 func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
-	return a.stateAndHeaderFromHeader(a.HeaderByNumberOrHash(ctx, blockNrOrHash))
+	header, err := a.HeaderByNumberOrHash(ctx, blockNrOrHash)
+	return a.stateAndHeaderFromHeader(ctx, header, err)
 }
 
 func (a *APIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
