@@ -278,7 +278,7 @@ func (t *Transaction) GasPrice(ctx context.Context) hexutil.Big {
 	case types.DynamicFeeTxType:
 		if block != nil {
 			if baseFee, _ := block.BaseFeePerGas(ctx); baseFee != nil {
-				// price = min(tip, gasFeeCap - baseFee) + baseFee
+				// price = min(gasTipCap + baseFee, gasFeeCap)
 				return (hexutil.Big)(*math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee.ToInt()), tx.GasFeeCap()))
 			}
 		}
@@ -1134,7 +1134,7 @@ func (b *Block) Call(ctx context.Context, args struct {
 func (b *Block) EstimateGas(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (hexutil.Uint64, error) {
-	return ethapi.DoEstimateGas(ctx, b.r.backend, args.Data, *b.numberOrHash, b.r.backend.RPCGasCap())
+	return ethapi.DoEstimateGas(ctx, b.r.backend, args.Data, *b.numberOrHash, nil, b.r.backend.RPCGasCap())
 }
 
 type Pending struct {
@@ -1198,7 +1198,7 @@ func (p *Pending) EstimateGas(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (Long, error) {
 	latestBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-	gas, err := ethapi.DoEstimateGas(ctx, p.r.backend, args.Data, latestBlockNr, p.r.backend.RPCGasCap())
+	gas, err := ethapi.DoEstimateGas(ctx, p.r.backend, args.Data, latestBlockNr, nil, p.r.backend.RPCGasCap())
 	return Long(gas), err
 }
 
