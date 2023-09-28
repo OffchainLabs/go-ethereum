@@ -308,7 +308,7 @@ func gasCreateEip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 		return 0, err
 	}
 	size, overflow := stack.Back(2).Uint64WithOverflow()
-	if overflow || size > *evm.chainConfig.ArbitrumChainParams.MaxInitCodeSize {
+	if overflow || size > evm.chainConfig.ArbitrumChainParams.MaxInitCodeSize {
 		return 0, ErrGasUintOverflow
 	}
 	// Since size <= *evm.chainConfig.ArbitrumChainParams.MaxInitCodeSize, these multiplication cannot overflow
@@ -324,7 +324,7 @@ func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 		return 0, err
 	}
 	size, overflow := stack.Back(2).Uint64WithOverflow()
-	if overflow || size > *evm.chainConfig.ArbitrumChainParams.MaxInitCodeSize {
+	if overflow || size > evm.chainConfig.ArbitrumChainParams.MaxInitCodeSize {
 		return 0, ErrGasUintOverflow
 	}
 	// Since size <= *evm.chainConfig.ArbitrumChainParams.MaxInitCodeSize, these multiplication cannot overflow

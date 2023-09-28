@@ -318,11 +318,11 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &cfgJSON); err != nil {
 		return err
 	}
-	if cfgJSON.ArbitrumChainParams.MaxCodeSize == nil {
-		cfgJSON.ArbitrumChainParams.MaxCodeSize = newUint64(MaxCodeSize)
+	if cfgJSON.ArbitrumChainParams.MaxCodeSize == 0 {
+		cfgJSON.ArbitrumChainParams.MaxCodeSize = MaxCodeSize
 	}
-	if cfgJSON.ArbitrumChainParams.MaxInitCodeSize == nil {
-		cfgJSON.ArbitrumChainParams.MaxInitCodeSize = newUint64(MaxInitCodeSize)
+	if cfgJSON.ArbitrumChainParams.MaxInitCodeSize == 0 {
+		cfgJSON.ArbitrumChainParams.MaxInitCodeSize = MaxInitCodeSize
 	}
 	*c = ChainConfig(cfgJSON)
 	return nil

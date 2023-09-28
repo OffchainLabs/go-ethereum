@@ -41,15 +41,13 @@ func TestInvalidCliqueConfig(t *testing.T) {
 	}
 }
 
-func newUint64(val uint64) *uint64 { return &val }
-
 func TestSetupGenesis(t *testing.T) {
 	var (
 		customghash = common.HexToHash("0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd50")
 		customg     = Genesis{
 			Config: &params.ChainConfig{HomesteadBlock: big.NewInt(3), ArbitrumChainParams: params.ArbitrumChainParams{
-				MaxCodeSize:     newUint64(params.MaxCodeSize),
-				MaxInitCodeSize: newUint64(params.MaxInitCodeSize)}},
+				MaxCodeSize:     params.MaxCodeSize,
+				MaxInitCodeSize: params.MaxInitCodeSize}},
 			Alloc: GenesisAlloc{
 				{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
 			},
@@ -57,8 +55,8 @@ func TestSetupGenesis(t *testing.T) {
 		oldcustomg = customg
 	)
 	oldcustomg.Config = &params.ChainConfig{HomesteadBlock: big.NewInt(2), ArbitrumChainParams: params.ArbitrumChainParams{
-		MaxCodeSize:     newUint64(params.MaxCodeSize),
-		MaxInitCodeSize: newUint64(params.MaxInitCodeSize)}}
+		MaxCodeSize:     params.MaxCodeSize,
+		MaxInitCodeSize: params.MaxInitCodeSize}}
 	tests := []struct {
 		name       string
 		fn         func(ethdb.Database) (*params.ChainConfig, common.Hash, error)

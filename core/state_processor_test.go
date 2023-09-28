@@ -59,8 +59,8 @@ func TestStateProcessorErrors(t *testing.T) {
 			LondonBlock:         big.NewInt(0),
 			Ethash:              new(params.EthashConfig),
 			ArbitrumChainParams: params.ArbitrumChainParams{
-				MaxCodeSize:     newUint64(params.MaxCodeSize),
-				MaxInitCodeSize: newUint64(params.MaxInitCodeSize),
+				MaxCodeSize:     params.MaxCodeSize,
+				MaxInitCodeSize: params.MaxInitCodeSize,
 			},
 		}
 		signer  = types.LatestSigner(config)
@@ -242,8 +242,8 @@ func TestStateProcessorErrors(t *testing.T) {
 					IstanbulBlock:       big.NewInt(0),
 					MuirGlacierBlock:    big.NewInt(0),
 					ArbitrumChainParams: params.ArbitrumChainParams{
-						MaxCodeSize:     newUint64(params.MaxCodeSize),
-						MaxInitCodeSize: newUint64(params.MaxInitCodeSize),
+						MaxCodeSize:     params.MaxCodeSize,
+						MaxInitCodeSize: params.MaxInitCodeSize,
 					},
 				},
 				Alloc: GenesisAlloc{
@@ -342,8 +342,8 @@ func TestStateProcessorErrors(t *testing.T) {
 					TerminalTotalDifficultyPassed: true,
 					ShanghaiTime:                  u64(0),
 					ArbitrumChainParams: params.ArbitrumChainParams{
-						MaxCodeSize:     newUint64(params.MaxCodeSize),
-						MaxInitCodeSize: newUint64(params.MaxInitCodeSize),
+						MaxCodeSize:     params.MaxCodeSize,
+						MaxInitCodeSize: params.MaxInitCodeSize,
 					},
 				},
 				Alloc: GenesisAlloc{
