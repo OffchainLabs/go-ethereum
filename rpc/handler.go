@@ -152,15 +152,19 @@ func (b *batchCallBuffer) write(ctx context.Context, conn jsonWriter) {
 // timeout sends the responses added so far. For the remaining unanswered call
 // messages, it sends a timeout error response.
 func (b *batchCallBuffer) timeout(ctx context.Context, conn jsonWriter) {
+	b.respondWithError(ctx, conn, &internalServerError{errcodeTimeout, errMsgTimeout})
+}
+
+func (b *batchCallBuffer) respondWithError(ctx context.Context, conn jsonWriter, err error) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 
 	for _, msg := range b.calls {
 		if !msg.isNotification() {
-			resp := msg.errorResponse(&internalServerError{errcodeTimeout, errMsgTimeout})
+			resp := msg.errorResponse(err)
 			serialized, err := json.Marshal(resp)
 			if err != nil {
-				conn.writeJSON(ctx, errorMessage(&parseError{"error serializing timeout error: " + err.Error()}), true)
+				conn.writeJSON(ctx, errorMessage(&parseError{"error serializing response error: " + err.Error()}), true)
 				b.wrote = true
 				return
 			}
@@ -237,7 +241,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			resp := h.handleCallMsg(cp, msg)
 			err := callBuffer.pushResponse(resp)
 			if err != nil {
-				h.conn.writeJSON(cp.ctx, errorMessage(err), true)
+				callBuffer.respondWithError(cp.ctx, h.conn, err)
 				return
 			}
 		}
