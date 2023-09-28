@@ -144,6 +144,9 @@ type CacheConfig struct {
 	TriesInMemory uint64        // Height difference before which a trie may not be garbage-collected
 	TrieRetention time.Duration // Time limit before which a trie may not be garbage-collected
 
+	MaxNumberOfBlocksToSkipStateSaving uint32
+	MaxAmountOfGasToSkipStateSaving    uint64
+
 	SnapshotNoBuild bool // Whether the background generation is allowed
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
@@ -153,8 +156,10 @@ type CacheConfig struct {
 var defaultCacheConfig = &CacheConfig{
 
 	// Arbitrum Config Options
-	TriesInMemory: DefaultTriesInMemory,
-	TrieRetention: 30 * time.Minute,
+	TriesInMemory:                      DefaultTriesInMemory,
+	TrieRetention:                      30 * time.Minute,
+	MaxNumberOfBlocksToSkipStateSaving: 0,
+	MaxAmountOfGasToSkipStateSaving:    0,
 
 	TrieCleanLimit: 256,
 	TrieDirtyLimit: 256,
@@ -236,6 +241,9 @@ type BlockChain struct {
 	processor  Processor // Block transaction processor interface
 	forker     *ForkChoice
 	vmConfig   vm.Config
+
+	numberOfBlocksToSkipStateSaving      uint32
+	amountOfGasInBlocksToSkipStateSaving uint64
 }
 
 type trieGcEntry struct {
@@ -1439,9 +1447,34 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if err != nil {
 		return err
 	}
-	// If we're running an archive node, always flush
+	// If we're running an archive node, flush
+	// If MaxNumberOfBlocksToSkipStateSaving or MaxAmountOfGasToSkipStateSaving is not zero, then flushing of some blocks will be skipped:
+	// * at most MaxNumberOfBlocksToSkipStateSaving block state commits will be skipped
+	// * sum of gas used in skipped blocks will be at most MaxAmountOfGasToSkipStateSaving
 	if bc.cacheConfig.TrieDirtyDisabled {
-		return bc.triedb.Commit(root, false)
+		var maySkipCommiting, blockLimitReached, gasLimitReached bool
+		if bc.cacheConfig.MaxNumberOfBlocksToSkipStateSaving != 0 {
+			maySkipCommiting = true
+			if bc.numberOfBlocksToSkipStateSaving > 0 {
+				bc.numberOfBlocksToSkipStateSaving--
+			} else {
+				blockLimitReached = true
+			}
+		}
+		if bc.cacheConfig.MaxAmountOfGasToSkipStateSaving != 0 {
+			maySkipCommiting = true
+			if bc.amountOfGasInBlocksToSkipStateSaving >= block.GasUsed() {
+				bc.amountOfGasInBlocksToSkipStateSaving -= block.GasUsed()
+			} else {
+				gasLimitReached = true
+			}
+		}
+		if !maySkipCommiting || blockLimitReached || gasLimitReached {
+			bc.numberOfBlocksToSkipStateSaving = bc.cacheConfig.MaxNumberOfBlocksToSkipStateSaving
+			bc.amountOfGasInBlocksToSkipStateSaving = bc.cacheConfig.MaxAmountOfGasToSkipStateSaving
+			return bc.triedb.Commit(root, false)
+		}
+		return nil
 	}
 
 	// Full but not archive node, do proper garbage collection
