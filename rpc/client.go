@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"reflect"
 	"strconv"
 	"sync/atomic"
@@ -42,7 +43,7 @@ var (
 const (
 	// Timeouts
 	defaultDialTimeout = 10 * time.Second // used if context has no deadline
-	subscribeTimeout   = 5 * time.Second  // overall timeout eth_subscribe, rpc_modules calls
+	subscribeTimeout   = 10 * time.Second // overall timeout eth_subscribe, rpc_modules calls
 )
 
 const (
@@ -59,6 +60,13 @@ const (
 	maxClientSubscriptionBuffer = 20000
 )
 
+type ClientInterface interface {
+	CallContext(ctx_in context.Context, result interface{}, method string, args ...interface{}) error
+	EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error)
+	BatchCallContext(ctx context.Context, b []BatchElem) error
+	Close()
+}
+
 // BatchElem is an element in a batch request.
 type BatchElem struct {
 	Method string
@@ -74,13 +82,11 @@ type BatchElem struct {
 
 // Client represents a connection to an RPC server.
 type Client struct {
-	requestHook RequestHook
-
 	idgen    func() ID // for subscriptions
 	isHTTP   bool      // connection type: http, ws or ipc
 	services *serviceRegistry
 
-	idCounter uint32
+	idCounter atomic.Uint32
 
 	// This function, if non-nil, is called when the connection is lost.
 	reconnectFunc reconnectFunc
@@ -102,7 +108,7 @@ type Client struct {
 	reqTimeout  chan *requestOp  // removes response IDs when call timeout expires
 }
 
-type reconnectFunc func(ctx context.Context) (ServerCodec, error)
+type reconnectFunc func(context.Context) (ServerCodec, error)
 
 type clientContextKey struct{}
 
@@ -156,14 +162,16 @@ func (op *requestOp) wait(ctx context.Context, c *Client) (*jsonrpcMessage, erro
 //
 // The currently supported URL schemes are "http", "https", "ws" and "wss". If rawurl is a
 // file name with no URL scheme, a local socket connection is established using UNIX
-// domain sockets on supported platforms and named pipes on Windows. If you want to
-// configure transport options, use DialHTTP, DialWebsocket or DialIPC instead.
+// domain sockets on supported platforms and named pipes on Windows.
+//
+// If you want to further configure the transport, use DialOptions instead of this
+// function.
 //
 // For websocket connections, the origin is set to the local host name.
 //
-// The client reconnects automatically if the connection is lost.
+// The client reconnects automatically when the connection is lost.
 func Dial(rawurl string) (*Client, error) {
-	return DialContext(context.Background(), rawurl)
+	return DialOptions(context.Background(), rawurl)
 }
 
 // DialContext creates a new RPC client, just like Dial.
@@ -171,22 +179,46 @@ func Dial(rawurl string) (*Client, error) {
 // The context is used to cancel or time out the initial connection establishment. It does
 // not affect subsequent interactions with the client.
 func DialContext(ctx context.Context, rawurl string) (*Client, error) {
+	return DialOptions(ctx, rawurl)
+}
+
+// DialOptions creates a new RPC client for the given URL. You can supply any of the
+// pre-defined client options to configure the underlying transport.
+//
+// The context is used to cancel or time out the initial connection establishment. It does
+// not affect subsequent interactions with the client.
+//
+// The client reconnects automatically when the connection is lost.
+func DialOptions(ctx context.Context, rawurl string, options ...ClientOption) (*Client, error) {
 	u, err := url.Parse(rawurl)
 	if err != nil {
 		return nil, err
 	}
+
+	cfg := new(clientConfig)
+	for _, opt := range options {
+		opt.applyOption(cfg)
+	}
+
+	var reconnect reconnectFunc
 	switch u.Scheme {
 	case "http", "https":
-		return DialHTTP(rawurl)
+		reconnect = newClientTransportHTTP(rawurl, cfg)
 	case "ws", "wss":
-		return DialWebsocket(ctx, rawurl, "")
+		rc, err := newClientTransportWS(rawurl, cfg)
+		if err != nil {
+			return nil, err
+		}
+		reconnect = rc
 	case "stdio":
-		return DialStdIO(ctx)
+		reconnect = newClientTransportIO(os.Stdin, os.Stdout)
 	case "":
-		return DialIPC(ctx, rawurl)
+		reconnect = newClientTransportIPC(rawurl)
 	default:
 		return nil, fmt.Errorf("no known transport for URL scheme %q", u.Scheme)
 	}
+
+	return newClient(ctx, reconnect)
 }
 
 // ClientFromContext retrieves the client from the context, if any. This can be used to perform
@@ -238,7 +270,7 @@ func (c *Client) RegisterName(name string, receiver interface{}) error {
 }
 
 func (c *Client) nextID() json.RawMessage {
-	id := atomic.AddUint32(&c.idCounter, 1)
+	id := c.idCounter.Add(1)
 	return strconv.AppendUint(nil, uint64(id), 10)
 }
 
@@ -302,31 +334,28 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 	}
 	op := &requestOp{ids: []json.RawMessage{msg.ID}, resp: make(chan *jsonrpcMessage, 1)}
 
-	resultHook := c.onRequest(msg)
 	if c.isHTTP {
 		err = c.sendHTTP(ctx, op, msg)
 	} else {
 		err = c.send(ctx, op, msg)
 	}
 	if err != nil {
-		resultHook.OnResult(nil, err)
 		return err
 	}
 
 	// dispatch has accepted the request and will close the channel when it quits.
 	switch resp, err := op.wait(ctx, c); {
 	case err != nil:
-		resultHook.OnResult(resp, err)
 		return err
 	case resp.Error != nil:
-		resultHook.OnResult(resp, resp.Error)
 		return resp.Error
 	case len(resp.Result) == 0:
-		resultHook.OnResult(resp, ErrNoResult)
 		return ErrNoResult
 	default:
-		err := json.Unmarshal(resp.Result, &result)
-		resultHook.OnResult(resp, err)
+		if result == nil {
+			return nil
+		}
+		err := json.Unmarshal(resp.Result, result)
 		return err
 	}
 }
@@ -371,12 +400,6 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 		byID[string(msg.ID)] = i
 	}
 
-	resultHooks := make([]ResultHook, len(msgs))
-	responsesForHooks := make([]interface{}, len(msgs))
-	for i, msg := range msgs {
-		resultHooks[i] = c.onRequest(msg)
-	}
-
 	var err error
 	if c.isHTTP {
 		err = c.sendBatchHTTP(ctx, op, msgs)
@@ -394,9 +417,7 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 		// Find the element corresponding to this response.
 		// The element is guaranteed to be present because dispatch
 		// only sends valid IDs to our channel.
-		idx := byID[string(resp.ID)]
-		responsesForHooks[idx] = resp
-		elem := &b[idx]
+		elem := &b[byID[string(resp.ID)]]
 		if resp.Error != nil {
 			elem.Error = resp.Error
 			continue
@@ -406,9 +427,6 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 			continue
 		}
 		elem.Error = json.Unmarshal(resp.Result, elem.Result)
-	}
-	for i, hook := range resultHooks {
-		hook.OnResult(responsesForHooks[i], err)
 	}
 	return err
 }
@@ -520,7 +538,7 @@ func (c *Client) write(ctx context.Context, msg interface{}, retry bool) error {
 			return err
 		}
 	}
-	err := c.writeConn.writeJSON(ctx, msg)
+	err := c.writeConn.writeJSON(ctx, msg, false)
 	if err != nil {
 		c.writeConn = nil
 		if !retry {
@@ -653,7 +671,8 @@ func (c *Client) read(codec ServerCodec) {
 	for {
 		msgs, batch, err := codec.readBatch()
 		if _, ok := err.(*json.SyntaxError); ok {
-			codec.writeJSON(context.Background(), errorMessage(&parseError{err.Error()}))
+			msg := errorMessage(&parseError{err.Error()})
+			codec.writeJSON(context.Background(), msg, true)
 		}
 		if err != nil {
 			c.readErr <- err

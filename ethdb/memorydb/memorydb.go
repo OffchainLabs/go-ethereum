@@ -32,9 +32,9 @@ var (
 	// invocation of a data access operation.
 	errMemorydbClosed = errors.New("database closed")
 
-	// errMemorydbNotFound is returned if a key is requested that is not found in
+	// ErrMemorydbNotFound is returned if a key is requested that is not found in
 	// the provided memory database.
-	errMemorydbNotFound = errors.New("not found")
+	ErrMemorydbNotFound = errors.New("not found")
 
 	// errSnapshotReleased is returned if callers want to retrieve data from a
 	// released snapshot.
@@ -98,7 +98,7 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 	if entry, ok := db.db[string(key)]; ok {
 		return common.CopyBytes(entry), nil
 	}
-	return nil, errMemorydbNotFound
+	return nil, ErrMemorydbNotFound
 }
 
 // Put inserts the given value into the key-value store.
@@ -244,6 +244,9 @@ func (b *batch) Write() error {
 	b.db.lock.Lock()
 	defer b.db.lock.Unlock()
 
+	if b.db.db == nil {
+		return errMemorydbClosed
+	}
 	for _, keyvalue := range b.writes {
 		if keyvalue.delete {
 			delete(b.db.db, string(keyvalue.key))
@@ -342,7 +345,7 @@ func newSnapshot(db *Database) *snapshot {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
-	copied := make(map[string][]byte)
+	copied := make(map[string][]byte, len(db.db))
 	for key, val := range db.db {
 		copied[key] = common.CopyBytes(val)
 	}
@@ -374,7 +377,7 @@ func (snap *snapshot) Get(key []byte) ([]byte, error) {
 	if entry, ok := snap.db[string(key)]; ok {
 		return common.CopyBytes(entry), nil
 	}
-	return nil, errMemorydbNotFound
+	return nil, ErrMemorydbNotFound
 }
 
 // Release releases associated resources. Release should always succeed and can

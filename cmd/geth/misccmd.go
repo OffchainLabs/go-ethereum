@@ -20,11 +20,9 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
 )
@@ -38,36 +36,10 @@ var (
 	VersionCheckVersionFlag = &cli.StringFlag{
 		Name:  "check.version",
 		Usage: "Version to check",
-		Value: fmt.Sprintf("Geth/v%v/%v-%v/%v",
-			params.VersionWithCommit(gitCommit, gitDate),
-			runtime.GOOS, runtime.GOARCH, runtime.Version()),
-	}
-	makecacheCommand = &cli.Command{
-		Action:    makecache,
-		Name:      "makecache",
-		Usage:     "Generate ethash verification cache (for testing)",
-		ArgsUsage: "<blockNum> <outputDir>",
-		Description: `
-The makecache command generates an ethash cache in <outputDir>.
-
-This command exists to support the system testing project.
-Regular users do not need to execute it.
-`,
-	}
-	makedagCommand = &cli.Command{
-		Action:    makedag,
-		Name:      "makedag",
-		Usage:     "Generate ethash mining DAG (for testing)",
-		ArgsUsage: "<blockNum> <outputDir>",
-		Description: `
-The makedag command generates an ethash DAG in <outputDir>.
-
-This command exists to support the system testing project.
-Regular users do not need to execute it.
-`,
+		Value: version.ClientName(clientIdentifier),
 	}
 	versionCommand = &cli.Command{
-		Action:    version,
+		Action:    printVersion,
 		Name:      "version",
 		Usage:     "Print version numbers",
 		ArgsUsage: " ",
@@ -97,44 +69,16 @@ and displays information about any security vulnerabilities that affect the curr
 	}
 )
 
-// makecache generates an ethash verification cache into the provided folder.
-func makecache(ctx *cli.Context) error {
-	args := ctx.Args().Slice()
-	if len(args) != 2 {
-		utils.Fatalf(`Usage: geth makecache <block number> <outputdir>`)
-	}
-	block, err := strconv.ParseUint(args[0], 0, 64)
-	if err != nil {
-		utils.Fatalf("Invalid block number: %v", err)
-	}
-	ethash.MakeCache(block, args[1])
+func printVersion(ctx *cli.Context) error {
+	git, _ := version.VCS()
 
-	return nil
-}
-
-// makedag generates an ethash mining DAG into the provided folder.
-func makedag(ctx *cli.Context) error {
-	args := ctx.Args().Slice()
-	if len(args) != 2 {
-		utils.Fatalf(`Usage: geth makedag <block number> <outputdir>`)
-	}
-	block, err := strconv.ParseUint(args[0], 0, 64)
-	if err != nil {
-		utils.Fatalf("Invalid block number: %v", err)
-	}
-	ethash.MakeDataset(block, args[1])
-
-	return nil
-}
-
-func version(ctx *cli.Context) error {
 	fmt.Println(strings.Title(clientIdentifier))
 	fmt.Println("Version:", params.VersionWithMeta)
-	if gitCommit != "" {
-		fmt.Println("Git Commit:", gitCommit)
+	if git.Commit != "" {
+		fmt.Println("Git Commit:", git.Commit)
 	}
-	if gitDate != "" {
-		fmt.Println("Git Commit Date:", gitDate)
+	if git.Date != "" {
+		fmt.Println("Git Commit Date:", git.Date)
 	}
 	fmt.Println("Architecture:", runtime.GOARCH)
 	fmt.Println("Go Version:", runtime.Version())

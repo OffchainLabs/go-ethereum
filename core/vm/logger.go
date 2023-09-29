@@ -18,7 +18,6 @@ package vm
 
 import (
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -29,7 +28,7 @@ import (
 // Note that reference types are actual VM data structures; make copies
 // if you need to retain them beyond the current call.
 type EVMLogger interface {
-	// Arbitrum: capture a transfer, mint, or burn that happens outside of EVM exectuion
+	// Arbitrum: capture a transfer, mint, or burn that happens outside of EVM execution
 	CaptureArbitrumTransfer(env *EVM, from, to *common.Address, value *big.Int, before bool, purpose string)
 	CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)
 	CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)
@@ -39,7 +38,7 @@ type EVMLogger interface {
 	CaptureTxEnd(restGas uint64)
 	// Top call frame
 	CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
-	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error)
+	CaptureEnd(output []byte, gasUsed uint64, err error)
 	// Rest of call frames
 	CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
 	CaptureExit(output []byte, gasUsed uint64, err error)

@@ -56,16 +56,13 @@ const freezerTableSize = 2 * 1000 * 1000 * 1000
 // Freezer is a memory mapped append-only database to store immutable ordered
 // data into flat files:
 //
-// - The append-only nature ensures that disk writes are minimized.
-// - The memory mapping ensures we can max out system memory for caching without
-//   reserving it for go-ethereum. This would also reduce the memory requirements
-//   of Geth, and thus also GC overhead.
+//   - The append-only nature ensures that disk writes are minimized.
+//   - The memory mapping ensures we can max out system memory for caching without
+//     reserving it for go-ethereum. This would also reduce the memory requirements
+//     of Geth, and thus also GC overhead.
 type Freezer struct {
-	// WARNING: The `frozen` and `tail` fields are accessed atomically. On 32 bit platforms, only
-	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
-	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
-	frozen uint64 // Number of blocks already frozen
-	tail   uint64 // Number of the first stored item in the freezer
+	frozen atomic.Uint64 // Number of blocks already frozen
+	tail   atomic.Uint64 // Number of the first stored item in the freezer
 
 	// This lock synchronizes writers and the truncate operation, as well as
 	// the "atomic" (batched) read operations.
@@ -74,8 +71,14 @@ type Freezer struct {
 
 	readonly     bool
 	tables       map[string]*freezerTable // Data tables for storing everything
-	instanceLock Releaser                 // File-system lock to prevent double opens
+	instanceLock FileLock                 // File-system lock to prevent double opens
 	closeOnce    sync.Once
+}
+
+// NewChainFreezer is a small utility method around NewFreezer that sets the
+// default parameters for the chain storage.
+func NewChainFreezer(datadir string, namespace string, readonly bool) (*Freezer, error) {
+	return NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerNoSnappy)
 }
 
 // NewFreezer creates a freezer instance for maintaining immutable ordered
@@ -97,11 +100,17 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 			return nil, errSymlinkDatadir
 		}
 	}
+	flockFile := filepath.Join(datadir, "FLOCK")
+	if err := os.MkdirAll(filepath.Dir(flockFile), 0755); err != nil {
+		return nil, err
+	}
 	// Leveldb uses LOCK as the filelock filename. To prevent the
 	// name collision, we use FLOCK as the lock name.
-	lock, _, err := Flock(filepath.Join(datadir, "FLOCK"))
-	if err != nil {
+	lock := NewFileLock(flockFile)
+	if locked, err := lock.TryLock(); err != nil {
 		return nil, err
+	} else if !locked {
+		return nil, errors.New("locking failed")
 	}
 	// Open all the supported data tables
 	freezer := &Freezer{
@@ -117,12 +126,12 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 			for _, table := range freezer.tables {
 				table.Close()
 			}
-			lock.Release()
+			lock.Unlock()
 			return nil, err
 		}
 		freezer.tables[name] = table
 	}
-
+	var err error
 	if freezer.readonly {
 		// In readonly mode only validate, don't truncate.
 		// validate also sets `freezer.frozen`.
@@ -135,7 +144,7 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 		for _, table := range freezer.tables {
 			table.Close()
 		}
-		lock.Release()
+		lock.Unlock()
 		return nil, err
 	}
 
@@ -158,7 +167,7 @@ func (f *Freezer) Close() error {
 				errs = append(errs, err)
 			}
 		}
-		if err := f.instanceLock.Release(); err != nil {
+		if err := f.instanceLock.Unlock(); err != nil {
 			errs = append(errs, err)
 		}
 	})
@@ -187,9 +196,9 @@ func (f *Freezer) Ancient(kind string, number uint64) ([]byte, error) {
 
 // AncientRange retrieves multiple items in sequence, starting from the index 'start'.
 // It will return
-//  - at most 'max' items,
-//  - at least 1 item (even if exceeding the maxByteSize), but will otherwise
-//   return as many items as fit into maxByteSize.
+//   - at most 'max' items,
+//   - at least 1 item (even if exceeding the maxByteSize), but will otherwise
+//     return as many items as fit into maxByteSize.
 func (f *Freezer) AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
 	if table := f.tables[kind]; table != nil {
 		return table.RetrieveItems(start, count, maxBytes)
@@ -199,12 +208,12 @@ func (f *Freezer) AncientRange(kind string, start, count, maxBytes uint64) ([][]
 
 // Ancients returns the length of the frozen items.
 func (f *Freezer) Ancients() (uint64, error) {
-	return atomic.LoadUint64(&f.frozen), nil
+	return f.frozen.Load(), nil
 }
 
 // Tail returns the number of first stored item in the freezer.
 func (f *Freezer) Tail() (uint64, error) {
-	return atomic.LoadUint64(&f.tail), nil
+	return f.tail.Load(), nil
 }
 
 // AncientSize returns the ancient size of the specified category.
@@ -238,7 +247,7 @@ func (f *Freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (writeSize
 	defer f.writeLock.Unlock()
 
 	// Roll back all tables to the starting position in case of error.
-	prevItem := atomic.LoadUint64(&f.frozen)
+	prevItem := f.frozen.Load()
 	defer func() {
 		if err != nil {
 			// The write operation has failed. Go back to the previous item position.
@@ -259,7 +268,7 @@ func (f *Freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (writeSize
 	if err != nil {
 		return 0, err
 	}
-	atomic.StoreUint64(&f.frozen, item)
+	f.frozen.Store(item)
 	return writeSize, nil
 }
 
@@ -271,7 +280,7 @@ func (f *Freezer) TruncateHead(items uint64) error {
 	f.writeLock.Lock()
 	defer f.writeLock.Unlock()
 
-	if atomic.LoadUint64(&f.frozen) <= items {
+	if f.frozen.Load() <= items {
 		return nil
 	}
 	for _, table := range f.tables {
@@ -279,7 +288,7 @@ func (f *Freezer) TruncateHead(items uint64) error {
 			return err
 		}
 	}
-	atomic.StoreUint64(&f.frozen, items)
+	f.frozen.Store(items)
 	return nil
 }
 
@@ -291,7 +300,7 @@ func (f *Freezer) TruncateTail(tail uint64) error {
 	f.writeLock.Lock()
 	defer f.writeLock.Unlock()
 
-	if atomic.LoadUint64(&f.tail) >= tail {
+	if f.tail.Load() >= tail {
 		return nil
 	}
 	for _, table := range f.tables {
@@ -299,7 +308,7 @@ func (f *Freezer) TruncateTail(tail uint64) error {
 			return err
 		}
 	}
-	atomic.StoreUint64(&f.tail, tail)
+	f.tail.Store(tail)
 	return nil
 }
 
@@ -317,30 +326,35 @@ func (f *Freezer) Sync() error {
 	return nil
 }
 
-// validate checks that every table has the same length.
+// validate checks that every table has the same boundary.
 // Used instead of `repair` in readonly mode.
 func (f *Freezer) validate() error {
 	if len(f.tables) == 0 {
 		return nil
 	}
 	var (
-		length uint64
-		name   string
+		head uint64
+		tail uint64
+		name string
 	)
-	// Hack to get length of any table
+	// Hack to get boundary of any table
 	for kind, table := range f.tables {
-		length = atomic.LoadUint64(&table.items)
+		head = table.items.Load()
+		tail = table.itemHidden.Load()
 		name = kind
 		break
 	}
-	// Now check every table against that length
+	// Now check every table against those boundaries.
 	for kind, table := range f.tables {
-		items := atomic.LoadUint64(&table.items)
-		if length != items {
-			return fmt.Errorf("freezer tables %s and %s have differing lengths: %d != %d", kind, name, items, length)
+		if head != table.items.Load() {
+			return fmt.Errorf("freezer tables %s and %s have differing head: %d != %d", kind, name, table.items.Load(), head)
+		}
+		if tail != table.itemHidden.Load() {
+			return fmt.Errorf("freezer tables %s and %s have differing tail: %d != %d", kind, name, table.itemHidden.Load(), tail)
 		}
 	}
-	atomic.StoreUint64(&f.frozen, length)
+	f.frozen.Store(head)
+	f.tail.Store(tail)
 	return nil
 }
 
@@ -351,11 +365,11 @@ func (f *Freezer) repair() error {
 		tail = uint64(0)
 	)
 	for _, table := range f.tables {
-		items := atomic.LoadUint64(&table.items)
+		items := table.items.Load()
 		if head > items {
 			head = items
 		}
-		hidden := atomic.LoadUint64(&table.itemHidden)
+		hidden := table.itemHidden.Load()
 		if hidden > tail {
 			tail = hidden
 		}
@@ -368,8 +382,8 @@ func (f *Freezer) repair() error {
 			return err
 		}
 	}
-	atomic.StoreUint64(&f.frozen, head)
-	atomic.StoreUint64(&f.tail, tail)
+	f.frozen.Store(head)
+	f.tail.Store(tail)
 	return nil
 }
 
@@ -395,7 +409,7 @@ func (f *Freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	// and that error will be returned.
 	forEach := func(t *freezerTable, offset uint64, fn func(uint64, []byte) error) error {
 		var (
-			items     = atomic.LoadUint64(&t.items)
+			items     = t.items.Load()
 			batchSize = uint64(1024)
 			maxBytes  = uint64(1024 * 1024)
 		)
@@ -418,7 +432,7 @@ func (f *Freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	}
 	// TODO(s1na): This is a sanity-check since as of now no process does tail-deletion. But the migration
 	// process assumes no deletion at tail and needs to be modified to account for that.
-	if table.itemOffset > 0 || table.itemHidden > 0 {
+	if table.itemOffset.Load() > 0 || table.itemHidden.Load() > 0 {
 		return fmt.Errorf("migration not supported for tail-deleted freezers")
 	}
 	ancientsPath := filepath.Dir(table.index.Name())
@@ -434,7 +448,7 @@ func (f *Freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 		out    []byte
 		start  = time.Now()
 		logged = time.Now()
-		offset = newTable.items
+		offset = newTable.items.Load()
 	)
 	if offset > 0 {
 		log.Info("found previous migration attempt", "migrated", offset)

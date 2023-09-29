@@ -50,37 +50,3 @@ func DialTransport(ctx context.Context, rawUrl string, transport *http.Transport
 	}
 	return rpcClient, nil
 }
-
-func DialContextWithRequestHook(ctx context.Context, url string, hook RequestHook) (*Client, error) {
-	client, err := DialContext(ctx, url)
-	if err != nil {
-		return nil, err
-	}
-	client.requestHook = hook
-	return client, nil
-}
-
-type RequestHook interface {
-	OnRequest(request interface{}) ResultHook
-}
-
-type ResultHook interface {
-	OnResult(response interface{}, err error)
-}
-
-type noopResultHook struct{}
-
-func (h noopResultHook) OnResult(interface{}, error) {
-}
-
-func (c *Client) onRequest(request interface{}) ResultHook {
-	hooks := c.requestHook
-	var respHooks ResultHook
-	if hooks != nil {
-		respHooks = hooks.OnRequest(request)
-	}
-	if respHooks == nil {
-		respHooks = noopResultHook{}
-	}
-	return respHooks
-}

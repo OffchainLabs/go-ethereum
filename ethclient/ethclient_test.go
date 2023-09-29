@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
@@ -30,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -56,7 +54,7 @@ var (
 )
 
 func TestToFilterArg(t *testing.T) {
-	blockHashErr := fmt.Errorf("cannot specify both BlockHash and FromBlock/ToBlock")
+	blockHashErr := errors.New("cannot specify both BlockHash and FromBlock/ToBlock")
 	addresses := []common.Address{
 		common.HexToAddress("0xD36722ADeC3EdCB29c8e7b5a47f352D701393462"),
 	}
@@ -222,7 +220,6 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	}
 	// Create Ethereum Service
 	config := &ethconfig.Config{Genesis: genesis}
-	config.Ethash.PowMode = ethash.ModeFake
 	ethservice, err := eth.New(n, config)
 	if err != nil {
 		t.Fatalf("can't create new ethereum service: %v", err)
@@ -238,7 +235,6 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 }
 
 func generateTestChain() []*types.Block {
-	db := rawdb.NewMemoryDatabase()
 	generate := func(i int, g *core.BlockGen) {
 		g.OffsetTime(5)
 		g.SetExtra([]byte("test"))
@@ -248,11 +244,8 @@ func generateTestChain() []*types.Block {
 			g.AddTx(testTx2)
 		}
 	}
-	gblock := genesis.MustCommit(db)
-	engine := ethash.NewFaker()
-	blocks, _ := core.GenerateChain(genesis.Config, gblock, engine, db, 2, generate)
-	blocks = append([]*types.Block{gblock}, blocks...)
-	return blocks
+	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 2, generate)
+	return append([]*types.Block{genesis.ToBlock()}, blocks...)
 }
 
 func TestEthClient(t *testing.T) {
@@ -397,7 +390,7 @@ func testTransactionInBlockInterrupted(t *testing.T, client *rpc.Client) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Test tx in block interupted.
+	// Test tx in block interrupted.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	tx, err := ec.TransactionInBlock(ctx, block.Hash(), 0)

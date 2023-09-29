@@ -17,6 +17,7 @@
 package misc
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -33,14 +34,14 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 	// Verify that the gas limit remains within allowed bounds
 	parentGasLimit := parent.GasLimit
 	if !config.IsLondon(parent.Number) {
-		parentGasLimit = parent.GasLimit * params.ElasticityMultiplier
+		parentGasLimit = parent.GasLimit * config.ElasticityMultiplier()
 	}
 	if err := VerifyGaslimit(parentGasLimit, header.GasLimit); err != nil {
 		return err
 	}
 	// Verify the header is not malformed
 	if header.BaseFee == nil {
-		return fmt.Errorf("header is missing baseFee")
+		return errors.New("header is missing baseFee")
 	}
 	// Verify the baseFee is correct based on the parent header.
 	expectedBaseFee := CalcBaseFee(config, parent)
@@ -58,7 +59,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		return new(big.Int).SetUint64(params.InitialBaseFee)
 	}
 
-	parentGasTarget := parent.GasLimit / params.ElasticityMultiplier
+	parentGasTarget := parent.GasLimit / config.ElasticityMultiplier()
 	// If the parent gasUsed is the same as the target, the baseFee remains unchanged.
 	if parent.GasUsed == parentGasTarget {
 		return new(big.Int).Set(parent.BaseFee)
@@ -75,7 +76,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		num.SetUint64(parent.GasUsed - parentGasTarget)
 		num.Mul(num, parent.BaseFee)
 		num.Div(num, denom.SetUint64(parentGasTarget))
-		num.Div(num, denom.SetUint64(params.BaseFeeChangeDenominator))
+		num.Div(num, denom.SetUint64(config.BaseFeeChangeDenominator()))
 		baseFeeDelta := math.BigMax(num, common.Big1)
 
 		return num.Add(parent.BaseFee, baseFeeDelta)
@@ -85,7 +86,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		num.SetUint64(parentGasTarget - parent.GasUsed)
 		num.Mul(num, parent.BaseFee)
 		num.Div(num, denom.SetUint64(parentGasTarget))
-		num.Div(num, denom.SetUint64(params.BaseFeeChangeDenominator))
+		num.Div(num, denom.SetUint64(config.BaseFeeChangeDenominator()))
 		baseFee := num.Sub(parent.BaseFee, num)
 
 		return math.BigMax(baseFee, common.Big0)

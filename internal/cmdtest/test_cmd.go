@@ -83,7 +83,7 @@ func (tt *TestCmd) Run(name string, args ...string) {
 // InputLine writes the given text to the child's stdin.
 // This method can also be called from an expect template, e.g.:
 //
-//     geth.expect(`Passphrase: {{.InputLine "password"}}`)
+//	geth.expect(`Passphrase: {{.InputLine "password"}}`)
 func (tt *TestCmd) InputLine(s string) string {
 	io.WriteString(tt.stdin, s+"\n")
 	return ""
@@ -237,7 +237,7 @@ func (tt *TestCmd) Kill() {
 }
 
 func (tt *TestCmd) withKillTimeout(fn func()) {
-	timeout := time.AfterFunc(5*time.Second, func() {
+	timeout := time.AfterFunc(30*time.Second, func() {
 		tt.Log("killing the child process (timeout)")
 		tt.Kill()
 	})

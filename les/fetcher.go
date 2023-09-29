@@ -161,18 +161,11 @@ func newLightFetcher(chain *light.LightChain, engine consensus.Engine, peers *se
 	// Construct the fetcher by offering all necessary APIs
 	validator := func(header *types.Header) error {
 		// Disable seal verification explicitly if we are running in ulc mode.
-		return engine.VerifyHeader(chain, header, ulc == nil)
+		return engine.VerifyHeader(chain, header)
 	}
 	heighter := func() uint64 { return chain.CurrentHeader().Number.Uint64() }
 	dropper := func(id string) { peers.unregister(id) }
-	inserter := func(headers []*types.Header) (int, error) {
-		// Disable PoW checking explicitly if we are running in ulc mode.
-		checkFreq := 1
-		if ulc != nil {
-			checkFreq = 0
-		}
-		return chain.InsertHeaderChain(headers, checkFreq)
-	}
+	inserter := func(headers []*types.Header) (int, error) { return chain.InsertHeaderChain(headers) }
 	f := &lightFetcher{
 		ulc:         ulc,
 		peerset:     peers,
@@ -242,18 +235,20 @@ func (f *lightFetcher) forEachPeer(check func(id enode.ID, p *fetcherPeer) bool)
 }
 
 // mainloop is the main event loop of the light fetcher, which is responsible for
-// - announcement maintenance(ulc)
-//   If we are running in ultra light client mode, then all announcements from
-//   the trusted servers are maintained. If the same announcements from trusted
-//   servers reach the threshold, then the relevant header is requested for retrieval.
 //
-// - block header retrieval
-//   Whenever we receive announce with higher td compared with local chain, the
-//   request will be made for header retrieval.
+//   - announcement maintenance(ulc)
 //
-// - re-sync trigger
-//   If the local chain lags too much, then the fetcher will enter "synchronise"
-//   mode to retrieve missing headers in batch.
+//     If we are running in ultra light client mode, then all announcements from
+//     the trusted servers are maintained. If the same announcements from trusted
+//     servers reach the threshold, then the relevant header is requested for retrieval.
+//
+//   - block header retrieval
+//     Whenever we receive announce with higher td compared with local chain, the
+//     request will be made for header retrieval.
+//
+//   - re-sync trigger
+//     If the local chain lags too much, then the fetcher will enter "synchronise"
+//     mode to retrieve missing headers in batch.
 func (f *lightFetcher) mainloop() {
 	defer f.wg.Done()
 
@@ -270,6 +265,7 @@ func (f *lightFetcher) mainloop() {
 		localHead = f.chain.CurrentHeader()
 		localTd   = f.chain.GetTd(localHead.Hash(), localHead.Number.Uint64())
 	)
+	defer requestTimer.Stop()
 	sub := f.chain.SubscribeChainHeadEvent(headCh)
 	defer sub.Unsubscribe()
 

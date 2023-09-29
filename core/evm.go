@@ -55,25 +55,31 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.Difficulty.Cmp(common.Big0) == 0 {
 		random = &header.MixDigest
 	}
+	arbOsVersion := types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion
+	if arbOsVersion > 0 {
+		difficultyHash := common.BigToHash(header.Difficulty)
+		random = &difficultyHash
+	}
 	return vm.BlockContext{
-		CanTransfer: CanTransfer,
-		Transfer:    Transfer,
-		GetHash:     GetHashFn(header, chain),
-		Coinbase:    beneficiary,
-		BlockNumber: new(big.Int).Set(header.Number),
-		Time:        new(big.Int).SetUint64(header.Time),
-		Difficulty:  new(big.Int).Set(header.Difficulty),
-		BaseFee:     baseFee,
-		GasLimit:    header.GasLimit,
-		Random:      random,
+		CanTransfer:  CanTransfer,
+		Transfer:     Transfer,
+		GetHash:      GetHashFn(header, chain),
+		Coinbase:     beneficiary,
+		BlockNumber:  new(big.Int).Set(header.Number),
+		Time:         header.Time,
+		Difficulty:   new(big.Int).Set(header.Difficulty),
+		BaseFee:      baseFee,
+		GasLimit:     header.GasLimit,
+		Random:       random,
+		ArbOSVersion: arbOsVersion,
 	}
 }
 
 // NewEVMTxContext creates a new transaction context for a single transaction.
-func NewEVMTxContext(msg Message) vm.TxContext {
+func NewEVMTxContext(msg *Message) vm.TxContext {
 	return vm.TxContext{
-		Origin:   msg.From(),
-		GasPrice: new(big.Int).Set(msg.GasPrice()),
+		Origin:   msg.From,
+		GasPrice: new(big.Int).Set(msg.GasPrice),
 	}
 }
 

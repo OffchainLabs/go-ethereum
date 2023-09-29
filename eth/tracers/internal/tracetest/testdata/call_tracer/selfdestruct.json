@@ -52,22 +52,49 @@
   },
   "input": "0xf88b8271908506fc23ac0083015f90943b873a919aa0512d5a0f09e6dcceaa4a6727fafe80a463e4bff40000000000000000000000000024f658a46fbb89d8ac105e98d7ac7cbbaf27c52aa0bdce0b59e8761854e857fe64015f06dd08a4fbb7624f6094893a79a72e6ad6bea01d9dde033cff7bb235a3163f348a6d7ab8d6b52bc0963a95b91612e40ca766a4",
   "result": {
-    "calls": [
+    "beforeEVMTransfers": [
+      {
+        "purpose": "feePayment",
+        "from": "0xb436ba50D378D4BBC8660d312A13dF6af6E89dFB",
+        "to": null,
+        "value": "0x997a2bce4c000"
+      }
+    ],
+    "afterEVMTransfers": [
+      {
+        "purpose": "gasRefund",
+        "from": null,
+        "to": "0xb436ba50D378D4BBC8660d312A13dF6af6E89dFB",
+        "value": "0x68ac555075c00"
+      },
+      {
+        "purpose": "tip",
+        "from": null,
+        "to": "0x1585936b53834b021f68CC13eEeFdEc2EfC8e724",
+        "value": "0x30cdd67dd6400"
+      },
+      {
+        "purpose": "selfDestruct",
+        "from": "0x3b873A919aA0512D5A0F09E6dCCEaA4a6727faFE",
+        "to": null,
+        "value": "0x0"
+      }
+    ],
+	"calls": [
       {
         "from": "0x3b873a919aa0512d5a0f09e6dcceaa4a6727fafe",
         "gas": "0x0",
         "gasUsed": "0x0",
         "input": "0x",
-        "to": "0x000000000000000000000000000000000000dEaD",
+        "to": "0x000000000000000000000000000000000000dead",
         "type": "SELFDESTRUCT",
         "value": "0x4d87094125a369d9bd5"
       }
     ],
     "from": "0xb436ba50d378d4bbc8660d312a13df6af6e89dfb",
-    "gas": "0x10738",
-    "gasUsed": "0x7533",
+    "gas": "0x15f90",
+    "gasUsed": "0x6fcb",
     "input": "0x63e4bff40000000000000000000000000024f658a46fbb89d8ac105e98d7ac7cbbaf27c5",
-    "output": "0x",
     "to": "0x3b873a919aa0512d5a0f09e6dcceaa4a6727fafe",
     "type": "CALL",
     "value": "0x0"
