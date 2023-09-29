@@ -62,6 +62,28 @@
   },
   "input": "0xf889448504a817c800832dc6c094269296dddce321a6bcbaa2f0181127593d732cba80a47065cb480000000000000000000000001523e55a1ca4efbae03355775ae89f8d7699ad9e29a080ed81e4c5e9971a730efab4885566e2c868cd80bd4166d0ed8c287fdf181650a069d7c49215e3d4416ad239cd09dbb71b9f04c16b33b385d14f40b618a7a65115",
   "result": {
+    "beforeEVMTransfers": [
+      {
+        "purpose": "feePayment",
+        "from": "0xA529806c67cc6486d4D62024471772F47F6FD672",
+        "to": null,
+        "value": "0xd529ae9e860000"
+      }
+    ],
+    "afterEVMTransfers": [
+      {
+        "purpose": "gasRefund",
+        "from": null,
+        "to": "0xA529806c67cc6486d4D62024471772F47F6FD672",
+        "value": "0xd1b8093ff89800"
+      },
+      {
+        "purpose": "tip",
+        "from": null,
+        "to": "0x5659922cE141EedBC2733678f9806c77b4eEBEE8",
+        "value": "0x371a55e8d6800"
+      }
+    ],
     "calls": [
       {
         "calls": [
@@ -72,7 +94,8 @@
             "input": "0x7d65837a0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a529806c67cc6486d4d62024471772f47f6fd672",
             "output": "0x0000000000000000000000000000000000000000000000000000000000000001",
             "to": "0x42b02b5deeb78f34cd5ac896473b63e6c99a71a2",
-            "type": "DELEGATECALL"
+            "type": "DELEGATECALL",
+            "value": "0x0"
           }
         ],
         "from": "0x269296dddce321a6bcbaa2f0181127593d732cba",
@@ -86,10 +109,9 @@
       }
     ],
     "from": "0xa529806c67cc6486d4d62024471772f47f6fd672",
-    "gas": "0x2d6e28",
-    "gasUsed": "0x64bd",
+    "gas": "0x2dc6c0",
+    "gasUsed": "0xbd55",
     "input": "0x7065cb480000000000000000000000001523e55a1ca4efbae03355775ae89f8d7699ad9e",
-    "output": "0x",
     "to": "0x269296dddce321a6bcbaa2f0181127593d732cba",
     "type": "CALL",
     "value": "0x0"

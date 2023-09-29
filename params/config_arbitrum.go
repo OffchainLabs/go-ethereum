@@ -36,7 +36,7 @@ func (c *ChainConfig) IsArbitrum() bool {
 }
 
 func (c *ChainConfig) IsArbitrumNitro(num *big.Int) bool {
-	return c.IsArbitrum() && isForked(new(big.Int).SetUint64(c.ArbitrumChainParams.GenesisBlockNum), num)
+	return c.IsArbitrum() && isBlockForked(new(big.Int).SetUint64(c.ArbitrumChainParams.GenesisBlockNum), num)
 }
 
 func (c *ChainConfig) DebugMode() bool {
@@ -46,7 +46,7 @@ func (c *ChainConfig) DebugMode() bool {
 func (c *ChainConfig) checkArbitrumCompatible(newcfg *ChainConfig, head *big.Int) *ConfigCompatError {
 	if c.IsArbitrum() != newcfg.IsArbitrum() {
 		// This difference applies to the entire chain, so report that the genesis block is where the difference appears.
-		return newCompatError("isArbitrum", common.Big0, common.Big0)
+		return newBlockCompatError("isArbitrum", common.Big0, common.Big0)
 	}
 	if !c.IsArbitrum() {
 		return nil
@@ -54,7 +54,7 @@ func (c *ChainConfig) checkArbitrumCompatible(newcfg *ChainConfig, head *big.Int
 	cArb := &c.ArbitrumChainParams
 	newArb := &newcfg.ArbitrumChainParams
 	if cArb.GenesisBlockNum != newArb.GenesisBlockNum {
-		return newCompatError("genesisblocknum", new(big.Int).SetUint64(cArb.GenesisBlockNum), new(big.Int).SetUint64(newArb.GenesisBlockNum))
+		return newBlockCompatError("genesisblocknum", new(big.Int).SetUint64(cArb.GenesisBlockNum), new(big.Int).SetUint64(newArb.GenesisBlockNum))
 	}
 	return nil
 }
@@ -94,7 +94,7 @@ func ArbitrumDevTestParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     true,
 		DataAvailabilityCommittee: false,
-		InitialArbOSVersion:       10,
+		InitialArbOSVersion:       11,
 		InitialChainOwner:         common.Address{},
 	}
 }
@@ -104,7 +104,7 @@ func ArbitrumDevTestDASParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     true,
 		DataAvailabilityCommittee: true,
-		InitialArbOSVersion:       10,
+		InitialArbOSVersion:       11,
 		InitialChainOwner:         common.Address{},
 	}
 }
@@ -136,7 +136,6 @@ func ArbitrumOneChainConfig() *ChainConfig {
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
 		EIP150Block:         big.NewInt(0),
-		EIP150Hash:          common.Hash{},
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
@@ -161,7 +160,6 @@ func ArbitrumNovaChainConfig() *ChainConfig {
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
 		EIP150Block:         big.NewInt(0),
-		EIP150Hash:          common.Hash{},
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
@@ -186,7 +184,6 @@ func ArbitrumRollupGoerliTestnetChainConfig() *ChainConfig {
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
 		EIP150Block:         big.NewInt(0),
-		EIP150Hash:          common.Hash{},
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
@@ -211,7 +208,6 @@ func ArbitrumDevTestChainConfig() *ChainConfig {
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
 		EIP150Block:         big.NewInt(0),
-		EIP150Hash:          common.Hash{},
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
@@ -236,7 +232,6 @@ func ArbitrumDevTestDASChainConfig() *ChainConfig {
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
 		EIP150Block:         big.NewInt(0),
-		EIP150Hash:          common.Hash{},
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
@@ -261,7 +256,6 @@ func ArbitrumAnytrustGoerliTestnetChainConfig() *ChainConfig {
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
 		EIP150Block:         big.NewInt(0),
-		EIP150Hash:          common.Hash{},
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),

@@ -14,22 +14,29 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	flag "github.com/spf13/pflag"
+)
+
+var (
+	recordingDbSize       = metrics.NewRegisteredGauge("arb/validator/recordingdb/size", nil) // note: only updating when adding state, not when removing - but should be good enough
+	recordingDbReferences = metrics.NewRegisteredGauge("arb/validator/recordingdb/references", nil)
 )
 
 type RecordingKV struct {
 	inner         *trie.Database
+	diskDb        ethdb.KeyValueStore
 	readDbEntries map[common.Hash][]byte
 	enableBypass  bool
 }
 
-func newRecordingKV(inner *trie.Database) *RecordingKV {
-	return &RecordingKV{inner, make(map[common.Hash][]byte), false}
+func newRecordingKV(inner *trie.Database, diskDb ethdb.KeyValueStore) *RecordingKV {
+	return &RecordingKV{inner, diskDb, make(map[common.Hash][]byte), false}
 }
 
 func (db *RecordingKV) Has(key []byte) (bool, error) {
@@ -46,7 +53,7 @@ func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 	} else if len(key) == len(rawdb.CodePrefix)+32 && bytes.HasPrefix(key, rawdb.CodePrefix) {
 		// Retrieving code
 		copy(hash[:], key[len(rawdb.CodePrefix):])
-		res, err = db.inner.DiskDB().Get(key)
+		res, err = db.diskDb.Get(key)
 	} else {
 		err = fmt.Errorf("recording KV attempted to access non-hash key %v", hex.EncodeToString(key))
 	}
@@ -73,7 +80,7 @@ func (db *RecordingKV) Delete(key []byte) error {
 
 func (db *RecordingKV) NewBatch() ethdb.Batch {
 	if db.enableBypass {
-		return db.inner.DiskDB().NewBatch()
+		return db.diskDb.NewBatch()
 	}
 	log.Error("recording KV: attempted to create batch when bypass not enabled")
 	return nil
@@ -81,7 +88,7 @@ func (db *RecordingKV) NewBatch() ethdb.Batch {
 
 func (db *RecordingKV) NewBatchWithSize(size int) ethdb.Batch {
 	if db.enableBypass {
-		return db.inner.DiskDB().NewBatchWithSize(size)
+		return db.diskDb.NewBatchWithSize(size)
 	}
 	log.Error("recording KV: attempted to create batch when bypass not enabled")
 	return nil
@@ -89,7 +96,7 @@ func (db *RecordingKV) NewBatchWithSize(size int) ethdb.Batch {
 
 func (db *RecordingKV) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 	if db.enableBypass {
-		return db.inner.DiskDB().NewIterator(prefix, start)
+		return db.diskDb.NewIterator(prefix, start)
 	}
 	log.Error("recording KV: attempted to create iterator when bypass not enabled")
 	return nil
@@ -112,9 +119,7 @@ func (db *RecordingKV) Close() error {
 	return nil
 }
 
-func (db *RecordingKV) Release() {
-	return
-}
+func (db *RecordingKV) Release() {}
 
 func (db *RecordingKV) GetRecordedEntries() map[common.Hash][]byte {
 	return db.readDbEntries
@@ -152,17 +157,34 @@ func (r *RecordingChainContext) GetMinBlockNumberAccessed() uint64 {
 	return r.minBlockNumberAccessed
 }
 
+type RecordingDatabaseConfig struct {
+	TrieDirtyCache int `koanf:"trie-dirty-cache"`
+	TrieCleanCache int `koanf:"trie-clean-cache"`
+}
+
+var DefaultRecordingDatabaseConfig = RecordingDatabaseConfig{
+	TrieDirtyCache: 1024,
+	TrieCleanCache: 16,
+}
+
+func RecordingDatabaseConfigAddOptions(prefix string, f *flag.FlagSet) {
+	f.Int(prefix+".trie-dirty-cache", DefaultRecordingDatabaseConfig.TrieDirtyCache, "like trie-dirty-cache for the separate, recording database (used for validation)")
+	f.Int(prefix+".trie-clean-cache", DefaultRecordingDatabaseConfig.TrieCleanCache, "like trie-clean-cache for the separate, recording database (used for validation)")
+}
+
 type RecordingDatabase struct {
+	config     *RecordingDatabaseConfig
 	db         state.Database
 	bc         *core.BlockChain
 	mutex      sync.Mutex // protects StateFor and Dereference
 	references int64
 }
 
-func NewRecordingDatabase(ethdb ethdb.Database, blockchain *core.BlockChain) *RecordingDatabase {
+func NewRecordingDatabase(config *RecordingDatabaseConfig, ethdb ethdb.Database, blockchain *core.BlockChain) *RecordingDatabase {
 	return &RecordingDatabase{
-		db: state.NewDatabaseWithConfig(ethdb, &trie.Config{Cache: 16}), //TODO cache needed? configurable?
-		bc: blockchain,
+		config: config,
+		db:     state.NewDatabaseWithConfig(ethdb, &trie.Config{Cache: config.TrieCleanCache}),
+		bc:     blockchain,
 	}
 }
 
@@ -187,7 +209,7 @@ func (r *RecordingDatabase) Dereference(header *types.Header) {
 
 func (r *RecordingDatabase) WriteStateToDatabase(header *types.Header) error {
 	if header != nil {
-		return r.db.TrieDB().Commit(header.Root, true, nil)
+		return r.db.TrieDB().Commit(header.Root, true)
 	}
 	return nil
 }
@@ -195,6 +217,7 @@ func (r *RecordingDatabase) WriteStateToDatabase(header *types.Header) error {
 // lock must be held when calling that
 func (r *RecordingDatabase) referenceRootLockHeld(root common.Hash) {
 	r.references++
+	recordingDbReferences.Update(r.references)
 	r.db.TrieDB().Reference(root, common.Hash{})
 }
 
@@ -202,6 +225,7 @@ func (r *RecordingDatabase) dereferenceRoot(root common.Hash) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	r.references--
+	recordingDbReferences.Update(r.references)
 	r.db.TrieDB().Dereference(root)
 }
 
@@ -216,10 +240,18 @@ func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected comm
 		return fmt.Errorf("bad root hash expected: %v got: %v", expected, result)
 	}
 	r.referenceRootLockHeld(result)
+
+	size, _ := r.db.TrieDB().Size()
+	limit := common.StorageSize(r.config.TrieDirtyCache) * 1024 * 1024
+	recordingDbSize.Update(int64(size))
+	if size > limit {
+		log.Info("Recording DB: flushing to disk", "size", size, "limit", limit)
+		r.db.TrieDB().Cap(limit - ethdb.IdealBatchSize)
+		size, _ = r.db.TrieDB().Size()
+		recordingDbSize.Update(int64(size))
+	}
 	return nil
 }
-
-type StateBuildingLogFunction func(targetHeader, header *types.Header, hasState bool)
 
 func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeader *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
 	_, err := r.GetOrRecreateState(ctx, lastBlockHeader, logFunc)
@@ -228,7 +260,7 @@ func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeade
 	}
 	finalDereference := lastBlockHeader // dereference in case of error
 	defer func() { r.Dereference(finalDereference) }()
-	recordingKeyValue := newRecordingKV(r.db.TrieDB())
+	recordingKeyValue := newRecordingKV(r.db.TrieDB(), r.db.DiskDB())
 
 	recordingStateDatabase := state.NewDatabase(rawdb.NewDatabase(recordingKeyValue))
 	var prevRoot common.Hash
@@ -270,32 +302,14 @@ func (r *RecordingDatabase) PreimagesFromRecording(chainContextIf core.ChainCont
 }
 
 func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, error) {
-	stateDb, err := r.StateFor(header)
-	if err == nil {
-		return stateDb, nil
+	state, currentHeader, err := FindLastAvailableState(ctx, r.bc, r.StateFor, header, logFunc, -1)
+	if err != nil {
+		return nil, err
 	}
-	returnedBlockNumber := header.Number.Uint64()
-	genesis := r.bc.Config().ArbitrumChainParams.GenesisBlockNum
-	currentHeader := header
-	var lastRoot common.Hash
-	for ctx.Err() == nil {
-		if logFunc != nil {
-			logFunc(header, currentHeader, false)
-		}
-		if currentHeader.Number.Uint64() <= genesis {
-			return nil, fmt.Errorf("moved beyond genesis looking for state looking for %d, genesis %d, err %w", returnedBlockNumber, genesis, err)
-		}
-		lastHeader := currentHeader
-		currentHeader = r.bc.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64()-1)
-		if currentHeader == nil {
-			return nil, fmt.Errorf("chain doesn't contain parent of block %d hash %v (expected parent hash %v)", lastHeader.Number, lastHeader.Hash(), lastHeader.ParentHash)
-		}
-		stateDb, err = r.StateFor(currentHeader)
-		if err == nil {
-			lastRoot = currentHeader.Root
-			break
-		}
+	if currentHeader == header {
+		return state, nil
 	}
+	lastRoot := currentHeader.Root
 	defer func() {
 		if (lastRoot != common.Hash{}) {
 			r.dereferenceRoot(lastRoot)
@@ -303,25 +317,16 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 	}()
 	blockToRecreate := currentHeader.Number.Uint64() + 1
 	prevHash := currentHeader.Hash()
+	returnedBlockNumber := header.Number.Uint64()
 	for ctx.Err() == nil {
-		block := r.bc.GetBlockByNumber(blockToRecreate)
-		if block == nil {
-			return nil, fmt.Errorf("block not found while recreating: %d", blockToRecreate)
-		}
-		if block.ParentHash() != prevHash {
-			return nil, fmt.Errorf("reorg detected: number %d expectedPrev: %v foundPrev: %v", blockToRecreate, prevHash, block.ParentHash())
+		state, block, err := AdvanceStateByBlock(ctx, r.bc, state, header, blockToRecreate, prevHash, logFunc)
+		if err != nil {
+			return nil, err
 		}
 		prevHash = block.Hash()
-		if logFunc != nil {
-			logFunc(header, block.Header(), true)
-		}
-		_, _, _, err := r.bc.Processor().Process(block, stateDb, vm.Config{})
+		err = r.addStateVerify(state, block.Root())
 		if err != nil {
-			return nil, fmt.Errorf("failed recreating state for block %d : %w", blockToRecreate, err)
-		}
-		err = r.addStateVerify(stateDb, block.Root())
-		if err != nil {
-			return nil, fmt.Errorf("failed commiting state for block %d : %w", blockToRecreate, err)
+			return nil, fmt.Errorf("failed committing state for block %d : %w", blockToRecreate, err)
 		}
 		r.dereferenceRoot(lastRoot)
 		lastRoot = block.Root()
@@ -331,7 +336,7 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 			}
 			// don't dereference this one
 			lastRoot = common.Hash{}
-			return stateDb, nil
+			return state, nil
 		}
 		blockToRecreate++
 	}

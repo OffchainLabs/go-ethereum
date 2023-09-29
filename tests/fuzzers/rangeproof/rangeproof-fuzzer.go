@@ -69,8 +69,8 @@ func (f *fuzzer) randomTrie(n int) (*trie.Trie, map[string]*kv) {
 	for i := byte(0); i < byte(size); i++ {
 		value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
 		value2 := &kv{common.LeftPadBytes([]byte{i + 10}, 32), []byte{i}, false}
-		trie.Update(value.k, value.v)
-		trie.Update(value2.k, value2.v)
+		trie.MustUpdate(value.k, value.v)
+		trie.MustUpdate(value2.k, value2.v)
 		vals[string(value.k)] = value
 		vals[string(value2.k)] = value2
 	}
@@ -82,7 +82,7 @@ func (f *fuzzer) randomTrie(n int) (*trie.Trie, map[string]*kv) {
 		k := f.randBytes(32)
 		v := f.randBytes(20)
 		value := &kv{k, v, false}
-		trie.Update(k, v)
+		trie.MustUpdate(k, v)
 		vals[string(k)] = value
 		if f.exhausted {
 			return nil, nil
@@ -179,12 +179,16 @@ func (f *fuzzer) fuzz() int {
 	return ok
 }
 
+// Fuzz is the fuzzing entry-point.
 // The function must return
-// 1 if the fuzzer should increase priority of the
-//   given input during subsequent fuzzing (for example, the input is lexically
-//   correct and was parsed successfully);
-// -1 if the input must not be added to corpus even if gives new coverage; and
-// 0 otherwise; other values are reserved for future use.
+//
+//   - 1 if the fuzzer should increase priority of the
+//     given input during subsequent fuzzing (for example, the input is lexically
+//     correct and was parsed successfully);
+//   - -1 if the input must not be added to corpus even if gives new coverage; and
+//   - 0 otherwise
+//
+// other values are reserved for future use.
 func Fuzz(input []byte) int {
 	if len(input) < 100 {
 		return 0
