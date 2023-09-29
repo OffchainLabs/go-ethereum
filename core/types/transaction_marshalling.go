@@ -355,11 +355,21 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 
 	case DynamicFeeTxType, ArbitrumTippingTxSubtype + arbitrumSubtypeOffset:
 		var itx DynamicFeeTx
+<<<<<<< HEAD
 		// Access list is optional for now.
 		if dec.AccessList != nil {
 			itx.AccessList = *dec.AccessList
 		}
 		inner = &itx
+||||||| 48b19f407
+		inner = &itx
+		// Access list is optional for now.
+		if dec.AccessList != nil {
+			itx.AccessList = *dec.AccessList
+		}
+=======
+		inner = &itx
+>>>>>>> master
 		if dec.ChainID == nil {
 			return errors.New("missing required field 'chainId' in transaction")
 		}
