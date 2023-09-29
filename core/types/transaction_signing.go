@@ -298,7 +298,7 @@ func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 	// Check that chain ID of tx matches the signer. We also accept ID zero here,
 	// because it indicates that the chain ID was not specified in the tx.
 	if txdata.chainID().Sign() != 0 && txdata.chainID().Cmp(s.chainId) != 0 {
-		return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.ChainID, s.chainId)
+		return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.chainID(), s.chainId)
 	}
 	R, S, _ = decodeSignature(sig)
 	V = big.NewInt(int64(sig[64]))
