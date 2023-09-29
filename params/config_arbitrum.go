@@ -29,8 +29,8 @@ type ArbitrumChainParams struct {
 	InitialArbOSVersion       uint64
 	InitialChainOwner         common.Address
 	GenesisBlockNum           uint64
-	MaxCodeSize               uint64 `json:"maxCodeSize,omitempty,"`    // Maximum bytecode to permit for a contract. 0 value implies params.MaxCodeSize
-	MaxInitCodeSize           uint64 `json:"maxInitCodeSize,omitempty"` // Maximum initcode to permit in a creation transaction and create instructions. o vale implies params.MaxInitCodeSize
+	MaxCodeSize               uint64 // Maximum bytecode to permit for a contract. 0 value implies params.MaxCodeSize
+	MaxInitCodeSize           uint64 // Maximum initcode to permit in a creation transaction and create instructions. o vale implies params.MaxInitCodeSize
 }
 
 func (c *ChainConfig) IsArbitrum() bool {
@@ -39,6 +39,20 @@ func (c *ChainConfig) IsArbitrum() bool {
 
 func (c *ChainConfig) IsArbitrumNitro(num *big.Int) bool {
 	return c.IsArbitrum() && isBlockForked(new(big.Int).SetUint64(c.ArbitrumChainParams.GenesisBlockNum), num)
+}
+
+func (c *ChainConfig) MaxCodeSize() uint64 {
+	if c.ArbitrumChainParams.MaxCodeSize == 0 {
+		return MaxCodeSize
+	}
+	return c.ArbitrumChainParams.MaxCodeSize
+}
+
+func (c *ChainConfig) MaxInitCodeSize() uint64 {
+	if c.ArbitrumChainParams.MaxInitCodeSize == 0 {
+		return MaxInitCodeSize
+	}
+	return c.ArbitrumChainParams.MaxInitCodeSize
 }
 
 func (c *ChainConfig) DebugMode() bool {
@@ -138,8 +152,6 @@ func DisableArbitrumParams() ArbitrumChainParams {
 		DataAvailabilityCommittee: false,
 		InitialArbOSVersion:       0,
 		InitialChainOwner:         common.Address{},
-		MaxCodeSize:               MaxCodeSize,
-		MaxInitCodeSize:           MaxInitCodeSize,
 	}
 }
 

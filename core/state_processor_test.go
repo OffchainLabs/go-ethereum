@@ -58,10 +58,6 @@ func TestStateProcessorErrors(t *testing.T) {
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
 			Ethash:              new(params.EthashConfig),
-			ArbitrumChainParams: params.ArbitrumChainParams{
-				MaxCodeSize:     params.MaxCodeSize,
-				MaxInitCodeSize: params.MaxInitCodeSize,
-			},
 		}
 		signer  = types.LatestSigner(config)
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -241,10 +237,6 @@ func TestStateProcessorErrors(t *testing.T) {
 					PetersburgBlock:     big.NewInt(0),
 					IstanbulBlock:       big.NewInt(0),
 					MuirGlacierBlock:    big.NewInt(0),
-					ArbitrumChainParams: params.ArbitrumChainParams{
-						MaxCodeSize:     params.MaxCodeSize,
-						MaxInitCodeSize: params.MaxInitCodeSize,
-					},
 				},
 				Alloc: GenesisAlloc{
 					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
@@ -341,10 +333,6 @@ func TestStateProcessorErrors(t *testing.T) {
 					TerminalTotalDifficulty:       big.NewInt(0),
 					TerminalTotalDifficultyPassed: true,
 					ShanghaiTime:                  u64(0),
-					ArbitrumChainParams: params.ArbitrumChainParams{
-						MaxCodeSize:     params.MaxCodeSize,
-						MaxInitCodeSize: params.MaxInitCodeSize,
-					},
 				},
 				Alloc: GenesisAlloc{
 					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
