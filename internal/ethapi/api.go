@@ -1468,7 +1468,7 @@ type RPCTransaction struct {
 	S                *hexutil.Big      `json:"s"`
 
 	// Arbitrum fields:
-	Subtype             hexutil.Uint64  `json:"subtype",omitempty`             // ArbiturumSubtypedTx
+	Subtype             hexutil.Uint64  `json:"subtype,omitempty"`             // ArbiturumSubtypedTx
 	RequestId           *common.Hash    `json:"requestId,omitempty"`           // Contract SubmitRetryable Deposit
 	TicketId            *common.Hash    `json:"ticketId,omitempty"`            // Retry
 	MaxRefund           *hexutil.Big    `json:"maxRefund,omitempty"`           // Retry
