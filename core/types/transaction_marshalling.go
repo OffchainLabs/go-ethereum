@@ -359,7 +359,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.AccessList != nil {
 			itx.AccessList = *dec.AccessList
 		}
-		inner = &itx
 		if dec.ChainID == nil {
 			return errors.New("missing required field 'chainId' in transaction")
 		}
