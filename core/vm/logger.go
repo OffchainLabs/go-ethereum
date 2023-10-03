@@ -34,7 +34,7 @@ type EVMLogger interface {
 	CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)
 
 	// Stylus: capture hostio invocation
-	CaptureStylusHostio(name string, args, outs []byte, ink uint64)
+	CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64)
 
 	// Transaction level
 	CaptureTxStart(gasLimit uint64)

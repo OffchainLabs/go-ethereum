@@ -131,9 +131,9 @@ func (t *muxTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Addres
 	}
 }
 
-func (t *muxTracer) CaptureStylusHostio(name string, args, outs []byte, ink uint64) {
+func (t *muxTracer) CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64) {
 	for _, t := range t.tracers {
-		t.CaptureStylusHostio(name, args, outs, ink)
+		t.CaptureStylusHostio(name, args, outs, startInk, endInk)
 	}
 }
 
