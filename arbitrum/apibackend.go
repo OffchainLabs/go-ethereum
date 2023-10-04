@@ -101,7 +101,7 @@ func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fal
 }
 
 func (a *APIBackend) SetSyncBackend(sync SyncProgressBackend) error {
-	if a.sync != nil && sync != nil {
+	if a.sync != nil {
 		return errors.New("sync progress monitor already set")
 	}
 	a.sync = sync
