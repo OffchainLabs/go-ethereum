@@ -164,6 +164,15 @@ func (d *Downloader) BeaconExtend(mode SyncMode, head *types.Header) error {
 	return d.beaconSync(mode, head, nil, false)
 }
 
+// PivotSync sets an explicit pivot and syncs from there. Pivot state will be read from peers.
+func (d *Downloader) PivotSync(pivot *types.Header) error {
+	d.pivotLock.Lock()
+	d.pivotHeader = pivot
+	d.pivotExplicit = true
+	d.pivotLock.Unlock()
+	return d.beaconSync(SnapSync, pivot, nil, true)
+}
+
 // beaconSync is the post-merge version of the chain synchronization, where the
 // chain is not downloaded from genesis onward, rather from trusted head announces
 // backwards.

@@ -131,8 +131,9 @@ type Downloader struct {
 	skeleton *skeleton // Header skeleton to backfill the chain with (eth2 mode)
 
 	// State sync
-	pivotHeader *types.Header // Pivot block header to dynamically push the syncing state root
-	pivotLock   sync.RWMutex  // Lock protecting pivot header reads from updates
+	pivotHeader   *types.Header // Pivot block header to dynamically push the syncing state root
+	pivotExplicit bool          // arbitrum: pivot is set explicitly only
+	pivotLock     sync.RWMutex  // Lock protecting pivot header reads from updates
 
 	SnapSyncer     *snap.Syncer // TODO(karalabe): make private! hack for now
 	stateSyncStart chan *stateSync
@@ -476,7 +477,12 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 	}(time.Now())
 
 	// Look up the sync boundaries: the common ancestor and the target block
-	var latest, pivot, final *types.Header
+	var latest, pivot, explicitPivot, final *types.Header
+	d.pivotLock.Lock()
+	if d.pivotExplicit {
+		explicitPivot = d.pivotHeader
+	}
+	d.pivotLock.Unlock()
 	if !beaconMode {
 		// In legacy mode, use the master peer to retrieve the headers from
 		latest, pivot, err = d.fetchHead(p)
@@ -489,7 +495,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 		if err != nil {
 			return err
 		}
-		if latest.Number.Uint64() > uint64(fsMinFullBlocks) {
+		if latest.Number.Uint64() > uint64(fsMinFullBlocks) && explicitPivot == nil {
 			number := latest.Number.Uint64() - uint64(fsMinFullBlocks)
 
 			// Retrieve the pivot header from the skeleton chain segment but
@@ -521,6 +527,12 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 	if mode == SnapSync && pivot == nil {
 		pivot = d.blockchain.CurrentBlock()
 	}
+	if explicitPivot != nil {
+		if explicitPivot.Number.Cmp(latest.Number) < 0 {
+			return fmt.Errorf("skeleton behind explicit pivot. cannot sync")
+		}
+		pivot = explicitPivot
+	}
 	height := latest.Number.Uint64()
 
 	var origin uint64
@@ -546,7 +558,9 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 
 	// Ensure our origin point is below any snap sync pivot point
 	if mode == SnapSync {
-		if height <= uint64(fsMinFullBlocks) {
+		if explicitPivot != nil {
+			rawdb.WriteLastPivotNumber(d.stateDB, pivot.Nonce.Uint64())
+		} else if height <= uint64(fsMinFullBlocks) {
 			origin = 0
 		} else {
 			pivotNumber := pivot.Number.Uint64()
@@ -635,7 +649,9 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 	}
 	if mode == SnapSync {
 		d.pivotLock.Lock()
-		d.pivotHeader = pivot
+		if !d.pivotExplicit {
+			d.pivotHeader = pivot
+		}
 		d.pivotLock.Unlock()
 
 		fetchers = append(fetchers, func() error { return d.processSnapSyncContent() })
@@ -1034,8 +1050,13 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, head uint64) e
 		case pivoting:
 			d.pivotLock.RLock()
 			pivot := d.pivotHeader.Number.Uint64()
+			pivotExplicit := d.pivotExplicit
 			d.pivotLock.RUnlock()
 
+			if pivotExplicit {
+				pivoting = false
+				continue
+			}
 			p.log.Trace("Fetching next pivot header", "number", pivot+uint64(fsMinFullBlocks))
 			headers, hashes, err = d.fetchHeadersByNumber(p, pivot+uint64(fsMinFullBlocks), 2, fsMinFullBlocks-9, false) // move +64 when it's 2x64-8 deep
 
@@ -1079,6 +1100,9 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, head uint64) e
 		d.pivotLock.RLock()
 		if d.pivotHeader != nil {
 			pivot = d.pivotHeader.Number.Uint64()
+		}
+		if d.pivotExplicit {
+			pivoting = false
 		}
 		d.pivotLock.RUnlock()
 
@@ -1637,6 +1661,7 @@ func (d *Downloader) processSnapSyncContent() error {
 		// notifications from the header downloader
 		d.pivotLock.RLock()
 		pivot := d.pivotHeader
+		pivotExplicit := d.pivotExplicit
 		d.pivotLock.RUnlock()
 
 		if oldPivot == nil {
@@ -1659,7 +1684,7 @@ func (d *Downloader) processSnapSyncContent() error {
 			// Note, we have `reorgProtHeaderDelay` number of blocks withheld, Those
 			// need to be taken into account, otherwise we're detecting the pivot move
 			// late and will drop peers due to unavailable state!!!
-			if height := latest.Number.Uint64(); height >= pivot.Number.Uint64()+2*uint64(fsMinFullBlocks)-uint64(reorgProtHeaderDelay) {
+			if height := latest.Number.Uint64(); height >= pivot.Number.Uint64()+2*uint64(fsMinFullBlocks)-uint64(reorgProtHeaderDelay) && !pivotExplicit {
 				log.Warn("Pivot became stale, moving", "old", pivot.Number.Uint64(), "new", height-uint64(fsMinFullBlocks)+uint64(reorgProtHeaderDelay))
 				pivot = results[len(results)-1-fsMinFullBlocks+reorgProtHeaderDelay].Header // must exist as lower old pivot is uncommitted
 

@@ -16,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -57,8 +56,8 @@ func (i *dummyIterator) Close() { // ends the iterator
 }
 
 func TestSimpleSync(t *testing.T) {
-	const numBlocks = 100
-	const oldBlock = 20
+	const numBlocks = 200
+	const oldBlock = 198
 
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(log.LvlTrace))
@@ -152,7 +151,7 @@ func TestSimpleSync(t *testing.T) {
 	log.Info("dest listener", "address", destStack.Server().Config.ListenAddr)
 	log.Info("initial source", "head", sourceChain.CurrentBlock())
 	log.Info("initial dest", "head", destChain.CurrentBlock())
-	err = destHandler.downloader.BeaconSync(downloader.SnapSync, sourceChain.CurrentBlock(), sourceChain.CurrentBlock())
+	err = destHandler.downloader.PivotSync(sourceChain.CurrentBlock())
 	if err != nil {
 		t.Fatal(err)
 	}
