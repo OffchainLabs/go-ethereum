@@ -460,7 +460,9 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 // commit is the private locked version of Commit.
 func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner) error {
 	// If the node does not exist, it's a previously committed node
+	db.lock.RLock()
 	node, ok := db.dirties[hash]
+	db.lock.RUnlock()
 	if !ok {
 		return nil
 	}
