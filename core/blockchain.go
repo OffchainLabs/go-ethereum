@@ -1039,9 +1039,9 @@ func (bc *BlockChain) Stop() {
 		triedb := bc.triedb
 
 		for _, offset := range []uint64{0, 1, bc.cacheConfig.TriesInMemory - 1, math.MaxUint64} {
-			if number := bc.CurrentBlock().Number.Uint64(); number > offset {
+			if number := bc.CurrentBlock().Number.Uint64(); number > offset || offset == math.MaxUint64 {
 				var recent *types.Block
-				if offset == math.MaxUint && !bc.triegc.Empty() {
+				if offset == math.MaxUint64 && !bc.triegc.Empty() {
 					_, latest := bc.triegc.Peek()
 					recent = bc.GetBlockByNumber(uint64(-latest))
 				} else {
