@@ -528,7 +528,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 		pivot = d.blockchain.CurrentBlock()
 	}
 	if explicitPivot != nil {
-		if explicitPivot.Number.Cmp(latest.Number) < 0 {
+		if explicitPivot.Number.Cmp(latest.Number) > 0 {
 			return fmt.Errorf("skeleton behind explicit pivot. cannot sync")
 		}
 		pivot = explicitPivot

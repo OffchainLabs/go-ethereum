@@ -17,6 +17,7 @@
 package downloader
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -165,12 +166,15 @@ func (d *Downloader) BeaconExtend(mode SyncMode, head *types.Header) error {
 }
 
 // PivotSync sets an explicit pivot and syncs from there. Pivot state will be read from peers.
-func (d *Downloader) PivotSync(pivot *types.Header) error {
+func (d *Downloader) PivotSync(head *types.Header, pivot *types.Header) error {
+	if head.Number.Cmp(pivot.Number) < 0 {
+		return errors.New("pivot must be behind head")
+	}
 	d.pivotLock.Lock()
 	d.pivotHeader = pivot
 	d.pivotExplicit = true
 	d.pivotLock.Unlock()
-	return d.beaconSync(SnapSync, pivot, nil, true)
+	return d.beaconSync(SnapSync, head, nil, true)
 }
 
 // beaconSync is the post-merge version of the chain synchronization, where the
