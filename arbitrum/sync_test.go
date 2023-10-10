@@ -12,7 +12,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -55,9 +54,28 @@ func (i *dummyIterator) Close() { // ends the iterator
 	i.nodes = nil
 }
 
+func testHasBlock(t *testing.T, chain *core.BlockChain, block *types.Block, shouldHaveState bool) {
+	t.Helper()
+	hasHeader := chain.GetHeaderByNumber(block.NumberU64())
+	if hasHeader == nil {
+		t.Fatal("block not found")
+	}
+	if hasHeader.Hash() != block.Hash() {
+		t.Fatal("wrong block in blockchain")
+	}
+	_, err := chain.StateAt(hasHeader.Root)
+	if err != nil && shouldHaveState {
+		t.Fatal("should have state, but doesn't")
+	}
+	if err == nil && !shouldHaveState {
+		t.Fatal("should not have state, but does")
+	}
+}
+
 func TestSimpleSync(t *testing.T) {
-	const numBlocks = 200
-	const oldBlock = 198
+	const pivotBlockNum = 50
+	const syncBlockNum = 70
+	const extraBlocks = 200
 
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(log.LvlTrace))
@@ -75,36 +93,36 @@ func TestSimpleSync(t *testing.T) {
 		t.Fatal("generate key err:", err)
 	}
 
-	// key for onchain user
-	testUser, err := crypto.GenerateKey()
-	if err != nil {
-		t.Fatal("generate key err:", err)
-	}
-	testUserAddress := crypto.PubkeyToAddress(testUser.PublicKey)
-
+	// source node
 	sourceStackConf := node.DefaultConfig
-	sourceStackConf.DataDir = ""
+	sourceStackConf.DataDir = t.TempDir()
 	sourceStackConf.P2P.NoDiscovery = true
 	sourceStackConf.P2P.ListenAddr = "127.0.0.1:0"
 	sourceStackConf.P2P.PrivateKey = sourceKey
-
-	destStackConf := sourceStackConf
-	destStackConf.P2P.PrivateKey = destKey
 
 	sourceStack, err := node.New(&sourceStackConf)
 	if err != nil {
 		t.Fatal(err)
 	}
+	sourceDb, err := sourceStack.OpenDatabaseWithFreezer("l2chaindata", 2048, 512, "", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// create and populate chain
-	sourceDb := rawdb.NewMemoryDatabase()
+	testUser, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal("generate key err:", err)
+	}
+	testUserAddress := crypto.PubkeyToAddress(testUser.PublicKey)
 	gspec := &core.Genesis{
 		Config: params.TestChainConfig,
 		Alloc:  core.GenesisAlloc{testUserAddress: {Balance: new(big.Int).Lsh(big.NewInt(1), 250)}},
 	}
 	sourceChain, _ := core.NewBlockChain(sourceDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	signer := types.MakeSigner(sourceChain.Config(), big.NewInt(1), 0)
-	_, bs, _ := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), numBlocks, func(i int, gen *core.BlockGen) {
+
+	_, blocks, _ := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), syncBlockNum+extraBlocks, func(i int, gen *core.BlockGen) {
 		tx, err := types.SignNewTx(testUser, signer, &types.LegacyTx{
 			Nonce:    gen.TxNonce(testUserAddress),
 			GasPrice: gen.BaseFee(),
@@ -115,9 +133,25 @@ func TestSimpleSync(t *testing.T) {
 		}
 		gen.AddTx(tx)
 	})
-	if _, err := sourceChain.InsertChain(bs); err != nil {
+
+	if _, err := sourceChain.InsertChain(blocks[:pivotBlockNum]); err != nil {
 		t.Fatal(err)
 	}
+
+	pivotBlock := blocks[pivotBlockNum-1]
+	syncBlock := blocks[syncBlockNum-1]
+
+	testHasBlock(t, sourceChain, pivotBlock, true)
+	sourceChain.TrieDB().Commit(pivotBlock.Root(), true)
+
+	if _, err := sourceChain.InsertChain(blocks[pivotBlockNum:]); err != nil {
+		t.Fatal(err)
+	}
+
+	// should have state of pivot but nothing around
+	testHasBlock(t, sourceChain, blocks[pivotBlockNum-2], false)
+	testHasBlock(t, sourceChain, blocks[pivotBlockNum-1], true)
+	testHasBlock(t, sourceChain, blocks[pivotBlockNum], false)
 
 	// source node
 	sourceHandler := NewProtocolHandler(sourceDb, sourceChain)
@@ -137,12 +171,19 @@ func TestSimpleSync(t *testing.T) {
 	}
 
 	// dest node
-	destDb := rawdb.NewMemoryDatabase()
-	destChain, _ := core.NewBlockChain(destDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	destStackConf := sourceStackConf
+	destStackConf.DataDir = t.TempDir()
+	destStackConf.P2P.PrivateKey = destKey
 	destStack, err := node.New(&destStackConf)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	destDb, err := destStack.OpenDatabaseWithFreezer("l2chaindata", 2048, 512, "", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	destChain, _ := core.NewBlockChain(destDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	destHandler := NewProtocolHandler(destDb, destChain)
 	destStack.RegisterProtocols(destHandler.MakeProtocols(iter))
 	destStack.Start()
@@ -151,38 +192,23 @@ func TestSimpleSync(t *testing.T) {
 	log.Info("dest listener", "address", destStack.Server().Config.ListenAddr)
 	log.Info("initial source", "head", sourceChain.CurrentBlock())
 	log.Info("initial dest", "head", destChain.CurrentBlock())
-	err = destHandler.downloader.PivotSync(sourceChain.CurrentBlock())
+	log.Info("pivot", "head", pivotBlock.Header())
+	err = destHandler.downloader.PivotSync(syncBlock.Header(), pivotBlock.Header())
 	if err != nil {
 		t.Fatal(err)
 	}
 	<-time.After(time.Second * 5)
 
+	log.Info("final source", "head", sourceChain.CurrentBlock())
+	log.Info("final dest", "head", destChain.CurrentBlock())
+	log.Info("sync block", "header", syncBlock.Header())
+
 	// check sync
-	if sourceChain.CurrentBlock().Hash() != destChain.CurrentBlock().Hash() {
-		log.Info("final source", "head", sourceChain.CurrentBlock())
-		log.Info("final dest", "head", destChain.CurrentBlock())
-		t.Fatal("dest chain not synced to source")
+	if destChain.CurrentBlock().Number.Cmp(syncBlock.Number()) != 0 {
+		t.Fatal("did not sync to sync block")
 	}
 
-	oldDest := destChain.GetHeaderByNumber(oldBlock)
-	if oldDest == nil {
-		t.Fatal("old dest block nil")
-	}
-	oldSource := sourceChain.GetHeaderByNumber(oldBlock)
-	if oldSource == nil {
-		t.Fatal("old source block nil")
-	}
-	if oldDest.Hash() != oldSource.Hash() {
-		log.Info("final source", "old", oldSource)
-		log.Info("final dest", "old", oldDest)
-		t.Fatal("dest and source differ")
-	}
-	_, err = sourceChain.StateAt(oldSource.Root)
-	if err != nil {
-		t.Fatal("source chain does not have state for old block")
-	}
-	_, err = destChain.StateAt(oldDest.Root)
-	if err == nil {
-		t.Fatal("dest chain does have state for old block, but should have been snap-synced")
-	}
+	testHasBlock(t, destChain, syncBlock, true)
+	testHasBlock(t, destChain, pivotBlock, true)
+	testHasBlock(t, destChain, blocks[pivotBlockNum-2], false)
 }
