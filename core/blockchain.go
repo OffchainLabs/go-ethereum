@@ -1041,13 +1041,13 @@ func (bc *BlockChain) Stop() {
 		for _, offset := range []uint64{0, 1, bc.cacheConfig.TriesInMemory - 1, math.MaxUint64} {
 			if number := bc.CurrentBlock().Number.Uint64(); number > offset {
 				var recent *types.Block
-				if offset == math.MaxUint {
+				if offset == math.MaxUint && !bc.triegc.Empty() {
 					_, latest := bc.triegc.Peek()
 					recent = bc.GetBlockByNumber(uint64(-latest))
 				} else {
 					recent = bc.GetBlockByNumber(number - offset)
 				}
-				if recent.Root() == (common.Hash{}) {
+				if recent == nil || recent.Root() == (common.Hash{}) {
 					continue
 				}
 
