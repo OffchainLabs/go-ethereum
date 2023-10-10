@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -64,7 +64,11 @@ type Handler func(peer *Peer) error
 // callback methods to invoke on remote deliveries.
 type Backend interface {
 	// Chain retrieves the blockchain object to serve data.
-	Chain() *core.BlockChain
+	ContractCodeWithPrefix(codeHash common.Hash) ([]byte, error)
+	TrieDB() *trie.Database
+	Snapshot(root common.Hash) snapshot.Snapshot
+	AccountIterator(root, account common.Hash) (snapshot.AccountIterator, error)
+	StorageIterator(root, account, origin common.Hash) (snapshot.StorageIterator, error)
 
 	// RunPeer is invoked when a peer joins on the `eth` protocol. The handler
 	// should do any peer maintenance work, handshakes and validations. If all
@@ -103,7 +107,7 @@ func MakeProtocols(backend Backend, dnsdisc enode.Iterator) []p2p.Protocol {
 				})
 			},
 			NodeInfo: func() interface{} {
-				return nodeInfo(backend.Chain())
+				return nodeInfo()
 			},
 			PeerInfo: func(id enode.ID) interface{} {
 				return backend.PeerInfo(id)
@@ -159,7 +163,7 @@ func HandleMessage(backend Backend, peer *Peer) error {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
 		// Service the request, potentially returning nothing in case of errors
-		accounts, proofs := ServiceGetAccountRangeQuery(backend.Chain(), &req)
+		accounts, proofs := ServiceGetAccountRangeQuery(backend, &req)
 
 		// Send back anything accumulated (or empty in case of errors)
 		return p2p.Send(peer.rw, AccountRangeMsg, &AccountRangePacket{
@@ -191,7 +195,7 @@ func HandleMessage(backend Backend, peer *Peer) error {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
 		// Service the request, potentially returning nothing in case of errors
-		slots, proofs := ServiceGetStorageRangesQuery(backend.Chain(), &req)
+		slots, proofs := ServiceGetStorageRangesQuery(backend, &req)
 
 		// Send back anything accumulated (or empty in case of errors)
 		return p2p.Send(peer.rw, StorageRangesMsg, &StorageRangesPacket{
@@ -225,7 +229,7 @@ func HandleMessage(backend Backend, peer *Peer) error {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
 		// Service the request, potentially returning nothing in case of errors
-		codes := ServiceGetByteCodesQuery(backend.Chain(), &req)
+		codes := ServiceGetByteCodesQuery(backend, &req)
 
 		// Send back anything accumulated (or empty in case of errors)
 		return p2p.Send(peer.rw, ByteCodesMsg, &ByteCodesPacket{
@@ -250,7 +254,7 @@ func HandleMessage(backend Backend, peer *Peer) error {
 			return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 		}
 		// Service the request, potentially returning nothing in case of errors
-		nodes, err := ServiceGetTrieNodesQuery(backend.Chain(), &req, start)
+		nodes, err := ServiceGetTrieNodesQuery(backend, &req, start)
 		if err != nil {
 			return err
 		}
@@ -277,16 +281,16 @@ func HandleMessage(backend Backend, peer *Peer) error {
 
 // ServiceGetAccountRangeQuery assembles the response to an account range query.
 // It is exposed to allow external packages to test protocol behavior.
-func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePacket) ([]*AccountData, [][]byte) {
+func ServiceGetAccountRangeQuery(backend Backend, req *GetAccountRangePacket) ([]*AccountData, [][]byte) {
 	if req.Bytes > softResponseLimit {
 		req.Bytes = softResponseLimit
 	}
 	// Retrieve the requested state and bail out if non existent
-	tr, err := trie.New(trie.StateTrieID(req.Root), chain.StateCache().TrieDB())
+	tr, err := trie.New(trie.StateTrieID(req.Root), backend.TrieDB())
 	if err != nil {
 		return nil, nil
 	}
-	it, err := chain.Snapshots().AccountIterator(req.Root, req.Origin)
+	it, err := backend.AccountIterator(req.Root, req.Origin)
 	if err != nil {
 		return nil, nil
 	}
@@ -337,7 +341,7 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 	return accounts, proofs
 }
 
-func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesPacket) ([][]*StorageData, [][]byte) {
+func ServiceGetStorageRangesQuery(backend Backend, req *GetStorageRangesPacket) ([][]*StorageData, [][]byte) {
 	if req.Bytes > softResponseLimit {
 		req.Bytes = softResponseLimit
 	}
@@ -370,7 +374,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 			limit, req.Limit = common.BytesToHash(req.Limit), nil
 		}
 		// Retrieve the requested state and bail out if non existent
-		it, err := chain.Snapshots().StorageIterator(req.Root, account, origin)
+		it, err := backend.StorageIterator(req.Root, account, origin)
 		if err != nil {
 			return nil, nil
 		}
@@ -412,7 +416,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		if origin != (common.Hash{}) || (abort && len(storage) > 0) {
 			// Request started at a non-zero hash or was capped prematurely, add
 			// the endpoint Merkle proofs
-			accTrie, err := trie.NewStateTrie(trie.StateTrieID(req.Root), chain.StateCache().TrieDB())
+			accTrie, err := trie.NewStateTrie(trie.StateTrieID(req.Root), backend.TrieDB())
 			if err != nil {
 				return nil, nil
 			}
@@ -421,7 +425,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 				return nil, nil
 			}
 			id := trie.StorageTrieID(req.Root, account, acc.Root)
-			stTrie, err := trie.NewStateTrie(id, chain.StateCache().TrieDB())
+			stTrie, err := trie.NewStateTrie(id, backend.TrieDB())
 			if err != nil {
 				return nil, nil
 			}
@@ -450,7 +454,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 
 // ServiceGetByteCodesQuery assembles the response to a byte codes query.
 // It is exposed to allow external packages to test protocol behavior.
-func ServiceGetByteCodesQuery(chain *core.BlockChain, req *GetByteCodesPacket) [][]byte {
+func ServiceGetByteCodesQuery(backend Backend, req *GetByteCodesPacket) [][]byte {
 	if req.Bytes > softResponseLimit {
 		req.Bytes = softResponseLimit
 	}
@@ -467,7 +471,7 @@ func ServiceGetByteCodesQuery(chain *core.BlockChain, req *GetByteCodesPacket) [
 			// Peers should not request the empty code, but if they do, at
 			// least sent them back a correct response without db lookups
 			codes = append(codes, []byte{})
-		} else if blob, err := chain.ContractCodeWithPrefix(hash); err == nil {
+		} else if blob, err := backend.ContractCodeWithPrefix(hash); err == nil {
 			codes = append(codes, blob)
 			bytes += uint64(len(blob))
 		}
@@ -480,12 +484,12 @@ func ServiceGetByteCodesQuery(chain *core.BlockChain, req *GetByteCodesPacket) [
 
 // ServiceGetTrieNodesQuery assembles the response to a trie nodes query.
 // It is exposed to allow external packages to test protocol behavior.
-func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, start time.Time) ([][]byte, error) {
+func ServiceGetTrieNodesQuery(backend Backend, req *GetTrieNodesPacket, start time.Time) ([][]byte, error) {
 	if req.Bytes > softResponseLimit {
 		req.Bytes = softResponseLimit
 	}
 	// Make sure we have the state associated with the request
-	triedb := chain.StateCache().TrieDB()
+	triedb := backend.TrieDB()
 
 	accTrie, err := trie.NewStateTrie(trie.StateTrieID(req.Root), triedb)
 	if err != nil {
@@ -493,7 +497,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 		return nil, nil
 	}
 	// The 'snap' might be nil, in which case we cannot serve storage slots.
-	snap := chain.Snapshots().Snapshot(req.Root)
+	snap := backend.Snapshot(req.Root)
 	// Retrieve trie nodes until the packet size limit is reached
 	var (
 		nodes [][]byte
@@ -570,6 +574,6 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 type NodeInfo struct{}
 
 // nodeInfo retrieves some `snap` protocol metadata about the running host node.
-func nodeInfo(chain *core.BlockChain) *NodeInfo {
+func nodeInfo() *NodeInfo {
 	return &NodeInfo{}
 }
