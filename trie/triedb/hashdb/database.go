@@ -330,9 +330,9 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	// memory cache during commit but not yet in persistent storage). This is ensured
 	// by only uncaching existing data when the database write finalizes.
 	start := time.Now()
+	batch := db.diskdb.NewBatch()
 	db.lock.RLock()
 	nodes, storage := len(db.dirties), db.dirtiesSize
-	batch := db.diskdb.NewBatch()
 
 	// db.dirtiesSize only contains the useful data in the cache, but when reporting
 	// the total memory consumption, the maintenance metadata is also needed to be
