@@ -18,6 +18,7 @@
 package core
 
 import (
+	"errors"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/state"
@@ -39,7 +40,10 @@ func (bc *BlockChain) WriteBlockAndSetHeadWithTime(block *types.Block, receipts 
 func (bc *BlockChain) ReorgToOldBlock(newHead *types.Block) error {
 	bc.wg.Add(1)
 	defer bc.wg.Done()
-	bc.chainmu.MustLock()
+	locked := bc.chainmu.TryLock()
+	if !locked {
+		return errors.New("couldn't catch lock to reorg")
+	}
 	defer bc.chainmu.Unlock()
 	oldHead := bc.CurrentBlock()
 	if oldHead.Hash() == newHead.Hash() {
