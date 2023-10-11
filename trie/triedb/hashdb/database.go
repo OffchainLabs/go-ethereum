@@ -329,8 +329,9 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	// outside code doesn't see an inconsistent state (referenced data removed from
 	// memory cache during commit but not yet in persistent storage). This is ensured
 	// by only uncaching existing data when the database write finalizes.
+	start := time.Now()
 	db.lock.RLock()
-	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
+	nodes, storage := len(db.dirties), db.dirtiesSize
 	batch := db.diskdb.NewBatch()
 
 	// db.dirtiesSize only contains the useful data in the cache, but when reporting
