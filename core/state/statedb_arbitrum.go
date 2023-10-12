@@ -61,7 +61,7 @@ func StripStylusPrefix(b []byte) ([]byte, error) {
 	return b[3:], nil
 }
 
-func (s *StateDB) GetCompiledWasmCode(addr common.Address, version uint16) []byte {
+func (s *StateDB) GetActivatedAsm(addr common.Address, version uint16) []byte {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.CompiledWasmCode(s.db, version)
@@ -69,7 +69,7 @@ func (s *StateDB) GetCompiledWasmCode(addr common.Address, version uint16) []byt
 	return nil
 }
 
-func (s *StateDB) SetCompiledWasmCode(addr common.Address, code []byte, version uint16) {
+func (s *StateDB) SetActivatedAsm(addr common.Address, code []byte, version uint16) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetCompiledWasmCode(s.db, code, version)
@@ -169,7 +169,7 @@ func (s *StateDB) RecordProgram(program common.Address, codeHash common.Hash, ve
 		}
 		s.userWasms[call] = &UserWasm{
 			ModuleHash:     compiledHash,
-			ModuleAsm:      s.GetCompiledWasmCode(program, version),
+			ModuleAsm:      s.GetActivatedAsm(program, version),
 			CompressedWasm: compressedWasm,
 		}
 	}
