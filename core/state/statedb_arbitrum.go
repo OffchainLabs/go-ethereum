@@ -140,6 +140,7 @@ type UserWasms map[WasmCall]*UserWasm
 type UserWasm struct {
 	ModuleHash     common.Hash
 	CompressedWasm []byte
+	ModuleAsm      []byte
 }
 type WasmCall struct {
 	Version  uint16
@@ -159,16 +160,7 @@ func (s *StateDB) RecordProgram(program common.Address, codeHash common.Hash, ve
 		if _, ok := s.userWasms[call]; ok {
 			return
 		}
-		storedCodeHash := s.GetCodeHash(program)
-		if storedCodeHash != codeHash {
-			log.Error(
-				"wrong recorded codehash",
-				"address", program,
-				"stored", storedCodeHash,
-				"recorded", codeHash,
-			)
-			return
-		}
+
 		rawCode := s.GetCode(program)
 		compressedWasm, err := StripStylusPrefix(rawCode)
 		if err != nil {
@@ -177,6 +169,7 @@ func (s *StateDB) RecordProgram(program common.Address, codeHash common.Hash, ve
 		}
 		s.userWasms[call] = &UserWasm{
 			ModuleHash:     compiledHash,
+			ModuleAsm:      s.GetCompiledWasmCode(program, version),
 			CompressedWasm: compressedWasm,
 		}
 	}
