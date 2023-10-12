@@ -1045,12 +1045,10 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			}
 
 			// Arbitrum Only
-			for version, wasm := range obj.activatedWasms {
-				if wasm.dirty {
-					codeHash := common.BytesToHash(obj.CodeHash())
-					rawdb.WriteActivation(codeWriter, version, codeHash, wasm.asm, wasm.module)
-					wasm.dirty = false
-				}
+			wasm := &obj.activation
+			if wasm.dirty {
+				rawdb.WriteActivation(codeWriter, wasm.moduleHash, wasm.asm, wasm.module)
+				wasm.dirty = false
 			}
 
 			// Write any storage changes in the state object to its storage trie

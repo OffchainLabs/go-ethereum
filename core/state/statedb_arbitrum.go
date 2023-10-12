@@ -60,25 +60,25 @@ func StripStylusPrefix(b []byte) ([]byte, error) {
 	return b[3:], nil
 }
 
-func (s *StateDB) NewActivation(addr common.Address, version uint16, asm, module []byte) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) NewActivation(program common.Address, moduleHash common.Hash, asm, module []byte) {
+	stateObject := s.GetOrNewStateObject(program)
 	if stateObject != nil {
-		stateObject.NewActivation(s.db, version, asm, module)
+		stateObject.NewActivation(s.db, moduleHash, asm, module)
 	}
 }
 
-func (s *StateDB) GetActivatedAsm(addr common.Address, version uint16) []byte {
-	stateObject := s.getStateObject(addr)
+func (s *StateDB) GetActivatedAsm(program common.Address, moduleHash common.Hash) []byte {
+	stateObject := s.getStateObject(program)
 	if stateObject != nil {
-		return stateObject.ActivatedAsm(s.db, version)
+		return stateObject.ActivatedAsm(s.db, moduleHash)
 	}
 	return nil
 }
 
-func (s *StateDB) GetActivatedModule(addr common.Address, version uint16) []byte {
+func (s *StateDB) GetActivatedModule(addr common.Address, moduleHash common.Hash) []byte {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.ActivatedModule(s.db, version)
+		return stateObject.ActivatedModule(s.db, moduleHash)
 	}
 	return nil
 }
@@ -143,35 +143,16 @@ func (s *StateDB) GetSuicides() []common.Address {
 	return suicides
 }
 
-type UserWasms map[WasmCall]*UserWasm
-type UserWasm struct {
-	ModuleHash common.Hash
-	Asm        []byte
-	Module     []byte
-}
-type WasmCall struct {
-	Version  uint16
-	CodeHash common.Hash
-}
+// maps moduleHash to any correct address (TODO: replace with hash set)
+type UserWasms map[common.Hash]common.Address
 
 func (s *StateDB) StartRecording() {
 	s.userWasms = make(UserWasms)
 }
 
-func (s *StateDB) RecordProgram(program common.Address, codeHash common.Hash, version uint16, compiledHash common.Hash) {
+func (s *StateDB) RecordProgram(program common.Address, moduleHash common.Hash) {
 	if s.userWasms != nil {
-		call := WasmCall{
-			Version:  version,
-			CodeHash: codeHash,
-		}
-		if _, ok := s.userWasms[call]; ok {
-			return
-		}
-		s.userWasms[call] = &UserWasm{
-			ModuleHash: compiledHash,
-			Asm:        s.GetActivatedAsm(program, version),
-			Module:     s.GetActivatedModule(program, version),
-		}
+		s.userWasms[moduleHash] = program
 	}
 }
 

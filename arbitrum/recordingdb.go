@@ -54,10 +54,10 @@ func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 		// Retrieving code
 		copy(hash[:], key[len(rawdb.CodePrefix):])
 		res, err = db.diskDb.Get(key)
-	} else if ok, _, _ := rawdb.IsActivatedAsmKey(key); ok {
+	} else if ok, _ := rawdb.IsActivatedAsmKey(key); ok {
 		// Arbitrum: the asm is non-consensus
 		return db.diskDb.Get(key)
-	} else if ok, _, _ := rawdb.IsActivatedModuleKey(key); ok {
+	} else if ok, _ := rawdb.IsActivatedModuleKey(key); ok {
 		// Arbitrum: the module is non-consensus (only its hash is)
 		return db.diskDb.Get(key)
 	} else {

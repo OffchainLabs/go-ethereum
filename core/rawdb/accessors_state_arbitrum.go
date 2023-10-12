@@ -23,13 +23,13 @@ import (
 )
 
 // Stores the activated asm and module for a given codeHash
-func WriteActivation(db ethdb.KeyValueWriter, version uint16, codeHash common.Hash, asm, module []byte) {
-	key := ActivatedAsmKey(version, codeHash)
+func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asm, module []byte) {
+	key := ActivatedAsmKey(moduleHash)
 	if err := db.Put(key[:], asm); err != nil {
 		log.Crit("Failed to store activated wasm asm", "err", err)
 	}
 
-	key = ActivatedModuleKey(version, codeHash)
+	key = ActivatedModuleKey(moduleHash)
 	if err := db.Put(key[:], module); err != nil {
 		log.Crit("Failed to store activated wasm module", "err", err)
 	}

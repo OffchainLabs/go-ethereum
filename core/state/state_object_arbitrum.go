@@ -22,78 +22,54 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-type cachedActivation struct {
-	asm    []byte
-	module []byte
-	dirty  bool
-}
-type activatedWasms map[uint16]*cachedActivation
-
-func (c activatedWasms) Copy() activatedWasms {
-	cpy := make(activatedWasms, len(c))
-	for key, value := range c {
-		cpy[key] = value
-	}
-	return cpy
+type wasmActivation struct {
+	asm        []byte
+	module     []byte
+	moduleHash common.Hash
+	dirty      bool
 }
 
-func (s *stateObject) NewActivation(db Database, version uint16, asm, module []byte) {
-	// Can only be activated once, so this must have been empty
-	s.db.journal.append(wasmCodeChange{
-		account: &s.address,
-		version: version,
-	})
-	s.cacheActivation(version, asm, module)
-
-	codeHash := common.BytesToHash(s.CodeHash())
-	if err := db.NewActivation(version, codeHash, asm, module); err != nil {
-		s.db.setError(fmt.Errorf("failed to write activation for %x %v: %v", s.CodeHash(), version, err))
-	}
-}
-
-func (s *stateObject) ActivatedAsm(db Database, version uint16) []byte {
-	cached := s.getActivation(version)
-	if cached.asm != nil {
-		return cached.asm
-	}
-
-	asm, err := db.ActivatedAsm(version, common.BytesToHash(s.CodeHash()))
-	if err != nil {
-		s.db.setError(fmt.Errorf("missing asm for %x %v: %v", s.CodeHash(), version, err))
-	}
-	cached.asm = asm
-	return asm
-}
-
-func (s *stateObject) ActivatedModule(db Database, version uint16) []byte {
-	cached := s.getActivation(version)
-	if cached.module != nil {
-		return cached.module
-	}
-
-	module, err := db.ActivatedModule(version, common.BytesToHash(s.CodeHash()))
-	if err != nil {
-		s.db.setError(fmt.Errorf("missing module for %x %v: %v", s.CodeHash(), version, err))
-	}
-	cached.module = module
-	return module
-}
-
-func (s *stateObject) getActivation(version uint16) *cachedActivation {
-	if wasm, ok := s.activatedWasms[version]; ok {
-		return wasm
-	}
-	cached := &cachedActivation{
-		dirty: false,
-	}
-	s.activatedWasms[version] = cached
-	return cached
-}
-
-func (s *stateObject) cacheActivation(version uint16, asm, module []byte) {
-	s.activatedWasms[version] = &cachedActivation{
+func (s *stateObject) setActivation(moduleHash common.Hash, asm, module []byte) {
+	s.activation = wasmActivation{
 		asm:    asm,
 		module: module,
 		dirty:  true,
 	}
+}
+
+func (s *stateObject) NewActivation(db Database, moduleHash common.Hash, asm, module []byte) {
+	// Can only be activated once, so this must have been empty
+	s.db.journal.append(wasmCodeChange{
+		account:    &s.address,
+		moduleHash: moduleHash,
+	})
+	s.setActivation(moduleHash, asm, module)
+
+	if err := db.NewActivation(moduleHash, asm, module); err != nil {
+		s.db.setError(fmt.Errorf("failed to write activation for %x: %v", moduleHash, err))
+	}
+}
+
+func (s *stateObject) ActivatedAsm(db Database, moduleHash common.Hash) []byte {
+	if s.activation.asm != nil {
+		return s.activation.asm
+	}
+	asm, err := db.ActivatedAsm(moduleHash)
+	if err != nil {
+		s.db.setError(fmt.Errorf("missing asm for %x: %v", s.CodeHash(), err))
+	}
+	s.activation.asm = asm
+	return asm
+}
+
+func (s *stateObject) ActivatedModule(db Database, moduleHash common.Hash) []byte {
+	if s.activation.module != nil {
+		return s.activation.module
+	}
+	module, err := db.ActivatedModule(moduleHash)
+	if err != nil {
+		s.db.setError(fmt.Errorf("missing module for %x: %v", s.CodeHash(), err))
+	}
+	s.activation.module = module
+	return module
 }

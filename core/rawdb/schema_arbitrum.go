@@ -20,52 +20,47 @@ package rawdb
 
 import (
 	"bytes"
-	"encoding/binary"
 
 	"github.com/ethereum/go-ethereum/common"
 )
 
 var (
-	activatedAsmPrefix    = []byte{0x00, 'w', 'a'} // (prefix, version, code_hash) -> stylus asm
-	activatedModulePrefix = []byte{0x00, 'w', 'm'} // (prefix, version, code_hash) -> stylus module
+	activatedAsmPrefix    = []byte{0x00, 'w', 'a'} // (prefix, moduleHash) -> stylus asm
+	activatedModulePrefix = []byte{0x00, 'w', 'm'} // (prefix, moduleHash) -> stylus module
 )
 
-// WasmKeyLen = CompiledWasmCodePrefix + version + hash
-const WasmKeyLen = 3 + 2 + 32
+// WasmKeyLen = CompiledWasmCodePrefix + moduleHash
+const WasmKeyLen = 3 + 32
 
 type WasmKey = [WasmKeyLen]byte
 
-func ActivatedAsmKey(version uint16, codeHash common.Hash) WasmKey {
-	return newWasmKey(activatedAsmPrefix, version, codeHash)
+func ActivatedAsmKey(moduleHash common.Hash) WasmKey {
+	return newWasmKey(activatedAsmPrefix, moduleHash)
 }
 
-func ActivatedModuleKey(version uint16, codeHash common.Hash) WasmKey {
-	return newWasmKey(activatedModulePrefix, version, codeHash)
+func ActivatedModuleKey(moduleHash common.Hash) WasmKey {
+	return newWasmKey(activatedModulePrefix, moduleHash)
 }
 
-// key = prefix + version + hash
-func newWasmKey(prefix []byte, version uint16, codeHash common.Hash) WasmKey {
+// key = prefix + moduleHash
+func newWasmKey(prefix []byte, moduleHash common.Hash) WasmKey {
 	var key WasmKey
 	copy(key[:3], prefix)
-	binary.BigEndian.PutUint16(key[3:5], version)
-	copy(key[5:], codeHash[:])
+	copy(key[3:], moduleHash[:])
 	return key
 }
 
-func IsActivatedAsmKey(key []byte) (bool, common.Hash, uint16) {
+func IsActivatedAsmKey(key []byte) (bool, common.Hash) {
 	return extractWasmKey(activatedAsmPrefix, key)
 }
 
-func IsActivatedModuleKey(key []byte) (bool, common.Hash, uint16) {
+func IsActivatedModuleKey(key []byte) (bool, common.Hash) {
 	return extractWasmKey(activatedModulePrefix, key)
 }
 
-func extractWasmKey(prefix, key []byte) (bool, common.Hash, uint16) {
-	start := len(prefix)
-	if bytes.HasPrefix(key, prefix) && len(key) == WasmKeyLen {
-		version := binary.BigEndian.Uint16(key[start : start+2])
-		codeHash := common.BytesToHash(key[start+2:])
-		return true, codeHash, version
+func extractWasmKey(prefix, key []byte) (bool, common.Hash) {
+	if !bytes.HasPrefix(key, prefix) || len(key) == WasmKeyLen {
+		return false, common.Hash{}
 	}
-	return false, common.Hash{}, 0
+	return true, common.BytesToHash(key[len(prefix):])
 }

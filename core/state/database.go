@@ -43,9 +43,9 @@ const (
 // Database wraps access to tries and contract code.
 type Database interface {
 	// Arbitrum: Manage activated Stylus contracts
-	NewActivation(version uint16, codeHash common.Hash, asm, module []byte) error
-	ActivatedAsm(version uint16, codeHash common.Hash) ([]byte, error)
-	ActivatedModule(version uint16, codeHash common.Hash) ([]byte, error)
+	NewActivation(moduleHash common.Hash, asm, module []byte) error
+	ActivatedAsm(moduleHash common.Hash) (asm []byte, err error)
+	ActivatedModule(moduleHash common.Hash) (module []byte, err error)
 
 	// OpenTrie opens the main account trie.
 	OpenTrie(root common.Hash) (Trie, error)
