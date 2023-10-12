@@ -8,7 +8,7 @@ type wasmCodeChange struct {
 }
 
 func (ch wasmCodeChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setWASMCode(nil, ch.version)
+	s.getStateObject(*ch.account).cacheActivation(ch.version, nil, nil)
 }
 
 func (ch wasmCodeChange) dirtied() *common.Address {

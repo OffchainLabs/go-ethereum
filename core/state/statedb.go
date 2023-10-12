@@ -1045,10 +1045,10 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			}
 
 			// Arbitrum Only
-			for version, wasm := range obj.compiledWasmCode {
+			for version, wasm := range obj.activatedWasms {
 				if wasm.dirty {
 					codeHash := common.BytesToHash(obj.CodeHash())
-					rawdb.WriteCompiledWasmCode(codeWriter, version, codeHash, wasm.code)
+					rawdb.WriteActivation(codeWriter, version, codeHash, wasm.asm, wasm.module)
 					wasm.dirty = false
 				}
 			}

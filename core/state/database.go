@@ -31,7 +31,7 @@ import (
 
 const (
 	// Arbitrum: Cache size granted for caching clean compiled wasm code.
-	compiledWasmCodeCacheSize = 64 * 1024 * 1024
+	activatedWasmCacheSize = 64 * 1024 * 1024
 
 	// Number of codehash->size associations to keep.
 	codeSizeCacheSize = 100000
@@ -42,10 +42,10 @@ const (
 
 // Database wraps access to tries and contract code.
 type Database interface {
-	// Arbitrum: CompiledWasmContractCode retrieves a particular contract's user wasm code.
-	CompiledWasmContractCode(version uint16, codeHash common.Hash) ([]byte, error)
-	// Arbitrum: SetCompiledWasmContractCode sets a user wasm code.
-	SetCompiledWasmContractCode(version uint16, codeHash common.Hash, code []byte) error
+	// Arbitrum: Manage activated Stylus contracts
+	NewActivation(version uint16, codeHash common.Hash, asm, module []byte) error
+	ActivatedAsm(version uint16, codeHash common.Hash) ([]byte, error)
+	ActivatedModule(version uint16, codeHash common.Hash) ([]byte, error)
 
 	// OpenTrie opens the main account trie.
 	OpenTrie(root common.Hash) (Trie, error)
@@ -147,7 +147,8 @@ func NewDatabase(db ethdb.Database) Database {
 func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 	cdb := &cachingDB{
 		// Arbitrum only
-		compiledWasmCache: lru.NewSizeConstrainedCache[rawdb.WasmKey, []byte](compiledWasmCodeCacheSize),
+		activatedAsmCache:    lru.NewSizeConstrainedCache[rawdb.WasmKey, []byte](activatedWasmCacheSize),
+		activatedModuleCache: lru.NewSizeConstrainedCache[rawdb.WasmKey, []byte](activatedWasmCacheSize),
 
 		disk:          db,
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
@@ -161,7 +162,8 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
 	cdb := &cachingDB{
 		// Arbitrum only
-		compiledWasmCache: lru.NewSizeConstrainedCache[rawdb.WasmKey, []byte](compiledWasmCodeCacheSize),
+		activatedAsmCache:    lru.NewSizeConstrainedCache[rawdb.WasmKey, []byte](activatedWasmCacheSize),
+		activatedModuleCache: lru.NewSizeConstrainedCache[rawdb.WasmKey, []byte](activatedWasmCacheSize),
 
 		disk:          db,
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
@@ -173,7 +175,8 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
 
 type cachingDB struct {
 	// Arbitrum
-	compiledWasmCache *lru.SizeConstrainedCache[rawdb.WasmKey, []byte]
+	activatedAsmCache    *lru.SizeConstrainedCache[rawdb.WasmKey, []byte] // todo: change to moduleHash
+	activatedModuleCache *lru.SizeConstrainedCache[rawdb.WasmKey, []byte]
 
 	disk          ethdb.KeyValueStore
 	codeSizeCache *lru.Cache[common.Hash, int]

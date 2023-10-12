@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
@@ -61,19 +60,27 @@ func StripStylusPrefix(b []byte) ([]byte, error) {
 	return b[3:], nil
 }
 
+func (s *StateDB) NewActivation(addr common.Address, version uint16, asm, module []byte) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.NewActivation(s.db, version, asm, module)
+	}
+}
+
 func (s *StateDB) GetActivatedAsm(addr common.Address, version uint16) []byte {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.CompiledWasmCode(s.db, version)
+		return stateObject.ActivatedAsm(s.db, version)
 	}
 	return nil
 }
 
-func (s *StateDB) SetActivatedAsm(addr common.Address, code []byte, version uint16) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) GetActivatedModule(addr common.Address, version uint16) []byte {
+	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		stateObject.SetCompiledWasmCode(s.db, code, version)
+		return stateObject.ActivatedModule(s.db, version)
 	}
+	return nil
 }
 
 func (s *StateDB) GetStylusPages() (uint16, uint16) {
@@ -138,9 +145,9 @@ func (s *StateDB) GetSuicides() []common.Address {
 
 type UserWasms map[WasmCall]*UserWasm
 type UserWasm struct {
-	ModuleHash     common.Hash
-	CompressedWasm []byte
-	ModuleAsm      []byte
+	ModuleHash common.Hash
+	Asm        []byte
+	Module     []byte
 }
 type WasmCall struct {
 	Version  uint16
@@ -160,17 +167,10 @@ func (s *StateDB) RecordProgram(program common.Address, codeHash common.Hash, ve
 		if _, ok := s.userWasms[call]; ok {
 			return
 		}
-
-		rawCode := s.GetCode(program)
-		compressedWasm, err := StripStylusPrefix(rawCode)
-		if err != nil {
-			log.Error("Could not strip stylus program prefix from raw code: %v", err)
-			return
-		}
 		s.userWasms[call] = &UserWasm{
-			ModuleHash:     compiledHash,
-			ModuleAsm:      s.GetActivatedAsm(program, version),
-			CompressedWasm: compressedWasm,
+			ModuleHash: compiledHash,
+			Asm:        s.GetActivatedAsm(program, version),
+			Module:     s.GetActivatedModule(program, version),
 		}
 	}
 }

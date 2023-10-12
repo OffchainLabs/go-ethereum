@@ -22,10 +22,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func (db *odrDatabase) CompiledWasmContractCode(version uint16, codeHash common.Hash) ([]byte, error) {
+func (db *odrDatabase) NewActivation(version uint16, codeHash common.Hash, asm, module []byte) error {
+	return errors.New("setting compiled wasm not supported in light client")
+}
+
+func (db *odrDatabase) ActivatedAsm(version uint16, codeHash common.Hash) ([]byte, error) {
 	return nil, errors.New("retreiving compiled wasm not supported in light client")
 }
 
-func (db *odrDatabase) SetCompiledWasmContractCode(version uint16, codeHash common.Hash, code []byte) error {
-	return errors.New("setting compiled wasm not supported in light client")
+func (db *odrDatabase) ActivatedModule(version uint16, codeHash common.Hash) ([]byte, error) {
+	return nil, errors.New("retreiving compiled wasm not supported in light client")
 }

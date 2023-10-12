@@ -26,29 +26,43 @@ import (
 )
 
 var (
-	CompiledWasmCodePrefix = []byte{0x00, 'w'} // (prefix, version, code_hash) -> account compiled wasm code
+	activatedAsmPrefix    = []byte{0x00, 'w', 'a'} // (prefix, version, code_hash) -> stylus asm
+	activatedModulePrefix = []byte{0x00, 'w', 'm'} // (prefix, version, code_hash) -> stylus module
 )
 
-// CompiledWasmCodeKey = CompiledWasmCodePrefix + version + hash
-const WasmKeyLen = 2 + 2 + 32
+// WasmKeyLen = CompiledWasmCodePrefix + version + hash
+const WasmKeyLen = 3 + 2 + 32
 
 type WasmKey = [WasmKeyLen]byte
 
-// CompiledWasmCodeKey = CompiledWasmCodePrefix + version + hash
-func CompiledWasmCodeKey(version uint16, hash common.Hash) WasmKey {
+func ActivatedAsmKey(version uint16, codeHash common.Hash) WasmKey {
+	return newWasmKey(activatedAsmPrefix, version, codeHash)
+}
+
+func ActivatedModuleKey(version uint16, codeHash common.Hash) WasmKey {
+	return newWasmKey(activatedModulePrefix, version, codeHash)
+}
+
+// key = prefix + version + hash
+func newWasmKey(prefix []byte, version uint16, codeHash common.Hash) WasmKey {
 	var key WasmKey
-	copy(key[:2], CompiledWasmCodePrefix)
-	binary.BigEndian.PutUint16(key[2:4], version)
-	copy(key[4:], hash[:])
+	copy(key[:3], prefix)
+	binary.BigEndian.PutUint16(key[3:5], version)
+	copy(key[5:], codeHash[:])
 	return key
 }
 
-// IsCompiledWasmCodeKey reports whether the given byte slice is the key of compiled wasm contract code,
-// if so return the raw code hash and version as well.
-func IsCompiledWasmCodeKey(key []byte) (bool, common.Hash, uint16) {
-	start := len(CompiledWasmCodePrefix)
+func IsActivatedAsmKey(key []byte) (bool, common.Hash, uint16) {
+	return extractWasmKey(activatedAsmPrefix, key)
+}
 
-	if bytes.HasPrefix(key, CompiledWasmCodePrefix) && len(key) == WasmKeyLen {
+func IsActivatedModuleKey(key []byte) (bool, common.Hash, uint16) {
+	return extractWasmKey(activatedModulePrefix, key)
+}
+
+func extractWasmKey(prefix, key []byte) (bool, common.Hash, uint16) {
+	start := len(prefix)
+	if bytes.HasPrefix(key, prefix) && len(key) == WasmKeyLen {
 		version := binary.BigEndian.Uint16(key[start : start+2])
 		codeHash := common.BytesToHash(key[start+2:])
 		return true, codeHash, version

@@ -62,8 +62,8 @@ func (s Storage) Copy() Storage {
 // Account values can be accessed and modified through the object.
 // Finally, call commitTrie to write the modified storage trie into a database.
 type stateObject struct {
-	// Arbitrum: write caches and cache flags
-	compiledWasmCode CompiledWasms // compiled wasm bytecode which gets set when wasm is loaded
+	// Arbitrum: track activations
+	activatedWasms activatedWasms
 
 	address  common.Address
 	addrHash common.Hash // hash of ethereum address of the account
@@ -112,7 +112,7 @@ func newObject(db *StateDB, address common.Address, data types.StateAccount) *st
 		dirtyStorage:   make(Storage),
 
 		// Arbitrum Only
-		compiledWasmCode: make(CompiledWasms),
+		activatedWasms: make(activatedWasms),
 	}
 }
 
@@ -436,7 +436,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject.deleted = s.deleted
 
 	// Arbitrum Only
-	stateObject.compiledWasmCode = s.compiledWasmCode.Copy()
+	stateObject.activatedWasms = s.activatedWasms.Copy()
 
 	return stateObject
 }
