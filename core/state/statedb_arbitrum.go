@@ -18,6 +18,7 @@
 package state
 
 import (
+	"bytes"
 	"math/big"
 
 	"errors"
@@ -46,10 +47,10 @@ var (
 // Stylus differentiates WASMs from EVM bytecode via the prefix 0xEFF000 which will safely fail
 // to pass through EVM-bytecode EOF validation rules.
 func IsStylusProgram(b []byte) bool {
-	if len(b) < 3 {
+	if len(b) < len(StylusPrefix) {
 		return false
 	}
-	return b[0] == stylusEOFMagic && b[1] == stylusEOFMagicSuffix && b[2] == stylusEOFVersion
+	return bytes.Equal(b[:3], StylusPrefix)
 }
 
 // StripStylusPrefix if the specified input is a stylus program.
@@ -137,7 +138,7 @@ func (s *StateDB) GetSuicides() []common.Address {
 
 type UserWasms map[WasmCall]*UserWasm
 type UserWasm struct {
-	CompiledHash   common.Hash
+	ModuleHash     common.Hash
 	CompressedWasm []byte
 }
 type WasmCall struct {
@@ -175,7 +176,7 @@ func (s *StateDB) RecordProgram(program common.Address, codeHash common.Hash, ve
 			return
 		}
 		s.userWasms[call] = &UserWasm{
-			CompiledHash:   compiledHash,
+			ModuleHash:     compiledHash,
 			CompressedWasm: compressedWasm,
 		}
 	}
