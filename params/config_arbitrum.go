@@ -30,7 +30,7 @@ type ArbitrumChainParams struct {
 	InitialChainOwner         common.Address
 	GenesisBlockNum           uint64
 	MaxCodeSize               uint64 // Maximum bytecode to permit for a contract. 0 value implies params.MaxCodeSize
-	MaxInitCodeSize           uint64 // Maximum initcode to permit in a creation transaction and create instructions. o vale implies params.MaxInitCodeSize
+	MaxInitCodeSize           uint64 // Maximum initcode to permit in a creation transaction and create instructions. o value implies params.MaxInitCodeSize
 }
 
 func (c *ChainConfig) IsArbitrum() bool {
