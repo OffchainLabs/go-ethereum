@@ -59,7 +59,7 @@ func IsActivatedModuleKey(key []byte) (bool, common.Hash) {
 }
 
 func extractWasmKey(prefix, key []byte) (bool, common.Hash) {
-	if !bytes.HasPrefix(key, prefix) || len(key) == WasmKeyLen {
+	if !bytes.HasPrefix(key, prefix) || len(key) != WasmKeyLen {
 		return false, common.Hash{}
 	}
 	return true, common.BytesToHash(key[len(prefix):])

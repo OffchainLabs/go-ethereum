@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func (db *odrDatabase) NewActivation(moduleHash common.Hash, asm, module []byte) error {
+func (db *odrDatabase) ActivateWasm(moduleHash common.Hash, asm, module []byte) error {
 	return errors.New("setting compiled wasm not supported in light client")
 }
 

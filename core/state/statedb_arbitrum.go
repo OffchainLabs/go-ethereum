@@ -19,6 +19,7 @@ package state
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 
 	"errors"
@@ -42,6 +43,11 @@ var (
 	StylusPrefix = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersion}
 )
 
+type ActivatedWasm struct {
+	Asm    []byte
+	Module []byte
+}
+
 // IsStylusProgram checks if a specified bytecode is a user-submitted WASM program.
 // Stylus differentiates WASMs from EVM bytecode via the prefix 0xEFF000 which will safely fail
 // to pass through EVM-bytecode EOF validation rules.
@@ -60,27 +66,42 @@ func StripStylusPrefix(b []byte) ([]byte, error) {
 	return b[3:], nil
 }
 
-func (s *StateDB) NewActivation(program common.Address, moduleHash common.Hash, asm, module []byte) {
-	stateObject := s.GetOrNewStateObject(program)
-	if stateObject != nil {
-		stateObject.NewActivation(s.db, moduleHash, asm, module)
+func (s *StateDB) ActivateWasm(moduleHash common.Hash, asm, module []byte) {
+	_, exists := s.activatedWasms[moduleHash]
+	if exists {
+		return
 	}
+	s.activatedWasms[moduleHash] = &ActivatedWasm{
+		Asm:    asm,
+		Module: module,
+	}
+	s.journal.append(wasmActivation{
+		moduleHash: moduleHash,
+	})
 }
 
-func (s *StateDB) GetActivatedAsm(program common.Address, moduleHash common.Hash) []byte {
-	stateObject := s.getStateObject(program)
-	if stateObject != nil {
-		return stateObject.ActivatedAsm(s.db, moduleHash)
+func (s *StateDB) GetActivatedAsm(moduleHash common.Hash) []byte {
+	info, exists := s.activatedWasms[moduleHash]
+	if exists {
+		return info.Asm
 	}
-	return nil
+	asm, err := s.db.ActivatedAsm(moduleHash)
+	if err != nil {
+		s.setError(fmt.Errorf("failed to load asm for %x: %v", moduleHash, err))
+	}
+	return asm
 }
 
-func (s *StateDB) GetActivatedModule(addr common.Address, moduleHash common.Hash) []byte {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.ActivatedModule(s.db, moduleHash)
+func (s *StateDB) GetActivatedModule(moduleHash common.Hash) []byte {
+	info, exists := s.activatedWasms[moduleHash]
+	if exists {
+		return info.Module
 	}
-	return nil
+	code, err := s.db.ActivatedModule(moduleHash)
+	if err != nil {
+		s.setError(fmt.Errorf("failed to load module for %x: %v", moduleHash, err))
+	}
+	return code
 }
 
 func (s *StateDB) GetStylusPages() (uint16, uint16) {
@@ -143,16 +164,19 @@ func (s *StateDB) GetSuicides() []common.Address {
 	return suicides
 }
 
-// maps moduleHash to any correct address (TODO: replace with hash set)
-type UserWasms map[common.Hash]common.Address
+// maps moduleHash to activation info
+type UserWasms map[common.Hash]ActivatedWasm
 
 func (s *StateDB) StartRecording() {
 	s.userWasms = make(UserWasms)
 }
 
-func (s *StateDB) RecordProgram(program common.Address, moduleHash common.Hash) {
+func (s *StateDB) RecordProgram(moduleHash common.Hash) {
 	if s.userWasms != nil {
-		s.userWasms[moduleHash] = program
+		s.userWasms[moduleHash] = ActivatedWasm{
+			Asm:    s.GetActivatedAsm(moduleHash),
+			Module: s.GetActivatedModule(moduleHash),
+		}
 	}
 }
 
