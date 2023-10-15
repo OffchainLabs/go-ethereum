@@ -150,7 +150,6 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	}
 	sdb := &StateDB{
 		unexpectedBalanceDelta: new(big.Int),
-		userWasms:              make(UserWasms),
 		openWasmPages:          0,
 		everWasmPages:          0,
 		activatedWasms:         make(map[common.Hash]*ActivatedWasm),
@@ -734,7 +733,7 @@ func (s *StateDB) Copy() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
 		unexpectedBalanceDelta: new(big.Int).Set(s.unexpectedBalanceDelta),
-		userWasms:              make(UserWasms, len(s.userWasms)),
+		activatedWasms:         make(map[common.Hash]*ActivatedWasm, len(s.activatedWasms)),
 		openWasmPages:          s.openWasmPages,
 		everWasmPages:          s.everWasmPages,
 
@@ -809,8 +808,11 @@ func (s *StateDB) Copy() *StateDB {
 	state.transientStorage = s.transientStorage.Copy()
 
 	// Arbitrum: copy wasm calls and activated WASMs
-	for call, wasm := range s.userWasms {
-		state.userWasms[call] = wasm
+	if s.userWasms != nil {
+		state.userWasms = make(UserWasms, len(s.userWasms))
+		for call, wasm := range s.userWasms {
+			state.userWasms[call] = wasm
+		}
 	}
 	for moduleHash, info := range s.activatedWasms {
 		// It's fine to skip a deep copy since activations are immutable.
