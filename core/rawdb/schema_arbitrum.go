@@ -20,38 +20,47 @@ package rawdb
 
 import (
 	"bytes"
-	"encoding/binary"
 
 	"github.com/ethereum/go-ethereum/common"
 )
 
 var (
-	CompiledWasmCodePrefix = []byte{0x00, 'w'} // (prefix, version, code_hash) -> account compiled wasm code
+	activatedAsmPrefix    = []byte{0x00, 'w', 'a'} // (prefix, moduleHash) -> stylus asm
+	activatedModulePrefix = []byte{0x00, 'w', 'm'} // (prefix, moduleHash) -> stylus module
 )
 
-// CompiledWasmCodeKey = CompiledWasmCodePrefix + version + hash
-const WasmKeyLen = 2 + 2 + 32
+// WasmKeyLen = CompiledWasmCodePrefix + moduleHash
+const WasmKeyLen = 3 + 32
 
 type WasmKey = [WasmKeyLen]byte
 
-// CompiledWasmCodeKey = CompiledWasmCodePrefix + version + hash
-func CompiledWasmCodeKey(version uint16, hash common.Hash) WasmKey {
+func ActivatedAsmKey(moduleHash common.Hash) WasmKey {
+	return newWasmKey(activatedAsmPrefix, moduleHash)
+}
+
+func ActivatedModuleKey(moduleHash common.Hash) WasmKey {
+	return newWasmKey(activatedModulePrefix, moduleHash)
+}
+
+// key = prefix + moduleHash
+func newWasmKey(prefix []byte, moduleHash common.Hash) WasmKey {
 	var key WasmKey
-	copy(key[:2], CompiledWasmCodePrefix)
-	binary.BigEndian.PutUint16(key[2:4], version)
-	copy(key[4:], hash[:])
+	copy(key[:3], prefix)
+	copy(key[3:], moduleHash[:])
 	return key
 }
 
-// IsCompiledWasmCodeKey reports whether the given byte slice is the key of compiled wasm contract code,
-// if so return the raw code hash and version as well.
-func IsCompiledWasmCodeKey(key []byte) (bool, common.Hash, uint16) {
-	start := len(CompiledWasmCodePrefix)
+func IsActivatedAsmKey(key []byte) (bool, common.Hash) {
+	return extractWasmKey(activatedAsmPrefix, key)
+}
 
-	if bytes.HasPrefix(key, CompiledWasmCodePrefix) && len(key) == WasmKeyLen {
-		version := binary.BigEndian.Uint16(key[start : start+2])
-		codeHash := common.BytesToHash(key[start+2:])
-		return true, codeHash, version
+func IsActivatedModuleKey(key []byte) (bool, common.Hash) {
+	return extractWasmKey(activatedModulePrefix, key)
+}
+
+func extractWasmKey(prefix, key []byte) (bool, common.Hash) {
+	if !bytes.HasPrefix(key, prefix) || len(key) != WasmKeyLen {
+		return false, common.Hash{}
 	}
-	return false, common.Hash{}, 0
+	return true, common.BytesToHash(key[len(prefix):])
 }

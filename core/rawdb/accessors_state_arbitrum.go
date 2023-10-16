@@ -22,10 +22,15 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// WriteCompiledWasmCode writes the provided contract compiled wasm code database.
-func WriteCompiledWasmCode(db ethdb.KeyValueWriter, version uint16, hash common.Hash, code []byte) {
-	key := CompiledWasmCodeKey(version, hash)
-	if err := db.Put(key[:], code); err != nil {
-		log.Crit("Failed to store compiled wasm contract code", "err", err)
+// Stores the activated asm and module for a given codeHash
+func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asm, module []byte) {
+	key := ActivatedAsmKey(moduleHash)
+	if err := db.Put(key[:], asm); err != nil {
+		log.Crit("Failed to store activated wasm asm", "err", err)
+	}
+
+	key = ActivatedModuleKey(moduleHash)
+	if err := db.Put(key[:], module); err != nil {
+		log.Crit("Failed to store activated wasm module", "err", err)
 	}
 }

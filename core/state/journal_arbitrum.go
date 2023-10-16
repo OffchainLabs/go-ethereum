@@ -2,15 +2,14 @@ package state
 
 import "github.com/ethereum/go-ethereum/common"
 
-type wasmCodeChange struct {
-	account *common.Address
-	version uint16
+type wasmActivation struct {
+	moduleHash common.Hash
 }
 
-func (ch wasmCodeChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setWASMCode(nil, ch.version)
+func (ch wasmActivation) revert(s *StateDB) {
+	delete(s.activatedWasms, ch.moduleHash)
 }
 
-func (ch wasmCodeChange) dirtied() *common.Address {
-	return ch.account
+func (ch wasmActivation) dirtied() *common.Address {
+	return nil
 }
