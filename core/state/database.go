@@ -42,7 +42,7 @@ const (
 
 // Database wraps access to tries and contract code.
 type Database interface {
-	// Arbitrum: Manage activated Stylus contracts
+	// Arbitrum: Read activated Stylus contracts
 	ActivatedAsm(moduleHash common.Hash) (asm []byte, err error)
 	ActivatedModule(moduleHash common.Hash) (module []byte, err error)
 
