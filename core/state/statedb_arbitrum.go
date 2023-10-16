@@ -18,13 +18,14 @@
 package state
 
 import (
+	"bytes"
+	"fmt"
 	"math/big"
 
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
@@ -42,14 +43,19 @@ var (
 	StylusPrefix = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersion}
 )
 
+type ActivatedWasm struct {
+	Asm    []byte
+	Module []byte
+}
+
 // IsStylusProgram checks if a specified bytecode is a user-submitted WASM program.
 // Stylus differentiates WASMs from EVM bytecode via the prefix 0xEFF000 which will safely fail
 // to pass through EVM-bytecode EOF validation rules.
 func IsStylusProgram(b []byte) bool {
-	if len(b) < 3 {
+	if len(b) < len(StylusPrefix) {
 		return false
 	}
-	return b[0] == stylusEOFMagic && b[1] == stylusEOFMagicSuffix && b[2] == stylusEOFVersion
+	return bytes.Equal(b[:3], StylusPrefix)
 }
 
 // StripStylusPrefix if the specified input is a stylus program.
@@ -60,19 +66,42 @@ func StripStylusPrefix(b []byte) ([]byte, error) {
 	return b[3:], nil
 }
 
-func (s *StateDB) GetCompiledWasmCode(addr common.Address, version uint16) []byte {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.CompiledWasmCode(s.db, version)
+func (s *StateDB) ActivateWasm(moduleHash common.Hash, asm, module []byte) {
+	_, exists := s.activatedWasms[moduleHash]
+	if exists {
+		return
 	}
-	return nil
+	s.activatedWasms[moduleHash] = &ActivatedWasm{
+		Asm:    asm,
+		Module: module,
+	}
+	s.journal.append(wasmActivation{
+		moduleHash: moduleHash,
+	})
 }
 
-func (s *StateDB) SetCompiledWasmCode(addr common.Address, code []byte, version uint16) {
-	stateObject := s.GetOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.SetCompiledWasmCode(s.db, code, version)
+func (s *StateDB) GetActivatedAsm(moduleHash common.Hash) []byte {
+	info, exists := s.activatedWasms[moduleHash]
+	if exists {
+		return info.Asm
 	}
+	asm, err := s.db.ActivatedAsm(moduleHash)
+	if err != nil {
+		s.setError(fmt.Errorf("failed to load asm for %x: %v", moduleHash, err))
+	}
+	return asm
+}
+
+func (s *StateDB) GetActivatedModule(moduleHash common.Hash) []byte {
+	info, exists := s.activatedWasms[moduleHash]
+	if exists {
+		return info.Module
+	}
+	code, err := s.db.ActivatedModule(moduleHash)
+	if err != nil {
+		s.setError(fmt.Errorf("failed to load module for %x: %v", moduleHash, err))
+	}
+	return code
 }
 
 func (s *StateDB) GetStylusPages() (uint16, uint16) {
@@ -135,48 +164,18 @@ func (s *StateDB) GetSuicides() []common.Address {
 	return suicides
 }
 
-type UserWasms map[WasmCall]*UserWasm
-type UserWasm struct {
-	CompiledHash   common.Hash
-	CompressedWasm []byte
-}
-type WasmCall struct {
-	Version  uint16
-	CodeHash common.Hash
-}
+// maps moduleHash to activation info
+type UserWasms map[common.Hash]ActivatedWasm
 
 func (s *StateDB) StartRecording() {
 	s.userWasms = make(UserWasms)
 }
 
-func (s *StateDB) RecordProgram(program common.Address, codeHash common.Hash, version uint16, compiledHash common.Hash) {
+func (s *StateDB) RecordProgram(moduleHash common.Hash) {
 	if s.userWasms != nil {
-		call := WasmCall{
-			Version:  version,
-			CodeHash: codeHash,
-		}
-		if _, ok := s.userWasms[call]; ok {
-			return
-		}
-		storedCodeHash := s.GetCodeHash(program)
-		if storedCodeHash != codeHash {
-			log.Error(
-				"wrong recorded codehash",
-				"address", program,
-				"stored", storedCodeHash,
-				"recorded", codeHash,
-			)
-			return
-		}
-		rawCode := s.GetCode(program)
-		compressedWasm, err := StripStylusPrefix(rawCode)
-		if err != nil {
-			log.Error("Could not strip stylus program prefix from raw code: %v", err)
-			return
-		}
-		s.userWasms[call] = &UserWasm{
-			CompiledHash:   compiledHash,
-			CompressedWasm: compressedWasm,
+		s.userWasms[moduleHash] = ActivatedWasm{
+			Asm:    s.GetActivatedAsm(moduleHash),
+			Module: s.GetActivatedModule(moduleHash),
 		}
 	}
 }

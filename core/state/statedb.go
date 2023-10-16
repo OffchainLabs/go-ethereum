@@ -64,11 +64,12 @@ func (n *proofList) Delete(key []byte) error {
 // * Accounts
 type StateDB struct {
 	// Arbitrum
-	unexpectedBalanceDelta *big.Int  // total balance change across all accounts
-	userWasms              UserWasms // user wasms encountered during execution
-	openWasmPages          uint16    // number of pages currently open
-	everWasmPages          uint16    // largest number of pages ever allocated during this tx's execution
-	deterministic          bool      // whether the order in which deletes are committed should be deterministic
+	unexpectedBalanceDelta *big.Int                       // total balance change across all accounts
+	userWasms              UserWasms                      // user wasms encountered during execution
+	openWasmPages          uint16                         // number of pages currently open
+	everWasmPages          uint16                         // largest number of pages ever allocated during this tx's execution
+	deterministic          bool                           // whether the order in which deletes are committed should be deterministic
+	activatedWasms         map[common.Hash]*ActivatedWasm // newly activated WASMs
 
 	db         Database
 	prefetcher *triePrefetcher
@@ -149,9 +150,9 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	}
 	sdb := &StateDB{
 		unexpectedBalanceDelta: new(big.Int),
-		userWasms:              make(UserWasms),
 		openWasmPages:          0,
 		everWasmPages:          0,
+		activatedWasms:         make(map[common.Hash]*ActivatedWasm),
 
 		db:                   db,
 		trie:                 tr,
@@ -732,7 +733,7 @@ func (s *StateDB) Copy() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
 		unexpectedBalanceDelta: new(big.Int).Set(s.unexpectedBalanceDelta),
-		userWasms:              make(UserWasms, len(s.userWasms)),
+		activatedWasms:         make(map[common.Hash]*ActivatedWasm, len(s.activatedWasms)),
 		openWasmPages:          s.openWasmPages,
 		everWasmPages:          s.everWasmPages,
 
@@ -806,9 +807,16 @@ func (s *StateDB) Copy() *StateDB {
 	state.accessList = s.accessList.Copy()
 	state.transientStorage = s.transientStorage.Copy()
 
-	// Arbitrum: copy wasm calls
-	for call, wasm := range s.userWasms {
-		state.userWasms[call] = wasm
+	// Arbitrum: copy wasm calls and activated WASMs
+	if s.userWasms != nil {
+		state.userWasms = make(UserWasms, len(s.userWasms))
+		for call, wasm := range s.userWasms {
+			state.userWasms[call] = wasm
+		}
+	}
+	for moduleHash, info := range s.activatedWasms {
+		// It's fine to skip a deep copy since activations are immutable.
+		state.activatedWasms[moduleHash] = info
 	}
 
 	// If there's a prefetcher running, make an inactive copy of it that can
@@ -1044,15 +1052,6 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				obj.dirtyCode = false
 			}
 
-			// Arbitrum Only
-			for version, wasm := range obj.compiledWasmCode {
-				if wasm.dirty {
-					codeHash := common.BytesToHash(obj.CodeHash())
-					rawdb.WriteCompiledWasmCode(codeWriter, version, codeHash, wasm.code)
-					wasm.dirty = false
-				}
-			}
-
 			// Write any storage changes in the state object to its storage trie
 			set, err := obj.commitTrie(s.db)
 			if err != nil {
@@ -1078,6 +1077,15 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	if len(s.stateObjectsDirty) > 0 {
 		s.stateObjectsDirty = make(map[common.Address]struct{})
 	}
+
+	// Arbitrum: write Stylus programs to disk
+	for moduleHash, info := range s.activatedWasms {
+		rawdb.WriteActivation(codeWriter, moduleHash, info.Asm, info.Module)
+	}
+	if len(s.activatedWasms) > 0 {
+		s.activatedWasms = make(map[common.Hash]*ActivatedWasm)
+	}
+
 	if codeWriter.ValueSize() > 0 {
 		if err := codeWriter.Write(); err != nil {
 			log.Crit("Failed to commit dirty codes", "error", err)
