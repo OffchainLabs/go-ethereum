@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -146,19 +145,19 @@ func (h *snapHandler) Snapshot(root common.Hash) snapshot.Snapshot {
 }
 
 type trieIteratorWrapper struct {
-	val *trie.Iterator
+	iter *trie.Iterator
 }
 
-func (i trieIteratorWrapper) Next() bool        { return i.val.Next() }
-func (i trieIteratorWrapper) Error() error      { return i.val.Err }
-func (i trieIteratorWrapper) Hash() common.Hash { return common.BytesToHash(i.val.Key) }
+func (i trieIteratorWrapper) Next() bool        { return i.iter.Next() }
+func (i trieIteratorWrapper) Error() error      { return i.iter.Err }
+func (i trieIteratorWrapper) Hash() common.Hash { return common.BytesToHash(i.iter.Key) }
 func (i trieIteratorWrapper) Release()          {}
 
 type trieAccountIterator struct {
 	trieIteratorWrapper
 }
 
-func (i trieAccountIterator) Account() []byte { return i.val.Value }
+func (i trieAccountIterator) Account() []byte { return i.iter.Value }
 
 func (h *snapHandler) AccountIterator(root, account common.Hash) (snapshot.AccountIterator, error) {
 	triedb := trie.NewDatabase(h.db)
@@ -168,14 +167,16 @@ func (h *snapHandler) AccountIterator(root, account common.Hash) (snapshot.Accou
 		return nil, err
 	}
 	accIter := t.NodeIterator(account[:])
-	return trieAccountIterator{trieIteratorWrapper{trie.NewIterator((accIter))}}, nil
+	return trieAccountIterator{trieIteratorWrapper{
+		iter: trie.NewIterator((accIter)),
+	}}, nil
 }
 
 type trieStoreageIterator struct {
 	trieIteratorWrapper
 }
 
-func (i trieStoreageIterator) Slot() []byte { return i.val.Value }
+func (i trieStoreageIterator) Slot() []byte { return i.iter.Value }
 
 type nilStoreageIterator struct{}
 
@@ -192,14 +193,9 @@ func (h *snapHandler) StorageIterator(root, account, origin common.Hash) (snapsh
 		log.Error("Failed to open trie", "root", root, "err", err)
 		return nil, err
 	}
-	val, _, err := t.GetNode(account[:])
+	acc, err := t.GetAccountByHash(account)
 	if err != nil {
 		log.Error("Failed to find account in trie", "root", root, "account", account, "err", err)
-		return nil, err
-	}
-	var acc types.StateAccount
-	if err := rlp.DecodeBytes(val, &acc); err != nil {
-		log.Error("Invalid account encountered during traversal", "err", err)
 		return nil, err
 	}
 	if acc.Root == types.EmptyRootHash {
@@ -211,7 +207,9 @@ func (h *snapHandler) StorageIterator(root, account, origin common.Hash) (snapsh
 		log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
 		return nil, err
 	}
-	return trieStoreageIterator{trieIteratorWrapper{trie.NewIterator(storageTrie.NodeIterator(origin[:]))}}, nil
+	return trieStoreageIterator{trieIteratorWrapper{
+		iter: trie.NewIterator(storageTrie.NodeIterator(origin[:])),
+	}}, nil
 }
 
 // RunPeer is invoked when a peer joins on the `snap` protocol.
