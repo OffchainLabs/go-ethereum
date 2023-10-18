@@ -486,7 +486,13 @@ func (a *APIBackend) GetEVM(ctx context.Context, msg *core.Message, state *state
 		vmConfig = a.blockChain().GetVMConfig()
 	}
 	txContext := core.NewEVMTxContext(msg)
-	return vm.NewEVM(*blockCtx, txContext, state, a.blockChain().Config(), *vmConfig), vmError
+	var context vm.BlockContext
+	if blockCtx != nil {
+		context = *blockCtx
+	} else {
+		context = core.NewEVMBlockContext(header, a.blockChain(), nil)
+	}
+	return vm.NewEVM(context, txContext, state, a.blockChain().Config(), *vmConfig), vmError
 }
 
 func (a *APIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
