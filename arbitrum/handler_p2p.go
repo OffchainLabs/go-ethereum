@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/protocols/arb"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -65,7 +66,18 @@ func NewProtocolHandler(db ethdb.Database, bc *core.BlockChain) *protocolHandler
 func (h *protocolHandler) MakeProtocols(dnsdisc enode.Iterator) []p2p.Protocol {
 	protos := eth.MakeProtocols((*ethHandler)(h), h.chain.Config().ChainID.Uint64(), dnsdisc)
 	protos = append(protos, snap.MakeProtocols((*snapHandler)(h), dnsdisc)...)
+	protos = append(protos, arb.MakeProtocols((*arbHandler)(h), dnsdisc)...)
 	return protos
+}
+
+type arbHandler protocolHandler
+
+func (h *arbHandler) PeerInfo(id enode.ID) interface{} {
+	return nil
+}
+
+func (h *arbHandler) LastConfirmed(id enode.ID, confirmed *types.Header) error {
+	return nil
 }
 
 // ethHandler implements the eth.Backend interface to handle the various network
