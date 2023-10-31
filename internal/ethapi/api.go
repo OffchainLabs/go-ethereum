@@ -1098,6 +1098,7 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 		if err != nil {
 			return nil, err
 		}
+		msg.TxRunMode = runMode
 		// make a new EVM for the scheduled Tx (an EVM must never be reused)
 		evm, vmError := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true}, &blockCtx)
 		go func() {
