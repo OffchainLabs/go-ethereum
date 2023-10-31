@@ -84,6 +84,7 @@ func prepare(diskdb ethdb.Database, config *Config) *Database {
 		} else {
 			cleans = fastcache.LoadFromFileOrNew(config.Journal, config.Cache*1024*1024)
 		}
+		runtime.SetFinalizer(cleans, func(c *fastcache.Cache) { c.Reset() })
 	}
 	var preimages *preimageStore
 	if config != nil && config.Preimages {
@@ -94,6 +95,13 @@ func prepare(diskdb ethdb.Database, config *Config) *Database {
 		diskdb:    diskdb,
 		cleans:    cleans,
 		preimages: preimages,
+	}
+}
+
+// resets fastcache to return memory chunks to pool of free chunks
+func (db *Database) ResetCleans() {
+	if db.cleans != nil {
+		db.cleans.Reset()
 	}
 }
 
