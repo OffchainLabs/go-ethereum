@@ -344,6 +344,13 @@ func (db *Database) Close() error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
+	dl := db.tree.bottom()
+	if dl.cleans != nil {
+		// Reset cleans cache to return mmaped memory chunks to fastcache pool
+		// We need to do that only for one diskLayer as all diskLayers share the same cleans cache
+		dl.cleans.Reset()
+	}
+
 	db.readOnly = true
 	if db.freezer == nil {
 		return nil
