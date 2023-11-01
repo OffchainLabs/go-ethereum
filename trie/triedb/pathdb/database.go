@@ -347,7 +347,7 @@ func (db *Database) Close() error {
 	dl := db.tree.bottom()
 	if dl.cleans != nil {
 		// Reset cleans cache to return mmaped memory chunks to fastcache pool
-		// We need to do that only for one diskLayer as all diskLayers share the same cleans cache
+		// All diskLayers share the same cleans cache
 		dl.cleans.Reset()
 	}
 
