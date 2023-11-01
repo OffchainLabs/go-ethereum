@@ -635,7 +635,13 @@ func (db *Database) Size() common.StorageSize {
 }
 
 // Close closes the trie database and releases all held resources.
-func (db *Database) Close() error { return nil }
+func (db *Database) Close() error {
+	if db.cleans != nil {
+		// Reset cleans cache to return mmaped memory chunks to fastcache pool
+		db.cleans.Reset()
+	}
+	return nil
+}
 
 // Scheme returns the node scheme used in the database.
 func (db *Database) Scheme() string {
