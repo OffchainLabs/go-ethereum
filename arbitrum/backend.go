@@ -51,6 +51,14 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 		chanNewBlock: make(chan struct{}, 1),
 	}
 
+	if len(config.AllowMethod) > 0 {
+		rpcFilter := make(map[string]bool)
+		for _, method := range config.AllowMethod {
+			rpcFilter[method] = true
+		}
+		backend.stack.ApplyAPIFilter(rpcFilter)
+	}
+
 	backend.bloomIndexer.Start(backend.arb.BlockChain())
 	filterSystem, err := createRegisterAPIBackend(backend, filterConfig, config.ClassicRedirect, config.ClassicRedirectTimeout)
 	if err != nil {

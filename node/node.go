@@ -69,6 +69,8 @@ type Node struct {
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
 
 	databases map[*closeTrackingDB]struct{} // All open databases
+
+	apiFilter map[string]bool // Whitelisting API methods
 }
 
 const (
@@ -379,6 +381,11 @@ func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
 	return jwtSecret, nil
 }
 
+// ApplyAPIFilter is the first step in whitelisting given rpc methods inside apiFilter
+func (n *Node) ApplyAPIFilter(apiFilter map[string]bool) {
+	n.apiFilter = apiFilter
+}
+
 // startRPC is a helper method to configure all the various RPC endpoints during node
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
@@ -413,6 +420,7 @@ func (n *Node) startRPC() error {
 	rpcConfig := rpcEndpointConfig{
 		batchItemLimit:         n.config.BatchRequestLimit,
 		batchResponseSizeLimit: n.config.BatchResponseMaxSize,
+		apiFilter:              n.apiFilter,
 	}
 
 	initHttp := func(server *httpServer, port int) error {
