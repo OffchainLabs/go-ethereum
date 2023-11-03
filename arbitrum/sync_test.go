@@ -56,6 +56,27 @@ func (i *dummyIterator) Close() { // ends the iterator
 	i.nodes = nil
 }
 
+type dummySyncHelper struct {
+	confirmed  *types.Header
+	checkpoint *types.Header
+}
+
+func (d *dummySyncHelper) LastConfirmed() (*types.Header, uint64, error) {
+	return d.confirmed, 0, nil
+}
+
+func (d *dummySyncHelper) LastCheckpoint() (*types.Header, error) {
+	return d.checkpoint, nil
+}
+
+func (d *dummySyncHelper) CheckpointSupported(*types.Header) (bool, error) {
+	return true, nil
+}
+
+func (d *dummySyncHelper) ValidateConfirmed(*types.Header, uint64) (bool, error) {
+	return true, nil
+}
+
 func testHasBlock(t *testing.T, chain *core.BlockChain, block *types.Block, shouldHaveState bool) {
 	t.Helper()
 	hasHeader := chain.GetHeaderByNumber(block.NumberU64())
@@ -234,7 +255,7 @@ func TestSimpleSync(t *testing.T) {
 	testHasBlock(t, sourceChain, blocks[pivotBlockNum], false)
 
 	// source node
-	sourceHandler := NewProtocolHandler(sourceDb, sourceChain)
+	sourceHandler := NewProtocolHandler(sourceDb, sourceChain, &dummySyncHelper{syncBlock.Header(), pivotBlock.Header()}, false)
 	sourceStack.RegisterProtocols(sourceHandler.MakeProtocols(&dummyIterator{}))
 	sourceStack.Start()
 
@@ -264,19 +285,16 @@ func TestSimpleSync(t *testing.T) {
 		t.Fatal(err)
 	}
 	destChain, _ := core.NewBlockChain(destDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
-	destHandler := NewProtocolHandler(destDb, destChain)
+	destHandler := NewProtocolHandler(destDb, destChain, &dummySyncHelper{}, true)
 	destStack.RegisterProtocols(destHandler.MakeProtocols(iter))
-	destStack.Start()
 
 	// start sync
 	log.Info("dest listener", "address", destStack.Server().Config.ListenAddr)
 	log.Info("initial source", "head", sourceChain.CurrentBlock())
 	log.Info("initial dest", "head", destChain.CurrentBlock())
 	log.Info("pivot", "head", pivotBlock.Header())
-	err = destHandler.downloader.PivotSync(syncBlock.Header(), pivotBlock.Header())
-	if err != nil {
-		t.Fatal(err)
-	}
+	destStack.Start()
+
 	<-time.After(time.Second * 5)
 
 	log.Info("final source", "head", sourceChain.CurrentBlock())

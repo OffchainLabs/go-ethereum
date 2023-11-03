@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 type Peer struct {
@@ -21,8 +23,25 @@ func NewPeer(p2pPeer *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	}
 }
 
-func (p *Peer) Run(backend Backend) error {
-	return Handle(backend, p)
+func (p *Peer) RequestCheckpoint(header *types.Header) error {
+	if header == nil {
+		return p2p.Send(p.rw, GetLastCheckpointMsg, struct{}{})
+	}
+	return p2p.Send(p.rw, CheckpointQueryMsg, &CheckpointQueryPacket{
+		Header: header,
+	})
+}
+
+func (p *Peer) RequestLastConfirmed() error {
+	return p2p.Send(p.rw, GetLastConfirmedMsg, struct{}{})
+}
+
+func (p *Peer) ID() string {
+	return p.p2pPeer.ID().String()
+}
+
+func (p *Peer) Node() *enode.Node {
+	return p.p2pPeer.Node()
 }
 
 // Handle is the callback invoked to manage the life cycle of a `snap` peer.
@@ -60,14 +79,61 @@ func HandleMessage(backend Backend, peer *Peer) error {
 			metrics.GetOrRegisterHistogramLazy(h, nil, sampler).Update(time.Since(start).Microseconds())
 		}(start)
 	}
-	if msg.Code == GetLastConfirmedMsg {
-		response := LastConfirmedMsgPacket{}
+	switch {
+	case msg.Code == GetLastConfirmedMsg:
+		confirmed, node, err := backend.LastConfirmed()
+		if err != nil || confirmed == nil {
+			return err
+		}
+		response := LastConfirmedMsgPacket{
+			Header: confirmed,
+			Node:   node,
+		}
 		return p2p.Send(peer.rw, LastConfirmedMsg, &response)
-	}
-	if msg.Code == LastConfirmedMsg {
-		incoming := LastConfirmedMsgPacket{}
-		msg.Decode(&incoming)
-		return backend.LastConfirmed(peer.p2pPeer.ID(), &incoming.header)
+	case msg.Code == LastConfirmedMsg:
+		var incoming LastConfirmedMsgPacket
+		err := msg.Decode(&incoming)
+		if err != nil {
+			return err
+		}
+		if incoming.Header == nil {
+			return nil
+		}
+		backend.HandleLastConfirmed(peer, incoming.Header, incoming.Node)
+		return nil
+	case msg.Code == GetLastCheckpointMsg:
+		checkpoint, err := backend.LastCheckpoint()
+		if err != nil {
+			return err
+		}
+		response := CheckpointMsgPacket{
+			Header:   checkpoint,
+			HasState: true,
+		}
+		return p2p.Send(peer.rw, CheckpointMsg, &response)
+	case msg.Code == CheckpointQueryMsg:
+		incoming := CheckpointQueryPacket{}
+		err := msg.Decode(&incoming)
+		if err != nil {
+			return err
+		}
+		hasState, err := backend.CheckpointSupported(incoming.Header)
+		if err != nil {
+			return err
+		}
+		response := CheckpointMsgPacket{
+			Header:   incoming.Header,
+			HasState: hasState,
+		}
+		return p2p.Send(peer.rw, CheckpointMsg, &response)
+	case msg.Code == CheckpointMsg:
+		incoming := CheckpointMsgPacket{}
+		err := msg.Decode(&incoming)
+		if err != nil {
+			return err
+		}
+		backend.HandleCheckpoint(peer, incoming.Header, incoming.HasState)
+		return nil
 	}
 	return fmt.Errorf("Invalid message: %v", msg.Code)
 }

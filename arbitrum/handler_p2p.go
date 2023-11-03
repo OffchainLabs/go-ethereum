@@ -18,6 +18,7 @@ package arbitrum
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -36,27 +37,53 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+type SyncHelper interface {
+	LastConfirmed() (*types.Header, uint64, error)
+	LastCheckpoint() (*types.Header, error)
+	CheckpointSupported(*types.Header) (bool, error)
+	ValidateConfirmed(*types.Header, uint64) (bool, error)
+}
+
+type Peer struct {
+	arb  *arb.Peer
+	eth  *eth.Peer
+	snap *snap.Peer
+}
+
+func NewPeer() *Peer {
+	return &Peer{}
+}
+
 type protocolHandler struct {
 	chain      *core.BlockChain
 	eventMux   *event.TypeMux
 	downloader *downloader.Downloader
 	db         ethdb.Database
+	helper     SyncHelper
 
-	done atomic.Bool
+	peersLock sync.RWMutex
+	peers     map[string]*Peer
+
+	confirmed  *types.Header
+	checkpoint *types.Header
+	syncing    atomic.Bool
 }
 
-func NewProtocolHandler(db ethdb.Database, bc *core.BlockChain) *protocolHandler {
+func NewProtocolHandler(db ethdb.Database, bc *core.BlockChain, helper SyncHelper, syncing bool) *protocolHandler {
 	evMux := new(event.TypeMux)
 	p := &protocolHandler{
 		chain:    bc,
 		eventMux: evMux,
 		db:       db,
+		helper:   helper,
+		peers:    make(map[string]*Peer),
 	}
+	p.syncing.Store(syncing)
 	peerDrop := func(id string) {
 		log.Info("dropping peer", "id", id)
 	}
 	success := func() {
-		p.done.Store(true)
+		p.syncing.Store(false)
 		log.Info("DOWNLOADER DONE")
 	}
 	p.downloader = downloader.New(db, evMux, bc, nil, peerDrop, success)
@@ -70,14 +97,108 @@ func (h *protocolHandler) MakeProtocols(dnsdisc enode.Iterator) []p2p.Protocol {
 	return protos
 }
 
+func (h *protocolHandler) getCreatePeer(id string) *Peer {
+	h.peersLock.Lock()
+	defer h.peersLock.Unlock()
+	peer := h.peers[id]
+	if peer != nil {
+		return peer
+	}
+	peer = NewPeer()
+	h.peers[id] = peer
+	return peer
+}
+
+func (h *protocolHandler) getPeer(id string) *Peer {
+	h.peersLock.RLock()
+	defer h.peersLock.RUnlock()
+	return h.peers[id]
+}
+
 type arbHandler protocolHandler
 
 func (h *arbHandler) PeerInfo(id enode.ID) interface{} {
 	return nil
 }
 
-func (h *arbHandler) LastConfirmed(id enode.ID, confirmed *types.Header) error {
-	return nil
+func (h *arbHandler) HandleLastConfirmed(peer *arb.Peer, confirmed *types.Header, node uint64) {
+	// TODO: validate confirmed
+	validated := false
+	valid := false
+	if h.confirmed != nil {
+		if confirmed.Number.Cmp(h.confirmed.Number) == 0 {
+			validated = true
+			valid = h.confirmed.Hash() == confirmed.Hash()
+		}
+	}
+	if !validated {
+		var err error
+		valid, err = h.helper.ValidateConfirmed(confirmed, node)
+		if err != nil {
+			log.Error("error in validate confirmed", "id", peer.ID(), "err", err)
+			return
+		}
+	}
+	hPeer := (*protocolHandler)(h).getPeer(peer.ID())
+	if hPeer == nil {
+		log.Warn("hPeer not found on HandleLastConfirmed")
+		return
+	}
+	if !valid {
+		//TODO: remove peer
+		return
+	}
+	peer.RequestCheckpoint(nil)
+	h.confirmed = confirmed
+	log.Info("lastconfirmed", "confirmed", h.confirmed, "checkpoint", "h.checkpoint")
+	h.downloader.PivotSync(h.confirmed, h.checkpoint)
+}
+
+func (h *arbHandler) HandleCheckpoint(peer *arb.Peer, checkpoint *types.Header, supported bool) {
+	log.Error("got checkpoint", "from", peer.ID(), "checkpoint", checkpoint, "supported", supported)
+	if !supported {
+		return
+	}
+	if h.checkpoint != nil && h.checkpoint.Number.Uint64() > checkpoint.Number.Uint64() {
+		return
+	}
+	// TODO: confirm
+	// TODO: advance?
+	hPeer := (*protocolHandler)(h).getPeer(peer.ID())
+	if hPeer == nil {
+		log.Warn("hPeer not found on HandleLastConfirmed")
+		return
+	}
+	h.checkpoint = checkpoint
+	h.downloader.PivotSync(h.confirmed, h.checkpoint)
+}
+
+func (h *arbHandler) LastConfirmed() (*types.Header, uint64, error) {
+	return h.helper.LastConfirmed()
+}
+
+func (h *arbHandler) LastCheckpoint() (*types.Header, error) {
+	return h.helper.LastCheckpoint()
+}
+
+func (h *arbHandler) CheckpointSupported(checkpoint *types.Header) (bool, error) {
+	return h.helper.CheckpointSupported(checkpoint)
+}
+
+func (h *arbHandler) RunPeer(peer *arb.Peer, handler arb.Handler) error {
+	//id := h.peers[]
+	hPeer := (*protocolHandler)(h).getCreatePeer(peer.ID())
+	if hPeer.arb != nil {
+		return fmt.Errorf("peer id already known")
+	}
+	hPeer.arb = peer
+	if h.syncing.Load() {
+		err := peer.RequestLastConfirmed()
+		if err != nil {
+			return err
+		}
+	}
+	return handler(peer)
 }
 
 // ethHandler implements the eth.Backend interface to handle the various network
@@ -96,11 +217,15 @@ func (h *ethHandler) TxPool() eth.TxPool { return &dummyTxPool{} }
 
 // RunPeer is invoked when a peer joins on the `eth` protocol.
 func (h *ethHandler) RunPeer(peer *eth.Peer, hand eth.Handler) error {
+	hPeer := (*protocolHandler)(h).getCreatePeer(peer.ID())
+	if hPeer.eth != nil {
+		return fmt.Errorf("peer id already known")
+	}
+	hPeer.eth = peer
 	if err := h.downloader.RegisterPeer(peer.ID(), peer.Version(), peer); err != nil {
 		peer.Log().Error("Failed to register peer in eth syncer", "err", err)
 		return err
 	}
-	log.Info("eth peer")
 	return hand(peer)
 }
 
@@ -226,11 +351,15 @@ func (h *snapHandler) StorageIterator(root, account, origin common.Hash) (snapsh
 
 // RunPeer is invoked when a peer joins on the `snap` protocol.
 func (h *snapHandler) RunPeer(peer *snap.Peer, hand snap.Handler) error {
+	hPeer := (*protocolHandler)(h).getCreatePeer(peer.ID())
+	if hPeer.snap != nil {
+		return fmt.Errorf("peer id already known")
+	}
+	hPeer.snap = peer
 	if err := h.downloader.SnapSyncer.Register(peer); err != nil {
 		peer.Log().Error("Failed to register peer in snap syncer", "err", err)
 		return err
 	}
-	log.Info("snap peer")
 	return hand(peer)
 }
 

@@ -22,21 +22,29 @@ var ProtocolVersions = []uint{ARB1}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ARB1: 8}
+var protocolLengths = map[uint]uint64{ARB1: ProtocolLenArb1}
 
 const (
-	GetLastConfirmedMsg         = 0x00
-	LastConfirmedMsg            = 0x01
-	GetLastCheckpointMsg        = 0x02
-	LastCheckpointMsg           = 0x03
-	QueryCheckpointSupportedMsg = 0x04
-	CheckpointSupportedMsg      = 0x05
-	ProtocolLenArb1             = 6
+	GetLastConfirmedMsg  = 0x00
+	LastConfirmedMsg     = 0x01
+	GetLastCheckpointMsg = 0x02
+	CheckpointQueryMsg   = 0x03
+	CheckpointMsg        = 0x04
+	ProtocolLenArb1      = 5
 )
 
 type LastConfirmedMsgPacket struct {
-	header types.Header
-	node   uint64
+	Header *types.Header
+	Node   uint64
+}
+
+type CheckpointMsgPacket struct {
+	Header   *types.Header
+	HasState bool
+}
+
+type CheckpointQueryPacket struct {
+	Header *types.Header
 }
 
 // NodeInfo represents a short summary of the `arb` sub-protocol metadata
@@ -48,9 +56,22 @@ func nodeInfo() *NodeInfo {
 	return &NodeInfo{}
 }
 
+type Handler func(peer *Peer) error
+
+// Backend defines the data retrieval methods to serve remote requests and the
+// callback methods to invoke on remote deliveries.
 type Backend interface {
 	PeerInfo(id enode.ID) interface{}
-	LastConfirmed(id enode.ID, confirmed *types.Header) error
+	HandleLastConfirmed(peer *Peer, confirmed *types.Header, node uint64)
+	HandleCheckpoint(peer *Peer, header *types.Header, supported bool)
+	LastConfirmed() (*types.Header, uint64, error)
+	LastCheckpoint() (*types.Header, error)
+	CheckpointSupported(*types.Header) (bool, error)
+	// RunPeer is invoked when a peer joins on the `eth` protocol. The handler
+	// should do any peer maintenance work, handshakes and validations. If all
+	// is passed, control should be given back to the `handler` to process the
+	// inbound messages going forward.
+	RunPeer(peer *Peer, handler Handler) error
 }
 
 func MakeProtocols(backend Backend, dnsdisc enode.Iterator) []p2p.Protocol {
@@ -64,7 +85,9 @@ func MakeProtocols(backend Backend, dnsdisc enode.Iterator) []p2p.Protocol {
 			Length:  protocolLengths[version],
 			Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 				peer := NewPeer(p, rw)
-				return peer.Run(backend)
+				return backend.RunPeer(peer, func(peer *Peer) error {
+					return Handle(backend, peer)
+				})
 			},
 			NodeInfo: func() interface{} {
 				return nodeInfo()
