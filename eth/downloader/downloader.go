@@ -477,13 +477,30 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 	}(time.Now())
 
 	// Look up the sync boundaries: the common ancestor and the target block
-	var latest, pivot, explicitPivot, final *types.Header
+	var latest, pivot, final *types.Header
+	var pivotExplicit bool
 	d.pivotLock.Lock()
 	if d.pivotExplicit {
-		explicitPivot = d.pivotHeader
+		pivotExplicit = true
+		pivot = d.pivotHeader
 	}
 	d.pivotLock.Unlock()
-	if !beaconMode {
+	if pivotExplicit {
+		latest, _, _, err = d.skeleton.Bounds()
+		if err != nil {
+			return err
+		}
+		if pivot != nil {
+			localPivot := d.skeleton.Header(pivot.Number.Uint64())
+			if localPivot == nil {
+				return fmt.Errorf("pivot not in skeleton chain")
+			}
+			if localPivot.Hash() != pivot.Hash() {
+				return fmt.Errorf("pivot disagrees with skeleton")
+			}
+			final = localPivot
+		}
+	} else if !beaconMode {
 		// In legacy mode, use the master peer to retrieve the headers from
 		latest, pivot, err = d.fetchHead(p)
 		if err != nil {
@@ -495,7 +512,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 		if err != nil {
 			return err
 		}
-		if latest.Number.Uint64() > uint64(fsMinFullBlocks) && explicitPivot == nil {
+		if latest.Number.Uint64() > uint64(fsMinFullBlocks) {
 			number := latest.Number.Uint64() - uint64(fsMinFullBlocks)
 
 			// Retrieve the pivot header from the skeleton chain segment but
@@ -524,14 +541,8 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 	// threshold (i.e. new chain). In that case we won't really snap sync
 	// anyway, but still need a valid pivot block to avoid some code hitting
 	// nil panics on access.
-	if mode == SnapSync && pivot == nil {
+	if mode == SnapSync && pivot == nil && !pivotExplicit {
 		pivot = d.blockchain.CurrentBlock()
-	}
-	if explicitPivot != nil {
-		if explicitPivot.Number.Cmp(latest.Number) > 0 {
-			return fmt.Errorf("skeleton behind explicit pivot. cannot sync")
-		}
-		pivot = explicitPivot
 	}
 	height := latest.Number.Uint64()
 
@@ -558,8 +569,10 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 
 	// Ensure our origin point is below any snap sync pivot point
 	if mode == SnapSync {
-		if explicitPivot != nil {
-			rawdb.WriteLastPivotNumber(d.stateDB, pivot.Nonce.Uint64())
+		if pivotExplicit {
+			if pivot != nil {
+				rawdb.WriteLastPivotNumber(d.stateDB, pivot.Nonce.Uint64())
+			}
 		} else if height <= uint64(fsMinFullBlocks) {
 			origin = 0
 		} else {
@@ -573,7 +586,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 		}
 	}
 	d.committed.Store(true)
-	if mode == SnapSync && pivot.Number.Uint64() != 0 {
+	if mode == SnapSync && pivot != nil && pivot.Number.Uint64() != 0 {
 		d.committed.Store(false)
 	}
 	if mode == SnapSync {
@@ -653,8 +666,15 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 			d.pivotHeader = pivot
 		}
 		d.pivotLock.Unlock()
-
-		fetchers = append(fetchers, func() error { return d.processSnapSyncContent() })
+		if pivot != nil {
+			fetchers = append(fetchers, func() error { return d.processSnapSyncContent() })
+		} else {
+			// no pivot yet - cannot complete this sync
+			fetchers = append(fetchers, func() error {
+				<-d.cancelCh
+				return errCanceled
+			})
+		}
 	} else if mode == FullSync {
 		fetchers = append(fetchers, func() error { return d.processFullSyncContent(ttd, beaconMode) })
 	}

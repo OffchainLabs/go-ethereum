@@ -167,7 +167,7 @@ func (d *Downloader) BeaconExtend(mode SyncMode, head *types.Header) error {
 
 // PivotSync sets an explicit pivot and syncs from there. Pivot state will be read from peers.
 func (d *Downloader) PivotSync(head *types.Header, pivot *types.Header) error {
-	if head.Number.Cmp(pivot.Number) < 0 {
+	if pivot != nil && head.Number.Cmp(pivot.Number) < 0 {
 		return errors.New("pivot must be behind head")
 	}
 	d.pivotLock.Lock()
@@ -311,7 +311,7 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 		// If the pivot became stale (older than 2*64-8 (bit of wiggle room)),
 		// move it ahead to HEAD-64
 		d.pivotLock.Lock()
-		if d.pivotHeader != nil {
+		if d.pivotHeader != nil && d.pivotExplicit == false {
 			if head.Number.Uint64() > d.pivotHeader.Number.Uint64()+2*uint64(fsMinFullBlocks)-8 {
 				// Retrieve the next pivot header, either from skeleton chain
 				// or the filled chain
