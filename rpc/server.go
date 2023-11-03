@@ -78,6 +78,10 @@ func (s *Server) SetBatchLimits(itemLimit, maxResponseSize int) {
 	s.batchResponseLimit = maxResponseSize
 }
 
+func (s *Server) ApplyAPIFilter(apiFilter map[string]bool) {
+	s.services.apiFilter = apiFilter
+}
+
 // RegisterName creates a service for the given receiver type under the given name. When no
 // methods on the given receiver match the criteria to be either a RPC method or a
 // subscription an error is returned. Otherwise a new service is created and added to the
