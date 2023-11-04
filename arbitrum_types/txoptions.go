@@ -46,9 +46,17 @@ func WrapOptionsCheckError(err error, msg string) error {
 	}
 }
 
+type SlotValueComparison struct {
+	Equal    *common.Hash
+	NotEqual *common.Hash
+	Greater  *common.Hash
+	Lesser   *common.Hash
+}
+
 type RootHashOrSlots struct {
-	RootHash  *common.Hash
-	SlotValue map[common.Hash]common.Hash
+	RootHash            *common.Hash
+	SlotValueComparison *map[common.Hash]SlotValueComparison
+	SlotValue           map[common.Hash]common.Hash
 }
 
 func (r *RootHashOrSlots) UnmarshalJSON(data []byte) error {
@@ -100,6 +108,19 @@ func (o *ConditionalOptions) Check(l1BlockNumber uint64, l2Timestamp uint64, sta
 			}
 			if trie.Hash() != *rootHashOrSlots.RootHash {
 				return NewRejectedError("Storage root hash condition not met")
+			}
+		} else if rootHashOrSlots.SlotValueComparison != nil && len(*rootHashOrSlots.SlotValueComparison) > 0 {
+			for slot, comparison := range *rootHashOrSlots.SlotValueComparison {
+				stored := statedb.GetState(address, slot)
+				if comparison.Equal != nil && !bytes.Equal(stored.Bytes(), comparison.Equal.Bytes()) {
+					return NewRejectedError("Storage slot value equal comparison condition not met")
+				} else if comparison.NotEqual != nil && bytes.Equal(stored.Bytes(), comparison.NotEqual.Bytes()) {
+					return NewRejectedError("Storage slot value not equal comparison condition not met")
+				} else if comparison.Greater != nil && bytes.Compare(stored.Bytes(), comparison.Greater.Bytes()) <= 0 {
+					return NewRejectedError("Storage slot value greater than comparison condition not met")
+				} else if comparison.Lesser != nil && bytes.Compare(stored.Bytes(), comparison.Lesser.Bytes()) >= 0 {
+					return NewRejectedError("Storage slot value lesser than comparison condition not met")
+				}
 			}
 		} else if len(rootHashOrSlots.SlotValue) > 0 {
 			for slot, value := range rootHashOrSlots.SlotValue {
