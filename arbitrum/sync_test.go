@@ -66,6 +66,9 @@ func (d *dummySyncHelper) LastConfirmed() (*types.Header, uint64, error) {
 }
 
 func (d *dummySyncHelper) LastCheckpoint() (*types.Header, error) {
+	if d.confirmed == nil {
+		return nil, nil
+	}
 	return d.checkpoint, nil
 }
 
@@ -73,8 +76,17 @@ func (d *dummySyncHelper) CheckpointSupported(*types.Header) (bool, error) {
 	return true, nil
 }
 
-func (d *dummySyncHelper) ValidateConfirmed(*types.Header, uint64) (bool, error) {
-	return true, nil
+func (d *dummySyncHelper) ValidateConfirmed(header *types.Header, node uint64) (bool, error) {
+	if d.confirmed == nil {
+		return true, nil
+	}
+	if header == nil {
+		return false, nil
+	}
+	if d.confirmed.Hash() == header.Hash() {
+		return true, nil
+	}
+	return false, nil
 }
 
 func testHasBlock(t *testing.T, chain *core.BlockChain, block *types.Block, shouldHaveState bool) {
@@ -93,6 +105,11 @@ func testHasBlock(t *testing.T, chain *core.BlockChain, block *types.Block, shou
 	if err == nil && !shouldHaveState {
 		t.Fatal("should not have state, but does")
 	}
+}
+
+func portFromAddress(address string) (int, error) {
+	splitAddr := strings.Split(address, ":")
+	return strconv.Atoi(splitAddr[len(splitAddr)-1])
 }
 
 func TestSimpleSync(t *testing.T) {
@@ -116,6 +133,12 @@ func TestSimpleSync(t *testing.T) {
 		t.Fatal("generate key err:", err)
 	}
 
+	// key for bad node p2p
+	badNodeKey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal("generate key err:", err)
+	}
+
 	// source node
 	sourceStackConf := node.DefaultConfig
 	sourceStackConf.DataDir = t.TempDir()
@@ -134,6 +157,7 @@ func TestSimpleSync(t *testing.T) {
 
 	// create and populate chain
 
+	// code for contractcodehex below:
 	// pragma solidity ^0.8.20;
 	//
 	// contract Temmp {
@@ -235,16 +259,12 @@ func TestSimpleSync(t *testing.T) {
 			}
 		}
 	}
+	pivotBlock := blocks[pivotBlockNum-1]
+	syncBlock := blocks[syncBlockNum-1]
 	if _, err := sourceChain.InsertChain(blocks[:pivotBlockNum]); err != nil {
 		t.Fatal(err)
 	}
-
-	pivotBlock := blocks[pivotBlockNum-1]
-	syncBlock := blocks[syncBlockNum-1]
-
-	testHasBlock(t, sourceChain, pivotBlock, true)
-	sourceChain.TrieDB().Commit(pivotBlock.Root(), true)
-
+	sourceChain.TrieDB().Commit(blocks[pivotBlockNum-1].Root(), true)
 	if _, err := sourceChain.InsertChain(blocks[pivotBlockNum:]); err != nil {
 		t.Fatal(err)
 	}
@@ -259,16 +279,49 @@ func TestSimpleSync(t *testing.T) {
 	sourceStack.RegisterProtocols(sourceHandler.MakeProtocols(&dummyIterator{}))
 	sourceStack.Start()
 
-	// figure out port of the source node and create dummy iter that points to it
-	sourceListenAddr := sourceStack.Server().Config.ListenAddr
-	splitAddr := strings.Split(sourceListenAddr, ":")
-	sourcePort, err := strconv.Atoi(splitAddr[len(splitAddr)-1])
+	// bad node (on wrong blockchain)
+	_, badBlocks, _ := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), syncBlockNum+extraBlocks, func(i int, gen *core.BlockGen) {
+		creationNonce := gen.TxNonce(testUser2Address)
+		tx, err := types.SignTx(types.NewContractCreation(creationNonce, new(big.Int), 1000000, gen.BaseFee(), contractCode), signer, testUser2)
+		if err != nil {
+			t.Fatalf("failed to create contract: %v", err)
+		}
+		gen.AddTx(tx)
+	})
+	badStackConf := sourceStackConf
+	badStackConf.DataDir = t.TempDir()
+	badStackConf.P2P.PrivateKey = badNodeKey
+	badStack, err := node.New(&badStackConf)
+
+	badDb, err := badStack.OpenDatabaseWithFreezer("l2chaindata", 2048, 512, "", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
+	badChain, _ := core.NewBlockChain(badDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	if _, err := badChain.InsertChain(badBlocks[:pivotBlockNum]); err != nil {
+		t.Fatal(err)
+	}
+	badChain.TrieDB().Commit(badBlocks[pivotBlockNum-1].Root(), true)
+	if _, err := badChain.InsertChain(badBlocks[pivotBlockNum:]); err != nil {
+		t.Fatal(err)
+	}
+	badHandler := NewProtocolHandler(badDb, badChain, &dummySyncHelper{badBlocks[syncBlockNum-1].Header(), badBlocks[pivotBlockNum-1].Header()}, false)
+	badStack.RegisterProtocols(badHandler.MakeProtocols(&dummyIterator{}))
+	badStack.Start()
+
+	// figure out port of the source node and create dummy iter that points to it
+	sourcePort, err := portFromAddress(sourceStack.Server().Config.ListenAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	badNodePort, err := portFromAddress(badStack.Server().Config.ListenAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	badEnode := enode.NewV4(&badNodeKey.PublicKey, net.IPv4(127, 0, 0, 1), badNodePort, 0)
 	sourceEnode := enode.NewV4(&sourceKey.PublicKey, net.IPv4(127, 0, 0, 1), sourcePort, 0)
 	iter := &dummyIterator{
-		nodes: []*enode.Node{nil, sourceEnode},
+		nodes: []*enode.Node{nil, badEnode, sourceEnode},
 	}
 
 	// dest node
@@ -285,7 +338,7 @@ func TestSimpleSync(t *testing.T) {
 		t.Fatal(err)
 	}
 	destChain, _ := core.NewBlockChain(destDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
-	destHandler := NewProtocolHandler(destDb, destChain, &dummySyncHelper{}, true)
+	destHandler := NewProtocolHandler(destDb, destChain, &dummySyncHelper{syncBlock.Header(), nil}, true)
 	destStack.RegisterProtocols(destHandler.MakeProtocols(iter))
 
 	// start sync
