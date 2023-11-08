@@ -45,9 +45,10 @@ type SyncHelper interface {
 }
 
 type Peer struct {
-	arb  *arb.Peer
-	eth  *eth.Peer
-	snap *snap.Peer
+	mutex sync.Mutex
+	arb   *arb.Peer
+	eth   *eth.Peer
+	snap  *snap.Peer
 }
 
 func NewPeer() *Peer {
@@ -79,20 +80,17 @@ func NewProtocolHandler(db ethdb.Database, bc *core.BlockChain, helper SyncHelpe
 		peers:    make(map[string]*Peer),
 	}
 	p.syncing.Store(syncing)
-	peerDrop := func(id string) {
-		log.Info("dropping peer", "id", id)
-	}
 	success := func() {
 		p.syncing.Store(false)
 		log.Info("DOWNLOADER DONE")
 	}
-	p.downloader = downloader.New(db, evMux, bc, nil, peerDrop, success)
+	p.downloader = downloader.New(db, evMux, bc, nil, p.peerDrop, success)
 	return p
 }
 
 func (h *protocolHandler) MakeProtocols(dnsdisc enode.Iterator) []p2p.Protocol {
-	protos := eth.MakeProtocols((*ethHandler)(h), h.chain.Config().ChainID.Uint64(), dnsdisc)
-	protos = append(protos, snap.MakeProtocols((*snapHandler)(h), dnsdisc)...)
+	protos := eth.MakeProtocols((*ethHandler)(h), h.chain.Config().ChainID.Uint64(), nil)
+	protos = append(protos, snap.MakeProtocols((*snapHandler)(h), nil)...)
 	protos = append(protos, arb.MakeProtocols((*arbHandler)(h), dnsdisc)...)
 	return protos
 }
@@ -109,10 +107,45 @@ func (h *protocolHandler) getCreatePeer(id string) *Peer {
 	return peer
 }
 
+func (h *protocolHandler) getRemovePeer(id string) *Peer {
+	h.peersLock.Lock()
+	defer h.peersLock.Unlock()
+	peer := h.peers[id]
+	if peer != nil {
+		h.peers[id] = nil
+	}
+	return peer
+}
+
 func (h *protocolHandler) getPeer(id string) *Peer {
 	h.peersLock.RLock()
 	defer h.peersLock.RUnlock()
 	return h.peers[id]
+}
+
+func (h *protocolHandler) peerDrop(id string) {
+	log.Info("dropping peer", "id", id)
+	hPeer := h.getRemovePeer(id)
+	if hPeer == nil {
+		return
+	}
+	hPeer.mutex.Lock()
+	defer hPeer.mutex.Unlock()
+	hPeer.arb = nil
+	if hPeer.eth != nil {
+		hPeer.eth.Disconnect(p2p.DiscSelf)
+		err := h.downloader.UnregisterPeer(id)
+		if err != nil {
+			log.Warn("failed deregistering peer from downloader", "err", err)
+		}
+		hPeer.eth = nil
+	}
+	if hPeer.snap != nil {
+		err := h.downloader.SnapSyncer.Unregister(id)
+		if err != nil {
+			log.Warn("failed deregistering peer from downloader", "err", err)
+		}
+	}
 }
 
 type arbHandler protocolHandler
@@ -139,13 +172,13 @@ func (h *arbHandler) HandleLastConfirmed(peer *arb.Peer, confirmed *types.Header
 			return
 		}
 	}
+	if !valid {
+		(*protocolHandler)(h).peerDrop(peer.ID())
+		return
+	}
 	hPeer := (*protocolHandler)(h).getPeer(peer.ID())
 	if hPeer == nil {
 		log.Warn("hPeer not found on HandleLastConfirmed")
-		return
-	}
-	if !valid {
-		//TODO: remove peer
 		return
 	}
 	peer.RequestCheckpoint(nil)
@@ -188,10 +221,13 @@ func (h *arbHandler) CheckpointSupported(checkpoint *types.Header) (bool, error)
 func (h *arbHandler) RunPeer(peer *arb.Peer, handler arb.Handler) error {
 	//id := h.peers[]
 	hPeer := (*protocolHandler)(h).getCreatePeer(peer.ID())
+	hPeer.mutex.Lock()
 	if hPeer.arb != nil {
+		hPeer.mutex.Unlock()
 		return fmt.Errorf("peer id already known")
 	}
 	hPeer.arb = peer
+	hPeer.mutex.Unlock()
 	if h.syncing.Load() {
 		err := peer.RequestLastConfirmed()
 		if err != nil {
@@ -218,11 +254,15 @@ func (h *ethHandler) TxPool() eth.TxPool { return &dummyTxPool{} }
 // RunPeer is invoked when a peer joins on the `eth` protocol.
 func (h *ethHandler) RunPeer(peer *eth.Peer, hand eth.Handler) error {
 	hPeer := (*protocolHandler)(h).getCreatePeer(peer.ID())
+	hPeer.mutex.Lock()
 	if hPeer.eth != nil {
+		hPeer.mutex.Unlock()
 		return fmt.Errorf("peer id already known")
 	}
 	hPeer.eth = peer
-	if err := h.downloader.RegisterPeer(peer.ID(), peer.Version(), peer); err != nil {
+	err := h.downloader.RegisterPeer(peer.ID(), peer.Version(), peer)
+	hPeer.mutex.Unlock()
+	if err != nil {
 		peer.Log().Error("Failed to register peer in eth syncer", "err", err)
 		return err
 	}
@@ -352,11 +392,15 @@ func (h *snapHandler) StorageIterator(root, account, origin common.Hash) (snapsh
 // RunPeer is invoked when a peer joins on the `snap` protocol.
 func (h *snapHandler) RunPeer(peer *snap.Peer, hand snap.Handler) error {
 	hPeer := (*protocolHandler)(h).getCreatePeer(peer.ID())
+	hPeer.mutex.Lock()
 	if hPeer.snap != nil {
+		hPeer.mutex.Unlock()
 		return fmt.Errorf("peer id already known")
 	}
 	hPeer.snap = peer
-	if err := h.downloader.SnapSyncer.Register(peer); err != nil {
+	err := h.downloader.SnapSyncer.Register(peer)
+	hPeer.mutex.Unlock()
+	if err != nil {
 		peer.Log().Error("Failed to register peer in snap syncer", "err", err)
 		return err
 	}
