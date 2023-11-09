@@ -118,7 +118,7 @@ func TestSimpleSync(t *testing.T) {
 	const extraBlocks = 200
 
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.Lvl(log.LvlTrace))
+	glogger.Verbosity(log.LvlTrace)
 	log.Root().SetHandler(glogger)
 
 	// key for source node p2p
@@ -291,6 +291,9 @@ func TestSimpleSync(t *testing.T) {
 	badStackConf.DataDir = t.TempDir()
 	badStackConf.P2P.PrivateKey = badNodeKey
 	badStack, err := node.New(&badStackConf)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	badDb, err := badStack.OpenDatabaseWithFreezer("l2chaindata", 2048, 512, "", "", false)
 	if err != nil {
