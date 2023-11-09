@@ -27,12 +27,14 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	fuzz "github.com/google/gofuzz"
 )
 
@@ -87,7 +89,26 @@ type dummyBackend struct {
 	chain *core.BlockChain
 }
 
-func (d *dummyBackend) Chain() *core.BlockChain                { return d.chain }
+func (d *dummyBackend) ContractCodeWithPrefix(codeHash common.Hash) ([]byte, error) {
+	return d.chain.ContractCodeWithPrefix(codeHash)
+}
+
+func (d *dummyBackend) TrieDB() *trie.Database {
+	return d.chain.TrieDB()
+}
+
+func (d *dummyBackend) Snapshot(root common.Hash) snapshot.Snapshot {
+	return d.chain.Snapshots().Snapshot(root)
+}
+
+func (d *dummyBackend) AccountIterator(root, account common.Hash) (snapshot.AccountIterator, error) {
+	return d.chain.Snapshots().AccountIterator(root, account)
+}
+
+func (d *dummyBackend) StorageIterator(root, account, origin common.Hash) (snapshot.StorageIterator, error) {
+	return d.chain.Snapshots().StorageIterator(root, account, origin)
+}
+
 func (d *dummyBackend) RunPeer(*snap.Peer, snap.Handler) error { return nil }
 func (d *dummyBackend) PeerInfo(enode.ID) interface{}          { return "Foo" }
 func (d *dummyBackend) Handle(*snap.Peer, snap.Packet) error   { return nil }

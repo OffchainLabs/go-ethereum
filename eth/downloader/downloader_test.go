@@ -31,12 +31,14 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -151,6 +153,38 @@ type downloadTesterPeer struct {
 	chain *core.BlockChain
 
 	withholdHeaders map[common.Hash]struct{}
+}
+
+type snapBackend struct {
+	chain *core.BlockChain
+}
+
+func (d *snapBackend) ContractCodeWithPrefix(codeHash common.Hash) ([]byte, error) {
+	return d.chain.ContractCodeWithPrefix(codeHash)
+}
+
+func (d *snapBackend) TrieDB() *trie.Database {
+	return d.chain.TrieDB()
+}
+
+func (d *snapBackend) Snapshot(root common.Hash) snapshot.Snapshot {
+	return d.chain.Snapshots().Snapshot(root)
+}
+
+func (d *snapBackend) AccountIterator(root, account common.Hash) (snapshot.AccountIterator, error) {
+	return d.chain.Snapshots().AccountIterator(root, account)
+}
+
+func (d *snapBackend) StorageIterator(root, account, origin common.Hash) (snapshot.StorageIterator, error) {
+	return d.chain.Snapshots().StorageIterator(root, account, origin)
+}
+
+func (d *snapBackend) RunPeer(*snap.Peer, snap.Handler) error { return nil }
+func (d *snapBackend) PeerInfo(enode.ID) interface{}          { return "Foo" }
+func (d *snapBackend) Handle(*snap.Peer, snap.Packet) error   { return nil }
+
+func (dlp *downloadTesterPeer) SnapBackend() *snapBackend {
+	return &snapBackend{dlp.chain}
 }
 
 // Head constructs a function to retrieve a peer's current head hash
@@ -344,7 +378,7 @@ func (dlp *downloadTesterPeer) RequestAccountRange(id uint64, root, origin, limi
 		Limit:  limit,
 		Bytes:  bytes,
 	}
-	slimaccs, proofs := snap.ServiceGetAccountRangeQuery(dlp.chain, req)
+	slimaccs, proofs := snap.ServiceGetAccountRangeQuery(dlp.SnapBackend(), req)
 
 	// We need to convert to non-slim format, delegate to the packet code
 	res := &snap.AccountRangePacket{
@@ -371,7 +405,7 @@ func (dlp *downloadTesterPeer) RequestStorageRanges(id uint64, root common.Hash,
 		Limit:    limit,
 		Bytes:    bytes,
 	}
-	storage, proofs := snap.ServiceGetStorageRangesQuery(dlp.chain, req)
+	storage, proofs := snap.ServiceGetStorageRangesQuery(dlp.SnapBackend(), req)
 
 	// We need to convert to demultiplex, delegate to the packet code
 	res := &snap.StorageRangesPacket{
@@ -392,7 +426,7 @@ func (dlp *downloadTesterPeer) RequestByteCodes(id uint64, hashes []common.Hash,
 		Hashes: hashes,
 		Bytes:  bytes,
 	}
-	codes := snap.ServiceGetByteCodesQuery(dlp.chain, req)
+	codes := snap.ServiceGetByteCodesQuery(dlp.SnapBackend(), req)
 	go dlp.dl.downloader.SnapSyncer.OnByteCodes(dlp, id, codes)
 	return nil
 }
@@ -406,7 +440,7 @@ func (dlp *downloadTesterPeer) RequestTrieNodes(id uint64, root common.Hash, pat
 		Paths: paths,
 		Bytes: bytes,
 	}
-	nodes, _ := snap.ServiceGetTrieNodesQuery(dlp.chain, req, time.Now())
+	nodes, _ := snap.ServiceGetTrieNodesQuery(dlp.SnapBackend(), req, time.Now())
 	go dlp.dl.downloader.SnapSyncer.OnTrieNodes(dlp, id, nodes)
 	return nil
 }
