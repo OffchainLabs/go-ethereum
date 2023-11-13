@@ -380,10 +380,14 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 	switch r.Type {
 	case AccessListTxType, DynamicFeeTxType, BlobTxType:
 		rlp.Encode(w, data)
-	default:
+	case ArbitrumDepositTxType, ArbitrumUnsignedTxType, ArbitrumContractTxType, ArbitrumRetryTxType, ArbitrumSubmitRetryableTxType, ArbitrumInternalTxType:
 		// Arbitrum: same as above, but this should help prevent future merge conflicts,
 		// by keeping above case statement the same.
 		rlp.Encode(w, data)
+	default:
+		// For unsupported types, write nothing. Since this is for
+		// DeriveSha, the error will be caught matching the derived hash
+		// to the block.
 	}
 }
 
