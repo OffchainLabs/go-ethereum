@@ -80,11 +80,14 @@ func NewProtocolHandler(db ethdb.Database, bc *core.BlockChain, helper SyncHelpe
 		peers:    make(map[string]*Peer),
 	}
 	p.syncing.Store(syncing)
-	success := func() {
-		p.syncing.Store(false)
-		log.Info("DOWNLOADER DONE")
+	backfillerCreator := func(dl *downloader.Downloader) downloader.Backfiller {
+		success := func() {
+			p.syncing.Store(false)
+			log.Info("DOWNLOADER DONE")
+		}
+		return downloader.NewBeaconBackfiller(dl, success)
 	}
-	p.downloader = downloader.New(db, evMux, bc, nil, p.peerDrop, success)
+	p.downloader = downloader.New(db, evMux, bc, nil, p.peerDrop, backfillerCreator)
 	return p
 }
 

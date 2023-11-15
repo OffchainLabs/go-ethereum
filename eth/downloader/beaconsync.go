@@ -42,8 +42,8 @@ type beaconBackfiller struct {
 	lock       sync.Mutex    // Mutex protecting the sync lock
 }
 
-// newBeaconBackfiller is a helper method to create the backfiller.
-func newBeaconBackfiller(dl *Downloader, success func()) backfiller {
+// NewBeaconBackfiller is a helper method to create the backfiller.
+func NewBeaconBackfiller(dl *Downloader, success func()) Backfiller {
 	return &beaconBackfiller{
 		downloader: dl,
 		success:    success,

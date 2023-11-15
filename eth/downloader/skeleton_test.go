@@ -46,7 +46,7 @@ type hookedBackfiller struct {
 
 // newHookedBackfiller creates a hooked backfiller with all callbacks disabled,
 // essentially acting as a noop.
-func newHookedBackfiller() backfiller {
+func newHookedBackfiller() Backfiller {
 	return new(hookedBackfiller)
 }
 

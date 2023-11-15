@@ -161,21 +161,24 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			h.snapSync.Store(true)
 		}
 	}
-	// If sync succeeds, pass a callback to potentially disable snap sync mode
-	// and enable transaction propagation.
-	success := func() {
-		// If we were running snap sync and it finished, disable doing another
-		// round on next sync cycle
-		if h.snapSync.Load() {
-			log.Info("Snap sync complete, auto disabling")
-			h.snapSync.Store(false)
+	backfillerCreator := func(dl *downloader.Downloader) downloader.Backfiller {
+		// If sync succeeds, pass a callback to potentially disable snap sync mode
+		// and enable transaction propagation.
+		success := func() {
+			// If we were running snap sync and it finished, disable doing another
+			// round on next sync cycle
+			if h.snapSync.Load() {
+				log.Info("Snap sync complete, auto disabling")
+				h.snapSync.Store(false)
+			}
+			// If we've successfully finished a sync cycle, accept transactions from
+			// the network
+			h.acceptTxs.Store(true)
 		}
-		// If we've successfully finished a sync cycle, accept transactions from
-		// the network
-		h.acceptTxs.Store(true)
+		return downloader.NewBeaconBackfiller(dl, success)
 	}
 	// Construct the downloader (long sync)
-	h.downloader = downloader.New(config.Database, h.eventMux, h.chain, nil, h.removePeer, success)
+	h.downloader = downloader.New(config.Database, h.eventMux, h.chain, nil, h.removePeer, backfillerCreator)
 	if ttd := h.chain.Config().TerminalTotalDifficulty; ttd != nil {
 		if h.chain.Config().TerminalTotalDifficultyPassed {
 			log.Info("Chain post-merge, sync via beacon client")

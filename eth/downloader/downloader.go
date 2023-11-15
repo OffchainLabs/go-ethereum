@@ -217,7 +217,7 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn, success func()) *Downloader {
+func New(stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn, backFillerCreator func(*Downloader) Backfiller) *Downloader {
 	if lightchain == nil {
 		lightchain = chain
 	}
@@ -236,7 +236,7 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchai
 		syncStartBlock: chain.CurrentSnapBlock().Number.Uint64(),
 	}
 	// Create the post-merge skeleton syncer and start the process
-	dl.skeleton = newSkeleton(stateDb, dl.peers, dropPeer, newBeaconBackfiller(dl, success))
+	dl.skeleton = newSkeleton(stateDb, dl.peers, dropPeer, backFillerCreator(dl))
 
 	go dl.stateFetcher()
 	return dl

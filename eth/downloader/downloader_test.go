@@ -83,7 +83,8 @@ func newTesterWithNotification(t *testing.T, success func()) *downloadTester {
 		chain:   chain,
 		peers:   make(map[string]*downloadTesterPeer),
 	}
-	tester.downloader = New(db, new(event.TypeMux), tester.chain, nil, tester.dropPeer, success)
+	backfillerCreator := func(dl *Downloader) Backfiller { return NewBeaconBackfiller(dl, success) }
+	tester.downloader = New(db, new(event.TypeMux), tester.chain, nil, tester.dropPeer, backfillerCreator)
 	return tester
 }
 
