@@ -32,10 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// noopReleaser is returned in case there is no operation expected
-// for releasing state.
-var noopReleaser = tracers.StateReleaseFunc(func() {})
-
 // StateAtBlock retrieves the state database associated with a certain block.
 // If no state is locally available for the given block, a number of blocks
 // are attempted to be reexecuted to generate the desired state. The optional
