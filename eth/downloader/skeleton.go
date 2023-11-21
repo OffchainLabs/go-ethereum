@@ -154,13 +154,13 @@ type Backfiller interface {
 	//
 	// The method should return the last block header that has been successfully
 	// backfilled, or nil if the backfiller was not resumed.
-	suspend() *types.Header
+	Suspend() *types.Header
 
 	// resume requests the backfiller to start running fill or snap sync based on
 	// the skeleton chain as it has successfully been linked. Appending new heads
 	// to the end of the chain will not result in suspend/resume cycles.
 	// leaking too much sync logic out to the filler.
-	resume()
+	Resume()
 }
 
 // skeleton represents a header chain synchronized after the merge where blocks
@@ -364,10 +364,10 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 		rawdb.HasBody(s.db, s.progress.Subchains[0].Next, s.scratchHead) &&
 		rawdb.HasReceipts(s.db, s.progress.Subchains[0].Next, s.scratchHead)
 	if linked {
-		s.filler.resume()
+		s.filler.Resume()
 	}
 	defer func() {
-		if filled := s.filler.suspend(); filled != nil {
+		if filled := s.filler.Suspend(); filled != nil {
 			// If something was filled, try to delete stale sync helpers. If
 			// unsuccessful, warn the user, but not much else we can do (it's
 			// a programming error, just let users report an issue and don't
@@ -456,7 +456,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 			// is still running, it will pick it up. If it already terminated,
 			// a new cycle needs to be spun up.
 			if linked {
-				s.filler.resume()
+				s.filler.Resume()
 			}
 
 		case req := <-requestFails:

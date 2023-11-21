@@ -54,7 +54,7 @@ func newHookedBackfiller() Backfiller {
 // based on the skeleton chain as it might be invalid. The backfiller should
 // gracefully handle multiple consecutive suspends without a resume, even
 // on initial startup.
-func (hf *hookedBackfiller) suspend() *types.Header {
+func (hf *hookedBackfiller) Suspend() *types.Header {
 	if hf.suspendHook != nil {
 		return hf.suspendHook()
 	}
@@ -64,7 +64,7 @@ func (hf *hookedBackfiller) suspend() *types.Header {
 // resume requests the backfiller to start running fill or snap sync based on
 // the skeleton chain as it has successfully been linked. Appending new heads
 // to the end of the chain will not result in suspend/resume cycles.
-func (hf *hookedBackfiller) resume() {
+func (hf *hookedBackfiller) Resume() {
 	if hf.resumeHook != nil {
 		hf.resumeHook()
 	}

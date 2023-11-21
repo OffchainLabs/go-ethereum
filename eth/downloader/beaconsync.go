@@ -52,7 +52,7 @@ func NewBeaconBackfiller(dl *Downloader, success func()) Backfiller {
 
 // suspend cancels any background downloader threads and returns the last header
 // that has been successfully backfilled.
-func (b *beaconBackfiller) suspend() *types.Header {
+func (b *beaconBackfiller) Suspend() *types.Header {
 	// If no filling is running, don't waste cycles
 	b.lock.Lock()
 	filling := b.filling
@@ -80,7 +80,7 @@ func (b *beaconBackfiller) suspend() *types.Header {
 }
 
 // resume starts the downloader threads for backfilling state and chain data.
-func (b *beaconBackfiller) resume() {
+func (b *beaconBackfiller) Resume() {
 	b.lock.Lock()
 	if b.filling {
 		// If a previous filling cycle is still running, just ignore this start
@@ -134,8 +134,8 @@ func (b *beaconBackfiller) setMode(mode SyncMode) {
 		return
 	}
 	log.Error("Downloader sync mode changed mid-run", "old", mode.String(), "new", mode.String())
-	b.suspend()
-	b.resume()
+	b.Suspend()
+	b.Resume()
 }
 
 // SetBadBlockCallback sets the callback to run when a bad block is hit by the
