@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -65,9 +66,15 @@ type protocolHandler struct {
 	peersLock sync.RWMutex
 	peers     map[string]*Peer
 
-	confirmed  *types.Header
-	checkpoint *types.Header
-	syncing    atomic.Bool
+	beaconBackFiller downloader.Backfiller
+
+	confirmed      *types.Header
+	checkpoint     *types.Header
+	syncedBlockNum uint64 // blocks that were synced by skeleton-downloader
+	syncedCond     *sync.Cond
+	headersLock    sync.RWMutex
+
+	syncing atomic.Bool
 }
 
 func NewProtocolHandler(db ethdb.Database, bc *core.BlockChain, helper SyncHelper, syncing bool) *protocolHandler {
@@ -79,13 +86,15 @@ func NewProtocolHandler(db ethdb.Database, bc *core.BlockChain, helper SyncHelpe
 		helper:   helper,
 		peers:    make(map[string]*Peer),
 	}
+	p.syncedCond = sync.NewCond(&p.headersLock)
 	p.syncing.Store(syncing)
 	backfillerCreator := func(dl *downloader.Downloader) downloader.Backfiller {
 		success := func() {
 			p.syncing.Store(false)
 			log.Info("DOWNLOADER DONE")
 		}
-		return downloader.NewBeaconBackfiller(dl, success)
+		p.beaconBackFiller = downloader.NewBeaconBackfiller(dl, success)
+		return (*filler)(p)
 	}
 	p.downloader = downloader.New(db, evMux, bc, nil, p.peerDrop, backfillerCreator)
 	return p
@@ -108,6 +117,18 @@ func (h *protocolHandler) getCreatePeer(id string) *Peer {
 	peer = NewPeer()
 	h.peers[id] = peer
 	return peer
+}
+
+func (h *protocolHandler) waitBlockSync(num uint64) error {
+	h.headersLock.Lock()
+	defer h.headersLock.Unlock()
+	for {
+		if h.syncedBlockNum >= num {
+			break
+		}
+		h.syncedCond.Wait()
+	}
+	return nil
 }
 
 func (h *protocolHandler) getRemovePeer(id string) *Peer {
@@ -151,6 +172,99 @@ func (h *protocolHandler) peerDrop(id string) {
 	}
 }
 
+func (h *protocolHandler) getHeaders() (*types.Header, *types.Header) {
+	h.peersLock.RLock()
+	defer h.peersLock.RUnlock()
+	return h.checkpoint, h.confirmed
+}
+
+func (h *protocolHandler) advanceCheckpoint(checkpoint *types.Header) {
+	h.peersLock.Lock()
+	defer h.peersLock.Unlock()
+	if h.checkpoint != nil {
+		compare := h.checkpoint.Number.Cmp(checkpoint.Number)
+		if compare > 0 {
+			return
+		}
+		if compare == 0 {
+			if h.checkpoint.Hash() != checkpoint.Hash() {
+				log.Error("arbitrum_p2p: hash for checkpoint changed", "number", checkpoint.Number, "old", h.checkpoint.Hash(), "new", checkpoint.Hash())
+			} else {
+				return
+			}
+		}
+	}
+	if h.confirmed == nil || checkpoint.Number.Cmp(h.confirmed.Number) > 0 {
+		confirmedNum := common.Big0
+		if h.confirmed != nil {
+			confirmedNum = h.confirmed.Number
+		}
+		log.Error("arbitrum_p2p: trying to move checkpont ahead of confirmed", "number", checkpoint.Number, "confirmed", confirmedNum)
+		return
+	}
+	h.checkpoint = checkpoint
+	log.Info("arbitrum_p2p: checkpoint", "number", checkpoint.Number, "hash", checkpoint.Hash())
+	h.downloader.PivotSync(h.confirmed, h.checkpoint)
+}
+
+func (h *protocolHandler) advanceConfirmed(confirmed *types.Header) {
+	h.peersLock.Lock()
+	defer h.peersLock.Unlock()
+	if h.confirmed != nil {
+		compare := h.confirmed.Number.Cmp(confirmed.Number)
+		if compare > 0 {
+			return
+		}
+		if compare == 0 {
+			if h.confirmed.Hash() != confirmed.Hash() {
+				log.Error("arbitrum_p2p: hash for confirmed changed", "number", confirmed.Number, "old", h.confirmed.Hash(), "new", confirmed.Hash())
+			} else {
+				return
+			}
+		}
+	}
+	h.confirmed = confirmed
+	log.Info("arbitrum_p2p: confirmed", "number", confirmed.Number, "hash", confirmed.Hash())
+	h.downloader.PivotSync(h.confirmed, h.checkpoint)
+}
+
+type filler protocolHandler
+
+func (h *filler) Suspend() *types.Header {
+	h.headersLock.Lock()
+	defer h.headersLock.Unlock()
+	if h.syncedBlockNum > 0 && h.syncing.Load() {
+		log.Warn("arbitrum_p2p: suspend while syncing", "head", h.syncedBlockNum)
+	}
+	return h.beaconBackFiller.Suspend()
+}
+
+func (h *filler) Resume() {
+	defer h.beaconBackFiller.Resume()
+	head, err := h.downloader.SkeletonHead()
+	if err != nil || head == nil {
+		log.Error("arbitrum_p2p: error from SkeletonHead", "err", err)
+		return
+	}
+	if !head.Number.IsUint64() {
+		log.Error("arbitrum_p2p: syncedBlockNum bad number", "num", head.Number)
+		return
+	}
+	h.headersLock.Lock()
+	if h.confirmed.Number.Cmp(head.Number) < 0 {
+		// confirmed only moves forward and is used as head for sync.. somerthing bad already happened
+		log.Error("arbitrum_p2p: skeleton head ahead of confirmed", "skeleton", head.Number, "confirmed", h.confirmed.Number)
+	}
+	h.syncedBlockNum = head.Number.Uint64()
+	h.syncedCond.Broadcast()
+	h.headersLock.Unlock()
+	log.Trace("arbitrum_p2p: resume", "skeletonhead", h.syncedBlockNum)
+}
+
+func (h *filler) SetMode(mode downloader.SyncMode) {
+	h.beaconBackFiller.SetMode(mode)
+}
+
 type arbHandler protocolHandler
 
 func (h *arbHandler) PeerInfo(id enode.ID) interface{} {
@@ -158,13 +272,14 @@ func (h *arbHandler) PeerInfo(id enode.ID) interface{} {
 }
 
 func (h *arbHandler) HandleLastConfirmed(peer *arb.Peer, confirmed *types.Header, node uint64) {
-	// TODO: validate confirmed
+	protoHandler := (*protocolHandler)(h)
 	validated := false
 	valid := false
-	if h.confirmed != nil {
-		if confirmed.Number.Cmp(h.confirmed.Number) == 0 {
+	current, _ := protoHandler.getHeaders()
+	if current != nil {
+		if confirmed.Number.Cmp(current.Number) == 0 {
 			validated = true
-			valid = h.confirmed.Hash() == confirmed.Hash()
+			valid = current.Hash() == confirmed.Hash()
 		}
 	}
 	if !validated {
@@ -176,37 +291,56 @@ func (h *arbHandler) HandleLastConfirmed(peer *arb.Peer, confirmed *types.Header
 		}
 	}
 	if !valid {
-		(*protocolHandler)(h).peerDrop(peer.ID())
+		protoHandler.peerDrop(peer.ID())
 		return
 	}
-	hPeer := (*protocolHandler)(h).getPeer(peer.ID())
+	hPeer := protoHandler.getPeer(peer.ID())
 	if hPeer == nil {
 		log.Warn("hPeer not found on HandleLastConfirmed")
 		return
 	}
 	peer.RequestCheckpoint(nil)
-	h.confirmed = confirmed
-	log.Info("lastconfirmed", "confirmed", h.confirmed, "checkpoint", "h.checkpoint")
-	h.downloader.PivotSync(h.confirmed, h.checkpoint)
+	protoHandler.advanceConfirmed(confirmed)
 }
 
 func (h *arbHandler) HandleCheckpoint(peer *arb.Peer, checkpoint *types.Header, supported bool) {
+	protoHandler := (*protocolHandler)(h)
 	log.Error("got checkpoint", "from", peer.ID(), "checkpoint", checkpoint, "supported", supported)
 	if !supported {
 		return
 	}
-	if h.checkpoint != nil && h.checkpoint.Number.Uint64() > checkpoint.Number.Uint64() {
+	if !h.syncing.Load() {
 		return
 	}
-	// TODO: confirm
-	// TODO: advance?
-	hPeer := (*protocolHandler)(h).getPeer(peer.ID())
-	if hPeer == nil {
-		log.Warn("hPeer not found on HandleLastConfirmed")
+	if !checkpoint.Number.IsUint64() {
+		log.Warn("got bad header from peer - number not uint64", "peer", peer.ID())
+		protoHandler.peerDrop(peer.ID())
 		return
 	}
-	h.checkpoint = checkpoint
-	h.downloader.PivotSync(h.confirmed, h.checkpoint)
+	number := checkpoint.Number.Uint64()
+	log.Info("handler_p2p: handle checkpoint - before", "peer", peer.ID())
+	protoHandler.waitBlockSync(number)
+	log.Info("handler_p2p: handle checkpoint - after", "peer", peer.ID())
+	if !h.syncing.Load() {
+		return
+	}
+	canonical := rawdb.ReadCanonicalHash(h.db, number)
+	if canonical == (common.Hash{}) {
+		skeleton := rawdb.ReadSkeletonHeader(h.db, number)
+		if skeleton == nil {
+			log.Error("arbitrum handler_p2p: canonical not found", "number", number, "peer", peer.ID())
+		}
+		canonical = skeleton.Hash()
+	}
+	if canonical == (common.Hash{}) {
+		log.Error("arbitrum handler_p2p: did not find a canonical hash", "number", number, "peer", peer.ID())
+	}
+	if canonical != checkpoint.Hash() {
+		log.Warn("got bad header from peer - bad hash", "peer", peer.ID(), "number", number, "expected", canonical, "peer", checkpoint.Hash())
+		protoHandler.peerDrop(peer.ID())
+		return
+	}
+	protoHandler.advanceCheckpoint(checkpoint)
 }
 
 func (h *arbHandler) LastConfirmed() (*types.Header, uint64, error) {
