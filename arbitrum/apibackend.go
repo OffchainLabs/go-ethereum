@@ -561,11 +561,11 @@ func (a *APIBackend) Stats() (pending int, queued int) {
 	panic("not implemented") // TODO: Implement
 }
 
-func (a *APIBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
+func (a *APIBackend) TxPoolContent() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction) {
 	panic("not implemented") // TODO: Implement
 }
 
-func (a *APIBackend) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
+func (a *APIBackend) TxPoolContentFrom(addr common.Address) ([]*types.Transaction, []*types.Transaction) {
 	panic("not implemented") // TODO: Implement
 }
 

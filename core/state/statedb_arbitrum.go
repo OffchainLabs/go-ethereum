@@ -33,16 +33,16 @@ func (s *StateDB) GetUnexpectedBalanceDelta() *big.Int {
 	return new(big.Int).Set(s.unexpectedBalanceDelta)
 }
 
-func (s *StateDB) GetSuicides() []common.Address {
-	suicides := []common.Address{}
+func (s *StateDB) GetSelfDestructs() []common.Address {
+	selfDestructs := []common.Address{}
 	for addr := range s.journal.dirties {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
 			continue
 		}
-		if obj.suicided {
-			suicides = append(suicides, addr)
+		if obj.selfDestructed {
+			selfDestructs = append(selfDestructs, addr)
 		}
 	}
-	return suicides
+	return selfDestructs
 }
