@@ -307,7 +307,7 @@ func TestSimpleSync(t *testing.T) {
 	if _, err := badChain.InsertChain(badBlocks[pivotBlockNum:]); err != nil {
 		t.Fatal(err)
 	}
-	badHandler := NewProtocolHandler(badDb, badChain, &dummySyncHelper{badBlocks[syncBlockNum-1].Header(), badBlocks[pivotBlockNum-1].Header()}, false)
+	badHandler := NewProtocolHandler(badDb, badChain, &dummySyncHelper{blocks[syncBlockNum-1].Header(), badBlocks[pivotBlockNum-1].Header()}, false)
 	badStack.RegisterProtocols(badHandler.MakeProtocols(&dummyIterator{}))
 	badStack.Start()
 
