@@ -70,6 +70,8 @@ func (hf *hookedBackfiller) Resume() {
 	}
 }
 
+func (hf *hookedBackfiller) SetMode(SyncMode) {}
+
 // skeletonTestPeer is a mock peer that can only serve header requests from a
 // pre-perated header chain (which may be arbitrarily wrong for testing).
 //
