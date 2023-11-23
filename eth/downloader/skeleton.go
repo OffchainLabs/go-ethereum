@@ -161,6 +161,8 @@ type Backfiller interface {
 	// to the end of the chain will not result in suspend/resume cycles.
 	// leaking too much sync logic out to the filler.
 	Resume()
+
+	SetMode(mode SyncMode)
 }
 
 // skeleton represents a header chain synchronized after the merge where blocks

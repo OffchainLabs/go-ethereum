@@ -120,7 +120,7 @@ func (b *beaconBackfiller) Resume() {
 
 // setMode updates the sync mode from the current one to the requested one. If
 // there's an active sync in progress, it will be cancelled and restarted.
-func (b *beaconBackfiller) setMode(mode SyncMode) {
+func (b *beaconBackfiller) SetMode(mode SyncMode) {
 	// Update the old sync mode and track if it was changed
 	b.lock.Lock()
 	updated := b.syncMode != mode
@@ -190,7 +190,7 @@ func (d *Downloader) beaconSync(mode SyncMode, head *types.Header, final *types.
 	//
 	// Super crazy dangerous type cast. Should be fine (TM), we're only using a
 	// different backfiller implementation for skeleton tests.
-	d.skeleton.filler.(*beaconBackfiller).setMode(mode)
+	d.skeleton.filler.SetMode(mode)
 
 	// Signal the skeleton sync to switch to a new head, however it wants
 	if err := d.skeleton.Sync(head, final, force); err != nil {
@@ -278,6 +278,14 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 		start = check
 	}
 	return start, nil
+}
+
+func (d *Downloader) SkeletonHead() (*types.Header, error) {
+	head, _, _, err := d.skeleton.Bounds()
+	if err != nil {
+		return nil, err
+	}
+	return head, nil
 }
 
 // fetchBeaconHeaders feeds skeleton headers to the downloader queue for scheduling
