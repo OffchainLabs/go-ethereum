@@ -142,7 +142,8 @@ func TestSimpleSync(t *testing.T) {
 	// source node
 	sourceStackConf := node.DefaultConfig
 	sourceStackConf.DataDir = t.TempDir()
-	sourceStackConf.P2P.NoDiscovery = true
+	sourceStackConf.P2P.DiscoveryV4 = false
+	sourceStackConf.P2P.DiscoveryV5 = false
 	sourceStackConf.P2P.ListenAddr = "127.0.0.1:0"
 	sourceStackConf.P2P.PrivateKey = sourceKey
 
@@ -276,7 +277,9 @@ func TestSimpleSync(t *testing.T) {
 	// source node
 	sourceHandler := NewProtocolHandler(sourceDb, sourceChain, &dummySyncHelper{syncBlock.Header(), pivotBlock.Header()}, false)
 	sourceStack.RegisterProtocols(sourceHandler.MakeProtocols(&dummyIterator{}))
-	sourceStack.Start()
+	if err := sourceStack.Start(); err != nil {
+		t.Fatal(err)
+	}
 
 	// bad node (on wrong blockchain)
 	_, badBlocks, _ := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), syncBlockNum+extraBlocks, func(i int, gen *core.BlockGen) {
@@ -309,7 +312,9 @@ func TestSimpleSync(t *testing.T) {
 	}
 	badHandler := NewProtocolHandler(badDb, badChain, &dummySyncHelper{blocks[syncBlockNum-1].Header(), badBlocks[pivotBlockNum-1].Header()}, false)
 	badStack.RegisterProtocols(badHandler.MakeProtocols(&dummyIterator{}))
-	badStack.Start()
+	if err := badStack.Start(); err != nil {
+		t.Fatal(err)
+	}
 
 	// figure out port of the source node and create dummy iter that points to it
 	sourcePort, err := portFromAddress(sourceStack.Server().Config.ListenAddr)
@@ -348,7 +353,9 @@ func TestSimpleSync(t *testing.T) {
 	log.Info("initial source", "head", sourceChain.CurrentBlock())
 	log.Info("initial dest", "head", destChain.CurrentBlock())
 	log.Info("pivot", "head", pivotBlock.Header())
-	destStack.Start()
+	if err := destStack.Start(); err != nil {
+		t.Fatal(err)
+	}
 
 	<-time.After(time.Second * 5)
 
