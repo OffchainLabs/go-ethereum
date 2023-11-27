@@ -365,6 +365,8 @@ func (test *stateTest) verify(root common.Hash, next common.Hash, db *trie.Datab
 }
 
 func TestStateChanges(t *testing.T) {
+	t.Skip("Arbitrum doesn't support some of these operations due to https://github.com/OffchainLabs/go-ethereum/pull/271")
+
 	config := &quick.Config{MaxCount: 1000}
 	err := quick.Check((*stateTest).run, config)
 	if cerr, ok := err.(*quick.CheckError); ok {

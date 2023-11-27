@@ -90,7 +90,6 @@ type (
 		account *common.Address
 	}
 	resetObjectChange struct {
-		account      *common.Address
 		prev         *stateObject
 		prevdestruct bool
 		prevAccount  []byte
@@ -181,7 +180,13 @@ func (ch resetObjectChange) revert(s *StateDB) {
 }
 
 func (ch resetObjectChange) dirtied() *common.Address {
-	return ch.account
+	// Arbitrum: We keep the behavior that existed before go-ethereum v1.12.1 and return nil,
+	// instead of returning the reset address as upstream go-ethereum v1.12.1 does.
+	// That's because, unlike for go-ethereum, whether this account is dirty or not is relevant for Arbitrum.
+	// Arbitrum hooks manipulate the state in some ways that go-ethereum doesn't which cause that relevance,
+	// e.g. subtracting balance from an account that hasn't been otherwise touched.
+	// See https://github.com/OffchainLabs/nitro/pull/1976 for details
+	return nil
 }
 
 func (ch selfDestructChange) revert(s *StateDB) {

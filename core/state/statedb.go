@@ -718,7 +718,6 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 		// cache the latest account/storage data.
 		prevAccount, ok := s.accountsOrigin[prev.address]
 		s.journal.append(resetObjectChange{
-			account:                &addr,
 			prev:                   prev,
 			prevdestruct:           prevdestruct,
 			prevAccount:            s.accounts[prev.addrHash],
