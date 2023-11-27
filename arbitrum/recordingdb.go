@@ -229,15 +229,15 @@ func (r *RecordingDatabase) dereferenceRoot(root common.Hash) {
 	r.db.TrieDB().Dereference(root)
 }
 
-func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected common.Hash) error {
+func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected common.Hash, blockNumber uint64) (*state.StateDB, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	result, err := statedb.Commit(true)
+	result, err := statedb.Commit(blockNumber, true)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if result != expected {
-		return fmt.Errorf("bad root hash expected: %v got: %v", expected, result)
+		return nil, fmt.Errorf("bad root hash expected: %v got: %v", expected, result)
 	}
 	r.referenceRootLockHeld(result)
 
@@ -250,7 +250,7 @@ func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected comm
 		size, _ = r.db.TrieDB().Size()
 		recordingDbSize.Update(int64(size))
 	}
-	return nil
+	return state.New(result, statedb.Database(), nil)
 }
 
 func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeader *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
@@ -319,12 +319,13 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 	prevHash := currentHeader.Hash()
 	returnedBlockNumber := header.Number.Uint64()
 	for ctx.Err() == nil {
-		state, block, err := AdvanceStateByBlock(ctx, r.bc, state, header, blockToRecreate, prevHash, logFunc)
+		var block *types.Block
+		state, block, err = AdvanceStateByBlock(ctx, r.bc, state, header, blockToRecreate, prevHash, logFunc)
 		if err != nil {
 			return nil, err
 		}
 		prevHash = block.Hash()
-		err = r.addStateVerify(state, block.Root())
+		state, err = r.addStateVerify(state, block.Root(), block.NumberU64())
 		if err != nil {
 			return nil, fmt.Errorf("failed committing state for block %d : %w", blockToRecreate, err)
 		}

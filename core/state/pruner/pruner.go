@@ -57,7 +57,6 @@ const (
 // Config includes all the configurations for pruning.
 type Config struct {
 	Datadir   string // The directory of the state database
-	Cachedir  string // The directory of state clean cache
 	BloomSize uint64 // The Megabytes of memory allocated to bloom-filter
 }
 
@@ -336,7 +335,10 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 	if err != nil {
 		return err
 	}
-	accountIt := tr.NodeIterator(nil)
+	accountIt, err := tr.NodeIterator(nil)
+	if err != nil {
+		return err
+	}
 	startedAt := time.Now()
 	lastLog := time.Now()
 
@@ -379,7 +381,14 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 				output.Put(data.CodeHash, nil)
 			}
 			if data.Root != (common.Hash{}) {
-				storageTr, err := sdb.OpenStorageTrie(key, common.BytesToHash(accountIt.LeafKey()), data.Root)
+				// Lookup the preimage of account hash
+				preimage := tr.GetKey(accountIt.LeafKey())
+				if preimage == nil {
+					return errors.New("account address is not available")
+				}
+				address := common.BytesToAddress(preimage)
+
+				storageTr, err := sdb.OpenStorageTrie(key, address, data.Root)
 				if err != nil {
 					return err
 				}
@@ -392,7 +401,10 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 					defer func() {
 						results <- err
 					}()
-					storageIt := storageTr.NodeIterator(nil)
+					storageIt, err := storageTr.NodeIterator(nil)
+					if err != nil {
+						return
+					}
 					for storageIt.Next(true) {
 						storageTrieHash := storageIt.Hash()
 						if storageTrieHash != (common.Hash{}) {
@@ -436,7 +448,7 @@ func (p *Pruner) Prune(inputRoots []common.Hash) error {
 		return err
 	}
 	if bloomExists {
-		return RecoverPruning(p.config.Datadir, p.db, p.config.Cachedir)
+		return RecoverPruning(p.config.Datadir, p.db)
 	}
 	// Retrieve all snapshot layers from the current HEAD.
 	// In theory there are 128 difflayers + 1 disk layer present,
@@ -491,11 +503,6 @@ func (p *Pruner) Prune(inputRoots []common.Hash) error {
 	if len(roots) == 0 {
 		return errors.New("no pruning target roots found")
 	}
-	// Before start the pruning, delete the clean trie cache first.
-	// It's necessary otherwise in the next restart we will hit the
-	// deleted state root in the "clean cache" so that the incomplete
-	// state is picked for usage.
-	deleteCleanTrieCache(p.config.Cachedir)
 
 	// Traverse the target state, re-construct the whole state trie and
 	// commit to the given bloom filter.
@@ -535,7 +542,7 @@ func (p *Pruner) Prune(inputRoots []common.Hash) error {
 // pruning can be resumed. What's more if the bloom filter is constructed, the
 // pruning **has to be resumed**. Otherwise a lot of dangling nodes may be left
 // in the disk.
-func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) error {
+func RecoverPruning(datadir string, db ethdb.Database) error {
 	exists, err := bloomFilterExists(datadir)
 	if err != nil {
 		return err
@@ -572,12 +579,6 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 	}
 	log.Info("Loaded state bloom filter", "path", stateBloomPath, "roots", stateBloomRoots)
 
-	// Before start the pruning, delete the clean trie cache first.
-	// It's necessary otherwise in the next restart we will hit the
-	// deleted state root in the "clean cache" so that the incomplete
-	// state is picked for usage.
-	deleteCleanTrieCache(trieCachePath)
-
 	return prune(snaptree, stateBloomRoots, db, stateBloom, stateBloomPath, time.Now())
 }
 
@@ -609,24 +610,4 @@ func bloomFilterExists(datadir string) (bool, error) {
 	} else {
 		return true, nil
 	}
-}
-
-const warningLog = `
-
-WARNING!
-
-The clean trie cache is not found. Please delete it by yourself after the
-pruning. Remember don't start the Geth without deleting the clean trie cache
-otherwise the entire database may be damaged!
-
-Check the command description "geth snapshot prune-state --help" for more details.
-`
-
-func deleteCleanTrieCache(path string) {
-	if !common.FileExist(path) {
-		log.Warn(warningLog)
-		return
-	}
-	os.RemoveAll(path)
-	log.Info("Deleted trie clean cache", "path", path)
 }
