@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/protocols/arb"
@@ -382,7 +383,7 @@ func (h *ethHandler) Chain() *core.BlockChain { return h.chain }
 
 type dummyTxPool struct{}
 
-func (d *dummyTxPool) Get(hash common.Hash) *types.Transaction {
+func (d *dummyTxPool) Get(hash common.Hash) *txpool.Transaction {
 	return nil
 }
 
@@ -480,7 +481,11 @@ func (h *snapHandler) AccountIterator(root, account common.Hash) (snapshot.Accou
 		log.Error("Failed to open trie", "root", root, "err", err)
 		return nil, err
 	}
-	accIter := t.NodeIterator(account[:])
+	accIter, err := t.NodeIterator(account[:])
+	if err != nil {
+		log.Error("Failed to open nodeIterator for trie", "root", root, "err", err)
+		return nil, err
+	}
 	return trieAccountIterator{trieIteratorWrapper{
 		iter: trie.NewIterator((accIter)),
 	}}, nil
@@ -521,8 +526,13 @@ func (h *snapHandler) StorageIterator(root, account, origin common.Hash) (snapsh
 		log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
 		return nil, err
 	}
+	nodeIter, err := storageTrie.NodeIterator(origin[:])
+	if err != nil {
+		log.Error("Failed node iterator to open storage trie", "root", acc.Root, "err", err)
+		return nil, err
+	}
 	return trieStoreageIterator{trieIteratorWrapper{
-		iter: trie.NewIterator(storageTrie.NodeIterator(origin[:])),
+		iter: trie.NewIterator(nodeIter),
 	}}, nil
 }
 
