@@ -43,7 +43,7 @@ func (c *ChainConfig) IsArbitrumNitro(num *big.Int) bool {
 
 func (c *ChainConfig) MaxCodeSize() uint64 {
 	if c.ArbitrumChainParams.MaxCodeSize == 0 {
-		return MaxCodeSize
+		return DefaultMaxCodeSize
 	}
 	return c.ArbitrumChainParams.MaxCodeSize
 }
