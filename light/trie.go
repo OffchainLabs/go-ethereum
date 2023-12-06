@@ -59,6 +59,10 @@ func (db *odrDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Add
 	return &odrTrie{db: db, id: StorageTrieID(db.id, address, root)}, nil
 }
 
+func (db *odrDatabase) OpenStorageTrieWithAddrHash(stateRoot common.Hash, addrHash common.Hash, root common.Hash) (state.Trie, error) {
+	return nil, errors.New("OpenStorageTrieWithAddrHash is not implemented for odrDatabase")
+}
+
 func (db *odrDatabase) CopyTrie(t state.Trie) state.Trie {
 	switch t := t.(type) {
 	case *odrTrie:

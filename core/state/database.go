@@ -46,6 +46,9 @@ type Database interface {
 	// OpenStorageTrie opens the storage trie of an account.
 	OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (Trie, error)
 
+	// OpenStorageTrieWithAddrHash opens the storage trie of an account
+	OpenStorageTrieWithAddrHash(stateRoot common.Hash, addrHash common.Hash, root common.Hash) (Trie, error)
+
 	// CopyTrie returns an independent copy of the given trie.
 	CopyTrie(Trie) Trie
 
@@ -182,6 +185,16 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 // OpenStorageTrie opens the storage trie of an account.
 func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (Trie, error) {
 	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)
+	if err != nil {
+		return nil, err
+	}
+	return tr, nil
+}
+
+// OpenStorageTrieWithAddrHash opens the storage trie of an account.
+// arbitrum: the method is readded to not require address which is not available in pruner dumpRawTrieDescendants
+func (db *cachingDB) OpenStorageTrieWithAddrHash(stateRoot common.Hash, addrHash common.Hash, root common.Hash) (Trie, error) {
+	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, addrHash, root), db.triedb)
 	if err != nil {
 		return nil, err
 	}
