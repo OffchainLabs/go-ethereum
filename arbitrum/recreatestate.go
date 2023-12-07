@@ -80,24 +80,3 @@ func AdvanceStateByBlock(ctx context.Context, bc *core.BlockChain, state *state.
 	}
 	return state, block, nil
 }
-
-func AdvanceStateUpToBlock(ctx context.Context, bc *core.BlockChain, state *state.StateDB, targetHeader *types.Header, lastAvailableHeader *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, error) {
-	returnedBlockNumber := targetHeader.Number.Uint64()
-	blockToRecreate := lastAvailableHeader.Number.Uint64() + 1
-	prevHash := lastAvailableHeader.Hash()
-	for ctx.Err() == nil {
-		state, block, err := AdvanceStateByBlock(ctx, bc, state, targetHeader, blockToRecreate, prevHash, logFunc)
-		if err != nil {
-			return nil, err
-		}
-		prevHash = block.Hash()
-		if blockToRecreate >= returnedBlockNumber {
-			if block.Hash() != targetHeader.Hash() {
-				return nil, fmt.Errorf("blockHash doesn't match when recreating number: %d expected: %v got: %v", blockToRecreate, targetHeader.Hash(), block.Hash())
-			}
-			return state, nil
-		}
-		blockToRecreate++
-	}
-	return nil, ctx.Err()
-}

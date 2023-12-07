@@ -53,7 +53,7 @@ import (
 //   - preferDisk: this arg can be used by the caller to signal that even though the 'base' is
 //     provided, it would be preferable to start from a fresh state, if we have it
 //     on disk.
-func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
+func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, baseBlock *types.Block, readOnly bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
 	var (
 		current  *types.Block
 		database state.Database
@@ -66,8 +66,10 @@ func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexe
 		// The state is available in live database, create a reference
 		// on top to prevent garbage collection and return a release
 		// function to deref it.
+
+		// Try referencing the root, if it isn't in dirties cache then Reference will have no effect
+		statedb.Database().TrieDB().Reference(block.Root(), common.Hash{})
 		if statedb, err = eth.blockchain.StateAt(block.Root()); err == nil {
-			statedb.Database().TrieDB().Reference(block.Root(), common.Hash{})
 			return statedb, func() {
 				statedb.Database().TrieDB().Dereference(block.Root())
 			}, nil
@@ -95,7 +97,11 @@ func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexe
 		}
 		// The optional base statedb is given, mark the start point as parent block
 		statedb, database, report = base, base.Database(), false
-		current = eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
+		if baseBlock == nil {
+			current = eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
+		} else {
+			current = baseBlock
+		}
 	} else {
 		// Otherwise, try to reexec blocks until we find a state or reach our limit
 		current = block
@@ -214,7 +220,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	}
 	// Lookup the statedb of parent block from the live database,
 	// otherwise regenerate it on the flight.
-	statedb, release, err := eth.StateAtBlock(ctx, parent, reexec, nil, true, false)
+	statedb, release, err := eth.StateAtBlock(ctx, parent, reexec, nil, nil, true, false)
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, err
 	}

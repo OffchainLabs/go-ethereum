@@ -86,9 +86,9 @@ type Account struct {
 }
 
 // getState fetches the StateDB object for an account.
-func (a *Account) getState(ctx context.Context) (*state.StateDB, error) {
-	state, _, err := a.r.backend.StateAndHeaderByNumberOrHash(ctx, a.blockNrOrHash)
-	return state, err
+func (a *Account) getState(ctx context.Context) (*state.StateDB, ethapi.StateReleaseFunc, error) {
+	state, _, release, err := a.r.backend.StateAndHeaderByNumberOrHash(ctx, a.blockNrOrHash)
+	return state, release, err
 }
 
 func (a *Account) Address(ctx context.Context) (common.Address, error) {
@@ -96,10 +96,11 @@ func (a *Account) Address(ctx context.Context) (common.Address, error) {
 }
 
 func (a *Account) Balance(ctx context.Context) (hexutil.Big, error) {
-	state, err := a.getState(ctx)
+	state, release, err := a.getState(ctx)
 	if err != nil {
 		return hexutil.Big{}, err
 	}
+	defer release()
 	balance := state.GetBalance(a.address)
 	if balance == nil {
 		return hexutil.Big{}, fmt.Errorf("failed to load balance %x", a.address)
@@ -116,26 +117,29 @@ func (a *Account) TransactionCount(ctx context.Context) (hexutil.Uint64, error) 
 		}
 		return hexutil.Uint64(nonce), nil
 	}
-	state, err := a.getState(ctx)
+	state, release, err := a.getState(ctx)
 	if err != nil {
 		return 0, err
 	}
+	defer release()
 	return hexutil.Uint64(state.GetNonce(a.address)), nil
 }
 
 func (a *Account) Code(ctx context.Context) (hexutil.Bytes, error) {
-	state, err := a.getState(ctx)
+	state, release, err := a.getState(ctx)
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
+	defer release()
 	return state.GetCode(a.address), nil
 }
 
 func (a *Account) Storage(ctx context.Context, args struct{ Slot common.Hash }) (common.Hash, error) {
-	state, err := a.getState(ctx)
+	state, release, err := a.getState(ctx)
 	if err != nil {
 		return common.Hash{}, err
 	}
+	defer release()
 	return state.GetState(a.address, args.Slot), nil
 }
 

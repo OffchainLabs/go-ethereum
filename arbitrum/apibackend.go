@@ -229,10 +229,11 @@ func (a *APIBackend) FeeHistory(
 
 	// use the most recent average compute rate for all blocks
 	// note: while we could query this value for each block, it'd be prohibitively expensive
-	state, _, err := a.StateAndHeaderByNumber(ctx, newestBlock)
+	state, _, release, err := a.StateAndHeaderByNumber(ctx, newestBlock)
 	if err != nil {
 		return common.Big0, nil, nil, nil, err
 	}
+	defer release()
 	speedLimit, err := core.GetArbOSSpeedLimitPerSecond(state)
 	if err != nil {
 		return common.Big0, nil, nil, nil, err
@@ -433,40 +434,59 @@ func (a *APIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
-func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types.Header, err error) (*state.StateDB, *types.Header, error) {
+func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types.Header, err error) (*state.StateDB, *types.Header, ethapi.StateReleaseFunc, error) {
 	if err != nil {
-		return nil, header, err
+		return nil, header, nil, err
 	}
 	if header == nil {
-		return nil, nil, errors.New("header not found")
+		return nil, nil, nil, errors.New("header not found")
 	}
 	if !a.BlockChain().Config().IsArbitrumNitro(header.Number) {
-		return nil, header, types.ErrUseFallback
+		return nil, header, nil, types.ErrUseFallback
 	}
 	bc := a.BlockChain()
 	stateFor := func(header *types.Header) (*state.StateDB, error) {
-		return bc.StateAt(header.Root)
+		if header.Root != (common.Hash{}) {
+			// Try referencing the root, if it isn't in dirties cache then Reference will have no effect
+			bc.StateCache().TrieDB().Reference(header.Root, common.Hash{})
+		}
+		state, err := bc.StateAt(header.Root)
+		return state, err
 	}
-	state, lastHeader, err := FindLastAvailableState(ctx, bc, stateFor, header, nil, a.b.config.MaxRecreateStateDepth)
+	lastState, lastHeader, err := FindLastAvailableState(ctx, bc, stateFor, header, nil, a.b.config.MaxRecreateStateDepth)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
+	}
+	release := func() {
+		if lastHeader.Root != (common.Hash{}) {
+			bc.StateCache().TrieDB().Dereference(lastHeader.Root)
+		}
 	}
 	if lastHeader == header {
-		return state, header, nil
+		return lastState, header, release, nil
 	}
-	state, err = AdvanceStateUpToBlock(ctx, bc, state, header, lastHeader, nil)
-	if err != nil {
-		return nil, nil, err
+	defer release()
+	targetBlock := bc.GetBlockByNumber(header.Number.Uint64())
+	if targetBlock == nil {
+		return nil, nil, nil, errors.New("target block not found")
 	}
-	return state, header, err
+	lastBlock := bc.GetBlockByNumber(lastHeader.Number.Uint64())
+	if lastBlock == nil {
+		return nil, nil, nil, errors.New("last block not found")
+	}
+	reexec := uint64(0)
+	checkLive := false
+	preferDisk := true
+	state, release, err := eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(ctx, targetBlock, reexec, lastState, lastBlock, checkLive, preferDisk)
+	return state, header, release, err
 }
 
-func (a *APIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
+func (a *APIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, ethapi.StateReleaseFunc, error) {
 	header, err := a.HeaderByNumber(ctx, number)
 	return a.stateAndHeaderFromHeader(ctx, header, err)
 }
 
-func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
+func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, ethapi.StateReleaseFunc, error) {
 	header, err := a.HeaderByNumberOrHash(ctx, blockNrOrHash)
 	return a.stateAndHeaderFromHeader(ctx, header, err)
 }
@@ -476,7 +496,7 @@ func (a *APIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexe
 		return nil, nil, types.ErrUseFallback
 	}
 	// DEV: This assumes that `StateAtBlock` only accesses the blockchain and chainDb fields
-	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(ctx, block, reexec, base, checkLive, preferDisk)
+	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(ctx, block, reexec, base, nil, checkLive, preferDisk)
 }
 
 func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*core.Message, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {

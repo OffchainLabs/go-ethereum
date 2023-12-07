@@ -437,7 +437,7 @@ func (b testBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 func (b testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
 	return b.chain.GetBlock(hash, uint64(number.Int64())).Body(), nil
 }
-func (b testBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
+func (b testBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, StateReleaseFunc, error) {
 	if number == rpc.PendingBlockNumber {
 		panic("pending state not implemented")
 	}
@@ -449,9 +449,9 @@ func (b testBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.Bloc
 		return nil, nil, errors.New("header not found")
 	}
 	stateDb, err := b.chain.StateAt(header.Root)
-	return stateDb, header, err
+	return stateDb, header, NoOpStateRelease, err
 }
-func (b testBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
+func (b testBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, StateReleaseFunc, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.StateAndHeaderByNumber(ctx, blockNr)
 	}

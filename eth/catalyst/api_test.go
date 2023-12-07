@@ -1143,10 +1143,11 @@ func TestWithdrawals(t *testing.T) {
 	}
 
 	// 11: verify withdrawals were processed.
-	db, _, err := ethservice.APIBackend.StateAndHeaderByNumber(context.Background(), rpc.BlockNumber(execData.ExecutionPayload.Number))
+	db, _, release, err := ethservice.APIBackend.StateAndHeaderByNumber(context.Background(), rpc.BlockNumber(execData.ExecutionPayload.Number))
 	if err != nil {
 		t.Fatalf("unable to load db: %v", err)
 	}
+	defer release()
 	for i, w := range blockParams.Withdrawals {
 		// w.Amount is in gwei, balance in wei
 		if db.GetBalance(w.Address).Uint64() != w.Amount*params.GWei {
