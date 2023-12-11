@@ -128,7 +128,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			}
 			blockchain, _  = NewBlockChain(db, nil, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil)
-			tooBigInitCode = [params.MaxInitCodeSize + 1]byte{}
+			tooBigInitCode = [params.DefaultMaxInitCodeSize + 1]byte{}
 		)
 
 		defer blockchain.Stop()

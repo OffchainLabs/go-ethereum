@@ -1624,6 +1624,8 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.MaxSubmissionFee = (*hexutil.Big)(inner.MaxSubmissionFee)
 		result.GasFeeCap = (*hexutil.Big)(inner.GasFeeCap)
 		result.ChainID = (*hexutil.Big)(inner.ChainId)
+	case *types.ArbitrumUnsignedTx:
+		result.ChainID = (*hexutil.Big)(inner.ChainId)
 	case *types.ArbitrumSubtypedTx:
 		subtype := inner.TxSubtype()
 		result.Subtype = hexutil.Uint64(subtype)

@@ -32,10 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// noopReleaser is returned in case there is no operation expected
-// for releasing state.
-var noopReleaser = tracers.StateReleaseFunc(func() {})
-
 // StateAtBlock retrieves the state database associated with a certain block.
 // If no state is locally available for the given block, a number of blocks
 // are attempted to be reexecuted to generate the desired state. The optional
@@ -77,6 +73,7 @@ func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexe
 			}, nil
 		}
 	}
+	closeTrieDBInDefer := true
 	// The state is both for reading and writing, or it's unavailable in disk,
 	// try to construct/recover the state over an ephemeral trie.Database for
 	// isolating the live one.
@@ -85,10 +82,15 @@ func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexe
 			// Create an ephemeral trie.Database for isolating the live one. Otherwise
 			// the internal junks created by tracing will be persisted into the disk.
 			database = state.NewDatabaseWithConfig(eth.chainDb, &trie.Config{Cache: 16})
-			defer database.TrieDB().Close()
+			defer func() {
+				if closeTrieDBInDefer {
+					database.TrieDB().Close()
+				}
+			}()
 			if statedb, err = state.New(block.Root(), database, nil); err == nil {
 				log.Info("Found disk backend for state trie", "root", block.Root(), "number", block.Number())
-				return statedb, noopReleaser, nil
+				closeTrieDBInDefer = false
+				return statedb, func() { database.TrieDB().Close() }, nil
 			}
 		}
 		// The optional base statedb is given, mark the start point as parent block
@@ -101,7 +103,11 @@ func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexe
 		// Create an ephemeral trie.Database for isolating the live one. Otherwise
 		// the internal junks created by tracing will be persisted into the disk.
 		database = state.NewDatabaseWithConfig(eth.chainDb, &trie.Config{Cache: 16})
-		defer database.TrieDB().Close()
+		defer func() {
+			if closeTrieDBInDefer {
+				database.TrieDB().Close()
+			}
+		}()
 
 		// If we didn't check the live database, do check state over ephemeral database,
 		// otherwise we would rewind past a persisted block (specific corner case is
@@ -109,7 +115,8 @@ func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexe
 		if !readOnly {
 			statedb, err = state.New(current.Root(), database, nil)
 			if err == nil {
-				return statedb, noopReleaser, nil
+				closeTrieDBInDefer = false
+				return statedb, func() { database.TrieDB().Close() }, nil
 			}
 		}
 		// Database does not have the state for the given block, try to regenerate
@@ -187,7 +194,11 @@ func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexe
 		nodes, imgs := database.TrieDB().Size()
 		log.Info("Historical state regenerated", "block", current.NumberU64(), "elapsed", time.Since(start), "nodes", nodes, "preimages", imgs)
 	}
-	return statedb, func() { database.TrieDB().Dereference(block.Root()) }, nil
+	closeTrieDBInDefer = false
+	return statedb, func() {
+		database.TrieDB().Dereference(block.Root())
+		database.TrieDB().Close()
+	}, nil
 }
 
 // stateAtTransaction returns the execution environment of a certain transaction.
