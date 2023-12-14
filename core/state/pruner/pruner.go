@@ -381,7 +381,7 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 				output.Put(data.CodeHash, nil)
 			}
 			if data.Root != (common.Hash{}) {
-				storageTr, err := sdb.OpenStorageTrieWithAddrHash(key, common.BytesToHash(accountIt.LeafKey()), data.Root)
+				storageTr, err := trie.NewStateTrie(trie.StorageTrieID(root, key, data.Root), sdb.TrieDB())
 				if err != nil {
 					return err
 				}
