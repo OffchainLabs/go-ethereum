@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -229,11 +230,10 @@ func (a *APIBackend) FeeHistory(
 
 	// use the most recent average compute rate for all blocks
 	// note: while we could query this value for each block, it'd be prohibitively expensive
-	state, _, release, err := a.StateAndHeaderByNumber(ctx, newestBlock)
+	state, _, err := a.StateAndHeaderByNumber(ctx, newestBlock)
 	if err != nil {
 		return common.Big0, nil, nil, nil, err
 	}
-	defer release()
 	speedLimit, err := core.GetArbOSSpeedLimitPerSecond(state)
 	if err != nil {
 		return common.Big0, nil, nil, nil, err
@@ -434,15 +434,15 @@ func (a *APIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
-func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types.Header, err error) (*state.StateDB, *types.Header, ethapi.StateReleaseFunc, error) {
+func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types.Header, err error) (*state.StateDB, *types.Header, error) {
 	if err != nil {
-		return nil, header, nil, err
+		return nil, header, err
 	}
 	if header == nil {
-		return nil, nil, nil, errors.New("header not found")
+		return nil, nil, errors.New("header not found")
 	}
 	if !a.BlockChain().Config().IsArbitrumNitro(header.Number) {
-		return nil, header, nil, types.ErrUseFallback
+		return nil, header, types.ErrUseFallback
 	}
 	bc := a.BlockChain()
 	stateFor := func(header *types.Header) (*state.StateDB, error) {
@@ -450,43 +450,61 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 			// Try referencing the root, if it isn't in dirties cache then Reference will have no effect
 			bc.StateCache().TrieDB().Reference(header.Root, common.Hash{})
 		}
-		state, err := bc.StateAt(header.Root)
-		return state, err
+		statedb, err := state.New(header.Root, bc.StateCache(), bc.Snapshots())
+		if err != nil {
+			return nil, err
+		}
+		if header.Root != (common.Hash{}) {
+			// we are setting finalizer instead of returning a StateReleaseFunc to avoid changing ethapi.Backend interface to minimize diff to upstream
+			headerRoot := header.Root
+			runtime.SetFinalizer(statedb, func(_ *state.StateDB) {
+				bc.StateCache().TrieDB().Dereference(headerRoot)
+			})
+		}
+		return statedb, err
 	}
 	lastState, lastHeader, err := FindLastAvailableState(ctx, bc, stateFor, header, nil, a.b.config.MaxRecreateStateDepth)
 	if err != nil {
-		return nil, nil, nil, err
-	}
-	release := func() {
-		if lastHeader.Root != (common.Hash{}) {
-			bc.StateCache().TrieDB().Dereference(lastHeader.Root)
-		}
+		return nil, nil, err
 	}
 	if lastHeader == header {
-		return lastState, header, release, nil
+		return lastState, header, nil
 	}
-	defer release()
+	if lastHeader.Root != (common.Hash{}) {
+		defer bc.StateCache().TrieDB().Dereference(lastHeader.Root)
+	}
 	targetBlock := bc.GetBlockByNumber(header.Number.Uint64())
 	if targetBlock == nil {
-		return nil, nil, nil, errors.New("target block not found")
+		return nil, nil, errors.New("target block not found")
 	}
 	lastBlock := bc.GetBlockByNumber(lastHeader.Number.Uint64())
 	if lastBlock == nil {
-		return nil, nil, nil, errors.New("last block not found")
+		return nil, nil, errors.New("last block not found")
 	}
 	reexec := uint64(0)
 	checkLive := false
 	preferDisk := true
-	state, release, err := eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(ctx, targetBlock, reexec, lastState, lastBlock, checkLive, preferDisk)
-	return state, header, release, err
+	statedb, release, err := eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(ctx, targetBlock, reexec, lastState, lastBlock, checkLive, preferDisk)
+	if err != nil {
+		return nil, nil, err
+	}
+	// we are setting finalizer instead of returning a StateReleaseFunc to avoid changing ethapi.Backend interface to minimize diff to upstream
+	// to set a finalizer we need to allocated the obj in current block
+	statedb, err = state.New(header.Root, statedb.Database(), nil)
+	if header.Root != (common.Hash{}) {
+		runtime.SetFinalizer(statedb, func(_ *state.StateDB) {
+			release()
+		})
+	}
+	return statedb, header, err
 }
 
-func (a *APIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, ethapi.StateReleaseFunc, error) {
+func (a *APIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	header, err := a.HeaderByNumber(ctx, number)
 	return a.stateAndHeaderFromHeader(ctx, header, err)
 }
 
-func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, ethapi.StateReleaseFunc, error) {
+func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
 	header, err := a.HeaderByNumberOrHash(ctx, blockNrOrHash)
 	return a.stateAndHeaderFromHeader(ctx, header, err)
 }

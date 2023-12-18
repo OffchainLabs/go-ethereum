@@ -620,7 +620,7 @@ func (s *BlockChainAPI) BlockNumber() hexutil.Uint64 {
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
 func (s *BlockChainAPI) GetBalance(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
-	state, _, release, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		if client := fallbackClientFor(s.b, err); client != nil {
 			var res hexutil.Big
@@ -629,7 +629,6 @@ func (s *BlockChainAPI) GetBalance(ctx context.Context, address common.Address, 
 		}
 		return nil, err
 	}
-	defer release()
 	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
 }
 
@@ -682,11 +681,10 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 		}
 	}
 
-	state, _, release, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
 	}
-	defer release()
 	if storageTrie, err = state.StorageTrie(address); err != nil {
 		return nil, err
 	}
@@ -869,7 +867,7 @@ func (s *BlockChainAPI) GetUncleCountByBlockHash(ctx context.Context, blockHash 
 
 // GetCode returns the code stored at the given address in the state for the given block number.
 func (s *BlockChainAPI) GetCode(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
-	state, _, release, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		if client := fallbackClientFor(s.b, err); client != nil {
 			var res hexutil.Bytes
@@ -878,7 +876,6 @@ func (s *BlockChainAPI) GetCode(ctx context.Context, address common.Address, blo
 		}
 		return nil, err
 	}
-	defer release()
 	code := state.GetCode(address)
 	return code, state.Error()
 }
@@ -891,7 +888,7 @@ func (s *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Address
 	if err != nil {
 		return nil, fmt.Errorf("unable to decode storage key: %s", err)
 	}
-	state, _, release, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		if client := fallbackClientFor(s.b, err); client != nil {
 			var res hexutil.Bytes
@@ -900,7 +897,6 @@ func (s *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Address
 		}
 		return nil, err
 	}
-	defer release()
 	res := state.GetState(address, key)
 	return res[:], state.Error()
 }
@@ -1129,11 +1125,10 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64, runMode core.MessageRunMode) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
-	state, header, release, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
 	}
-	defer release()
 
 	return doCall(ctx, b, args, state, header, overrides, blockOverrides, timeout, globalGasCap, runMode)
 }
@@ -1237,11 +1232,10 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	// Recap the highest gas limit with account's available balance.
 	if feeCap.BitLen() != 0 {
-		state, _, release, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+		state, _, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 		if err != nil {
 			return 0, err
 		}
-		defer release()
 		err = overrides.Apply(state)
 		if err != nil {
 			return 0, err
@@ -1271,11 +1265,10 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	vanillaGasCap := gasCap
 	{
-		state, header, release, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+		state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 		if state == nil || err != nil {
 			return 0, err
 		}
-		defer release()
 		gasCap, err = args.L2OnlyGasCap(gasCap, header, state, core.MessageGasEstimationMode)
 		if err != nil {
 			return 0, err
@@ -1302,11 +1295,10 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		}
 		return result.Failed(), result, nil
 	}
-	state, header, release, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return 0, err
 	}
-	defer release()
 	err = overrides.Apply(state)
 	if err != nil {
 		return 0, err
@@ -1703,11 +1695,10 @@ func (s *BlockChainAPI) CreateAccessList(ctx context.Context, args TransactionAr
 // If the transaction itself fails, an vmErr is returned.
 func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrHash, args TransactionArgs) (acl types.AccessList, gasUsed uint64, vmErr error, err error) {
 	// Retrieve the execution context
-	db, header, release, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	db, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if db == nil || err != nil {
 		return nil, 0, nil, err
 	}
-	defer release()
 	// If the gas amount is not set, default to RPC gas cap.
 	if args.Gas == nil {
 		tmp := hexutil.Uint64(b.RPCGasCap())
@@ -1838,7 +1829,7 @@ func (s *TransactionAPI) GetTransactionCount(ctx context.Context, address common
 		return (*hexutil.Uint64)(&nonce), nil
 	}
 	// Resolve block number and use its state to ask for the nonce
-	state, _, release, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		if client := fallbackClientFor(s.b, err); client != nil {
 			var res hexutil.Uint64
@@ -1847,7 +1838,6 @@ func (s *TransactionAPI) GetTransactionCount(ctx context.Context, address common
 		}
 		return nil, err
 	}
-	defer release()
 	nonce := state.GetNonce(address)
 	return (*hexutil.Uint64)(&nonce), state.Error()
 }
