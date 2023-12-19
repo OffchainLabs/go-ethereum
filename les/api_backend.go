@@ -140,10 +140,10 @@ func (b *LesApiBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts)
 func (b *LesApiBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	header, err := b.HeaderByNumber(ctx, number)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	if header == nil {
-		return nil, nil, nil, errors.New("header not found")
+		return nil, nil, errors.New("header not found")
 	}
 	return light.NewState(ctx, header, b.eth.odr), header, nil
 }

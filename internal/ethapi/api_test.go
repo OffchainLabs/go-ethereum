@@ -443,10 +443,10 @@ func (b testBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.Bloc
 	}
 	header, err := b.HeaderByNumber(ctx, number)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	if header == nil {
-		return nil, nil, nil, errors.New("header not found")
+		return nil, nil, errors.New("header not found")
 	}
 	stateDb, err := b.chain.StateAt(header.Root)
 	return stateDb, header, err
