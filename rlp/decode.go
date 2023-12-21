@@ -179,7 +179,7 @@ func makeDecoder(typ reflect.Type, tags rlpstruct.Tags) (dec decoder, err error)
 	case kind == reflect.Slice || kind == reflect.Array:
 		return makeListDecoder(typ, tags)
 	case kind == reflect.Struct:
-		return makeStructDecoder(typ, tags.Flat)
+		return makeStructDecoder(typ)
 	case kind == reflect.Interface:
 		return decodeInterface, nil
 	default:
@@ -401,7 +401,7 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 	return nil
 }
 
-func makeStructDecoder(typ reflect.Type, flat bool) (decoder, error) {
+func makeStructDecoder(typ reflect.Type) (decoder, error) {
 	fields, err := structFields(typ)
 	if err != nil {
 		return nil, err
@@ -412,10 +412,8 @@ func makeStructDecoder(typ reflect.Type, flat bool) (decoder, error) {
 		}
 	}
 	dec := func(s *Stream, val reflect.Value) (err error) {
-		if !flat {
-			if _, err := s.List(); err != nil {
-				return wrapStreamError(err, typ)
-			}
+		if _, err := s.List(); err != nil {
+			return wrapStreamError(err, typ)
 		}
 		for i, f := range fields {
 			err := f.info.decoder(s, val.Field(f.index))
@@ -431,9 +429,6 @@ func makeStructDecoder(typ reflect.Type, flat bool) (decoder, error) {
 			} else if err != nil {
 				return addErrorContext(err, "."+typ.Field(f.index).Name)
 			}
-		}
-		if flat {
-			return nil
 		}
 		return wrapStreamError(s.ListEnd(), typ)
 	}

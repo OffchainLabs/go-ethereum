@@ -551,7 +551,7 @@ func GetArbitrumTxSubtype(tx *Transaction) byte {
 }
 
 type ArbitrumTippingTx struct {
-	DynamicFeeTx `rlp:"flat"`
+	DynamicFeeTx
 }
 
 func NewArbitrumTippingTx(origTx *Transaction) (*Transaction, error) {

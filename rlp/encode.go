@@ -166,7 +166,7 @@ func makeWriter(typ reflect.Type, ts rlpstruct.Tags) (writer, error) {
 	case kind == reflect.Slice || kind == reflect.Array:
 		return makeSliceWriter(typ, ts)
 	case kind == reflect.Struct:
-		return makeStructWriter(typ, ts.Flat)
+		return makeStructWriter(typ)
 	case kind == reflect.Interface:
 		return writeInterface, nil
 	default:
@@ -339,7 +339,7 @@ func makeSliceWriter(typ reflect.Type, ts rlpstruct.Tags) (writer, error) {
 	return wfn, nil
 }
 
-func makeStructWriter(typ reflect.Type, flat bool) (writer, error) {
+func makeStructWriter(typ reflect.Type) (writer, error) {
 	fields, err := structFields(typ)
 	if err != nil {
 		return nil, err
@@ -355,18 +355,13 @@ func makeStructWriter(typ reflect.Type, flat bool) (writer, error) {
 	if firstOptionalField == len(fields) {
 		// This is the writer function for structs without any optional fields.
 		writer = func(val reflect.Value, w *encBuffer) error {
-			var lh int
-			if !flat {
-				lh = w.list()
-			}
+			lh := w.list()
 			for _, f := range fields {
 				if err := f.info.writer(val.Field(f.index), w); err != nil {
 					return err
 				}
 			}
-			if !flat {
-				w.listEnd(lh)
-			}
+			w.listEnd(lh)
 			return nil
 		}
 	} else {
@@ -379,18 +374,13 @@ func makeStructWriter(typ reflect.Type, flat bool) (writer, error) {
 					break
 				}
 			}
-			var lh int
-			if !flat {
-				lh = w.list()
-			}
+			lh := w.list()
 			for i := 0; i <= lastField; i++ {
 				if err := fields[i].info.writer(val.Field(fields[i].index), w); err != nil {
 					return err
 				}
 			}
-			if !flat {
-				w.listEnd(lh)
-			}
+			w.listEnd(lh)
 			return nil
 		}
 	}
