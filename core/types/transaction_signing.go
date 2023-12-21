@@ -267,7 +267,7 @@ func NewLondonSigner(chainId *big.Int) Signer {
 }
 
 func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
-	if tx.Type() != DynamicFeeTxType && !signSubtypedLikeDynamicFeeTx(tx) {
+	if tx.Type() != DynamicFeeTxType {
 		return s.eip2930Signer.Sender(tx)
 	}
 	V, R, S := tx.RawSignatureValues()
@@ -286,19 +286,14 @@ func (s londonSigner) Equal(s2 Signer) bool {
 }
 
 func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
-	var txdata TxData
-	var ok bool
-	txdata, ok = tx.inner.(*DynamicFeeTx)
+	txdata, ok := tx.inner.(*DynamicFeeTx)
 	if !ok {
-		txdata, ok = tx.inner.(*ArbitrumSubtypedTx)
-		if !ok || !signSubtypedLikeDynamicFeeTx(tx) {
-			return s.eip2930Signer.SignatureValues(tx, sig)
-		}
+		return s.eip2930Signer.SignatureValues(tx, sig)
 	}
 	// Check that chain ID of tx matches the signer. We also accept ID zero here,
 	// because it indicates that the chain ID was not specified in the tx.
-	if txdata.chainID().Sign() != 0 && txdata.chainID().Cmp(s.chainId) != 0 {
-		return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.chainID(), s.chainId)
+	if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
+		return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.ChainID, s.chainId)
 	}
 	R, S, _ = decodeSignature(sig)
 	V = big.NewInt(int64(sig[64]))
@@ -308,22 +303,6 @@ func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s londonSigner) Hash(tx *Transaction) common.Hash {
-	if signSubtypedLikeDynamicFeeTx(tx) {
-		return prefixedRlpHash(
-			tx.Type(),
-			[]interface{}{
-				tx.inner.(*ArbitrumSubtypedTx).TxSubtype(),
-				s.chainId,
-				tx.Nonce(),
-				tx.GasTipCap(),
-				tx.GasFeeCap(),
-				tx.Gas(),
-				tx.To(),
-				tx.Value(),
-				tx.Data(),
-				tx.AccessList(),
-			})
-	}
 	if tx.Type() != DynamicFeeTxType {
 		return s.eip2930Signer.Hash(tx)
 	}

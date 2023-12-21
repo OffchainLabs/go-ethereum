@@ -537,10 +537,6 @@ func (tx *ArbitrumSubtypedTx) copy() TxData {
 func (tx *ArbitrumSubtypedTx) txType() byte    { return ArbitrumSubtypedTxType }
 func (tx *ArbitrumSubtypedTx) TxSubtype() byte { return tx.TxData.txType() }
 
-func signSubtypedLikeDynamicFeeTx(tx *Transaction) bool {
-	return GetArbitrumTxSubtype(tx) == ArbitrumTippingTxSubtype
-}
-
 func GetArbitrumTxSubtype(tx *Transaction) byte {
 	switch inner := tx.inner.(type) {
 	case *ArbitrumSubtypedTx:

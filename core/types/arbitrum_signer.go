@@ -40,6 +40,14 @@ func (s arbitrumSigner) Sender(tx *Transaction) (common.Address, error) {
 		}
 		fakeTx := NewTx(&legacyData.LegacyTx)
 		return s.Signer.Sender(fakeTx)
+	case *ArbitrumSubtypedTx:
+		switch subtx := inner.TxData.(type) {
+		case *ArbitrumTippingTx:
+			fakeTx := NewTx(&subtx.DynamicFeeTx)
+			return s.Signer.Sender(fakeTx)
+		default:
+			return common.Address{}, ErrTxTypeNotSupported
+		}
 	default:
 		return s.Signer.Sender(tx)
 	}
@@ -51,7 +59,7 @@ func (s arbitrumSigner) Equal(s2 Signer) bool {
 }
 
 func (s arbitrumSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
-	switch tx.inner.(type) {
+	switch inner := tx.inner.(type) {
 	case *ArbitrumUnsignedTx:
 		return bigZero, bigZero, bigZero, nil
 	case *ArbitrumContractTx:
@@ -65,9 +73,16 @@ func (s arbitrumSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *b
 	case *ArbitrumSubmitRetryableTx:
 		return bigZero, bigZero, bigZero, nil
 	case *ArbitrumLegacyTxData:
-		legacyData := tx.inner.(*ArbitrumLegacyTxData)
-		fakeTx := NewTx(&legacyData.LegacyTx)
+		fakeTx := NewTx(&inner.LegacyTx)
 		return s.Signer.SignatureValues(fakeTx, sig)
+	case *ArbitrumSubtypedTx:
+		switch subtx := inner.TxData.(type) {
+		case *ArbitrumTippingTx:
+			fakeTx := NewTx(&subtx.DynamicFeeTx)
+			return s.Signer.SignatureValues(fakeTx, sig)
+		default:
+			return nil, nil, nil, ErrTxTypeNotSupported
+		}
 	default:
 		return s.Signer.SignatureValues(tx, sig)
 	}
@@ -76,9 +91,16 @@ func (s arbitrumSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *b
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s arbitrumSigner) Hash(tx *Transaction) common.Hash {
-	if legacyData, isArbLegacy := tx.inner.(*ArbitrumLegacyTxData); isArbLegacy {
-		fakeTx := NewTx(&legacyData.LegacyTx)
+	switch inner := tx.inner.(type) {
+	case *ArbitrumLegacyTxData:
+		fakeTx := NewTx(&inner.LegacyTx)
 		return s.Signer.Hash(fakeTx)
+	case *ArbitrumSubtypedTx:
+		switch subtx := inner.TxData.(type) {
+		case *ArbitrumTippingTx:
+			fakeTx := NewTx(&subtx.DynamicFeeTx)
+			return s.Signer.Hash(fakeTx)
+		}
 	}
 	return s.Signer.Hash(tx)
 }
