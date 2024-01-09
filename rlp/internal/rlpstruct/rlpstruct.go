@@ -79,9 +79,6 @@ type Tags struct {
 
 	// rlp:"-" ignores fields.
 	Ignored bool
-
-	// rlp:"flat" flattens field.
-	Flat bool
 }
 
 // TagError is raised for invalid struct tags.
@@ -186,8 +183,6 @@ func parseTag(field Field, lastPublic int) (Tags, error) {
 			if field.Type.Kind != reflect.Slice {
 				return ts, TagError{Field: name, Tag: t, Err: "field type is not slice"}
 			}
-		case "flat":
-			ts.Flat = true
 		default:
 			return ts, TagError{Field: name, Tag: t, Err: "unknown tag"}
 		}
