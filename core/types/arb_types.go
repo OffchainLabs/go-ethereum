@@ -17,7 +17,6 @@ import (
 )
 
 const (
-	arbitrumSubtypeOffset    = 0xff
 	ArbitrumInvalidSubtype   = 0
 	ArbitrumTippingTxSubtype = 1
 )
