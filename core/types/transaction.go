@@ -128,11 +128,6 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 
 // encodeTyped writes the canonical encoding of a typed transaction to w.
 func (tx *Transaction) encodeTyped(w *bytes.Buffer) error {
-	if tx.Type() == ArbitrumSubtypedTxType {
-		w.WriteByte(tx.Type())
-		w.WriteByte(tx.inner.(*ArbitrumSubtypedTx).TxSubtype())
-		return rlp.Encode(w, tx.inner.(*ArbitrumSubtypedTx).TxData)
-	}
 	w.WriteByte(tx.Type())
 	return rlp.Encode(w, tx.inner)
 }
@@ -204,22 +199,6 @@ func (tx *Transaction) decodeTyped(b []byte, arbParsing bool) (TxData, error) {
 	if len(b) <= 1 {
 		return nil, errShortTypedTx
 	}
-	txType := uint64(b[0])
-	if txType == ArbitrumSubtypedTxType {
-		if len(b) <= 2 {
-			return nil, errShortTypedTx
-		}
-		var inner ArbitrumSubtypedTx
-		switch b[1] {
-		case ArbitrumTippingTxSubtype:
-			var tipping ArbitrumTippingTx
-			err := rlp.DecodeBytes(b[2:], &tipping)
-			inner.TxData = &tipping
-			return &inner, err
-		default:
-			return nil, ErrTxTypeNotSupported
-		}
-	}
 	if arbParsing {
 		switch b[0] {
 		case ArbitrumDepositTxType:
@@ -263,6 +242,10 @@ func (tx *Transaction) decodeTyped(b []byte, arbParsing bool) (TxData, error) {
 		return &inner, err
 	case BlobTxType:
 		var inner BlobTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	case ArbitrumSubtypedTxType:
+		var inner ArbitrumSubtypedTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
 	default:

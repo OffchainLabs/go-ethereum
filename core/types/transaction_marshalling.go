@@ -224,29 +224,6 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		data := itx.data()
 		enc.Input = (*hexutil.Bytes)(&data)
 		enc.To = tx.To()
-	case *ArbitrumSubtypedTx:
-		subtype := uint64(itx.TxSubtype())
-		enc.Subtype = (*hexutil.Uint64)(&subtype)
-		switch subtype {
-		case ArbitrumTippingTxSubtype:
-			enc.ChainID = (*hexutil.Big)(itx.chainID())
-			accessList := itx.accessList()
-			enc.AccessList = &accessList
-			nonce := itx.nonce()
-			enc.Nonce = (*hexutil.Uint64)(&nonce)
-			gas := itx.gas()
-			enc.Gas = (*hexutil.Uint64)(&gas)
-			enc.MaxFeePerGas = (*hexutil.Big)(itx.gasFeeCap())
-			enc.MaxPriorityFeePerGas = (*hexutil.Big)(itx.gasTipCap())
-			enc.Value = (*hexutil.Big)(itx.value())
-			data := itx.data()
-			enc.Input = (*hexutil.Bytes)(&data)
-			enc.To = tx.To()
-			v, r, s := itx.rawSignatureValues()
-			enc.V = (*hexutil.Big)(v)
-			enc.R = (*hexutil.Big)(r)
-			enc.S = (*hexutil.Big)(s)
-		}
 	case *BlobTx:
 		enc.ChainID = (*hexutil.Big)(itx.ChainID.ToBig())
 		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
@@ -264,6 +241,8 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.S = (*hexutil.Big)(itx.S.ToBig())
 		yparity := itx.V.Uint64()
 		enc.YParity = (*hexutil.Uint64)(&yparity)
+	case *ArbitrumSubtypedTx:
+		itx.EncodeTxJson(&enc)
 	}
 	return json.Marshal(&enc)
 }
@@ -278,15 +257,7 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 
 	// Decode / verify fields according to transaction type.
 	var inner TxData
-	decType := uint64(dec.Type)
-	if decType == ArbitrumSubtypedTxType {
-		if dec.Subtype != nil {
-			decType = uint64(*dec.Subtype) + arbitrumSubtypeOffset
-		} else {
-			return errors.New("missing required field 'subtype' in transaction")
-		}
-	}
-	switch decType {
+	switch dec.Type {
 	case LegacyTxType:
 		var itx LegacyTx
 		inner = &itx
@@ -390,8 +361,9 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			}
 		}
 
-	case DynamicFeeTxType, ArbitrumTippingTxSubtype + arbitrumSubtypeOffset:
+	case DynamicFeeTxType:
 		var itx DynamicFeeTx
+		inner = &itx
 		// Access list is optional for now.
 		if dec.AccessList != nil {
 			itx.AccessList = *dec.AccessList
@@ -453,15 +425,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			if err := sanityCheckSignature(itx.V, itx.R, itx.S, false); err != nil {
 				return err
 			}
-		}
-		if decType == ArbitrumTippingTxSubtype+arbitrumSubtypeOffset {
-			inner = &ArbitrumSubtypedTx{
-				TxData: &ArbitrumTippingTx{
-					DynamicFeeTx: itx,
-				},
-			}
-		} else {
-			inner = &itx
 		}
 
 	case ArbitrumLegacyTxType:
@@ -806,6 +769,13 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			if err := sanityCheckSignature(vbig, itx.R.ToBig(), itx.S.ToBig(), false); err != nil {
 				return err
 			}
+		}
+
+	case ArbitrumSubtypedTxType:
+		var itx ArbitrumSubtypedTx
+		inner = &itx
+		if err := itx.DecodeTxJson(&dec); err != nil {
+			return err
 		}
 
 	default:
