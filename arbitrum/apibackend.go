@@ -445,34 +445,33 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 		return nil, header, types.ErrUseFallback
 	}
 	bc := a.BlockChain()
-	stateFor := func(header *types.Header) (*state.StateDB, error) {
+	stateFor := func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
 		if header.Root != (common.Hash{}) {
 			// Try referencing the root, if it isn't in dirties cache then Reference will have no effect
 			bc.StateCache().TrieDB().Reference(header.Root, common.Hash{})
 		}
 		statedb, err := state.New(header.Root, bc.StateCache(), bc.Snapshots())
 		if err != nil {
-			return nil, err
+			return nil, noopStateRelease, err
 		}
 		if header.Root != (common.Hash{}) {
-			// we are setting finalizer instead of returning a StateReleaseFunc to avoid changing ethapi.Backend interface to minimize diff to upstream
 			headerRoot := header.Root
-			runtime.SetFinalizer(statedb, func(_ *state.StateDB) {
-				bc.StateCache().TrieDB().Dereference(headerRoot)
-			})
+			return statedb, func() { bc.StateCache().TrieDB().Dereference(headerRoot) }, nil
 		}
-		return statedb, err
+		return statedb, noopStateRelease, nil
 	}
-	lastState, lastHeader, err := FindLastAvailableState(ctx, bc, stateFor, header, nil, a.b.config.MaxRecreateStateDepth)
+	lastState, lastHeader, lastStateRelease, err := FindLastAvailableState(ctx, bc, stateFor, header, nil, a.b.config.MaxRecreateStateDepth)
 	if err != nil {
 		return nil, nil, err
 	}
 	if lastHeader == header {
+		// we are setting finalizer instead of returning a StateReleaseFunc to avoid changing ethapi.Backend interface to minimize diff to upstream
+		runtime.SetFinalizer(lastState, func(_ *state.StateDB) {
+			lastStateRelease()
+		})
 		return lastState, header, nil
 	}
-	if lastHeader.Root != (common.Hash{}) {
-		defer bc.StateCache().TrieDB().Dereference(lastHeader.Root)
-	}
+	defer lastStateRelease()
 	targetBlock := bc.GetBlockByNumber(header.Number.Uint64())
 	if targetBlock == nil {
 		return nil, nil, errors.New("target block not found")
@@ -489,8 +488,6 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 		return nil, nil, err
 	}
 	// we are setting finalizer instead of returning a StateReleaseFunc to avoid changing ethapi.Backend interface to minimize diff to upstream
-	// to set a finalizer we need to allocated the obj in current block
-	statedb, err = state.New(header.Root, statedb.Database(), nil)
 	if header.Root != (common.Hash{}) {
 		runtime.SetFinalizer(statedb, func(_ *state.StateDB) {
 			release()
