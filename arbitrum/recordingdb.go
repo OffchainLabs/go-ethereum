@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	flag "github.com/spf13/pflag"
 )
 
@@ -181,9 +182,15 @@ type RecordingDatabase struct {
 }
 
 func NewRecordingDatabase(config *RecordingDatabaseConfig, ethdb ethdb.Database, blockchain *core.BlockChain) *RecordingDatabase {
+	hashConfig := *hashdb.Defaults
+	hashConfig.CleanCacheSize = config.TrieCleanCache
+	trieConfig := trie.Config{
+		Preimages: false,
+		HashDB:    &hashConfig,
+	}
 	return &RecordingDatabase{
 		config: config,
-		db:     state.NewDatabaseWithConfig(ethdb, &trie.Config{Cache: config.TrieCleanCache}),
+		db:     state.NewDatabaseWithConfig(ethdb, &trieConfig),
 		bc:     blockchain,
 	}
 }
