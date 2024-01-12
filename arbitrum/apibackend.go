@@ -580,7 +580,7 @@ func (a *APIBackend) BloomStatus() (uint64, uint64) {
 }
 
 func (a *APIBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {
-	return rawdb.ReadLogs(a.ChainDb(), hash, number, a.ChainConfig()), nil
+	return rawdb.ReadLogs(a.ChainDb(), hash, number), nil
 }
 
 func (a *APIBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {

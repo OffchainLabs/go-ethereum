@@ -741,7 +741,7 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
 	}
 	receipts := []*receiptLogs{}
 	if err := rlp.DecodeBytes(data, &receipts); err != nil {
-		if logs := readLegacyLogs(db, hash, number, config); logs != nil {
+		if logs := readLegacyLogs(db, hash, number); logs != nil {
 			return logs
 		}
 
@@ -760,16 +760,26 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
 // from a block which has its receipt stored in the legacy format. It'll
 // be removed after users have migrated their freezer databases.
 // Arbitrum: we are keeping this to handle classic (legacy) receipts
-func readLegacyLogs(db ethdb.Reader, hash common.Hash, number uint64, config *params.ChainConfig) [][]*types.Log {
+func readLegacyLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
 	// The time can be zero since Arbitrum legacy receipts on Arbitrum One are pre-Cancun,
 	// and the time only affects which fork's signer is picked.
-	receipts := ReadReceipts(db, hash, number, 0, config)
+	receipts := ReadRawReceipts(db, hash, number)
 	if receipts == nil {
 		return nil
 	}
 	logs := make([][]*types.Log, len(receipts))
+	logIndex := uint(0)
 	for i, receipt := range receipts {
 		logs[i] = receipt.Logs
+		for j := range logs[i] {
+			logs[i][j].BlockNumber = number
+			logs[i][j].BlockNumber = number
+			logs[i][j].BlockHash = hash
+			logs[i][j].TxHash = receipt.TxHash
+			logs[i][j].TxIndex = uint(i)
+			logs[i][j].Index = logIndex
+			logIndex++
+		}
 	}
 	return logs
 }
