@@ -44,6 +44,9 @@ func (s arbitrumSigner) Sender(tx *Transaction) (common.Address, error) {
 	case *ArbitrumSubtypedTx:
 		switch inner.TxData.(type) {
 		case *ArbitrumTippingTx:
+			// same as in londonSigner.Sender for DynamicFeeTx,
+			// but use arbitrumSigner.Hash to include tx subtype in the hashed data
+
 			V, R, S := tx.RawSignatureValues()
 			// DynamicFee txs are defined to use 0 and 1 as their recovery
 			// id, add 27 to become equivalent to unprotected Homestead signatures.
@@ -85,14 +88,8 @@ func (s arbitrumSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *b
 	case *ArbitrumSubtypedTx:
 		switch txdata := inner.TxData.(type) {
 		case *ArbitrumTippingTx:
-			// Check that chain ID of tx matches the signer. We also accept ID zero here,
-			// because it indicates that the chain ID was not specified in the tx.
-			if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.Signer.ChainID()) != 0 {
-				return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.ChainID, s.Signer.ChainID())
-			}
-			R, S, _ = decodeSignature(sig)
-			V = big.NewInt(int64(sig[64]))
-			return R, S, V, nil
+			fakeTx := NewTx(&txdata.DynamicFeeTx)
+			return s.Signer.SignatureValues(fakeTx, sig)
 		default:
 			return nil, nil, nil, ErrTxTypeNotSupported
 		}
