@@ -901,6 +901,37 @@ func (s *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Address
 	return res[:], state.Error()
 }
 
+// GetBlockReceipts returns the block receipts for the given block hash or number or tag.
+func (s *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
+	block, err := s.b.BlockByNumberOrHash(ctx, blockNrOrHash)
+	if block == nil || err != nil {
+		// When the block doesn't exist, the RPC method should return JSON null
+		// as per specification.
+		return nil, nil
+	}
+	receipts, err := s.b.GetReceipts(ctx, block.Hash())
+	if err != nil {
+		return nil, err
+	}
+	txs := block.Transactions()
+	if len(txs) != len(receipts) {
+		return nil, fmt.Errorf("receipts length mismatch: %d vs %d", len(txs), len(receipts))
+	}
+
+	// Derive the sender.
+	signer := types.MakeSigner(s.b.ChainConfig(), block.Number(), block.Time())
+
+	result := make([]map[string]interface{}, len(receipts))
+	for i, receipt := range receipts {
+		result[i], err = marshalReceipt(ctx, receipt, block.Hash(), block.NumberU64(), signer, txs[i], i, s.b)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
+}
+
 // OverrideAccount indicates the overriding fields of account during the execution
 // of a message call.
 // Note, state and stateDiff can't be specified at the same time. If state is
@@ -1905,13 +1936,18 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 
 	// Derive the sender.
 	signer := types.MakeSigner(s.b.ChainConfig(), header.Number, header.Time)
+	return marshalReceipt(ctx, receipt, blockHash, blockNumber, signer, tx, int(index), s.b)
+}
+
+// marshalReceipt marshals a transaction receipt into a JSON object.
+func marshalReceipt(ctx context.Context, receipt *types.Receipt, blockHash common.Hash, blockNumber uint64, signer types.Signer, tx *types.Transaction, txIndex int, backend Backend) (map[string]interface{}, error) {
 	from, _ := types.Sender(signer, tx)
 
 	fields := map[string]interface{}{
 		"blockHash":         blockHash,
 		"blockNumber":       hexutil.Uint64(blockNumber),
-		"transactionHash":   hash,
-		"transactionIndex":  hexutil.Uint64(index),
+		"transactionHash":   tx.Hash(),
+		"transactionIndex":  hexutil.Uint64(txIndex),
 		"from":              from,
 		"to":                tx.To(),
 		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
@@ -1937,14 +1973,14 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 	if receipt.ContractAddress != (common.Address{}) {
 		fields["contractAddress"] = receipt.ContractAddress
 	}
-	if s.b.ChainConfig().IsArbitrum() {
+	if backend.ChainConfig().IsArbitrum() {
 		fields["gasUsedForL1"] = hexutil.Uint64(receipt.GasUsedForL1)
 
-		header, err := s.b.HeaderByHash(ctx, blockHash)
+		header, err := backend.HeaderByHash(ctx, blockHash)
 		if err != nil {
 			return nil, err
 		}
-		if s.b.ChainConfig().IsArbitrumNitro(header.Number) {
+		if backend.ChainConfig().IsArbitrumNitro(header.Number) {
 			fields["effectiveGasPrice"] = hexutil.Uint64(header.BaseFee.Uint64())
 			fields["l1BlockNumber"] = hexutil.Uint64(types.DeserializeHeaderExtraInformation(header).L1BlockNumber)
 		} else {
