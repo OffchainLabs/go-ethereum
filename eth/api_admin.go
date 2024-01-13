@@ -108,6 +108,8 @@ func (api *AdminAPI) ImportChain(file string) (bool, error) {
 	// Run actual the import in pre-configured batches
 	stream := rlp.NewStream(reader, 0)
 
+	chainConfig := api.eth.blockchain.Config()
+
 	blocks, index := make([]*types.Block, 0, 2500), 0
 	for batch := 0; ; batch++ {
 		// Load a batch of blocks from the input file
@@ -119,7 +121,7 @@ func (api *AdminAPI) ImportChain(file string) (bool, error) {
 				return false, fmt.Errorf("block %d: failed to parse: %v", index, err)
 			}
 			// ignore the genesis block when importing blocks
-			if block.NumberU64() == 0 {
+			if block.NumberU64() <= chainConfig.ArbitrumChainParams.GenesisBlockNum {
 				continue
 			}
 			blocks = append(blocks, block)
