@@ -383,10 +383,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	case DynamicFeeTxType:
 		var itx DynamicFeeTx
 		inner = &itx
-		// Access list is optional for now.
-		if dec.AccessList != nil {
-			itx.AccessList = *dec.AccessList
-		}
 		if dec.ChainID == nil {
 			return errors.New("missing required field 'chainId' in transaction")
 		}
@@ -420,6 +416,9 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		itx.Data = *dec.Input
 		if dec.V == nil {
 			return errors.New("missing required field 'v' in transaction")
+		}
+		if dec.AccessList != nil {
+			itx.AccessList = *dec.AccessList
 		}
 
 		// signature R
@@ -797,10 +796,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		case ArbitrumTippingTxSubtype:
 			var itx ArbitrumTippingTx
 			subtypedTx.TxData = &itx
-			// Access list is optional for now.
-			if dec.AccessList != nil {
-				itx.AccessList = *dec.AccessList
-			}
 			if dec.ChainID == nil {
 				return errors.New("missing required field 'chainId' in transaction")
 			}
@@ -835,6 +830,10 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			if dec.V == nil {
 				return errors.New("missing required field 'v' in transaction")
 			}
+			if dec.AccessList != nil {
+				itx.AccessList = *dec.AccessList
+			}
+
 			// signature R
 			if dec.R == nil {
 				return errors.New("missing required field 'r' in transaction")
