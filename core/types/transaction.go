@@ -49,10 +49,11 @@ const (
 	ArbitrumSubmitRetryableTxType = 105
 	ArbitrumInternalTxType        = 106
 	ArbitrumLegacyTxType          = 120
-	LegacyTxType                  = 0x00
-	AccessListTxType              = 0x01
-	DynamicFeeTxType              = 0x02
-	BlobTxType                    = 0x03
+
+	LegacyTxType     = 0x00
+	AccessListTxType = 0x01
+	DynamicFeeTxType = 0x02
+	BlobTxType       = 0x03
 )
 
 // Transaction is an Ethereum transaction.
