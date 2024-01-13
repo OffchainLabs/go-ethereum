@@ -1632,7 +1632,9 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		switch subtype {
 		case types.ArbitrumTippingTxSubtype:
 			al := tx.AccessList()
+			yparity := hexutil.Uint64(v.Sign())
 			result.Accesses = &al
+			result.YParity = &yparity
 			result.ChainID = (*hexutil.Big)(tx.ChainId())
 			result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
 			result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
