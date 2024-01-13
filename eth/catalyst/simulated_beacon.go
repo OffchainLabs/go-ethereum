@@ -171,19 +171,19 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	if payload.Number%devEpochLength == 0 {
 		finalizedHash = payload.BlockHash
 	} else {
-		if fh := c.finalizedBlockHash(payload.Number); fh == nil {
-			return errors.New("chain rewind interrupted calculation of finalized block hash")
-		} else {
-			finalizedHash = *fh
-		}
+		finalizedHash = c.eth.BlockChain().GetBlockByNumber((payload.Number - 1) / devEpochLength * devEpochLength).Hash()
 	}
 
-	// Mark the payload as canon
+	// mark the payload as canon
 	if _, err = c.engineAPI.NewPayloadV2(*payload); err != nil {
 		return err
 	}
-	c.setCurrentState(payload.BlockHash, finalizedHash)
-	// Mark the block containing the payload as canonical
+	c.curForkchoiceState = engine.ForkchoiceStateV1{
+		HeadBlockHash:      payload.BlockHash,
+		SafeBlockHash:      payload.BlockHash,
+		FinalizedBlockHash: finalizedHash,
+	}
+	// mark the block containing the payload as canonical
 	if _, err = c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, nil); err != nil {
 		return err
 	}
