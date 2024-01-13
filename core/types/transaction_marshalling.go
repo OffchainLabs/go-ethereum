@@ -420,9 +420,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.V == nil {
 			return errors.New("missing required field 'v' in transaction")
 		}
-		if dec.AccessList != nil {
-			itx.AccessList = *dec.AccessList
-		}
 
 		// signature R
 		if dec.R == nil {
@@ -836,9 +833,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			itx.Data = *dec.Input
 			if dec.V == nil {
 				return errors.New("missing required field 'v' in transaction")
-			}
-			if dec.AccessList != nil {
-				itx.AccessList = *dec.AccessList
 			}
 			// signature R
 			if dec.R == nil {
