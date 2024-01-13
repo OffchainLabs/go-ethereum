@@ -224,6 +224,7 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		data := itx.data()
 		enc.Input = (*hexutil.Bytes)(&data)
 		enc.To = tx.To()
+
 	case *BlobTx:
 		enc.ChainID = (*hexutil.Big)(itx.ChainID.ToBig())
 		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
