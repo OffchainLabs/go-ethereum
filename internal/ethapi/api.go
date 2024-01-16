@@ -1466,7 +1466,7 @@ func (s *BlockChainAPI) arbClassicL1BlockNumber(ctx context.Context, block *type
 		}
 		i++
 		blockNum = startBlockNum - i
-		if i > 5 {
+		if i > 50 {
 			return 0, fmt.Errorf("couldn't find block with transactions. Reached %d", blockNum)
 		}
 		var err error
