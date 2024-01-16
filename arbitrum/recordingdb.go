@@ -248,13 +248,13 @@ func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected comm
 	}
 	r.referenceRootLockHeld(result)
 
-	size, _ := r.db.TrieDB().Size()
+	_, size, _ := r.db.TrieDB().Size()
 	limit := common.StorageSize(r.config.TrieDirtyCache) * 1024 * 1024
 	recordingDbSize.Update(int64(size))
 	if size > limit {
 		log.Info("Recording DB: flushing to disk", "size", size, "limit", limit)
 		r.db.TrieDB().Cap(limit - ethdb.IdealBatchSize)
-		size, _ = r.db.TrieDB().Size()
+		_, size, _ = r.db.TrieDB().Size()
 		recordingDbSize.Update(int64(size))
 	}
 	return state.New(result, statedb.Database(), nil)
