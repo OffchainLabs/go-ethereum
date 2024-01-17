@@ -141,6 +141,9 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = result.UsedGas
 
+	receipt.BlobGasUsed = uint64(len(tx.BlobHashes()) * params.BlobTxBlobGasPerBlob)
+	receipt.BlobGasPrice = tx.BlobGasFeeCap()
+
 	// If the transaction created a contract, store the creation address in the receipt.
 	if result.TopLevelDeployed != nil {
 		receipt.ContractAddress = *result.TopLevelDeployed
