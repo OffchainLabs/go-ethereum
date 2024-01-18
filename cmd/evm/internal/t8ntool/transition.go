@@ -404,7 +404,7 @@ func applyMergeChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 }
 
 func applyCancunChecks(env *stEnv, chainConfig *params.ChainConfig) error {
-	if !chainConfig.IsCancun(big.NewInt(int64(env.Number)), env.Timestamp) {
+	if !chainConfig.IsCancun(big.NewInt(int64(env.Number)), env.Timestamp, 0) {
 		env.ParentBeaconBlockRoot = nil // un-set it if it has been set too early
 		return nil
 	}

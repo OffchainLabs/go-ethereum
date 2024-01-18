@@ -399,7 +399,8 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 			header.GasLimit = CalcGasLimit(parentGasLimit, parentGasLimit)
 		}
 	}
-	if chain.Config().IsCancun(header.Number, header.Time) {
+	prevArbosVersion := types.DeserializeHeaderExtraInformation(parent.Header()).ArbOSFormatVersion
+	if chain.Config().IsCancun(header.Number, header.Time, prevArbosVersion) {
 		var (
 			parentExcessBlobGas uint64
 			parentBlobGasUsed   uint64

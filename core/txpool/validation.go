@@ -63,11 +63,12 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	if !opts.Config.IsLondon(head.Number) && tx.Type() == types.DynamicFeeTxType {
 		return fmt.Errorf("%w: type %d rejected, pool not yet in London", core.ErrTxTypeNotSupported, tx.Type())
 	}
-	if !opts.Config.IsCancun(head.Number, head.Time) && tx.Type() == types.BlobTxType {
+	arbosVersion := types.DeserializeHeaderExtraInformation(head).ArbOSFormatVersion
+	if !opts.Config.IsCancun(head.Number, head.Time, arbosVersion) && tx.Type() == types.BlobTxType {
 		return fmt.Errorf("%w: type %d rejected, pool not yet in Cancun", core.ErrTxTypeNotSupported, tx.Type())
 	}
 	// Check whether the init code size has been exceeded
-	if opts.Config.IsShanghai(head.Number, head.Time, types.DeserializeHeaderExtraInformation(head).ArbOSFormatVersion) && tx.To() == nil && len(tx.Data()) > int(opts.Config.MaxInitCodeSize()) {
+	if opts.Config.IsShanghai(head.Number, head.Time, arbosVersion) && tx.To() == nil && len(tx.Data()) > int(opts.Config.MaxInitCodeSize()) {
 		return fmt.Errorf("%w: code size %v, limit %v", core.ErrMaxInitCodeSizeExceeded, len(tx.Data()), int(opts.Config.MaxInitCodeSize()))
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded

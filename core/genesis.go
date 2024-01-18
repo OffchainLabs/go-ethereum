@@ -478,11 +478,12 @@ func (g *Genesis) ToBlock() *types.Block {
 	var withdrawals []*types.Withdrawal
 	if conf := g.Config; conf != nil {
 		num := big.NewInt(int64(g.Number))
-		if conf.IsShanghai(num, g.Timestamp, types.DeserializeHeaderExtraInformation(head).ArbOSFormatVersion) {
+		arbosVersion := types.DeserializeHeaderExtraInformation(head).ArbOSFormatVersion
+		if conf.IsShanghai(num, g.Timestamp, arbosVersion) {
 			head.WithdrawalsHash = &types.EmptyWithdrawalsHash
 			withdrawals = make([]*types.Withdrawal, 0)
 		}
-		if conf.IsCancun(num, g.Timestamp) {
+		if conf.IsCancun(num, g.Timestamp, arbosVersion) {
 			// EIP-4788: The parentBeaconBlockRoot of the genesis block is always
 			// the zero hash. This is because the genesis block does not have a parent
 			// by definition.

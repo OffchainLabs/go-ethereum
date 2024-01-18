@@ -936,10 +936,11 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 			header.GasLimit = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
 		}
 	}
+	prevArbosVersion := types.DeserializeHeaderExtraInformation(parent).ArbOSFormatVersion
 	// Apply EIP-4844, EIP-4788.
-	if w.chainConfig.IsCancun(header.Number, header.Time) {
+	if w.chainConfig.IsCancun(header.Number, header.Time, prevArbosVersion) {
 		var excessBlobGas uint64
-		if w.chainConfig.IsCancun(parent.Number, parent.Time) {
+		if w.chainConfig.IsCancun(parent.Number, parent.Time, prevArbosVersion) {
 			excessBlobGas = eip4844.CalcExcessBlobGas(*parent.ExcessBlobGas, *parent.BlobGasUsed)
 		} else {
 			// For the first post-fork block, both parent.data_gas_used and parent.excess_data_gas are evaluated as 0

@@ -545,7 +545,7 @@ func (c *ChainConfig) IsShanghai(num *big.Int, time uint64, currentArbosVersion 
 }
 
 // IsCancun returns whether num is either equal to the Cancun fork time or greater.
-func (c *ChainConfig) IsCancun(num *big.Int, time uint64) bool {
+func (c *ChainConfig) IsCancun(num *big.Int, time uint64, currentArbosVersion uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.CancunTime, time)
 }
 
@@ -894,7 +894,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, curren
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          isMerge,
 		IsShanghai:       c.IsShanghai(num, timestamp, currentArbosVersion),
-		IsCancun:         c.IsCancun(num, timestamp),
+		IsCancun:         c.IsCancun(num, timestamp, currentArbosVersion),
 		IsPrague:         c.IsPrague(num, timestamp),
 		IsVerkle:         c.IsVerkle(num, timestamp),
 	}

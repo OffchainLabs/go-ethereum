@@ -762,8 +762,10 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 			p.recheck(addr, inclusions)
 		}
 	}
+
+	arbosVersion := types.DeserializeHeaderExtraInformation(p.head).ArbOSFormatVersion
 	// Flush out any blobs from limbo that are older than the latest finality
-	if p.chain.Config().IsCancun(p.head.Number, p.head.Time) {
+	if p.chain.Config().IsCancun(p.head.Number, p.head.Time, arbosVersion) {
 		p.limbo.finalize(p.chain.CurrentFinalBlock())
 	}
 	// Reset the price heap for the new set of basefee/blobfee pairs

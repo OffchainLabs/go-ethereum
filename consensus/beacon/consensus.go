@@ -261,8 +261,9 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if err := eip1559.VerifyEIP1559Header(chain.Config(), parent, header); err != nil {
 		return err
 	}
+	arbosVersion := types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion
 	// Verify existence / non-existence of withdrawalsHash.
-	shanghai := chain.Config().IsShanghai(header.Number, header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion)
+	shanghai := chain.Config().IsShanghai(header.Number, header.Time, arbosVersion)
 	if shanghai && header.WithdrawalsHash == nil {
 		return errors.New("missing withdrawalsHash")
 	}
@@ -270,7 +271,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
 	}
 	// Verify the existence / non-existence of cancun-specific header fields
-	cancun := chain.Config().IsCancun(header.Number, header.Time)
+	cancun := chain.Config().IsCancun(header.Number, header.Time, arbosVersion)
 	if !cancun {
 		switch {
 		case header.ExcessBlobGas != nil:
