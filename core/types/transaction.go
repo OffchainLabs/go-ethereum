@@ -224,17 +224,21 @@ func (tx *Transaction) decodeTyped(b []byte, arbParsing bool) (TxData, error) {
 			inner = new(ArbitrumSubmitRetryableTx)
 		case ArbitrumLegacyTxType:
 			inner = new(ArbitrumLegacyTxData)
+		default:
+			arbParsing = false
 		}
 	}
-	switch b[0] {
-	case AccessListTxType:
-		inner = new(AccessListTx)
-	case DynamicFeeTxType:
-		inner = new(DynamicFeeTx)
-	case BlobTxType:
-		inner = new(BlobTx)
-	default:
-		return nil, ErrTxTypeNotSupported
+	if !arbParsing {
+		switch b[0] {
+		case AccessListTxType:
+			inner = new(AccessListTx)
+		case DynamicFeeTxType:
+			inner = new(DynamicFeeTx)
+		case BlobTxType:
+			inner = new(BlobTx)
+		default:
+			return nil, ErrTxTypeNotSupported
+		}
 	}
 	err := inner.decode(b[1:])
 	return inner, err
