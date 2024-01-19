@@ -146,7 +146,7 @@ type headerResponse struct {
 // backfiller is a callback interface through which the skeleton sync can tell
 // the downloader that it should suspend or resume backfilling on specific head
 // events (e.g. suspend on forks or gaps, resume on successful linkups).
-type backfiller interface {
+type Backfiller interface {
 	// suspend requests the backfiller to abort any running full or snap sync
 	// based on the skeleton chain as it might be invalid. The backfiller should
 	// gracefully handle multiple consecutive suspends without a resume, even
@@ -154,13 +154,15 @@ type backfiller interface {
 	//
 	// The method should return the last block header that has been successfully
 	// backfilled, or nil if the backfiller was not resumed.
-	suspend() *types.Header
+	Suspend() *types.Header
 
 	// resume requests the backfiller to start running fill or snap sync based on
 	// the skeleton chain as it has successfully been linked. Appending new heads
 	// to the end of the chain will not result in suspend/resume cycles.
 	// leaking too much sync logic out to the filler.
-	resume()
+	Resume()
+
+	SetMode(mode SyncMode)
 }
 
 // skeleton represents a header chain synchronized after the merge where blocks
@@ -192,7 +194,7 @@ type backfiller interface {
 // for now.
 type skeleton struct {
 	db     ethdb.Database // Database backing the skeleton
-	filler backfiller     // Chain syncer suspended/resumed by head events
+	filler Backfiller     // Chain syncer suspended/resumed by head events
 
 	peers *peerSet                   // Set of peers we can sync from
 	idles map[string]*peerConnection // Set of idle peers in the current sync cycle
@@ -219,7 +221,7 @@ type skeleton struct {
 
 // newSkeleton creates a new sync skeleton that tracks a potentially dangling
 // header chain until it's linked into an existing set of blocks.
-func newSkeleton(db ethdb.Database, peers *peerSet, drop peerDropFn, filler backfiller) *skeleton {
+func newSkeleton(db ethdb.Database, peers *peerSet, drop peerDropFn, filler Backfiller) *skeleton {
 	sk := &skeleton{
 		db:         db,
 		filler:     filler,
@@ -364,7 +366,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 		rawdb.HasBody(s.db, s.progress.Subchains[0].Next, s.scratchHead) &&
 		rawdb.HasReceipts(s.db, s.progress.Subchains[0].Next, s.scratchHead)
 	if linked {
-		s.filler.resume()
+		s.filler.Resume()
 	}
 	defer func() {
 		// The filler needs to be suspended, but since it can block for a while
@@ -374,7 +376,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			if filled := s.filler.suspend(); filled != nil {
+			if filled := s.filler.Suspend(); filled != nil {
 				// If something was filled, try to delete stale sync helpers. If
 				// unsuccessful, warn the user, but not much else we can do (it's
 				// a programming error, just let users report an issue and don't
@@ -474,7 +476,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 			// is still running, it will pick it up. If it already terminated,
 			// a new cycle needs to be spun up.
 			if linked {
-				s.filler.resume()
+				s.filler.Resume()
 			}
 
 		case req := <-requestFails:
@@ -1182,14 +1184,14 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 
 // Bounds retrieves the current head and tail tracked by the skeleton syncer
 // and optionally the last known finalized header if any was announced and if
-// it is still in the sync range. This method is used by the backfiller, whose
+// it is still in the sync range. This method is used by the Backfiller, whose
 // life cycle is controlled by the skeleton syncer.
 //
 // Note, the method will not use the internal state of the skeleton, but will
 // rather blindly pull stuff from the database. This is fine, because the back-
 // filler will only run when the skeleton chain is fully downloaded and stable.
 // There might be new heads appended, but those are atomic from the perspective
-// of this method. Any head reorg will first tear down the backfiller and only
+// of this method. Any head reorg will first tear down the Backfiller and only
 // then make the modification.
 func (s *skeleton) Bounds() (head *types.Header, tail *types.Header, final *types.Header, err error) {
 	// Read the current sync progress from disk and figure out the current head.
@@ -1222,7 +1224,7 @@ func (s *skeleton) Bounds() (head *types.Header, tail *types.Header, final *type
 }
 
 // Header retrieves a specific header tracked by the skeleton syncer. This method
-// is meant to be used by the backfiller, whose life cycle is controlled by the
+// is meant to be used by the Backfiller, whose life cycle is controlled by the
 // skeleton syncer.
 //
 // Note, outside the permitted runtimes, this method might return nil results and
