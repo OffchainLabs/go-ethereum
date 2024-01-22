@@ -245,7 +245,10 @@ type BlockChain struct {
 
 	numberOfBlocksToSkipStateSaving      uint32
 	amountOfGasInBlocksToSkipStateSaving uint64
+	forceTriedbCommitHook                ForceTriedbCommitHook
 }
+
+type ForceTriedbCommitHook func(*types.Block) bool
 
 type trieGcEntry struct {
 	Root      common.Hash
@@ -255,7 +258,7 @@ type trieGcEntry struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, forceTriedbCommitHook ForceTriedbCommitHook) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -469,6 +472,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		bc.wg.Add(1)
 		go bc.maintainTxIndex()
 	}
+	bc.forceTriedbCommitHook = forceTriedbCommitHook
 	return bc, nil
 }
 
@@ -1429,6 +1433,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	root, err := state.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
 		return err
+	}
+
+	if bc.forceTriedbCommitHook != nil && bc.forceTriedbCommitHook(block) {
+		bc.numberOfBlocksToSkipStateSaving = bc.cacheConfig.MaxNumberOfBlocksToSkipStateSaving
+		bc.amountOfGasInBlocksToSkipStateSaving = bc.cacheConfig.MaxAmountOfGasToSkipStateSaving
+		return bc.triedb.Commit(root, false)
 	}
 	// If we're running an archive node, flush
 	// If MaxNumberOfBlocksToSkipStateSaving or MaxAmountOfGasToSkipStateSaving is not zero, then flushing of some blocks will be skipped:
