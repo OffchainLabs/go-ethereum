@@ -41,13 +41,14 @@ var (
 
 // Transaction types.
 const (
-	ArbitrumDepositTxType         = 0x64
-	ArbitrumUnsignedTxType        = 0x65
-	ArbitrumContractTxType        = 0x66
-	ArbitrumRetryTxType           = 0x68
-	ArbitrumSubmitRetryableTxType = 0x69
-	ArbitrumInternalTxType        = 0x6A
-	ArbitrumLegacyTxType          = 0x78
+	ArbitrumSubtypedTxType        = 99
+	ArbitrumDepositTxType         = 100
+	ArbitrumUnsignedTxType        = 101
+	ArbitrumContractTxType        = 102
+	ArbitrumRetryTxType           = 104
+	ArbitrumSubmitRetryableTxType = 105
+	ArbitrumInternalTxType        = 106
+	ArbitrumLegacyTxType          = 120
 
 	LegacyTxType     = 0x00
 	AccessListTxType = 0x01
@@ -242,6 +243,10 @@ func (tx *Transaction) decodeTyped(b []byte, arbParsing bool) (TxData, error) {
 		return &inner, err
 	case BlobTxType:
 		var inner BlobTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	case ArbitrumSubtypedTxType:
+		var inner ArbitrumSubtypedTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
 	default:

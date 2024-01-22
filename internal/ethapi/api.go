@@ -1521,6 +1521,7 @@ type RPCTransaction struct {
 	YParity          *hexutil.Uint64   `json:"yParity,omitempty"`
 
 	// Arbitrum fields:
+	Subtype             hexutil.Uint64  `json:"subtype,omitempty"`             // ArbiturumSubtypedTx
 	RequestId           *common.Hash    `json:"requestId,omitempty"`           // Contract SubmitRetryable Deposit
 	TicketId            *common.Hash    `json:"ticketId,omitempty"`            // Retry
 	MaxRefund           *hexutil.Big    `json:"maxRefund,omitempty"`           // Retry
@@ -1625,6 +1626,27 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.ChainID = (*hexutil.Big)(inner.ChainId)
 	case *types.ArbitrumUnsignedTx:
 		result.ChainID = (*hexutil.Big)(inner.ChainId)
+	case *types.ArbitrumSubtypedTx:
+		subtype := inner.TxSubtype()
+		result.Subtype = hexutil.Uint64(subtype)
+		switch subtype {
+		case types.ArbitrumTippingTxSubtype:
+			al := tx.AccessList()
+			yparity := hexutil.Uint64(v.Sign())
+			result.Accesses = &al
+			result.YParity = &yparity
+			result.ChainID = (*hexutil.Big)(tx.ChainId())
+			result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
+			result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+			// if the transaction has been mined, compute the effective gas price
+			if baseFee != nil && blockHash != (common.Hash{}) {
+				// price = min(tip, gasFeeCap - baseFee) + baseFee
+				price := math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
+				result.GasPrice = (*hexutil.Big)(price)
+			} else {
+				result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
+			}
+		}
 	}
 	return result
 }

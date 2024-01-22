@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -40,6 +41,23 @@ func (s arbitrumSigner) Sender(tx *Transaction) (common.Address, error) {
 		}
 		fakeTx := NewTx(&legacyData.LegacyTx)
 		return s.Signer.Sender(fakeTx)
+	case *ArbitrumSubtypedTx:
+		switch inner.TxData.(type) {
+		case *ArbitrumTippingTx:
+			// same as in londonSigner.Sender for DynamicFeeTx,
+			// but use arbitrumSigner.Hash to include tx subtype in the hashed data
+
+			V, R, S := tx.RawSignatureValues()
+			// DynamicFee txs are defined to use 0 and 1 as their recovery
+			// id, add 27 to become equivalent to unprotected Homestead signatures.
+			V = new(big.Int).Add(V, big.NewInt(27))
+			if tx.ChainId().Cmp(s.Signer.ChainID()) != 0 {
+				return common.Address{}, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, tx.ChainId(), s.Signer.ChainID())
+			}
+			return recoverPlain(s.Hash(tx), R, S, V, true)
+		default:
+			return common.Address{}, ErrTxTypeNotSupported
+		}
 	default:
 		return s.Signer.Sender(tx)
 	}
@@ -51,7 +69,7 @@ func (s arbitrumSigner) Equal(s2 Signer) bool {
 }
 
 func (s arbitrumSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
-	switch tx.inner.(type) {
+	switch inner := tx.inner.(type) {
 	case *ArbitrumUnsignedTx:
 		return bigZero, bigZero, bigZero, nil
 	case *ArbitrumContractTx:
@@ -65,9 +83,16 @@ func (s arbitrumSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *b
 	case *ArbitrumSubmitRetryableTx:
 		return bigZero, bigZero, bigZero, nil
 	case *ArbitrumLegacyTxData:
-		legacyData := tx.inner.(*ArbitrumLegacyTxData)
-		fakeTx := NewTx(&legacyData.LegacyTx)
+		fakeTx := NewTx(&inner.LegacyTx)
 		return s.Signer.SignatureValues(fakeTx, sig)
+	case *ArbitrumSubtypedTx:
+		switch txdata := inner.TxData.(type) {
+		case *ArbitrumTippingTx:
+			fakeTx := NewTx(&txdata.DynamicFeeTx)
+			return s.Signer.SignatureValues(fakeTx, sig)
+		default:
+			return nil, nil, nil, ErrTxTypeNotSupported
+		}
 	default:
 		return s.Signer.SignatureValues(tx, sig)
 	}
@@ -76,9 +101,28 @@ func (s arbitrumSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *b
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s arbitrumSigner) Hash(tx *Transaction) common.Hash {
-	if legacyData, isArbLegacy := tx.inner.(*ArbitrumLegacyTxData); isArbLegacy {
-		fakeTx := NewTx(&legacyData.LegacyTx)
+	switch inner := tx.inner.(type) {
+	case *ArbitrumLegacyTxData:
+		fakeTx := NewTx(&inner.LegacyTx)
 		return s.Signer.Hash(fakeTx)
+	case *ArbitrumSubtypedTx:
+		switch inner.TxData.(type) {
+		case *ArbitrumTippingTx:
+			return prefixedRlpHash(
+				tx.Type(),
+				[]interface{}{
+					inner.TxSubtype(),
+					s.Signer.ChainID(),
+					tx.Nonce(),
+					tx.GasTipCap(),
+					tx.GasFeeCap(),
+					tx.Gas(),
+					tx.To(),
+					tx.Value(),
+					tx.Data(),
+					tx.AccessList(),
+				})
+		}
 	}
 	return s.Signer.Hash(tx)
 }

@@ -48,6 +48,7 @@ type txJSON struct {
 	YParity              *hexutil.Uint64 `json:"yParity,omitempty"`
 
 	// Arbitrum fields:
+	Subtype             *hexutil.Uint64 `json:"subtype,omitempty"`             // ArbitrumSubtypedTx
 	From                *common.Address `json:"from,omitempty"`                // Contract SubmitRetryable Unsigned Retry
 	RequestId           *common.Hash    `json:"requestId,omitempty"`           // Contract SubmitRetryable Deposit
 	TicketId            *common.Hash    `json:"ticketId,omitempty"`            // Retry
@@ -241,6 +242,26 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.S = (*hexutil.Big)(itx.S.ToBig())
 		yparity := itx.V.Uint64()
 		enc.YParity = (*hexutil.Uint64)(&yparity)
+	case *ArbitrumSubtypedTx:
+		subtype := uint64(itx.TxSubtype())
+		enc.Subtype = (*hexutil.Uint64)(&subtype)
+		switch inner := itx.TxData.(type) {
+		case *ArbitrumTippingTx:
+			enc.ChainID = (*hexutil.Big)(inner.ChainID)
+			enc.Nonce = (*hexutil.Uint64)(&inner.Nonce)
+			enc.To = tx.To()
+			enc.Gas = (*hexutil.Uint64)(&inner.Gas)
+			enc.MaxFeePerGas = (*hexutil.Big)(inner.GasFeeCap)
+			enc.MaxPriorityFeePerGas = (*hexutil.Big)(inner.GasTipCap)
+			enc.Value = (*hexutil.Big)(inner.Value)
+			enc.Input = (*hexutil.Bytes)(&inner.Data)
+			enc.AccessList = &inner.AccessList
+			enc.V = (*hexutil.Big)(inner.V)
+			enc.R = (*hexutil.Big)(inner.R)
+			enc.S = (*hexutil.Big)(inner.S)
+			yparity := inner.V.Uint64()
+			enc.YParity = (*hexutil.Uint64)(&yparity)
+		}
 	}
 	return json.Marshal(&enc)
 }
@@ -763,6 +784,78 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			if err := sanityCheckSignature(vbig, itx.R.ToBig(), itx.S.ToBig(), false); err != nil {
 				return err
 			}
+		}
+
+	case ArbitrumSubtypedTxType:
+		var subtypedTx ArbitrumSubtypedTx
+		inner = &subtypedTx
+		if dec.Subtype == nil {
+			return errors.New("missing required field 'subtype' in transaction")
+		}
+		switch *dec.Subtype {
+		case ArbitrumTippingTxSubtype:
+			var itx ArbitrumTippingTx
+			subtypedTx.TxData = &itx
+			if dec.ChainID == nil {
+				return errors.New("missing required field 'chainId' in transaction")
+			}
+			itx.ChainID = (*big.Int)(dec.ChainID)
+			if dec.Nonce == nil {
+				return errors.New("missing required field 'nonce' in transaction")
+			}
+			itx.Nonce = uint64(*dec.Nonce)
+			if dec.To != nil {
+				itx.To = dec.To
+			}
+			if dec.Gas == nil {
+				return errors.New("missing required field 'gas' for txdata")
+			}
+			itx.Gas = uint64(*dec.Gas)
+			if dec.MaxPriorityFeePerGas == nil {
+				return errors.New("missing required field 'maxPriorityFeePerGas' for txdata")
+			}
+			itx.GasTipCap = (*big.Int)(dec.MaxPriorityFeePerGas)
+			if dec.MaxFeePerGas == nil {
+				return errors.New("missing required field 'maxFeePerGas' for txdata")
+			}
+			itx.GasFeeCap = (*big.Int)(dec.MaxFeePerGas)
+			if dec.Value == nil {
+				return errors.New("missing required field 'value' in transaction")
+			}
+			itx.Value = (*big.Int)(dec.Value)
+			if dec.Input == nil {
+				return errors.New("missing required field 'input' in transaction")
+			}
+			itx.Data = *dec.Input
+			if dec.V == nil {
+				return errors.New("missing required field 'v' in transaction")
+			}
+			if dec.AccessList != nil {
+				itx.AccessList = *dec.AccessList
+			}
+
+			// signature R
+			if dec.R == nil {
+				return errors.New("missing required field 'r' in transaction")
+			}
+			itx.R = (*big.Int)(dec.R)
+			// signature S
+			if dec.S == nil {
+				return errors.New("missing required field 's' in transaction")
+			}
+			itx.S = (*big.Int)(dec.S)
+			// signature V
+			itx.V, err = dec.yParityValue()
+			if err != nil {
+				return err
+			}
+			if itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0 {
+				if err := sanityCheckSignature(itx.V, itx.R, itx.S, false); err != nil {
+					return err
+				}
+			}
+		default:
+			return ErrTxTypeNotSupported
 		}
 
 	default:

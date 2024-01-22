@@ -1,15 +1,24 @@
 package types
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
+	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/ethereum/go-ethereum/common"
+)
+
+const (
+	ArbitrumInvalidSubtype   = 0
+	ArbitrumTippingTxSubtype = 1
 )
 
 // Returns true if nonce checks should be skipped based on inner's isFake()
@@ -515,4 +524,92 @@ func DeserializeHeaderExtraInformation(header *Header) HeaderInfo {
 	extra.L1BlockNumber = binary.BigEndian.Uint64(header.MixDigest[8:16])
 	extra.ArbOSFormatVersion = binary.BigEndian.Uint64(header.MixDigest[16:24])
 	return extra
+}
+
+type ArbitrumSubtypedTx struct {
+	TxData
+}
+
+func (tx *ArbitrumSubtypedTx) copy() TxData {
+	return &ArbitrumSubtypedTx{
+		TxData: tx.TxData.copy(),
+	}
+}
+
+func (tx *ArbitrumSubtypedTx) txType() byte    { return ArbitrumSubtypedTxType }
+func (tx *ArbitrumSubtypedTx) TxSubtype() byte { return tx.TxData.txType() }
+
+func (tx *ArbitrumSubtypedTx) EncodeRLP(w io.Writer) error {
+	buf := encodeBufferPool.Get().(*bytes.Buffer)
+	defer encodeBufferPool.Put(buf)
+	buf.Reset()
+	buf.WriteByte(tx.TxSubtype())
+	if err := rlp.Encode(buf, tx.TxData); err != nil {
+		return err
+	}
+	return rlp.Encode(w, buf.Bytes())
+}
+
+func (tx *ArbitrumSubtypedTx) DecodeRLP(s *rlp.Stream) error {
+	b, err := s.Bytes()
+	if err != nil {
+		return err
+	}
+	if len(b) < 1 {
+		return errShortTypedTx
+	}
+	switch b[0] {
+	case ArbitrumTippingTxSubtype:
+		var tipping ArbitrumTippingTx
+		err := rlp.DecodeBytes(b[1:], &tipping)
+		tx.TxData = &tipping
+		return err
+	default:
+		return ErrTxTypeNotSupported
+	}
+}
+
+func GetArbitrumTxSubtype(tx *Transaction) byte {
+	switch inner := tx.inner.(type) {
+	case *ArbitrumSubtypedTx:
+		return inner.TxSubtype()
+	default:
+		return ArbitrumInvalidSubtype
+	}
+}
+
+type ArbitrumTippingTx struct {
+	DynamicFeeTx
+}
+
+func NewArbitrumTippingTx(origTx *Transaction) (*Transaction, error) {
+	dynamicPtr, ok := origTx.GetInner().(*DynamicFeeTx)
+	if origTx.Type() != DynamicFeeTxType || !ok {
+		return nil, errors.New("attempt to arbitrum-wrap into tipping transaction a transaction that is not a dynamic fee transaction")
+	}
+	inner := ArbitrumSubtypedTx{
+		TxData: &ArbitrumTippingTx{
+			DynamicFeeTx: *dynamicPtr,
+		}}
+	return NewTx(&inner), nil
+}
+
+func (tx *ArbitrumTippingTx) copy() TxData {
+	dynamicCopy := tx.DynamicFeeTx.copy().(*DynamicFeeTx)
+	return &ArbitrumTippingTx{
+		DynamicFeeTx: *dynamicCopy,
+	}
+}
+
+func (tx *ArbitrumTippingTx) txType() byte { return ArbitrumTippingTxSubtype }
+
+func (tx *ArbitrumTippingTx) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, tx.DynamicFeeTx)
+}
+
+func (tx *ArbitrumTippingTx) DecodeRLP(s *rlp.Stream) error {
+	var dynamic DynamicFeeTx
+	err := s.Decode(&dynamic)
+	tx.DynamicFeeTx = dynamic
+	return err
 }
