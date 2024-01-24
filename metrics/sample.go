@@ -24,16 +24,16 @@ type SampleSnapshot interface {
 	Variance() float64
 }
 
-func NewBoundedHistogramSample() Sample {
-	return NewSlidingTimeWindowArraySample(time.Minute * 1)
-}
-
 // Samples maintain a statistically-significant selection of values from
 // a stream.
 type Sample interface {
 	Snapshot() SampleSnapshot
 	Clear()
 	Update(int64)
+}
+
+func NewBoundedHistogramSample() Sample {
+	return NewSlidingTimeWindowArraySample(time.Minute * 1)
 }
 
 // ExpDecaySample is an exponentially-decaying sample using a forward-decaying
