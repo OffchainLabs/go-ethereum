@@ -773,7 +773,6 @@ func readLegacyLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types
 		logs[i] = receipt.Logs
 		for j := range logs[i] {
 			logs[i][j].BlockNumber = number
-			logs[i][j].BlockNumber = number
 			logs[i][j].BlockHash = hash
 			logs[i][j].TxHash = receipt.TxHash
 			logs[i][j].TxIndex = uint(i)
