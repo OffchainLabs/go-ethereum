@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	flag "github.com/spf13/pflag"
 )
 
@@ -181,9 +182,15 @@ type RecordingDatabase struct {
 }
 
 func NewRecordingDatabase(config *RecordingDatabaseConfig, ethdb ethdb.Database, blockchain *core.BlockChain) *RecordingDatabase {
+	hashConfig := *hashdb.Defaults
+	hashConfig.CleanCacheSize = config.TrieCleanCache
+	trieConfig := trie.Config{
+		Preimages: false,
+		HashDB:    &hashConfig,
+	}
 	return &RecordingDatabase{
 		config: config,
-		db:     state.NewDatabaseWithConfig(ethdb, &trie.Config{Cache: config.TrieCleanCache}),
+		db:     state.NewDatabaseWithConfig(ethdb, &trieConfig),
 		bc:     blockchain,
 	}
 }
@@ -241,13 +248,13 @@ func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected comm
 	}
 	r.referenceRootLockHeld(result)
 
-	size, _ := r.db.TrieDB().Size()
+	_, size, _ := r.db.TrieDB().Size()
 	limit := common.StorageSize(r.config.TrieDirtyCache) * 1024 * 1024
 	recordingDbSize.Update(int64(size))
 	if size > limit {
 		log.Info("Recording DB: flushing to disk", "size", size, "limit", limit)
 		r.db.TrieDB().Cap(limit - ethdb.IdealBatchSize)
-		size, _ = r.db.TrieDB().Size()
+		_, size, _ = r.db.TrieDB().Size()
 		recordingDbSize.Update(int64(size))
 	}
 	return state.New(result, statedb.Database(), nil)

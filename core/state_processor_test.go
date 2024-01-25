@@ -379,7 +379,8 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	if config.IsLondon(header.Number) {
 		header.BaseFee = eip1559.CalcBaseFee(config, parent.Header())
 	}
-	if config.IsShanghai(header.Number, header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {
+	arbosVersion := types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion
+	if config.IsShanghai(header.Number, header.Time, arbosVersion) {
 		header.WithdrawalsHash = &types.EmptyWithdrawalsHash
 	}
 	var receipts []*types.Receipt
@@ -400,7 +401,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		nBlobs += len(tx.BlobHashes())
 	}
 	header.Root = common.BytesToHash(hasher.Sum(nil))
-	if config.IsCancun(header.Number, header.Time) {
+	if config.IsCancun(header.Number, header.Time, arbosVersion) {
 		var pExcess, pUsed = uint64(0), uint64(0)
 		if parent.ExcessBlobGas() != nil {
 			pExcess = *parent.ExcessBlobGas()
@@ -410,6 +411,9 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		used := uint64(nBlobs * params.BlobTxBlobGasPerBlob)
 		header.ExcessBlobGas = &excess
 		header.BlobGasUsed = &used
+
+		beaconRoot := common.HexToHash("0xbeac00")
+		header.ParentBeaconRoot = &beaconRoot
 	}
 	// Assemble and return the final block for sealing
 	if config.IsShanghai(header.Number, header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {

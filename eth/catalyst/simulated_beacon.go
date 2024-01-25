@@ -17,6 +17,7 @@
 package catalyst
 
 import (
+	"crypto/rand"
 	"errors"
 	"sync"
 	"time"
@@ -91,7 +92,7 @@ func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, err
 		SafeBlockHash:      block.Hash(),
 		FinalizedBlockHash: block.Hash(),
 	}
-	engineAPI := NewConsensusAPI(eth)
+	engineAPI := newConsensusAPIWithoutHeartbeat(eth)
 
 	// if genesis block, send forkchoiceUpdated to trigger transition to PoS
 	if block.Number.Sign() == 0 {
@@ -149,10 +150,13 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 		c.setCurrentState(header.Hash(), *finalizedHash)
 	}
 
+	var random [32]byte
+	rand.Read(random[:])
 	fcResponse, err := c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, &engine.PayloadAttributes{
 		Timestamp:             tstamp,
 		SuggestedFeeRecipient: feeRecipient,
 		Withdrawals:           withdrawals,
+		Random:                random,
 	})
 	if err != nil {
 		return err
@@ -161,7 +165,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 		return errors.New("chain rewind prevented invocation of payload creation")
 	}
 
-	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID)
+	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true)
 	if err != nil {
 		return err
 	}
