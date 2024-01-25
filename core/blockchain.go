@@ -379,31 +379,41 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// Make sure the state associated with the block is available
 	head := bc.CurrentBlock()
 	if !bc.HasState(head.Root) {
-		// Head state is missing, before the state recovery, find out the
-		// disk layer point of snapshot(if it's enabled). Make sure the
-		// rewound point is lower than disk layer.
-		var diskRoot common.Hash
-		if bc.cacheConfig.SnapshotLimit > 0 {
-			diskRoot = rawdb.ReadSnapshotRoot(bc.db)
-		}
-		if diskRoot != (common.Hash{}) {
-			log.Warn("Head state missing, repairing", "number", head.Number, "hash", head.Hash(), "snaproot", diskRoot)
-
-			snapDisk, diskRootFound, err := bc.setHeadBeyondRoot(head.Number.Uint64(), 0, diskRoot, true, bc.cacheConfig.SnapshotRestoreMaxGas)
-			if err != nil {
-				return nil, err
-			}
-			// Chain rewound, persist old snapshot number to indicate recovery procedure
-			if diskRootFound {
-				rawdb.WriteSnapshotRecoveryNumber(bc.db, snapDisk)
-			} else {
-				log.Warn("Snapshot root not found or too far back. Recreating snapshot from scratch.")
-				rawdb.DeleteSnapshotRecoveryNumber(bc.db)
-			}
+		if head.Number.Uint64() <= bc.genesisBlock.NumberU64() {
+			// The genesis state is missing, which is only possible in the path-based
+			// scheme. This situation occurs when the state syncer overwrites it.
+			//
+			// The solution is to reset the state to the genesis state. Although it may not
+			// match the sync target, the state healer will later address and correct any
+			// inconsistencies.
+			bc.resetState()
 		} else {
-			log.Warn("Head state missing, repairing", "number", head.Number, "hash", head.Hash())
-			if _, _, err := bc.setHeadBeyondRoot(head.Number.Uint64(), 0, common.Hash{}, true, 0); err != nil {
-				return nil, err
+			// Head state is missing, before the state recovery, find out the
+			// disk layer point of snapshot(if it's enabled). Make sure the
+			// rewound point is lower than disk layer.
+			var diskRoot common.Hash
+			if bc.cacheConfig.SnapshotLimit > 0 {
+				diskRoot = rawdb.ReadSnapshotRoot(bc.db)
+			}
+			if diskRoot != (common.Hash{}) {
+				log.Warn("Head state missing, repairing", "number", head.Number, "hash", head.Hash(), "snaproot", diskRoot)
+
+				snapDisk, diskRootFound, err := bc.setHeadBeyondRoot(head.Number.Uint64(), 0, diskRoot, true, bc.cacheConfig.SnapshotRestoreMaxGas)
+				if err != nil {
+					return nil, err
+				}
+				// Chain rewound, persist old snapshot number to indicate recovery procedure
+				if diskRootFound {
+					rawdb.WriteSnapshotRecoveryNumber(bc.db, snapDisk)
+				} else {
+					log.Warn("Snapshot root not found or too far back. Recreating snapshot from scratch.")
+					rawdb.DeleteSnapshotRecoveryNumber(bc.db)
+				}
+			} else {
+				log.Warn("Head state missing, repairing", "number", head.Number, "hash", head.Hash())
+				if _, _, err := bc.setHeadBeyondRoot(head.Number.Uint64(), 0, common.Hash{}, true, 0); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -662,6 +672,28 @@ func (bc *BlockChain) SetSafe(header *types.Header) {
 	}
 }
 
+// resetState resets the persistent state to genesis state if it's not present.
+func (bc *BlockChain) resetState() {
+	// Short circuit if the genesis state is already present.
+	root := bc.genesisBlock.Root()
+	if bc.HasState(root) {
+		return
+	}
+	// Reset the state database to empty for committing genesis state.
+	// Note, it should only happen in path-based scheme and Reset function
+	// is also only call-able in this mode.
+	if bc.triedb.Scheme() == rawdb.PathScheme {
+		if err := bc.triedb.Reset(types.EmptyRootHash); err != nil {
+			log.Crit("Failed to clean state", "err", err) // Shouldn't happen
+		}
+	}
+	// Write genesis state into database.
+	if err := CommitGenesisState(bc.db, bc.triedb, bc.genesisBlock.Hash()); err != nil {
+		log.Crit("Failed to commit genesis state", "err", err)
+	}
+	log.Info("Reset state to genesis", "root", root)
+}
+
 // setHeadBeyondRoot rewinds the local chain to a new head with the extra condition
 // that the rewind must pass the specified state root. The extra condition is
 // ignored if it causes rolling back more than rewindLimit Gas (0 meaning infinte).
@@ -691,25 +723,6 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	pivot := rawdb.ReadLastPivotNumber(bc.db)
 	frozen, _ := bc.db.Ancients()
 
-	// resetState resets the persistent state to genesis if it's not available.
-	resetState := func() {
-		// Short circuit if the genesis state is already present.
-		if bc.HasState(bc.genesisBlock.Root()) {
-			return
-		}
-		// Reset the state database to empty for committing genesis state.
-		// Note, it should only happen in path-based scheme and Reset function
-		// is also only call-able in this mode.
-		if bc.triedb.Scheme() == rawdb.PathScheme {
-			if err := bc.triedb.Reset(types.EmptyRootHash); err != nil {
-				log.Crit("Failed to clean state", "err", err) // Shouldn't happen
-			}
-		}
-		// Write genesis state into database.
-		if err := CommitGenesisState(bc.db, bc.triedb, bc.genesisBlock.Hash()); err != nil {
-			log.Crit("Failed to commit genesis state", "err", err)
-		}
-	}
 	updateFn := func(db ethdb.KeyValueWriter, header *types.Header) (*types.Header, bool) {
 		// Rewind the blockchain, ensuring we don't end up with a stateless head
 		// block. Note, depth equality is permitted to allow using SetHead as a
@@ -719,7 +732,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			if newHeadBlock == nil {
 				log.Error("Gap in the chain, rewinding to genesis", "number", header.Number, "hash", header.Hash())
 				newHeadBlock = bc.genesisBlock
-				resetState()
+				bc.resetState()
 			} else {
 				// Block exists, keep rewinding until we find one with state,
 				// keeping rewinding until we exceed the optional threshold
@@ -772,7 +785,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 					}
 					if rootFound || newHeadBlock.NumberU64() <= bc.genesisBlock.NumberU64() {
 						if newHeadBlock.NumberU64() <= bc.genesisBlock.NumberU64() {
-							resetState()
+							bc.resetState()
 						} else if !bc.HasState(newHeadBlock.Root()) {
 							// Rewind to a block with recoverable state. If the state is
 							// missing, run the state recovery here.
