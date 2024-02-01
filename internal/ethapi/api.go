@@ -1075,7 +1075,7 @@ func (context *ChainContext) GetHeader(hash common.Hash, number uint64) *types.H
 	return header
 }
 
-func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64, runMode core.MessageRunMode, blockNrOrHash *rpc.BlockNumberOrHash) (*core.ExecutionResult, error) {
+func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64, runMode core.MessageRunMode) (*core.ExecutionResult, error) {
 	if err := overrides.Apply(state); err != nil {
 		return nil, err
 	}
@@ -1098,14 +1098,6 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 	}
 
 	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
-	if blockNrOrHash != nil &&
-		blockNrOrHash.BlockNumber != nil &&
-		*blockNrOrHash.BlockNumber == rpc.PendingBlockNumber {
-		blkTime := uint64(time.Now().Unix())
-		if blkTime > blockCtx.Time {
-			blockCtx.Time = blkTime
-		}
-	}
 	if blockOverrides != nil {
 		blockOverrides.Apply(&blockCtx)
 	}
@@ -1180,8 +1172,18 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if state == nil || err != nil {
 		return nil, err
 	}
+	if blockNrOrHash.BlockNumber != nil &&
+		*blockNrOrHash.BlockNumber == rpc.PendingBlockNumber {
+		headerCopy := *header
+		blkTime := uint64(time.Now().Unix())
+		if blkTime > headerCopy.Time {
+			headerCopy.Time = blkTime
+		}
+		headerCopy.Number = big.NewInt(headerCopy.Number.Int64() + 1)
+		header = &headerCopy
+	}
 
-	return doCall(ctx, b, args, state, header, overrides, blockOverrides, timeout, globalGasCap, runMode, &blockNrOrHash)
+	return doCall(ctx, b, args, state, header, overrides, blockOverrides, timeout, globalGasCap, runMode)
 }
 
 func newRevertError(result *core.ExecutionResult) *revertError {
@@ -1252,9 +1254,9 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 // executeEstimate is a helper that executes the transaction under a given gas limit and returns
 // true if the transaction fails for a reason that might be related to not enough gas. A non-nil
 // error means execution failed due to reasons unrelated to the gas limit.
-func executeEstimate(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, gasCap uint64, gasLimit uint64, blockNrOrHash *rpc.BlockNumberOrHash) (bool, *core.ExecutionResult, error) {
+func executeEstimate(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, gasCap uint64, gasLimit uint64) (bool, *core.ExecutionResult, error) {
 	args.Gas = (*hexutil.Uint64)(&gasLimit)
-	result, err := doCall(ctx, b, args, state, header, nil, nil, 0, gasCap, core.MessageGasEstimationMode, blockNrOrHash)
+	result, err := doCall(ctx, b, args, state, header, nil, nil, 0, gasCap, core.MessageGasEstimationMode)
 	if err != nil {
 		if errors.Is(err, core.ErrIntrinsicGas) {
 			return true, nil, nil // Special case, raise gas limit
@@ -1311,6 +1313,16 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if err := overrides.Apply(state); err != nil {
 		return 0, err
 	}
+	if blockNrOrHash.BlockNumber != nil &&
+		*blockNrOrHash.BlockNumber == rpc.PendingBlockNumber {
+		headerCopy := *header
+		blkTime := uint64(time.Now().Unix())
+		if blkTime > headerCopy.Time {
+			headerCopy.Time = blkTime
+		}
+		headerCopy.Number = big.NewInt(headerCopy.Number.Int64() + 1)
+		header = &headerCopy
+	}
 
 	// Recap the highest gas limit with account's available balance.
 	if feeCap.BitLen() != 0 {
@@ -1357,7 +1369,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 
 	// We first execute the transaction at the highest allowable gas limit, since if this fails we
 	// can return error immediately.
-	failed, result, err := executeEstimate(ctx, b, args, state.Copy(), header, vanillaGasCap, hi, &blockNrOrHash)
+	failed, result, err := executeEstimate(ctx, b, args, state.Copy(), header, vanillaGasCap, hi)
 	if err != nil {
 		return 0, err
 	}
@@ -1385,7 +1397,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 			// range here is skewed to favor the low side.
 			mid = lo * 2
 		}
-		failed, _, err = executeEstimate(ctx, b, args, state.Copy(), header, gasCap, mid, &blockNrOrHash)
+		failed, _, err = executeEstimate(ctx, b, args, state.Copy(), header, gasCap, mid)
 		if err != nil {
 			// This should not happen under normal conditions since if we make it this far the
 			// transaction had run without error at least once before.
