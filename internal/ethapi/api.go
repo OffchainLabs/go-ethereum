@@ -1165,13 +1165,7 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 	return result, nil
 }
 
-func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64, runMode core.MessageRunMode) (*core.ExecutionResult, error) {
-	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
-
-	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-	if state == nil || err != nil {
-		return nil, err
-	}
+func updateHeaderForPendingBlocks(blockNrOrHash rpc.BlockNumberOrHash, header *types.Header) *types.Header {
 	if blockNrOrHash.BlockNumber != nil &&
 		*blockNrOrHash.BlockNumber == rpc.PendingBlockNumber {
 		headerCopy := *header
@@ -1180,8 +1174,19 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 			headerCopy.Time = blkTime
 		}
 		headerCopy.Number = big.NewInt(headerCopy.Number.Int64() + 1)
-		header = &headerCopy
+		return &headerCopy
 	}
+	return header
+}
+
+func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64, runMode core.MessageRunMode) (*core.ExecutionResult, error) {
+	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+
+	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	header = updateHeaderForPendingBlocks(blockNrOrHash, header)
 
 	return doCall(ctx, b, args, state, header, overrides, blockOverrides, timeout, globalGasCap, runMode)
 }
@@ -1313,16 +1318,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if err := overrides.Apply(state); err != nil {
 		return 0, err
 	}
-	if blockNrOrHash.BlockNumber != nil &&
-		*blockNrOrHash.BlockNumber == rpc.PendingBlockNumber {
-		headerCopy := *header
-		blkTime := uint64(time.Now().Unix())
-		if blkTime > headerCopy.Time {
-			headerCopy.Time = blkTime
-		}
-		headerCopy.Number = big.NewInt(headerCopy.Number.Int64() + 1)
-		header = &headerCopy
-	}
+	header = updateHeaderForPendingBlocks(blockNrOrHash, header)
 
 	// Recap the highest gas limit with account's available balance.
 	if feeCap.BitLen() != 0 {
