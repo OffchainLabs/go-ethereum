@@ -246,9 +246,10 @@ type BlockChain struct {
 	numberOfBlocksToSkipStateSaving      uint32
 	amountOfGasInBlocksToSkipStateSaving uint64
 	forceTriedbCommitHook                ForceTriedbCommitHook
+	processingSinceLastForceCommit       time.Duration
 }
 
-type ForceTriedbCommitHook func(*types.Block) bool
+type ForceTriedbCommitHook func(*types.Block, time.Duration) bool
 
 type trieGcEntry struct {
 	Root      common.Hash
@@ -1435,11 +1436,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		return err
 	}
 
-	if bc.forceTriedbCommitHook != nil && bc.forceTriedbCommitHook(block) {
-		bc.numberOfBlocksToSkipStateSaving = bc.cacheConfig.MaxNumberOfBlocksToSkipStateSaving
-		bc.amountOfGasInBlocksToSkipStateSaving = bc.cacheConfig.MaxAmountOfGasToSkipStateSaving
-		return bc.triedb.Commit(root, false)
-	}
 	// If we're running an archive node, flush
 	// If MaxNumberOfBlocksToSkipStateSaving or MaxAmountOfGasToSkipStateSaving is not zero, then flushing of some blocks will be skipped:
 	// * at most MaxNumberOfBlocksToSkipStateSaving block state commits will be skipped
@@ -1489,6 +1485,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		}
 		var prevEntry *trieGcEntry
 		var prevNum uint64
+		var forceCommit bool
 		// Garbage collect anything below our required write retention
 		for !bc.triegc.Empty() {
 			triegcEntry, number := bc.triegc.Pop()
@@ -1497,15 +1494,22 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				break
 			}
 			if prevEntry != nil {
+				if bc.forceTriedbCommitHook != nil && bc.forceTriedbCommitHook(block, bc.gcproc+bc.processingSinceLastForceCommit) {
+					forceCommit = true
+					break
+				}
 				bc.triedb.Dereference(prevEntry.Root)
 			}
 			prevEntry = &triegcEntry
 			prevNum = uint64(-number)
 		}
+		if prevEntry != nil && bc.forceTriedbCommitHook != nil && !forceCommit {
+			forceCommit = bc.forceTriedbCommitHook(block, bc.gcproc+bc.processingSinceLastForceCommit)
+		}
 		flushInterval := time.Duration(bc.flushInterval.Load())
 		// If we exceeded out time allowance, flush an entire trie to disk
 		// In case of archive node that skips some trie commits we don't flush tries here
-		if bc.gcproc > flushInterval && prevEntry != nil && !archiveNode {
+		if prevEntry != nil && ((bc.gcproc > flushInterval && !archiveNode) || forceCommit) {
 			// If the header is missing (canonical chain behind), we're reorging a low
 			// diff sidechain. Suspend committing until this operation is completed.
 			header := bc.GetHeaderByNumber(prevNum)
@@ -1520,6 +1524,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				// Flush an entire trie and restart the counters
 				bc.triedb.Commit(header.Root, true)
 				bc.lastWrite = prevNum
+				if !forceCommit {
+					bc.processingSinceLastForceCommit += bc.gcproc
+				} else {
+					bc.processingSinceLastForceCommit = 0
+				}
 				bc.gcproc = 0
 			}
 		}
