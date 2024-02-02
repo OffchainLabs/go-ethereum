@@ -1169,11 +1169,11 @@ func updateHeaderForPendingBlocks(blockNrOrHash rpc.BlockNumberOrHash, header *t
 	if blockNrOrHash.BlockNumber != nil &&
 		*blockNrOrHash.BlockNumber == rpc.PendingBlockNumber {
 		headerCopy := *header
-		blkTime := uint64(time.Now().Unix())
-		if blkTime > headerCopy.Time {
-			headerCopy.Time = blkTime
+		now := uint64(time.Now().Unix())
+		if now > headerCopy.Time {
+			headerCopy.Time = now
 		}
-		headerCopy.Number = big.NewInt(headerCopy.Number.Int64() + 1)
+		headerCopy.Number = new(big.Int).Add(headerCopy.Number, common.Big1)
 		return &headerCopy
 	}
 	return header
@@ -1237,8 +1237,8 @@ func (e *revertError) ErrorData() interface{} {
 // useful to execute and retrieve values.
 func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides) (hexutil.Bytes, error) {
 	if blockNrOrHash == nil {
-		pending := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
-		blockNrOrHash = &pending
+		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+		blockNrOrHash = &latest
 	}
 	result, err := DoCall(ctx, s.b, args, *blockNrOrHash, overrides, blockOverrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap(), core.MessageEthcallMode)
 	if err != nil {
