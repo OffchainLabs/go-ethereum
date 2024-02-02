@@ -247,13 +247,15 @@ type BlockChain struct {
 	amountOfGasInBlocksToSkipStateSaving uint64
 	forceTriedbCommitHook                ForceTriedbCommitHook
 	processingSinceLastForceCommit       time.Duration
+	gasSinceLastForceCommit              uint64
 }
 
-type ForceTriedbCommitHook func(*types.Block, time.Duration) bool
+type ForceTriedbCommitHook func(*types.Block, time.Duration, uint64) bool
 
 type trieGcEntry struct {
 	Root      common.Hash
 	Timestamp uint64
+	GasUsed   uint64
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -1469,7 +1471,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// Full node or archive node that's not keeping all states, do proper garbage collection
 	bc.triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
-	bc.triegc.Push(trieGcEntry{root, block.Header().Time}, -int64(block.NumberU64()))
+	bc.triegc.Push(trieGcEntry{root, block.Header().Time, block.GasUsed()}, -int64(block.NumberU64()))
 
 	blockLimit := int64(block.NumberU64()) - int64(bc.cacheConfig.TriesInMemory)   // only cleared if below that
 	timeLimit := time.Now().Unix() - int64(bc.cacheConfig.TrieRetention.Seconds()) // only cleared if less than that
@@ -1494,7 +1496,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				break
 			}
 			if prevEntry != nil {
-				if bc.forceTriedbCommitHook != nil && bc.forceTriedbCommitHook(block, bc.gcproc+bc.processingSinceLastForceCommit) {
+				bc.gasSinceLastForceCommit += block.GasUsed()
+				if bc.forceTriedbCommitHook != nil && bc.forceTriedbCommitHook(block, bc.gcproc+bc.processingSinceLastForceCommit, bc.gasSinceLastForceCommit) {
 					forceCommit = true
 					break
 				}
@@ -1504,7 +1507,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			prevNum = uint64(-number)
 		}
 		if prevEntry != nil && bc.forceTriedbCommitHook != nil && !forceCommit {
-			forceCommit = bc.forceTriedbCommitHook(block, bc.gcproc+bc.processingSinceLastForceCommit)
+			bc.gasSinceLastForceCommit += block.GasUsed()
+			forceCommit = bc.forceTriedbCommitHook(block, bc.gcproc+bc.processingSinceLastForceCommit, bc.gasSinceLastForceCommit)
 		}
 		flushInterval := time.Duration(bc.flushInterval.Load())
 		// If we exceeded out time allowance, flush an entire trie to disk
@@ -1528,6 +1532,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					bc.processingSinceLastForceCommit += bc.gcproc
 				} else {
 					bc.processingSinceLastForceCommit = 0
+					bc.gasSinceLastForceCommit = 0
 				}
 				bc.gcproc = 0
 			}
