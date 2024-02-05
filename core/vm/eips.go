@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 
@@ -282,14 +283,33 @@ func opBlobHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	return nil, nil
 }
 
-// enable4844 applies EIP-4844 (DATAHASH opcode)
+// opBlobBaseFee implements BLOBBASEFEE opcode
+func opBlobBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	if interpreter.evm.chainConfig.IsArbitrum() {
+		return nil, errors.New("BLOBBASEFEE is not supported on Arbitrum")
+	}
+	blobBaseFee, _ := uint256.FromBig(interpreter.evm.Context.BlobBaseFee)
+	scope.Stack.push(blobBaseFee)
+	return nil, nil
+}
+
+// enable4844 applies EIP-4844 (BLOBHASH opcode)
 func enable4844(jt *JumpTable) {
-	// New opcode
 	jt[BLOBHASH] = &operation{
 		execute:     opBlobHash,
 		constantGas: GasFastestStep,
 		minStack:    minStack(1, 1),
 		maxStack:    maxStack(1, 1),
+	}
+}
+
+// enable7516 applies EIP-7516 (BLOBBASEFEE opcode)
+func enable7516(jt *JumpTable) {
+	jt[BLOBBASEFEE] = &operation{
+		execute:     opBlobBaseFee,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
 	}
 }
 

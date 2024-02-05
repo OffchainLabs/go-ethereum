@@ -24,6 +24,7 @@ import "github.com/gofrs/flock"
 type FileLock interface {
 	Unlock() error
 	TryLock() (bool, error)
+	TryRLock() (bool, error)
 }
 
 func NewFileLock(fileName string) FileLock {

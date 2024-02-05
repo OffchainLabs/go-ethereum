@@ -1017,7 +1017,7 @@ func (s *StateDB) fastDeleteStorage(addrHash common.Hash, root common.Hash) (boo
 		nodes = trienode.NewNodeSet(addrHash)
 		slots = make(map[common.Hash][]byte)
 	)
-	stack := trie.NewStackTrie(func(owner common.Hash, path []byte, hash common.Hash, blob []byte) {
+	stack := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
 		nodes.AddNode(path, trienode.NewDeleted())
 		size += common.StorageSize(len(path))
 	})
@@ -1026,7 +1026,7 @@ func (s *StateDB) fastDeleteStorage(addrHash common.Hash, root common.Hash) (boo
 			return true, size, nil, nil, nil
 		}
 		slot := common.CopyBytes(iter.Slot())
-		if iter.Error() != nil { // error might occur after Slot function
+		if err := iter.Error(); err != nil { // error might occur after Slot function
 			return false, 0, nil, nil, err
 		}
 		size += common.StorageSize(common.HashLength + len(slot))
@@ -1036,7 +1036,7 @@ func (s *StateDB) fastDeleteStorage(addrHash common.Hash, root common.Hash) (boo
 			return false, 0, nil, nil, err
 		}
 	}
-	if iter.Error() != nil { // error might occur during iteration
+	if err := iter.Error(); err != nil { // error might occur during iteration
 		return false, 0, nil, nil, err
 	}
 	if stack.Hash() != root {
@@ -1114,12 +1114,10 @@ func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root 
 			slotDeletionSkip.Inc(1)
 		}
 		n := int64(len(slots))
-		if n > slotDeletionMaxCount.Value() {
-			slotDeletionMaxCount.Update(n)
-		}
-		if int64(size) > slotDeletionMaxSize.Value() {
-			slotDeletionMaxSize.Update(int64(size))
-		}
+
+		slotDeletionMaxCount.UpdateIfGt(int64(len(slots)))
+		slotDeletionMaxSize.UpdateIfGt(int64(size))
+
 		slotDeletionTimer.UpdateSince(start)
 		slotDeletionCount.Mark(n)
 		slotDeletionSize.Mark(int64(size))

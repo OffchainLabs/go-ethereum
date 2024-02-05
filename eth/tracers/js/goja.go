@@ -474,7 +474,7 @@ func (t *jsTracer) setBuiltinFunctions() {
 		addr := common.BytesToAddress(a)
 		for _, p := range t.activePrecompiles {
 			space := new(big.Int).SetUint64(0x65)
-			arbOS := p.Hash().Big().Cmp(space) >= 0
+			arbOS := p.Big().Cmp(space) >= 0
 			if p == addr && arbOS {
 				return true
 			}

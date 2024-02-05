@@ -338,7 +338,7 @@ func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Addr
 }
 
 func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Address, input []byte, gasPrice, gasTipCap, gasFeeCap, value *big.Int) (uint64, error) {
-	if contract != nil && (contract.Hash().Big().BitLen() > 16) {
+	if contract != nil && (contract.Big().BitLen() > 16) {
 		// Gas estimation cannot succeed without code for method invocations, unless precompile.
 		if code, err := c.transactor.PendingCodeAt(ensureContext(opts.Context), c.address); err != nil {
 			return 0, err
