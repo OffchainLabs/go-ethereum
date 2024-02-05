@@ -144,10 +144,15 @@ func WasmCallCost(db StateDB, contract common.Address, value *big.Int, budget ui
 
 // Computes the cost of touching an account in wasm
 // Note: the code here is adapted from gasEip2929AccountCheck with the most recent parameters as of The Merge
-func WasmAccountTouchCost(db StateDB, addr common.Address) uint64 {
+func WasmAccountTouchCost(db StateDB, addr common.Address, withCode bool) uint64 {
+	cost := uint64(0)
+	if withCode {
+		cost = params.MaxCodeSize / 24576 * params.ExtcodeSizeGasEIP150
+	}
+
 	if !db.AddressInAccessList(addr) {
 		db.AddAddressToAccessList(addr)
-		return params.ColdAccountAccessCostEIP2929
+		return cost + params.ColdAccountAccessCostEIP2929
 	}
-	return params.WarmStorageReadCostEIP2929
+	return cost + params.WarmStorageReadCostEIP2929
 }
