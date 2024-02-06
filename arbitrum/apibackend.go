@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -38,6 +39,10 @@ type APIBackend struct {
 
 	fallbackClient types.FallbackClient
 	sync           SyncProgressBackend
+
+	// TODO remove
+	liveStateFinalizers      atomic.Int64
+	recreatedStateFinalizers atomic.Int64
 }
 
 type timeoutFallbackClient struct {
@@ -466,7 +471,11 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 	}
 	if lastHeader == header {
 		// we are setting finalizer instead of returning a StateReleaseFunc to avoid changing ethapi.Backend interface to minimize diff to upstream
+		a.liveStateFinalizers.Add(1)
+		log.Debug("Live state finalizer set", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 		runtime.SetFinalizer(lastState, func(_ *state.StateDB) {
+			a.liveStateFinalizers.Add(-1)
+			log.Debug("Live state finalizer called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 			lastStateRelease()
 		})
 		return lastState, header, nil
@@ -489,7 +498,12 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 	}
 	// we are setting finalizer instead of returning a StateReleaseFunc to avoid changing ethapi.Backend interface to minimize diff to upstream
 	if header.Root != (common.Hash{}) {
+		a.recreatedStateFinalizers.Add(1)
+		log.Debug("Recreated state finalizer set", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 		runtime.SetFinalizer(statedb, func(_ *state.StateDB) {
+			// TODO remove
+			a.recreatedStateFinalizers.Add(-1)
+			log.Debug("Recreated state finalizer called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 			release()
 		})
 	}
