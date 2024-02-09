@@ -171,7 +171,8 @@ func (s *StateDB) Release() {
 		if ref := s.releaseRefCount.Add(-1); ref == 0 {
 			s.release()
 		} else {
-			log.Warn("statedb not release, refCount != 0", ref)
+			//TODO remove
+			log.Warn("statedb not released, refCount != 0", ref)
 		}
 		s.released = true
 	}
