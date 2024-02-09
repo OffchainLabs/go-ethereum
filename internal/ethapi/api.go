@@ -630,6 +630,7 @@ func (s *BlockChainAPI) GetBalance(ctx context.Context, address common.Address, 
 		}
 		return nil, err
 	}
+	defer state.Release()
 	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
 }
 
@@ -686,6 +687,7 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 	if state == nil || err != nil {
 		return nil, err
 	}
+	defer state.Release()
 	if storageRoot := state.GetStorageRoot(address); storageRoot != types.EmptyRootHash && storageRoot != (common.Hash{}) {
 		id := trie.StorageTrieID(header.Root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
 		tr, err := trie.NewStateTrie(id, state.Database().TrieDB())
@@ -884,6 +886,7 @@ func (s *BlockChainAPI) GetCode(ctx context.Context, address common.Address, blo
 		}
 		return nil, err
 	}
+	defer state.Release()
 	code := state.GetCode(address)
 	return code, state.Error()
 }
@@ -905,6 +908,7 @@ func (s *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Address
 		}
 		return nil, err
 	}
+	defer state.Release()
 	res := state.GetState(address, key)
 	return res[:], state.Error()
 }
@@ -1186,6 +1190,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if state == nil || err != nil {
 		return nil, err
 	}
+	defer state.Release()
 	header = updateHeaderForPendingBlocks(blockNrOrHash, header)
 
 	return doCall(ctx, b, args, state, header, overrides, blockOverrides, timeout, globalGasCap, runMode)
@@ -1315,6 +1320,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if state == nil || err != nil {
 		return 0, err
 	}
+	defer state.Release()
 	if err := overrides.Apply(state); err != nil {
 		return 0, err
 	}
@@ -1351,6 +1357,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		if state == nil || err != nil {
 			return 0, err
 		}
+		defer state.Release()
 		gasCap, err = args.L2OnlyGasCap(gasCap, header, state, core.MessageGasEstimationMode)
 		if err != nil {
 			return 0, err
@@ -1806,6 +1813,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	if db == nil || err != nil {
 		return nil, 0, nil, err
 	}
+	defer db.Release()
 	// If the gas amount is not set, default to RPC gas cap.
 	if args.Gas == nil {
 		tmp := hexutil.Uint64(b.RPCGasCap())
@@ -1945,6 +1953,7 @@ func (s *TransactionAPI) GetTransactionCount(ctx context.Context, address common
 		}
 		return nil, err
 	}
+	defer state.Release()
 	nonce := state.GetNonce(address)
 	return (*hexutil.Uint64)(&nonce), state.Error()
 }

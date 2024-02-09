@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -240,6 +239,7 @@ func (a *APIBackend) FeeHistory(
 		return common.Big0, nil, nil, nil, err
 	}
 	speedLimit, err := core.GetArbOSSpeedLimitPerSecond(state)
+	state.Release()
 	if err != nil {
 		return common.Big0, nil, nil, nil, err
 	}
@@ -472,12 +472,13 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 	if lastHeader == header {
 		// we are setting finalizer instead of returning a StateReleaseFunc to avoid changing ethapi.Backend interface to minimize diff to upstream
 		a.liveStateFinalizers.Add(1)
-		log.Debug("Live state finalizer set", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
-		runtime.SetFinalizer(lastState, func(_ *state.StateDB) {
+		lastState.SetRelease(func() {
 			a.liveStateFinalizers.Add(-1)
-			log.Debug("Live state finalizer called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
+			// TODO remove logs and counters
+			log.Debug("Live state relase called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 			lastStateRelease()
 		})
+		log.Debug("Live state release set", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 		return lastState, header, nil
 	}
 	defer lastStateRelease()
@@ -499,13 +500,13 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 	// we are setting finalizer instead of returning a StateReleaseFunc to avoid changing ethapi.Backend interface to minimize diff to upstream
 	if header.Root != (common.Hash{}) {
 		a.recreatedStateFinalizers.Add(1)
-		log.Debug("Recreated state finalizer set", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
-		runtime.SetFinalizer(statedb, func(_ *state.StateDB) {
-			// TODO remove
+		statedb.SetRelease(func() {
+			// TODO remove logs and counters
 			a.recreatedStateFinalizers.Add(-1)
-			log.Debug("Recreated state finalizer called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
+			log.Debug("Recreated state release called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 			release()
 		})
+		log.Debug("Recreated state release set", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 	}
 	return statedb, header, err
 }

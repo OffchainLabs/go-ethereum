@@ -69,8 +69,8 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		database = state.NewDatabaseWithNodeDB(eth.chainDb, triedb)
 		// there is no need of referencing baseBlock state as it's read from disk
 		statedb, err = state.New(baseBlock.Root(), database, nil)
-		if err == nil {
-			return statedb, noopReleaser, nil
+		if err != nil {
+			return nil, nil, fmt.Errorf("state for base block missing: %w", err)
 		}
 		report = false
 		current = baseBlock

@@ -44,30 +44,25 @@ func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor S
 		if maxDepthInL2Gas > 0 {
 			receipts := bc.GetReceiptsByHash(currentHeader.Hash())
 			if receipts == nil {
-				release()
 				return nil, lastHeader, nil, fmt.Errorf("failed to get receipts for hash %v", currentHeader.Hash())
 			}
 			for _, receipt := range receipts {
 				l2GasUsed += receipt.GasUsed - receipt.GasUsedForL1
 			}
 			if l2GasUsed > uint64(maxDepthInL2Gas) {
-				release()
 				return nil, lastHeader, nil, ErrDepthLimitExceeded
 			}
 		} else if maxDepthInL2Gas != InfiniteMaxRecreateStateDepth {
-			release()
 			return nil, lastHeader, nil, err
 		}
 		if logFunc != nil {
 			logFunc(targetHeader, currentHeader, false)
 		}
 		if currentHeader.Number.Uint64() <= genesis {
-			release()
 			return nil, lastHeader, nil, errors.Wrap(err, fmt.Sprintf("moved beyond genesis looking for state %d, genesis %d", targetHeader.Number.Uint64(), genesis))
 		}
 		currentHeader = bc.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64()-1)
 		if currentHeader == nil {
-			release()
 			return nil, lastHeader, nil, fmt.Errorf("chain doesn't contain parent of block %d hash %v", lastHeader.Number, lastHeader.Hash())
 		}
 	}
