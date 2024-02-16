@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -23,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/filters"
@@ -450,32 +452,53 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 		return nil, header, types.ErrUseFallback
 	}
 	bc := a.BlockChain()
-	stateFor := func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
-		if header.Root != (common.Hash{}) {
-			// Try referencing the root, if it isn't in dirties cache then Reference will have no effect
-			bc.StateCache().TrieDB().Reference(header.Root, common.Hash{})
+	stateFor := func(db state.Database, snapshots *snapshot.Tree) func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
+		return func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
+			if header.Root != (common.Hash{}) {
+				// Try referencing the root, if it isn't in dirties cache then Reference will have no effect
+				db.TrieDB().Reference(header.Root, common.Hash{})
+			}
+			statedb, err := state.New(header.Root, db, snapshots)
+			if err != nil {
+				return nil, nil, err
+			}
+			if header.Root != (common.Hash{}) {
+				headerRoot := header.Root
+				return statedb, func() { db.TrieDB().Dereference(headerRoot) }, nil
+			}
+			return statedb, noopStateRelease, nil
 		}
-		statedb, err := state.New(header.Root, bc.StateCache(), bc.Snapshots())
-		if err != nil {
-			return nil, noopStateRelease, err
-		}
-		if header.Root != (common.Hash{}) {
-			headerRoot := header.Root
-			return statedb, func() { bc.StateCache().TrieDB().Dereference(headerRoot) }, nil
-		}
-		return statedb, noopStateRelease, nil
 	}
-	lastState, lastHeader, lastStateRelease, err := FindLastAvailableState(ctx, bc, stateFor, header, nil, a.b.config.MaxRecreateStateDepth)
+	liveState, liveStateRelease, err := stateFor(bc.StateCache(), bc.Snapshots())(header)
+	if err == nil {
+		a.liveStateFinalizers.Add(1)
+		liveState.SetRelease(func() {
+			a.liveStateFinalizers.Add(-1)
+			// TODO remove logs and counters
+			log.Debug("Live state release called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
+			liveStateRelease()
+		})
+		log.Debug("Live state release set", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
+		return liveState, header, nil
+	}
+	// else err != nil => we don't need to call liveStateRelease
+
+	// Create an ephemeral trie.Database for isolating the live one
+	// note: triedb cleans cache is disabled in trie.HashDefaults
+	// note: only states committed to diskdb can be found as we're creating new triedb
+	// note: snapshots are not used here
+	ephemeral := state.NewDatabaseWithConfig(a.ChainDb(), trie.HashDefaults)
+	lastState, lastHeader, lastStateRelease, err := FindLastAvailableState(ctx, bc, stateFor(ephemeral, nil), header, nil, a.b.config.MaxRecreateStateDepth)
 	if err != nil {
 		return nil, nil, err
 	}
+	// make sure that we haven't found the state in diskdb
 	if lastHeader == header {
-		// we are setting finalizer instead of returning a StateReleaseFunc to avoid changing ethapi.Backend interface to minimize diff to upstream
 		a.liveStateFinalizers.Add(1)
 		lastState.SetRelease(func() {
 			a.liveStateFinalizers.Add(-1)
 			// TODO remove logs and counters
-			log.Debug("Live state relase called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
+			log.Debug("Live state release called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 			lastStateRelease()
 		})
 		log.Debug("Live state release set", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
@@ -492,7 +515,7 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 	}
 	reexec := uint64(0)
 	checkLive := false
-	preferDisk := true
+	preferDisk := false // preferDisk is ignored in this case
 	statedb, release, err := eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(ctx, targetBlock, reexec, lastState, lastBlock, checkLive, preferDisk)
 	if err != nil {
 		return nil, nil, err

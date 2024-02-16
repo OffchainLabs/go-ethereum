@@ -64,16 +64,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 	// try to construct/recover the state over an ephemeral trie.Database for
 	// isolating the live one.
 	if baseBlock != nil {
-		// Create an ephemeral trie.Database for isolating the live one
-		triedb = trie.NewDatabase(eth.chainDb, trie.HashDefaults)
-		database = state.NewDatabaseWithNodeDB(eth.chainDb, triedb)
-		// there is no need of referencing baseBlock state as it's read from disk
-		statedb, err = state.New(baseBlock.Root(), database, nil)
-		if err != nil {
-			return nil, nil, fmt.Errorf("state for base block missing: %w", err)
-		}
-		report = false
-		current = baseBlock
+		current, statedb, database, triedb, report = baseBlock, base, base.Database(), base.Database().TrieDB(), false
 	} else if base != nil {
 		if preferDisk {
 			// Create an ephemeral trie.Database for isolating the live one. Otherwise
