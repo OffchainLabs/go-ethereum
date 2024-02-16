@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/trie"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -33,6 +34,13 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+)
+
+var (
+	referencedLiveStatesCounter       = metrics.NewRegisteredCounter("arb/apibackend/states/live/referenced", nil)
+	releasedLiveStatesCounter         = metrics.NewRegisteredCounter("arb/apibackend/states/live/released", nil)
+	referencedEphemermalStatesCounter = metrics.NewRegisteredCounter("arb/apibackend/states/ephemeral/referenced", nil)
+	releasedEphemermalStatesCounter   = metrics.NewRegisteredCounter("arb/apibackend/states/ephemeral/released", nil)
 )
 
 type APIBackend struct {
@@ -471,12 +479,12 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 	}
 	liveState, liveStateRelease, err := stateFor(bc.StateCache(), bc.Snapshots())(header)
 	if err == nil {
-		a.liveStateFinalizers.Add(1)
+		referencedLiveStatesCounter.Inc(1)
 		liveState.SetRelease(func() {
-			a.liveStateFinalizers.Add(-1)
 			// TODO remove logs and counters
 			log.Debug("Live state release called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 			liveStateRelease()
+			releasedLiveStatesCounter.Inc(1)
 		})
 		log.Debug("Live state release set", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 		return liveState, header, nil
@@ -494,12 +502,12 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 	}
 	// make sure that we haven't found the state in diskdb
 	if lastHeader == header {
-		a.liveStateFinalizers.Add(1)
+		referencedEphemermalStatesCounter.Inc(1)
 		lastState.SetRelease(func() {
-			a.liveStateFinalizers.Add(-1)
 			// TODO remove logs and counters
 			log.Debug("Live state release called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 			lastStateRelease()
+			releasedEphemermalStatesCounter.Inc(1)
 		})
 		log.Debug("Live state release set", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 		return lastState, header, nil
@@ -518,19 +526,18 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 	preferDisk := false // preferDisk is ignored in this case
 	statedb, release, err := eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(ctx, targetBlock, reexec, lastState, lastBlock, checkLive, preferDisk)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to recreate state: %w", err)
 	}
 	// we are setting finalizer instead of returning a StateReleaseFunc to avoid changing ethapi.Backend interface to minimize diff to upstream
-	if header.Root != (common.Hash{}) {
-		a.recreatedStateFinalizers.Add(1)
-		statedb.SetRelease(func() {
-			// TODO remove logs and counters
-			a.recreatedStateFinalizers.Add(-1)
-			log.Debug("Recreated state release called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
-			release()
-		})
-		log.Debug("Recreated state release set", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
-	}
+	referencedEphemermalStatesCounter.Inc(1)
+	statedb.SetRelease(func() {
+		// TODO remove logs and counters
+		a.recreatedStateFinalizers.Add(-1)
+		log.Debug("Recreated state release called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
+		release()
+		releasedEphemermalStatesCounter.Inc(1)
+	})
+	log.Debug("Recreated state release set", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 	return statedb, header, err
 }
 
