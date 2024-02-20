@@ -1145,6 +1145,14 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 		if err != nil {
 			return nil, err
 		}
+		// The scheduling transaction will "use" all of the gas available to it,
+		// but it's really just passing it on to the scheduled tx, so we subtract it out here.
+		if result.UsedGas >= msg.GasLimit {
+			result.UsedGas -= msg.GasLimit
+		} else {
+			log.Warn("Scheduling tx used less gas than scheduled tx has available", "usedGas", result.UsedGas, "scheduledGas", msg.GasLimit)
+			result.UsedGas = 0
+		}
 		msg.TxRunMode = runMode
 		// make a new EVM for the scheduled Tx (an EVM must never be reused)
 		evm, vmError := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true}, &blockCtx)
@@ -1163,6 +1171,8 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 		if scheduledTxResult.Failed() {
 			return scheduledTxResult, nil
 		}
+		// Add back in any gas used by the scheduled transaction.
+		result.UsedGas += scheduledTxResult.UsedGas
 		scheduled = append(scheduled[1:], scheduledTxResult.ScheduledTxes...)
 	}
 
