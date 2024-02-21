@@ -37,10 +37,8 @@ import (
 )
 
 var (
-	referencedLiveStatesCounter       = metrics.NewRegisteredCounter("arb/apibackend/states/live/referenced", nil)
-	releasedLiveStatesCounter         = metrics.NewRegisteredCounter("arb/apibackend/states/live/released", nil)
-	referencedEphemermalStatesCounter = metrics.NewRegisteredCounter("arb/apibackend/states/ephemeral/referenced", nil)
-	releasedEphemermalStatesCounter   = metrics.NewRegisteredCounter("arb/apibackend/states/ephemeral/released", nil)
+	liveStatesCounter      = metrics.NewRegisteredCounter("arb/apibackend/states/live", nil)
+	recreatedStatesCounter = metrics.NewRegisteredCounter("arb/apibackend/states/recreated", nil)
 )
 
 type APIBackend struct {
@@ -49,8 +47,6 @@ type APIBackend struct {
 	fallbackClient types.FallbackClient
 	sync           SyncProgressBackend
 
-	// TODO remove
-	liveStateFinalizers      atomic.Int64
 	recreatedStateFinalizers atomic.Int64
 }
 
@@ -479,14 +475,10 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 	}
 	liveState, liveStateRelease, err := stateFor(bc.StateCache(), bc.Snapshots())(header)
 	if err == nil {
-		referencedLiveStatesCounter.Inc(1)
+		liveStatesCounter.Inc(1)
 		liveState.SetRelease(func() {
-			// TODO remove logs and counters
-			log.Debug("Live state release called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 			liveStateRelease()
-			releasedLiveStatesCounter.Inc(1)
 		})
-		log.Debug("Live state release set", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 		return liveState, header, nil
 	}
 	// else err != nil => we don't need to call liveStateRelease
@@ -502,14 +494,10 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 	}
 	// make sure that we haven't found the state in diskdb
 	if lastHeader == header {
-		referencedEphemermalStatesCounter.Inc(1)
+		liveStatesCounter.Inc(1)
 		lastState.SetRelease(func() {
-			// TODO remove logs and counters
-			log.Debug("Live state release called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 			lastStateRelease()
-			releasedEphemermalStatesCounter.Inc(1)
 		})
-		log.Debug("Live state release set", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
 		return lastState, header, nil
 	}
 	defer lastStateRelease()
@@ -529,15 +517,15 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 		return nil, nil, fmt.Errorf("failed to recreate state: %w", err)
 	}
 	// we are setting finalizer instead of returning a StateReleaseFunc to avoid changing ethapi.Backend interface to minimize diff to upstream
-	referencedEphemermalStatesCounter.Inc(1)
+	recreatedStatesCounter.Inc(1)
+	a.recreatedStateFinalizers.Add(1)
 	statedb.SetRelease(func() {
 		// TODO remove logs and counters
 		a.recreatedStateFinalizers.Add(-1)
-		log.Debug("Recreated state release called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
+		log.Warn("Recreated state release called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load())
 		release()
-		releasedEphemermalStatesCounter.Inc(1)
 	})
-	log.Debug("Recreated state release set", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load(), "liveStateFinalizers", a.liveStateFinalizers.Load())
+	log.Warn("Recreated state release set", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load())
 	return statedb, header, err
 }
 

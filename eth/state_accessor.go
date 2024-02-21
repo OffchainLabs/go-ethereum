@@ -30,7 +30,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/trie"
+)
+
+var (
+	recreatedStatesCounter = metrics.NewRegisteredCounter("eth/stateaccessor/recreated/states", nil)
+	recreatedBytesMeter    = metrics.NewRegisteredMeter("eth/stateaccessor/recreated/bytes", nil)
 )
 
 // noopReleaser is returned in case there is no operation expected
@@ -171,10 +177,13 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		}
 		parent = root
 	}
+	_, nodes, imgs := triedb.Size() // all memory is contained within the nodes return in hashdb
 	if report {
-		_, nodes, imgs := triedb.Size() // all memory is contained within the nodes return in hashdb
 		log.Info("Historical state regenerated", "block", current.NumberU64(), "elapsed", time.Since(start), "nodes", nodes, "preimages", imgs)
 	}
+	recreatedStatesCounter.Inc(1)
+	recreatedBytesMeter.Mark(int64(nodes))
+
 	return statedb, func() { triedb.Dereference(block.Root()) }, nil
 }
 
