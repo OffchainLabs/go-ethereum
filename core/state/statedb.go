@@ -21,9 +21,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
-	"runtime"
 	"sort"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -147,10 +145,9 @@ type StateDB struct {
 	// Testing hooks
 	onCommit func(states *triestate.Set) // Hook invoked when commit is performed
 
-	// arbitrum: reference counted cleanup hook
-	release         func()
-	releaseRefCount *atomic.Int64
-	released        bool
+	// arbitrum: cleanup hook
+	release  func()
+	released bool
 
 	deterministic bool
 }
@@ -158,8 +155,6 @@ type StateDB struct {
 func (s *StateDB) SetRelease(release func()) {
 	if s.release == nil {
 		s.release = release
-		s.releaseRefCount = new(atomic.Int64)
-		s.releaseRefCount.Add(1)
 	} else {
 		// TODO
 		panic("StateDB.SetRelease called more then once")
@@ -168,12 +163,7 @@ func (s *StateDB) SetRelease(release func()) {
 
 func (s *StateDB) Release() {
 	if s.release != nil && !s.released {
-		if ref := s.releaseRefCount.Add(-1); ref == 0 {
-			s.release()
-		} else {
-			//TODO remove
-			log.Warn("statedb not released, refCount != 0", "refcnt", ref)
-		}
+		s.release()
 		s.released = true
 	}
 }
@@ -206,13 +196,9 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		transientStorage:     newTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
 
-		release:         nil,
-		releaseRefCount: nil,
-		released:        false,
+		release:  nil,
+		released: false,
 	}
-	runtime.SetFinalizer(sdb, func(s *StateDB) {
-		s.Release()
-	})
 	if sdb.snaps != nil {
 		sdb.snap = sdb.snaps.Snapshot(root)
 	}
@@ -789,17 +775,7 @@ func (s *StateDB) Copy() *StateDB {
 		// miner to operate trie-backed only.
 		snaps: s.snaps,
 		snap:  s.snap,
-
-		release:         s.release,
-		releaseRefCount: s.releaseRefCount,
-		released:        false,
 	}
-	if s.releaseRefCount != nil {
-		s.releaseRefCount.Add(1)
-	}
-	runtime.SetFinalizer(state, func(s *StateDB) {
-		s.Release()
-	})
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
 		// As documented [here](https://github.com/ethereum/go-ethereum/pull/16485#issuecomment-380438527),
