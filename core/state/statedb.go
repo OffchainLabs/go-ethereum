@@ -156,8 +156,7 @@ func (s *StateDB) SetRelease(release func()) {
 	if s.release == nil {
 		s.release = release
 	} else {
-		// TODO
-		panic("StateDB.SetRelease called more then once")
+		log.Error("StateDB.SetRelease called more then once, may cause memory leak")
 	}
 }
 
