@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -46,8 +45,6 @@ type APIBackend struct {
 
 	fallbackClient types.FallbackClient
 	sync           SyncProgressBackend
-
-	recreatedStateFinalizers atomic.Int64
 }
 
 type timeoutFallbackClient struct {
@@ -518,14 +515,9 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 	}
 	// we are setting finalizer instead of returning a StateReleaseFunc to avoid changing ethapi.Backend interface to minimize diff to upstream
 	recreatedStatesCounter.Inc(1)
-	a.recreatedStateFinalizers.Add(1)
 	statedb.SetRelease(func() {
-		// TODO remove logs and counters
-		a.recreatedStateFinalizers.Add(-1)
-		log.Warn("Recreated state release called", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load())
 		release()
 	})
-	log.Warn("Recreated state release set", "recreatedStateFinalizers", a.recreatedStateFinalizers.Load())
 	return statedb, header, err
 }
 
