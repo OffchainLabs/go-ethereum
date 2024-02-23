@@ -19,7 +19,7 @@ var (
 
 type StateReleaseFunc tracers.StateReleaseFunc
 
-var noopStateRelease StateReleaseFunc = func() {}
+var NoopStateRelease StateReleaseFunc = func() {}
 
 type StateBuildingLogFunction func(targetHeader, header *types.Header, hasState bool)
 type StateForHeaderFunction func(header *types.Header) (*state.StateDB, StateReleaseFunc, error)
@@ -34,7 +34,7 @@ func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor S
 	var state *state.StateDB
 	var err error
 	var l2GasUsed uint64
-	release := noopStateRelease
+	release := NoopStateRelease
 	for ctx.Err() == nil {
 		lastHeader := currentHeader
 		state, release, err = stateFor(currentHeader)
@@ -85,4 +85,25 @@ func AdvanceStateByBlock(ctx context.Context, bc *core.BlockChain, state *state.
 		return nil, nil, fmt.Errorf("failed recreating state for block %d : %w", blockToRecreate, err)
 	}
 	return state, block, nil
+}
+
+func AdvanceStateUpToBlock(ctx context.Context, bc *core.BlockChain, state *state.StateDB, targetHeader *types.Header, lastAvailableHeader *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, error) {
+	returnedBlockNumber := targetHeader.Number.Uint64()
+	blockToRecreate := lastAvailableHeader.Number.Uint64() + 1
+	prevHash := lastAvailableHeader.Hash()
+	for ctx.Err() == nil {
+		state, block, err := AdvanceStateByBlock(ctx, bc, state, targetHeader, blockToRecreate, prevHash, logFunc)
+		if err != nil {
+			return nil, err
+		}
+		prevHash = block.Hash()
+		if blockToRecreate >= returnedBlockNumber {
+			if block.Hash() != targetHeader.Hash() {
+				return nil, fmt.Errorf("blockHash doesn't match when recreating number: %d expected: %v got: %v", blockToRecreate, targetHeader.Hash(), block.Hash())
+			}
+			return state, nil
+		}
+		blockToRecreate++
+	}
+	return nil, ctx.Err()
 }

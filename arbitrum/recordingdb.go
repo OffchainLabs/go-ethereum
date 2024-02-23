@@ -312,7 +312,7 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 	stateFor := func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
 		state, err := r.StateFor(header)
 		// we don't use the release functor pattern here yet
-		return state, noopStateRelease, err
+		return state, NoopStateRelease, err
 	}
 	state, currentHeader, _, err := FindLastAvailableState(ctx, r.bc, stateFor, header, logFunc, -1)
 	if err != nil {

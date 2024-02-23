@@ -470,7 +470,7 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 				headerRoot := header.Root
 				return statedb, func() { db.TrieDB().Dereference(headerRoot) }, nil
 			}
-			return statedb, noopStateRelease, nil
+			return statedb, NoopStateRelease, nil
 		}
 	}
 	liveState, liveStateRelease, err := stateFor(bc.StateCache(), bc.Snapshots())(header)
