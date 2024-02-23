@@ -258,10 +258,26 @@ type trieGcEntry struct {
 	GasUsed   uint64
 }
 
+func NewBlockChainArbitrum(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, forceTriedbCommitHook ForceTriedbCommitHook) (*BlockChain, error) {
+	bc, err := NewBlockChain(db, cacheConfig, chainConfig, genesis, overrides, engine, vmConfig, shouldPreserve)
+	if err != nil {
+		return nil, err
+	}
+	// Start tx indexer/unindexer if required.
+	if txLookupLimit != nil {
+		bc.txLookupLimit = *txLookupLimit
+
+		bc.wg.Add(1)
+		go bc.maintainTxIndex()
+	}
+	bc.forceTriedbCommitHook = forceTriedbCommitHook
+	return bc, nil
+}
+
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, forceTriedbCommitHook ForceTriedbCommitHook) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -468,14 +484,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		}
 		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
 	}
-	// Start tx indexer/unindexer if required.
-	if txLookupLimit != nil {
-		bc.txLookupLimit = *txLookupLimit
-
-		bc.wg.Add(1)
-		go bc.maintainTxIndex()
-	}
-	bc.forceTriedbCommitHook = forceTriedbCommitHook
 	return bc, nil
 }
 
@@ -961,6 +969,7 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 //
 // Note, this function assumes that the `mu` mutex is held!
 func (bc *BlockChain) writeHeadBlock(block *types.Block) {
+	log.Warn("YYY writeBlockHead", "number", block.NumberU64())
 	// Add the block to the canonical chain number scheme and mark as the head
 	batch := bc.db.NewBatch()
 	rawdb.WriteHeadHeaderHash(batch, block.Hash())
@@ -1030,7 +1039,7 @@ func (bc *BlockChain) Stop() {
 	//  - HEAD:     So we don't need to reprocess any blocks in the general case
 	//  - HEAD-1:   So we don't do large reorgs if our HEAD becomes an uncle
 	//  - HEAD-127: So we have a hard limit on the number of blocks reexecuted
-	if !bc.cacheConfig.TrieDirtyDisabled {
+	if !bc.cacheConfig.TrieDirtyDisabled || bc.cacheConfig.MaxAmountOfGasToSkipStateSaving > 0 || bc.cacheConfig.MaxNumberOfBlocksToSkipStateSaving > 0 {
 		triedb := bc.triedb
 
 		for _, offset := range []uint64{0, 1, bc.cacheConfig.TriesInMemory - 1, math.MaxUint64} {
