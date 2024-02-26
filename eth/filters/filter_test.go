@@ -249,7 +249,7 @@ func TestFilters(t *testing.T) {
 		}
 	})
 	var l uint64
-	bc, err := core.NewBlockChainArbitrum(db, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l, nil)
+	bc, err := core.NewArbBlockChain(db, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

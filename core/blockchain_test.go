@@ -2585,7 +2585,7 @@ func TestTransactionIndices(t *testing.T) {
 		rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), big.NewInt(0))
 
 		l := l
-		chain, err := NewBlockChainArbitrum(ancientDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l, nil)
+		chain, err := NewArbBlockChain(ancientDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l, nil)
 		if err != nil {
 			t.Fatalf("failed to create tester chain: %v", err)
 		}
@@ -2609,7 +2609,7 @@ func TestTransactionIndices(t *testing.T) {
 	limit = []uint64{0, 64 /* drop stale */, 32 /* shorten history */, 64 /* extend history */, 0 /* restore all */}
 	for _, l := range limit {
 		l := l
-		chain, err := NewBlockChainArbitrum(ancientDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l, nil)
+		chain, err := NewArbBlockChain(ancientDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l, nil)
 		if err != nil {
 			t.Fatalf("failed to create tester chain: %v", err)
 		}
@@ -2682,7 +2682,7 @@ func TestSkipStaleTxIndicesInSnapSync(t *testing.T) {
 
 	// Import all blocks into ancient db, only HEAD-32 indices are kept.
 	l := uint64(32)
-	chain, err := NewBlockChainArbitrum(ancientDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l, nil)
+	chain, err := NewArbBlockChain(ancientDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -4021,7 +4021,7 @@ func TestTxIndexer(t *testing.T) {
 		rawdb.WriteAncientBlocks(db, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), big.NewInt(0))
 
 		// Index the initial blocks from ancient store
-		chain, _ := NewBlockChainArbitrum(db, nil, nil, gspec, nil, engine, vm.Config{}, nil, &c.limitA, nil)
+		chain, _ := NewArbBlockChain(db, nil, nil, gspec, nil, engine, vm.Config{}, nil, &c.limitA, nil)
 		chain.indexBlocks(nil, 128, make(chan struct{}))
 		verify(db, c.tailA)
 

@@ -258,7 +258,7 @@ type trieGcEntry struct {
 	GasUsed   uint64
 }
 
-func NewBlockChainArbitrum(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, forceTriedbCommitHook ForceTriedbCommitHook) (*BlockChain, error) {
+func NewArbBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, forceTriedbCommitHook ForceTriedbCommitHook) (*BlockChain, error) {
 	bc, err := NewBlockChain(db, cacheConfig, chainConfig, genesis, overrides, engine, vmConfig, shouldPreserve)
 	if err != nil {
 		return nil, err
