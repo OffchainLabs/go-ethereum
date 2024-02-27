@@ -245,17 +245,39 @@ type BlockChain struct {
 
 	numberOfBlocksToSkipStateSaving      uint32
 	amountOfGasInBlocksToSkipStateSaving uint64
+	forceTriedbCommitHook                ForceTriedbCommitHook
+	processingSinceLastForceCommit       time.Duration
+	gasSinceLastForceCommit              uint64
 }
+
+type ForceTriedbCommitHook func(*types.Block, time.Duration, uint64) bool
 
 type trieGcEntry struct {
 	Root      common.Hash
 	Timestamp uint64
+	GasUsed   uint64
+}
+
+func NewArbBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, forceTriedbCommitHook ForceTriedbCommitHook) (*BlockChain, error) {
+	bc, err := NewBlockChain(db, cacheConfig, chainConfig, genesis, overrides, engine, vmConfig, shouldPreserve)
+	if err != nil {
+		return nil, err
+	}
+	// Start tx indexer/unindexer if required.
+	if txLookupLimit != nil {
+		bc.txLookupLimit = *txLookupLimit
+
+		bc.wg.Add(1)
+		go bc.maintainTxIndex()
+	}
+	bc.forceTriedbCommitHook = forceTriedbCommitHook
+	return bc, nil
 }
 
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -461,13 +483,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			bc.SetHead(compat.RewindToBlock)
 		}
 		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
-	}
-	// Start tx indexer/unindexer if required.
-	if txLookupLimit != nil {
-		bc.txLookupLimit = *txLookupLimit
-
-		bc.wg.Add(1)
-		go bc.maintainTxIndex()
 	}
 	return bc, nil
 }
@@ -1430,6 +1445,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if err != nil {
 		return err
 	}
+
 	// If we're running an archive node, flush
 	// If MaxNumberOfBlocksToSkipStateSaving or MaxAmountOfGasToSkipStateSaving is not zero, then flushing of some blocks will be skipped:
 	// * at most MaxNumberOfBlocksToSkipStateSaving block state commits will be skipped
@@ -1463,7 +1479,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// Full node or archive node that's not keeping all states, do proper garbage collection
 	bc.triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
-	bc.triegc.Push(trieGcEntry{root, block.Header().Time}, -int64(block.NumberU64()))
+	bc.triegc.Push(trieGcEntry{root, block.Header().Time, block.GasUsed()}, -int64(block.NumberU64()))
 
 	blockLimit := int64(block.NumberU64()) - int64(bc.cacheConfig.TriesInMemory)   // only cleared if below that
 	timeLimit := time.Now().Unix() - int64(bc.cacheConfig.TrieRetention.Seconds()) // only cleared if less than that
@@ -1479,6 +1495,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		}
 		var prevEntry *trieGcEntry
 		var prevNum uint64
+		var forceCommit bool
 		// Garbage collect anything below our required write retention
 		for !bc.triegc.Empty() {
 			triegcEntry, number := bc.triegc.Pop()
@@ -1487,15 +1504,24 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				break
 			}
 			if prevEntry != nil {
+				bc.gasSinceLastForceCommit += block.GasUsed()
+				if bc.forceTriedbCommitHook != nil && bc.forceTriedbCommitHook(block, bc.gcproc+bc.processingSinceLastForceCommit, bc.gasSinceLastForceCommit) {
+					forceCommit = true
+					break
+				}
 				bc.triedb.Dereference(prevEntry.Root)
 			}
 			prevEntry = &triegcEntry
 			prevNum = uint64(-number)
 		}
+		if prevEntry != nil && bc.forceTriedbCommitHook != nil && !forceCommit {
+			bc.gasSinceLastForceCommit += block.GasUsed()
+			forceCommit = bc.forceTriedbCommitHook(block, bc.gcproc+bc.processingSinceLastForceCommit, bc.gasSinceLastForceCommit)
+		}
 		flushInterval := time.Duration(bc.flushInterval.Load())
 		// If we exceeded out time allowance, flush an entire trie to disk
 		// In case of archive node that skips some trie commits we don't flush tries here
-		if bc.gcproc > flushInterval && prevEntry != nil && !archiveNode {
+		if prevEntry != nil && ((bc.gcproc > flushInterval && !archiveNode) || forceCommit) {
 			// If the header is missing (canonical chain behind), we're reorging a low
 			// diff sidechain. Suspend committing until this operation is completed.
 			header := bc.GetHeaderByNumber(prevNum)
@@ -1510,6 +1536,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				// Flush an entire trie and restart the counters
 				bc.triedb.Commit(header.Root, true)
 				bc.lastWrite = prevNum
+				if !forceCommit {
+					bc.processingSinceLastForceCommit += bc.gcproc
+				} else {
+					bc.processingSinceLastForceCommit = 0
+					bc.gasSinceLastForceCommit = 0
+				}
 				bc.gcproc = 0
 			}
 		}
