@@ -969,7 +969,6 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 //
 // Note, this function assumes that the `mu` mutex is held!
 func (bc *BlockChain) writeHeadBlock(block *types.Block) {
-	log.Warn("YYY writeBlockHead", "number", block.NumberU64())
 	// Add the block to the canonical chain number scheme and mark as the head
 	batch := bc.db.NewBatch()
 	rawdb.WriteHeadHeaderHash(batch, block.Hash())
@@ -1039,7 +1038,7 @@ func (bc *BlockChain) Stop() {
 	//  - HEAD:     So we don't need to reprocess any blocks in the general case
 	//  - HEAD-1:   So we don't do large reorgs if our HEAD becomes an uncle
 	//  - HEAD-127: So we have a hard limit on the number of blocks reexecuted
-	if !bc.cacheConfig.TrieDirtyDisabled || bc.cacheConfig.MaxAmountOfGasToSkipStateSaving > 0 || bc.cacheConfig.MaxNumberOfBlocksToSkipStateSaving > 0 {
+	if !bc.cacheConfig.TrieDirtyDisabled {
 		triedb := bc.triedb
 
 		for _, offset := range []uint64{0, 1, bc.cacheConfig.TriesInMemory - 1, math.MaxUint64} {
