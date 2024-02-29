@@ -136,12 +136,12 @@ func (f *fuzzer) fuzz() int {
 	// This spongeDb is used to check the sequence of disk-db-writes
 	var (
 		spongeA = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
-		dbA     = trie.NewDatabase(rawdb.NewDatabase(spongeA))
+		dbA     = trie.NewDatabase(rawdb.NewDatabase(spongeA), nil)
 		trieA   = trie.NewEmpty(dbA)
 		spongeB = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
-		dbB     = trie.NewDatabase(rawdb.NewDatabase(spongeB))
-		trieB   = trie.NewStackTrie(func(owner common.Hash, path []byte, hash common.Hash, blob []byte) {
-			rawdb.WriteTrieNode(spongeB, owner, path, hash, blob, dbB.Scheme())
+		dbB     = trie.NewDatabase(rawdb.NewDatabase(spongeB), nil)
+		trieB   = trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
+			rawdb.WriteTrieNode(spongeB, common.Hash{}, path, hash, blob, dbB.Scheme())
 		})
 		vals        []kv
 		useful      bool
@@ -205,12 +205,9 @@ func (f *fuzzer) fuzz() int {
 	// Ensure all the nodes are persisted correctly
 	var (
 		nodeset = make(map[string][]byte) // path -> blob
-		trieC   = trie.NewStackTrie(func(owner common.Hash, path []byte, hash common.Hash, blob []byte) {
+		trieC   = trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
 			if crypto.Keccak256Hash(blob) != hash {
 				panic("invalid node blob")
-			}
-			if owner != (common.Hash{}) {
-				panic("invalid node owner")
 			}
 			nodeset[string(path)] = common.CopyBytes(blob)
 		})

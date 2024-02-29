@@ -22,6 +22,7 @@ package rawdb
 type FileLock interface {
 	Unlock() error
 	TryLock() (bool, error)
+	TryRLock() (bool, error)
 }
 
 func NewFileLock(_ string) FileLock {
@@ -34,5 +35,8 @@ func (r mockFileLock) Unlock() error {
 	return nil
 }
 func (r mockFileLock) TryLock() (bool, error) {
+	return true, nil
+}
+func (r mockFileLock) TryRLock() (bool, error) {
 	return true, nil
 }
