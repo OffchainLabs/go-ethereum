@@ -180,7 +180,7 @@ func (db *Database) insert(hash common.Hash, node []byte) {
 
 // node retrieves an encoded cached trie node from memory. If it cannot be found
 // cached, the method queries the persistent database for the content.
-func (db *Database) Node(hash common.Hash) ([]byte, error) {
+func (db *Database) node(hash common.Hash) ([]byte, error) {
 	// It doesn't make sense to retrieve the metaroot
 	if hash == (common.Hash{}) {
 		return nil, errors.New("not found")
@@ -219,6 +219,11 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 		return enc, nil
 	}
 	return nil, errors.New("not found")
+}
+
+// arbitrum: exposing hashdb.Database.Node for triedb.Database.Node currently used by arbitrum.RecordingKV.Get
+func (db *Database) Node(hash common.Hash) ([]byte, error) {
+	return db.node(hash)
 }
 
 // Reference adds a new reference from a parent node to a child node.
@@ -555,7 +560,7 @@ func (db *Database) Initialized(genesisRoot common.Hash) bool {
 func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	// Ensure the parent state is present and signal a warning if not.
 	if parent != types.EmptyRootHash {
-		if blob, _ := db.Node(parent); len(blob) == 0 {
+		if blob, _ := db.node(parent); len(blob) == 0 {
 			log.Error("parent state is not present")
 		}
 	}
@@ -636,7 +641,7 @@ func (db *Database) Scheme() string {
 // Reader retrieves a node reader belonging to the given state root.
 // An error will be returned if the requested state is not available.
 func (db *Database) Reader(root common.Hash) (*reader, error) {
-	if _, err := db.Node(root); err != nil {
+	if _, err := db.node(root); err != nil {
 		return nil, fmt.Errorf("state %#x is not available, %v", root, err)
 	}
 	return &reader{db: db}, nil
@@ -650,6 +655,6 @@ type reader struct {
 // Node retrieves the trie node with the given node hash. No error will be
 // returned if the node is not found.
 func (reader *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
-	blob, _ := reader.db.Node(hash)
+	blob, _ := reader.db.node(hash)
 	return blob, nil
 }
