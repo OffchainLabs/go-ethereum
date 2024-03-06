@@ -36,8 +36,10 @@ import (
 )
 
 var (
-	liveStatesCounter      = metrics.NewRegisteredCounter("arb/apibackend/states/live", nil)
-	recreatedStatesCounter = metrics.NewRegisteredCounter("arb/apibackend/states/recreated", nil)
+	liveStatesReferencedCounter        = metrics.NewRegisteredCounter("arb/apibackend/states/live/referenced", nil)
+	liveStatesDereferencedCounter      = metrics.NewRegisteredCounter("arb/apibackend/states/live/dereferenced", nil)
+	recreatedStatesReferencedCounter   = metrics.NewRegisteredCounter("arb/apibackend/states/recreated/referenced", nil)
+	recreatedStatesDereferencedCounter = metrics.NewRegisteredCounter("arb/apibackend/states/recreated/dereferenced", nil)
 )
 
 type APIBackend struct {
@@ -242,7 +244,6 @@ func (a *APIBackend) FeeHistory(
 		return common.Big0, nil, nil, nil, err
 	}
 	speedLimit, err := core.GetArbOSSpeedLimitPerSecond(state)
-	state.Release()
 	if err != nil {
 		return common.Big0, nil, nil, nil, err
 	}
@@ -472,9 +473,10 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 	}
 	liveState, liveStateRelease, err := stateFor(bc.StateCache(), bc.Snapshots())(header)
 	if err == nil {
-		liveStatesCounter.Inc(1)
-		liveState.SetRelease(func() {
+		liveStatesReferencedCounter.Inc(1)
+		liveState.SetArbFinalizer(func(*state.ArbitrumExtraData) {
 			liveStateRelease()
+			liveStatesDereferencedCounter.Inc(1)
 		})
 		return liveState, header, nil
 	}
@@ -491,9 +493,10 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 	}
 	// make sure that we haven't found the state in diskdb
 	if lastHeader == header {
-		liveStatesCounter.Inc(1)
-		lastState.SetRelease(func() {
+		liveStatesReferencedCounter.Inc(1)
+		lastState.SetArbFinalizer(func(*state.ArbitrumExtraData) {
 			lastStateRelease()
+			liveStatesDereferencedCounter.Inc(1)
 		})
 		return lastState, header, nil
 	}
@@ -514,9 +517,10 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 		return nil, nil, fmt.Errorf("failed to recreate state: %w", err)
 	}
 	// we are setting finalizer instead of returning a StateReleaseFunc to avoid changing ethapi.Backend interface to minimize diff to upstream
-	recreatedStatesCounter.Inc(1)
-	statedb.SetRelease(func() {
+	recreatedStatesReferencedCounter.Inc(1)
+	statedb.SetArbFinalizer(func(*state.ArbitrumExtraData) {
 		release()
+		recreatedStatesDereferencedCounter.Inc(1)
 	})
 	return statedb, header, err
 }
