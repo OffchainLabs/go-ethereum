@@ -155,7 +155,7 @@ func (a *APIBackend) GetAPIs(filterSystem *filters.FilterSystem) []rpc.API {
 }
 
 func (a *APIBackend) BlockChain() *core.BlockChain {
-	return a.b.arb.BlockChain()
+	return a.b.BlockChain()
 }
 
 func (a *APIBackend) GetArbitrumNode() interface{} {
@@ -671,7 +671,7 @@ func (a *APIBackend) ChainConfig() *params.ChainConfig {
 }
 
 func (a *APIBackend) Engine() consensus.Engine {
-	return a.BlockChain().Engine()
+	return a.b.Engine()
 }
 
 func (b *APIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
