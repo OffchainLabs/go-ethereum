@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	flag "github.com/spf13/pflag"
 )
 
@@ -187,9 +188,15 @@ type RecordingDatabase struct {
 }
 
 func NewRecordingDatabase(config *RecordingDatabaseConfig, ethdb ethdb.Database, blockchain *core.BlockChain) *RecordingDatabase {
+	hashConfig := *hashdb.Defaults
+	hashConfig.CleanCacheSize = config.TrieCleanCache
+	trieConfig := trie.Config{
+		Preimages: false,
+		HashDB:    &hashConfig,
+	}
 	return &RecordingDatabase{
 		config: config,
-		db:     state.NewDatabaseWithConfig(ethdb, &trie.Config{Cache: config.TrieCleanCache}),
+		db:     state.NewDatabaseWithConfig(ethdb, &trieConfig),
 		bc:     blockchain,
 	}
 }
@@ -235,28 +242,28 @@ func (r *RecordingDatabase) dereferenceRoot(root common.Hash) {
 	r.db.TrieDB().Dereference(root)
 }
 
-func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected common.Hash) error {
+func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected common.Hash, blockNumber uint64) (*state.StateDB, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	result, err := statedb.Commit(true)
+	result, err := statedb.Commit(blockNumber, true)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if result != expected {
-		return fmt.Errorf("bad root hash expected: %v got: %v", expected, result)
+		return nil, fmt.Errorf("bad root hash expected: %v got: %v", expected, result)
 	}
 	r.referenceRootLockHeld(result)
 
-	size, _ := r.db.TrieDB().Size()
+	_, size, _ := r.db.TrieDB().Size()
 	limit := common.StorageSize(r.config.TrieDirtyCache) * 1024 * 1024
 	recordingDbSize.Update(int64(size))
 	if size > limit {
 		log.Info("Recording DB: flushing to disk", "size", size, "limit", limit)
 		r.db.TrieDB().Cap(limit - ethdb.IdealBatchSize)
-		size, _ = r.db.TrieDB().Size()
+		_, size, _ = r.db.TrieDB().Size()
 		recordingDbSize.Update(int64(size))
 	}
-	return nil
+	return state.New(result, statedb.Database(), nil)
 }
 
 func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeader *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
@@ -326,12 +333,13 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 	prevHash := currentHeader.Hash()
 	returnedBlockNumber := header.Number.Uint64()
 	for ctx.Err() == nil {
-		state, block, err := AdvanceStateByBlock(ctx, r.bc, state, header, blockToRecreate, prevHash, logFunc)
+		var block *types.Block
+		state, block, err = AdvanceStateByBlock(ctx, r.bc, state, header, blockToRecreate, prevHash, logFunc)
 		if err != nil {
 			return nil, err
 		}
 		prevHash = block.Hash()
-		err = r.addStateVerify(state, block.Root())
+		state, err = r.addStateVerify(state, block.Root(), block.NumberU64())
 		if err != nil {
 			return nil, fmt.Errorf("failed committing state for block %d : %w", blockToRecreate, err)
 		}

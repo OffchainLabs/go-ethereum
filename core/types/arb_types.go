@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"math/big"
@@ -8,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -92,19 +94,22 @@ func (tx *ArbitrumUnsignedTx) copy() TxData {
 	return cpy
 }
 
-func (tx *ArbitrumUnsignedTx) chainID() *big.Int         { return tx.ChainId }
-func (tx *ArbitrumUnsignedTx) accessList() AccessList    { return nil }
-func (tx *ArbitrumUnsignedTx) data() []byte              { return tx.Data }
-func (tx *ArbitrumUnsignedTx) gas() uint64               { return tx.Gas }
-func (tx *ArbitrumUnsignedTx) gasPrice() *big.Int        { return tx.GasFeeCap }
-func (tx *ArbitrumUnsignedTx) gasTipCap() *big.Int       { return bigZero }
-func (tx *ArbitrumUnsignedTx) gasFeeCap() *big.Int       { return tx.GasFeeCap }
-func (tx *ArbitrumUnsignedTx) value() *big.Int           { return tx.Value }
-func (tx *ArbitrumUnsignedTx) nonce() uint64             { return tx.Nonce }
-func (tx *ArbitrumUnsignedTx) to() *common.Address       { return tx.To }
-func (tx *ArbitrumUnsignedTx) blobGas() uint64           { return 0 }
-func (tx *ArbitrumUnsignedTx) blobGasFeeCap() *big.Int   { return nil }
-func (tx *ArbitrumUnsignedTx) blobHashes() []common.Hash { return nil }
+func (tx *ArbitrumUnsignedTx) chainID() *big.Int      { return tx.ChainId }
+func (tx *ArbitrumUnsignedTx) accessList() AccessList { return nil }
+func (tx *ArbitrumUnsignedTx) data() []byte           { return tx.Data }
+func (tx *ArbitrumUnsignedTx) gas() uint64            { return tx.Gas }
+func (tx *ArbitrumUnsignedTx) gasPrice() *big.Int     { return tx.GasFeeCap }
+func (tx *ArbitrumUnsignedTx) gasTipCap() *big.Int    { return bigZero }
+func (tx *ArbitrumUnsignedTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
+func (tx *ArbitrumUnsignedTx) value() *big.Int        { return tx.Value }
+func (tx *ArbitrumUnsignedTx) nonce() uint64          { return tx.Nonce }
+func (tx *ArbitrumUnsignedTx) to() *common.Address    { return tx.To }
+func (tx *ArbitrumUnsignedTx) encode(b *bytes.Buffer) error {
+	return rlp.Encode(b, tx)
+}
+func (tx *ArbitrumUnsignedTx) decode(input []byte) error {
+	return rlp.DecodeBytes(input, tx)
+}
 
 func (tx *ArbitrumUnsignedTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero
@@ -162,19 +167,23 @@ func (tx *ArbitrumContractTx) copy() TxData {
 	return cpy
 }
 
-func (tx *ArbitrumContractTx) chainID() *big.Int         { return tx.ChainId }
-func (tx *ArbitrumContractTx) accessList() AccessList    { return nil }
-func (tx *ArbitrumContractTx) data() []byte              { return tx.Data }
-func (tx *ArbitrumContractTx) gas() uint64               { return tx.Gas }
-func (tx *ArbitrumContractTx) gasPrice() *big.Int        { return tx.GasFeeCap }
-func (tx *ArbitrumContractTx) gasTipCap() *big.Int       { return bigZero }
-func (tx *ArbitrumContractTx) gasFeeCap() *big.Int       { return tx.GasFeeCap }
-func (tx *ArbitrumContractTx) value() *big.Int           { return tx.Value }
-func (tx *ArbitrumContractTx) nonce() uint64             { return 0 }
-func (tx *ArbitrumContractTx) to() *common.Address       { return tx.To }
-func (tx *ArbitrumContractTx) blobGas() uint64           { return 0 }
-func (tx *ArbitrumContractTx) blobGasFeeCap() *big.Int   { return nil }
-func (tx *ArbitrumContractTx) blobHashes() []common.Hash { return nil }
+func (tx *ArbitrumContractTx) chainID() *big.Int      { return tx.ChainId }
+func (tx *ArbitrumContractTx) accessList() AccessList { return nil }
+func (tx *ArbitrumContractTx) data() []byte           { return tx.Data }
+func (tx *ArbitrumContractTx) gas() uint64            { return tx.Gas }
+func (tx *ArbitrumContractTx) gasPrice() *big.Int     { return tx.GasFeeCap }
+func (tx *ArbitrumContractTx) gasTipCap() *big.Int    { return bigZero }
+func (tx *ArbitrumContractTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
+func (tx *ArbitrumContractTx) value() *big.Int        { return tx.Value }
+func (tx *ArbitrumContractTx) nonce() uint64          { return 0 }
+func (tx *ArbitrumContractTx) to() *common.Address    { return tx.To }
+func (tx *ArbitrumContractTx) encode(b *bytes.Buffer) error {
+	return rlp.Encode(b, tx)
+}
+func (tx *ArbitrumContractTx) decode(input []byte) error {
+	return rlp.DecodeBytes(input, tx)
+}
+
 func (tx *ArbitrumContractTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero
 }
@@ -242,19 +251,23 @@ func (tx *ArbitrumRetryTx) copy() TxData {
 	return cpy
 }
 
-func (tx *ArbitrumRetryTx) chainID() *big.Int         { return tx.ChainId }
-func (tx *ArbitrumRetryTx) accessList() AccessList    { return nil }
-func (tx *ArbitrumRetryTx) data() []byte              { return tx.Data }
-func (tx *ArbitrumRetryTx) gas() uint64               { return tx.Gas }
-func (tx *ArbitrumRetryTx) gasPrice() *big.Int        { return tx.GasFeeCap }
-func (tx *ArbitrumRetryTx) gasTipCap() *big.Int       { return bigZero }
-func (tx *ArbitrumRetryTx) gasFeeCap() *big.Int       { return tx.GasFeeCap }
-func (tx *ArbitrumRetryTx) value() *big.Int           { return tx.Value }
-func (tx *ArbitrumRetryTx) nonce() uint64             { return tx.Nonce }
-func (tx *ArbitrumRetryTx) to() *common.Address       { return tx.To }
-func (tx *ArbitrumRetryTx) blobGas() uint64           { return 0 }
-func (tx *ArbitrumRetryTx) blobGasFeeCap() *big.Int   { return nil }
-func (tx *ArbitrumRetryTx) blobHashes() []common.Hash { return nil }
+func (tx *ArbitrumRetryTx) chainID() *big.Int      { return tx.ChainId }
+func (tx *ArbitrumRetryTx) accessList() AccessList { return nil }
+func (tx *ArbitrumRetryTx) data() []byte           { return tx.Data }
+func (tx *ArbitrumRetryTx) gas() uint64            { return tx.Gas }
+func (tx *ArbitrumRetryTx) gasPrice() *big.Int     { return tx.GasFeeCap }
+func (tx *ArbitrumRetryTx) gasTipCap() *big.Int    { return bigZero }
+func (tx *ArbitrumRetryTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
+func (tx *ArbitrumRetryTx) value() *big.Int        { return tx.Value }
+func (tx *ArbitrumRetryTx) nonce() uint64          { return tx.Nonce }
+func (tx *ArbitrumRetryTx) to() *common.Address    { return tx.To }
+func (tx *ArbitrumRetryTx) encode(b *bytes.Buffer) error {
+	return rlp.Encode(b, tx)
+}
+func (tx *ArbitrumRetryTx) decode(input []byte) error {
+	return rlp.DecodeBytes(input, tx)
+}
+
 func (tx *ArbitrumRetryTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero
 }
@@ -327,18 +340,22 @@ func (tx *ArbitrumSubmitRetryableTx) copy() TxData {
 	return cpy
 }
 
-func (tx *ArbitrumSubmitRetryableTx) chainID() *big.Int         { return tx.ChainId }
-func (tx *ArbitrumSubmitRetryableTx) accessList() AccessList    { return nil }
-func (tx *ArbitrumSubmitRetryableTx) gas() uint64               { return tx.Gas }
-func (tx *ArbitrumSubmitRetryableTx) gasPrice() *big.Int        { return tx.GasFeeCap }
-func (tx *ArbitrumSubmitRetryableTx) gasTipCap() *big.Int       { return big.NewInt(0) }
-func (tx *ArbitrumSubmitRetryableTx) gasFeeCap() *big.Int       { return tx.GasFeeCap }
-func (tx *ArbitrumSubmitRetryableTx) value() *big.Int           { return common.Big0 }
-func (tx *ArbitrumSubmitRetryableTx) nonce() uint64             { return 0 }
-func (tx *ArbitrumSubmitRetryableTx) to() *common.Address       { return &ArbRetryableTxAddress }
-func (tx *ArbitrumSubmitRetryableTx) blobGas() uint64           { return 0 }
-func (tx *ArbitrumSubmitRetryableTx) blobGasFeeCap() *big.Int   { return nil }
-func (tx *ArbitrumSubmitRetryableTx) blobHashes() []common.Hash { return nil }
+func (tx *ArbitrumSubmitRetryableTx) chainID() *big.Int      { return tx.ChainId }
+func (tx *ArbitrumSubmitRetryableTx) accessList() AccessList { return nil }
+func (tx *ArbitrumSubmitRetryableTx) gas() uint64            { return tx.Gas }
+func (tx *ArbitrumSubmitRetryableTx) gasPrice() *big.Int     { return tx.GasFeeCap }
+func (tx *ArbitrumSubmitRetryableTx) gasTipCap() *big.Int    { return big.NewInt(0) }
+func (tx *ArbitrumSubmitRetryableTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
+func (tx *ArbitrumSubmitRetryableTx) value() *big.Int        { return common.Big0 }
+func (tx *ArbitrumSubmitRetryableTx) nonce() uint64          { return 0 }
+func (tx *ArbitrumSubmitRetryableTx) to() *common.Address    { return &ArbRetryableTxAddress }
+func (tx *ArbitrumSubmitRetryableTx) encode(b *bytes.Buffer) error {
+	return rlp.Encode(b, tx)
+}
+func (tx *ArbitrumSubmitRetryableTx) decode(input []byte) error {
+	return rlp.DecodeBytes(input, tx)
+}
+
 func (tx *ArbitrumSubmitRetryableTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero
 }
@@ -411,19 +428,22 @@ func (d *ArbitrumDepositTx) copy() TxData {
 	return tx
 }
 
-func (d *ArbitrumDepositTx) chainID() *big.Int         { return d.ChainId }
-func (d *ArbitrumDepositTx) accessList() AccessList    { return nil }
-func (d *ArbitrumDepositTx) data() []byte              { return nil }
-func (d *ArbitrumDepositTx) gas() uint64               { return 0 }
-func (d *ArbitrumDepositTx) gasPrice() *big.Int        { return bigZero }
-func (d *ArbitrumDepositTx) gasTipCap() *big.Int       { return bigZero }
-func (d *ArbitrumDepositTx) gasFeeCap() *big.Int       { return bigZero }
-func (d *ArbitrumDepositTx) value() *big.Int           { return d.Value }
-func (d *ArbitrumDepositTx) nonce() uint64             { return 0 }
-func (d *ArbitrumDepositTx) to() *common.Address       { return &d.To }
-func (d *ArbitrumDepositTx) blobGas() uint64           { return 0 }
-func (d *ArbitrumDepositTx) blobGasFeeCap() *big.Int   { return nil }
-func (d *ArbitrumDepositTx) blobHashes() []common.Hash { return nil }
+func (d *ArbitrumDepositTx) chainID() *big.Int      { return d.ChainId }
+func (d *ArbitrumDepositTx) accessList() AccessList { return nil }
+func (d *ArbitrumDepositTx) data() []byte           { return nil }
+func (d *ArbitrumDepositTx) gas() uint64            { return 0 }
+func (d *ArbitrumDepositTx) gasPrice() *big.Int     { return bigZero }
+func (d *ArbitrumDepositTx) gasTipCap() *big.Int    { return bigZero }
+func (d *ArbitrumDepositTx) gasFeeCap() *big.Int    { return bigZero }
+func (d *ArbitrumDepositTx) value() *big.Int        { return d.Value }
+func (d *ArbitrumDepositTx) nonce() uint64          { return 0 }
+func (d *ArbitrumDepositTx) to() *common.Address    { return &d.To }
+func (d *ArbitrumDepositTx) encode(b *bytes.Buffer) error {
+	return rlp.Encode(b, d)
+}
+func (d *ArbitrumDepositTx) decode(input []byte) error {
+	return rlp.DecodeBytes(input, d)
+}
 
 func (d *ArbitrumDepositTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero
@@ -453,19 +473,22 @@ func (t *ArbitrumInternalTx) copy() TxData {
 	}
 }
 
-func (t *ArbitrumInternalTx) chainID() *big.Int         { return t.ChainId }
-func (t *ArbitrumInternalTx) accessList() AccessList    { return nil }
-func (t *ArbitrumInternalTx) data() []byte              { return t.Data }
-func (t *ArbitrumInternalTx) gas() uint64               { return 0 }
-func (t *ArbitrumInternalTx) gasPrice() *big.Int        { return bigZero }
-func (t *ArbitrumInternalTx) gasTipCap() *big.Int       { return bigZero }
-func (t *ArbitrumInternalTx) gasFeeCap() *big.Int       { return bigZero }
-func (t *ArbitrumInternalTx) value() *big.Int           { return common.Big0 }
-func (t *ArbitrumInternalTx) nonce() uint64             { return 0 }
-func (t *ArbitrumInternalTx) to() *common.Address       { return &ArbosAddress }
-func (t *ArbitrumInternalTx) blobGas() uint64           { return 0 }
-func (t *ArbitrumInternalTx) blobGasFeeCap() *big.Int   { return nil }
-func (t *ArbitrumInternalTx) blobHashes() []common.Hash { return nil }
+func (t *ArbitrumInternalTx) chainID() *big.Int      { return t.ChainId }
+func (t *ArbitrumInternalTx) accessList() AccessList { return nil }
+func (t *ArbitrumInternalTx) data() []byte           { return t.Data }
+func (t *ArbitrumInternalTx) gas() uint64            { return 0 }
+func (t *ArbitrumInternalTx) gasPrice() *big.Int     { return bigZero }
+func (t *ArbitrumInternalTx) gasTipCap() *big.Int    { return bigZero }
+func (t *ArbitrumInternalTx) gasFeeCap() *big.Int    { return bigZero }
+func (t *ArbitrumInternalTx) value() *big.Int        { return common.Big0 }
+func (t *ArbitrumInternalTx) nonce() uint64          { return 0 }
+func (t *ArbitrumInternalTx) to() *common.Address    { return &ArbosAddress }
+func (t *ArbitrumInternalTx) encode(b *bytes.Buffer) error {
+	return rlp.Encode(b, t)
+}
+func (t *ArbitrumInternalTx) decode(input []byte) error {
+	return rlp.DecodeBytes(input, t)
+}
 
 func (d *ArbitrumInternalTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero
@@ -504,7 +527,7 @@ func (info HeaderInfo) UpdateHeaderWithInfo(header *Header) {
 }
 
 func DeserializeHeaderExtraInformation(header *Header) HeaderInfo {
-	if header.BaseFee == nil || header.BaseFee.Sign() == 0 || len(header.Extra) != 32 || header.Difficulty.Cmp(common.Big1) != 0 {
+	if header == nil || header.BaseFee == nil || header.BaseFee.Sign() == 0 || len(header.Extra) != 32 || header.Difficulty.Cmp(common.Big1) != 0 {
 		// imported blocks have no base fee
 		// The genesis block doesn't have an ArbOS encoded extra field
 		return HeaderInfo{}

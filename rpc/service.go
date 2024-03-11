@@ -38,6 +38,8 @@ var (
 type serviceRegistry struct {
 	mu       sync.Mutex
 	services map[string]service
+
+	apiFilter map[string]bool
 }
 
 // service represents a registered object.
@@ -81,11 +83,17 @@ func (r *serviceRegistry) registerName(name string, rcvr interface{}) error {
 		}
 		r.services[name] = svc
 	}
-	for name, cb := range callbacks {
+	for methodName, cb := range callbacks {
+		if r.apiFilter != nil {
+			key := name + "_" + methodName
+			if _, ok := r.apiFilter[key]; !ok {
+				continue
+			}
+		}
 		if cb.isSubscribe {
-			svc.subscriptions[name] = cb
+			svc.subscriptions[methodName] = cb
 		} else {
-			svc.callbacks[name] = cb
+			svc.callbacks[methodName] = cb
 		}
 	}
 	return nil

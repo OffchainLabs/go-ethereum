@@ -17,6 +17,7 @@
 package math
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -113,4 +114,79 @@ func TestMustParseUint64Panic(t *testing.T) {
 		}
 	}()
 	MustParseUint64("ggg")
+}
+
+type marshalUnMarshalTest struct {
+	input   interface{}
+	want    interface{}
+	wantErr bool // if true, decoding must fail on any platform
+}
+
+var (
+	marshalHexOrDecimal64Tests = []marshalUnMarshalTest{
+		{input: uint64(0), want: "0x0"},
+		{input: uint64(1), want: "0x1"},
+		{input: uint64(16), want: "0x10"},
+		{input: uint64(255), want: "0xff"},
+		{input: uint64(0xff), want: "0xff"},
+		{input: uint64(0x1122334455667788), want: "0x1122334455667788"},
+	}
+
+	UnMarshalHexOrDecimal64Tests = []marshalUnMarshalTest{
+		// invalid encoding
+		{input: "", wantErr: true},
+		{input: "null", wantErr: true},
+		{input: "\"0x\"", wantErr: true},
+		{input: "\"0xfffffffffffffffff\"", wantErr: true},
+		{input: `"1ab"`, wantErr: true},
+		{input: "\"xx\"", wantErr: true},
+		{input: "\"0x1zz01\"", wantErr: true},
+
+		// valid encoding
+		{input: `""`, want: uint64(0)},
+		{input: `"0"`, want: uint64(0)},
+		{input: `"10"`, want: uint64(10)},
+		{input: `"100"`, want: uint64(100)},
+		{input: `"12344678"`, want: uint64(12344678)},
+		{input: `"1111111111111111"`, want: uint64(1111111111111111)},
+		{input: "\"0x0\"", want: uint64(0)},
+		{input: "\"0x2\"", want: uint64(0x2)},
+		{input: "\"0x2F2\"", want: uint64(0x2f2)},
+		{input: "\"0x1122aaff\"", want: uint64(0x1122aaff)},
+		{input: "\"0xbbb\"", want: uint64(0xbbb)},
+		{input: "\"0xffffffffffffffff\"", want: uint64(0xffffffffffffffff)},
+	}
+)
+
+func TestMarshalHexOrDecimal64(t *testing.T) {
+	for _, test := range marshalHexOrDecimal64Tests {
+		in := test.input.(uint64)
+		out, err := json.Marshal(HexOrDecimal64(in))
+		if err != nil {
+			t.Errorf("%d: %v", in, err)
+			continue
+		}
+		if want := `"` + test.want.(string) + `"`; string(out) != want {
+			t.Errorf("%d: MarshalJSON output mismatch: got %q, want %q", in, out, want)
+			continue
+		}
+	}
+}
+
+func TestUnMarshalHexOrDecimal64(t *testing.T) {
+	for _, test := range UnMarshalHexOrDecimal64Tests {
+		var v HexOrDecimal64
+		err := json.Unmarshal([]byte(test.input.(string)), &v)
+		if test.wantErr {
+			if err == nil {
+				t.Errorf("%s: UnMarshalJSON did not error on invalid encoding: got %q, want <nil>", test.input, err)
+			}
+			continue
+		}
+
+		if uint64(v) != test.want.(uint64) {
+			t.Errorf("input %s: value mismatch: got %d, want %d", test.input, v, test.want)
+			continue
+		}
+	}
 }

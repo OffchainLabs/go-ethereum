@@ -267,8 +267,8 @@ func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx 
 	case vm.CREATE, vm.CREATE2:
 		frame = newFlatCreate(input)
 	case vm.SELFDESTRUCT:
-		frame = newFlatSuicide(input)
-	case vm.CALL, vm.STATICCALL, vm.CALLCODE, vm.DELEGATECALL:
+		frame = newFlatSelfdestruct(input)
+	case vm.CALL, vm.STATICCALL, vm.CALLCODE, vm.DELEGATECALL, vm.INVALID:
 		frame = newFlatCall(input)
 	default:
 		return nil, fmt.Errorf("unrecognized call frame type: %s", input.Type)
@@ -351,7 +351,7 @@ func newFlatCall(input *callFrame) *flatCallFrame {
 	}
 }
 
-func newFlatSuicide(input *callFrame) *flatCallFrame {
+func newFlatSelfdestruct(input *callFrame) *flatCallFrame {
 	return &flatCallFrame{
 		Type: "suicide",
 		Action: flatCallAction{
