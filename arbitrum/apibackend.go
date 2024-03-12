@@ -532,6 +532,11 @@ func (a *APIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.Bloc
 
 func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
 	header, err := a.HeaderByNumberOrHash(ctx, blockNrOrHash)
+	hash, ishash := blockNrOrHash.Hash()
+	bc := a.BlockChain()
+	if ishash && header.Number.Cmp(bc.CurrentBlock().Number) > 0 && bc.GetCanonicalHash(header.Number.Uint64()) != hash {
+		return nil, nil, errors.New("requested block ahead of current block and the hash is not currently canonical")
+	}
 	return a.stateAndHeaderFromHeader(ctx, header, err)
 }
 
