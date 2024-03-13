@@ -309,7 +309,12 @@ func (r *RecordingDatabase) PreimagesFromRecording(chainContextIf core.ChainCont
 }
 
 func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, error) {
-	state, currentHeader, err := FindLastAvailableState(ctx, r.bc, r.StateFor, header, logFunc, -1)
+	stateFor := func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
+		state, err := r.StateFor(header)
+		// we don't use the release functor pattern here yet
+		return state, NoopStateRelease, err
+	}
+	state, currentHeader, _, err := FindLastAvailableState(ctx, r.bc, stateFor, header, logFunc, -1)
 	if err != nil {
 		return nil, err
 	}
