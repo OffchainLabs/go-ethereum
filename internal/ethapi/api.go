@@ -1178,13 +1178,14 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 func updateHeaderForPendingBlocks(blockNrOrHash rpc.BlockNumberOrHash, header *types.Header) *types.Header {
 	if blockNrOrHash.BlockNumber != nil &&
 		*blockNrOrHash.BlockNumber == rpc.PendingBlockNumber {
-		headerCopy := *header
+		headerCopy := types.CopyHeader(header)
 		now := uint64(time.Now().Unix())
 		if now > headerCopy.Time {
 			headerCopy.Time = now
 		}
 		headerCopy.Number = new(big.Int).Add(headerCopy.Number, common.Big1)
-		return &headerCopy
+		headerCopy.ParentHash = header.Hash()
+		return headerCopy
 	}
 	return header
 }
