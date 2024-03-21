@@ -39,7 +39,7 @@ var (
 	stylusEOFMagic       = byte(0xEF)
 	stylusEOFMagicSuffix = byte(0xF0)
 	stylusEOFVersion     = byte(0x00)
-	stylusEOFDictionary  = byte(0x00) // varies with dictionary selection
+	// 4th byte specifies the Stylus dictionary used during compression
 
 	StylusDiscriminant = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersion}
 )
@@ -57,7 +57,7 @@ func IsStylusProgram(b []byte) bool {
 	return bytes.Equal(b[:3], StylusDiscriminant)
 }
 
-// checks if the specified input is a stylus program.
+// strips the Stylus header from a contract, returning the dictionary used
 func StripStylusPrefix(b []byte) ([]byte, byte, error) {
 	if !IsStylusProgram(b) {
 		return nil, 0, errors.New("specified bytecode is not a Stylus program")
