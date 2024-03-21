@@ -7,6 +7,7 @@ import (
 )
 
 var ArbosAddress = common.HexToAddress("0xa4b05")
+var ArbosStateAddress = common.HexToAddress("0xA4B05FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 var ArbSysAddress = common.HexToAddress("0x64")
 var ArbGasInfoAddress = common.HexToAddress("0x6c")
 var ArbRetryableTxAddress = common.HexToAddress("0x6e")

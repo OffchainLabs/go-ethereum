@@ -39,8 +39,9 @@ var (
 	stylusEOFMagic       = byte(0xEF)
 	stylusEOFMagicSuffix = byte(0xF0)
 	stylusEOFVersion     = byte(0x00)
+	// 4th byte specifies the Stylus dictionary used during compression
 
-	StylusPrefix = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersion}
+	StylusDiscriminant = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersion}
 )
 
 type ActivatedWasm struct {
@@ -48,22 +49,26 @@ type ActivatedWasm struct {
 	Module []byte
 }
 
-// IsStylusProgram checks if a specified bytecode is a user-submitted WASM program.
-// Stylus differentiates WASMs from EVM bytecode via the prefix 0xEFF000 which will safely fail
-// to pass through EVM-bytecode EOF validation rules.
+// checks if a valid Stylus prefix is present
 func IsStylusProgram(b []byte) bool {
-	if len(b) < len(StylusPrefix) {
+	if len(b) < len(StylusDiscriminant)+1 {
 		return false
 	}
-	return bytes.Equal(b[:3], StylusPrefix)
+	return bytes.Equal(b[:3], StylusDiscriminant)
 }
 
-// StripStylusPrefix if the specified input is a stylus program.
-func StripStylusPrefix(b []byte) ([]byte, error) {
+// strips the Stylus header from a contract, returning the dictionary used
+func StripStylusPrefix(b []byte) ([]byte, byte, error) {
 	if !IsStylusProgram(b) {
-		return nil, errors.New("specified bytecode is not a Stylus program")
+		return nil, 0, errors.New("specified bytecode is not a Stylus program")
 	}
-	return b[3:], nil
+	return b[4:], b[3], nil
+}
+
+// creates a new Stylus prefix from the given dictionary byte
+func NewStylusPrefix(dictionary byte) []byte {
+	prefix := bytes.Clone(StylusDiscriminant)
+	return append(prefix, dictionary)
 }
 
 func (s *StateDB) ActivateWasm(moduleHash common.Hash, asm, module []byte) {
