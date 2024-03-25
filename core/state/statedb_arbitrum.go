@@ -19,6 +19,7 @@ package state
 
 import (
 	"math/big"
+	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -26,13 +27,22 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+type ArbitrumExtraData struct {
+	// track the total balance change across all accounts
+	unexpectedBalanceDelta *big.Int
+}
+
+func (s *StateDB) SetArbFinalizer(f func(*ArbitrumExtraData)) {
+	runtime.SetFinalizer(s.arbExtraData, f)
+}
+
 func (s *StateDB) GetCurrentTxLogs() []*types.Log {
 	return s.logs[s.thash]
 }
 
 // GetUnexpectedBalanceDelta returns the total unexpected change in balances since the last commit to the database.
 func (s *StateDB) GetUnexpectedBalanceDelta() *big.Int {
-	return new(big.Int).Set(s.unexpectedBalanceDelta)
+	return new(big.Int).Set(s.arbExtraData.unexpectedBalanceDelta)
 }
 
 func (s *StateDB) GetSelfDestructs() []common.Address {

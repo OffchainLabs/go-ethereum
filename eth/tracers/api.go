@@ -128,6 +128,10 @@ func (api *API) blockByHash(ctx context.Context, hash common.Hash) (*types.Block
 	if block == nil {
 		return nil, fmt.Errorf("block %s not found", hash.Hex())
 	}
+	canonical := rawdb.ReadCanonicalHash(api.backend.ChainDb(), block.NumberU64())
+	if hash != canonical {
+		return nil, fmt.Errorf("hash %s is not currently canonical", hash.Hex())
+	}
 	return block, nil
 }
 
