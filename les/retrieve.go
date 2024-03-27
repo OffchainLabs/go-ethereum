@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum-arbitrum/light"
 )
 
 var (

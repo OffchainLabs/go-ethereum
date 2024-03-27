@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ethereum/go-ethereum/tests/fuzzers/snap"
+	"github.com/ethereum/go-ethereum-arbitrum/tests/fuzzers/snap"
 )
 
 func main() {
