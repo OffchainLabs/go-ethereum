@@ -860,6 +860,10 @@ func opSelfdestruct6780(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCon
 	interpreter.evm.StateDB.SubBalance(scope.Contract.Address(), balance)
 	interpreter.evm.StateDB.AddBalance(beneficiary.Bytes20(), balance)
 	interpreter.evm.StateDB.Selfdestruct6780(scope.Contract.Address())
+	if beneficiary.Bytes20() == scope.Contract.Address() {
+		// Arbitrum: calling selfdestruct(this) burns the balance
+		interpreter.evm.StateDB.ExpectBalanceBurn(balance)
+	}
 	if tracer := interpreter.evm.Config.Tracer; tracer != nil {
 		tracer.CaptureEnter(SELFDESTRUCT, scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance)
 		tracer.CaptureExit([]byte{}, 0, nil)
