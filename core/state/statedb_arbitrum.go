@@ -26,6 +26,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
@@ -155,18 +157,61 @@ func (s *StateDB) GetUnexpectedBalanceDelta() *big.Int {
 	return new(big.Int).Set(s.unexpectedBalanceDelta)
 }
 
-func (s *StateDB) GetSuicides() []common.Address {
-	suicides := []common.Address{}
+func (s *StateDB) GetSelfDestructs() []common.Address {
+	selfDestructs := []common.Address{}
 	for addr := range s.journal.dirties {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
 			continue
 		}
-		if obj.suicided {
-			suicides = append(suicides, addr)
+		if obj.selfDestructed {
+			selfDestructs = append(selfDestructs, addr)
 		}
 	}
-	return suicides
+	return selfDestructs
+}
+
+// making the function public to be used by external tests
+func ForEachStorage(s *StateDB, addr common.Address, cb func(key, value common.Hash) bool) error {
+	return forEachStorage(s, addr, cb)
+}
+
+// moved here from statedb_test.go
+func forEachStorage(s *StateDB, addr common.Address, cb func(key, value common.Hash) bool) error {
+	so := s.getStateObject(addr)
+	if so == nil {
+		return nil
+	}
+	tr, err := so.getTrie()
+	if err != nil {
+		return err
+	}
+	trieIt, err := tr.NodeIterator(nil)
+	if err != nil {
+		return err
+	}
+	it := trie.NewIterator(trieIt)
+
+	for it.Next() {
+		key := common.BytesToHash(s.trie.GetKey(it.Key))
+		if value, dirty := so.dirtyStorage[key]; dirty {
+			if !cb(key, value) {
+				return nil
+			}
+			continue
+		}
+
+		if len(it.Value) > 0 {
+			_, content, _, err := rlp.Split(it.Value)
+			if err != nil {
+				return err
+			}
+			if !cb(key, common.BytesToHash(content)) {
+				return nil
+			}
+		}
+	}
+	return nil
 }
 
 // maps moduleHash to activation info

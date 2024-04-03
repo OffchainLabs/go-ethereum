@@ -86,7 +86,7 @@ func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString b
 		if !obj.Get("constructor").SameAs(bufType) {
 			break
 		}
-		b := obj.Get("buffer").Export().(goja.ArrayBuffer).Bytes()
+		b := obj.Export().([]byte)
 		return b, nil
 	}
 	return nil, errors.New("invalid buffer type")
@@ -236,7 +236,12 @@ func (t *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 	t.ctx["to"] = t.vm.ToValue(to.Bytes())
 	t.ctx["input"] = t.vm.ToValue(input)
 	t.ctx["gas"] = t.vm.ToValue(t.gasLimit)
-	t.ctx["gasPrice"] = t.vm.ToValue(env.TxContext.GasPrice)
+	gasPriceBig, err := t.toBig(t.vm, env.TxContext.GasPrice.String())
+	if err != nil {
+		t.err = err
+		return
+	}
+	t.ctx["gasPrice"] = gasPriceBig
 	valueBig, err := t.toBig(t.vm, value.String())
 	if err != nil {
 		t.err = err
@@ -469,7 +474,7 @@ func (t *jsTracer) setBuiltinFunctions() {
 		addr := common.BytesToAddress(a)
 		for _, p := range t.activePrecompiles {
 			space := new(big.Int).SetUint64(0x65)
-			arbOS := p.Hash().Big().Cmp(space) >= 0
+			arbOS := p.Big().Cmp(space) >= 0
 			if p == addr && arbOS {
 				return true
 			}

@@ -49,6 +49,14 @@ func (tx *ArbitrumLegacyTxData) copy() TxData {
 
 func (tx *ArbitrumLegacyTxData) txType() byte { return ArbitrumLegacyTxType }
 
+func (tx *ArbitrumLegacyTxData) encode(b *bytes.Buffer) error {
+	return rlp.Encode(b, tx)
+}
+
+func (tx *ArbitrumLegacyTxData) decode(input []byte) error {
+	return rlp.DecodeBytes(input, tx)
+}
+
 func (tx *ArbitrumLegacyTxData) EncodeOnlyLegacyInto(w *bytes.Buffer) {
 	rlp.Encode(w, tx.LegacyTx)
 }
