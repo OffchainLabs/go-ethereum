@@ -1486,7 +1486,7 @@ var bindTests = []struct {
 				}
 			}
 		}()
-		contract.Foo(auth, big.NewInt(1), big.NewInt(2))
+		contract.Foo04bc52f8(auth, big.NewInt(1), big.NewInt(2))
 		sim.Commit()
 		select {
 		case n := <-resCh:
@@ -1497,7 +1497,7 @@ var bindTests = []struct {
 			t.Fatalf("Wait bar0 event timeout")
 		}
 
-		contract.Foo0(auth, big.NewInt(1))
+		contract.Foo2fbebd38(auth, big.NewInt(1))
 		sim.Commit()
 		select {
 		case n := <-resCh:

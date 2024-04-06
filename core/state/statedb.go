@@ -63,13 +63,7 @@ type revision struct {
 // must be created with new root and updated database for accessing post-
 // commit states.
 type StateDB struct {
-	// Arbitrum
-	unexpectedBalanceDelta *big.Int                       // total balance change across all accounts
-	userWasms              UserWasms                      // user wasms encountered during execution
-	openWasmPages          uint16                         // number of pages currently open
-	everWasmPages          uint16                         // largest number of pages ever allocated during this tx's execution
-	deterministic          bool                           // whether the order in which deletes are committed should be deterministic
-	activatedWasms         map[common.Hash]*ActivatedWasm // newly activated WASMs
+	arbExtraData *ArbitrumExtraData // must be a pointer - can't be a part of StateDB allocation, otherwise its finalizer might not get called
 
 	db         Database
 	prefetcher *triePrefetcher
@@ -150,6 +144,8 @@ type StateDB struct {
 
 	// Testing hooks
 	onCommit func(states *triestate.Set) // Hook invoked when commit is performed
+
+	deterministic bool
 }
 
 // New creates a new state from a given trie.
@@ -159,10 +155,12 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		return nil, err
 	}
 	sdb := &StateDB{
-		unexpectedBalanceDelta: new(big.Int),
-		openWasmPages:          0,
-		everWasmPages:          0,
-		activatedWasms:         make(map[common.Hash]*ActivatedWasm),
+		arbExtraData: &ArbitrumExtraData{
+			unexpectedBalanceDelta: new(big.Int),
+			openWasmPages:          0,
+			everWasmPages:          0,
+			activatedWasms:         make(map[common.Hash]*ActivatedWasm),
+		},
 
 		db:                   db,
 		trie:                 tr,
@@ -393,7 +391,7 @@ func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
 func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
-		s.unexpectedBalanceDelta.Add(s.unexpectedBalanceDelta, amount)
+		s.arbExtraData.unexpectedBalanceDelta.Add(s.arbExtraData.unexpectedBalanceDelta, amount)
 		stateObject.AddBalance(amount)
 	}
 }
@@ -402,7 +400,7 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
-		s.unexpectedBalanceDelta.Sub(s.unexpectedBalanceDelta, amount)
+		s.arbExtraData.unexpectedBalanceDelta.Sub(s.arbExtraData.unexpectedBalanceDelta, amount)
 		stateObject.SubBalance(amount)
 	}
 }
@@ -414,8 +412,8 @@ func (s *StateDB) SetBalance(addr common.Address, amount *big.Int) {
 			amount = big.NewInt(0)
 		}
 		prevBalance := stateObject.Balance()
-		s.unexpectedBalanceDelta.Add(s.unexpectedBalanceDelta, amount)
-		s.unexpectedBalanceDelta.Sub(s.unexpectedBalanceDelta, prevBalance)
+		s.arbExtraData.unexpectedBalanceDelta.Add(s.arbExtraData.unexpectedBalanceDelta, amount)
+		s.arbExtraData.unexpectedBalanceDelta.Sub(s.arbExtraData.unexpectedBalanceDelta, prevBalance)
 		stateObject.SetBalance(amount)
 	}
 }
@@ -424,7 +422,7 @@ func (s *StateDB) ExpectBalanceBurn(amount *big.Int) {
 	if amount.Sign() < 0 {
 		panic(fmt.Sprintf("ExpectBalanceBurn called with negative amount %v", amount))
 	}
-	s.unexpectedBalanceDelta.Add(s.unexpectedBalanceDelta, amount)
+	s.arbExtraData.unexpectedBalanceDelta.Add(s.arbExtraData.unexpectedBalanceDelta, amount)
 }
 
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
@@ -486,7 +484,7 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 	})
 
 	stateObject.markSelfdestructed()
-	s.unexpectedBalanceDelta.Sub(s.unexpectedBalanceDelta, stateObject.data.Balance)
+	s.arbExtraData.unexpectedBalanceDelta.Sub(s.arbExtraData.unexpectedBalanceDelta, stateObject.data.Balance)
 
 	stateObject.data.Balance = new(big.Int)
 }
@@ -724,10 +722,12 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 func (s *StateDB) Copy() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
-		unexpectedBalanceDelta: new(big.Int).Set(s.unexpectedBalanceDelta),
-		activatedWasms:         make(map[common.Hash]*ActivatedWasm, len(s.activatedWasms)),
-		openWasmPages:          s.openWasmPages,
-		everWasmPages:          s.everWasmPages,
+		arbExtraData: &ArbitrumExtraData{
+			unexpectedBalanceDelta: new(big.Int).Set(s.arbExtraData.unexpectedBalanceDelta),
+			activatedWasms:         make(map[common.Hash]*ActivatedWasm, len(s.arbExtraData.activatedWasms)),
+			openWasmPages:          s.arbExtraData.openWasmPages,
+			everWasmPages:          s.arbExtraData.everWasmPages,
+		},
 
 		db:                   s.db,
 		trie:                 s.db.CopyTrie(s.trie),
@@ -820,15 +820,15 @@ func (s *StateDB) Copy() *StateDB {
 	state.transientStorage = s.transientStorage.Copy()
 
 	// Arbitrum: copy wasm calls and activated WASMs
-	if s.userWasms != nil {
-		state.userWasms = make(UserWasms, len(s.userWasms))
-		for call, wasm := range s.userWasms {
-			state.userWasms[call] = wasm
+	if s.arbExtraData.userWasms != nil {
+		state.arbExtraData.userWasms = make(UserWasms, len(s.arbExtraData.userWasms))
+		for call, wasm := range s.arbExtraData.userWasms {
+			state.arbExtraData.userWasms[call] = wasm
 		}
 	}
-	for moduleHash, info := range s.activatedWasms {
+	for moduleHash, info := range s.arbExtraData.activatedWasms {
 		// It's fine to skip a deep copy since activations are immutable.
-		state.activatedWasms[moduleHash] = info
+		state.arbExtraData.activatedWasms[moduleHash] = info
 	}
 
 	// If there's a prefetcher running, make an inactive copy of it that can
@@ -844,7 +844,7 @@ func (s *StateDB) Copy() *StateDB {
 func (s *StateDB) Snapshot() int {
 	id := s.nextRevisionId
 	s.nextRevisionId++
-	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length(), new(big.Int).Set(s.unexpectedBalanceDelta)})
+	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length(), new(big.Int).Set(s.arbExtraData.unexpectedBalanceDelta)})
 	return id
 }
 
@@ -859,7 +859,7 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	}
 	revision := s.validRevisions[idx]
 	snapshot := revision.journalIndex
-	s.unexpectedBalanceDelta = new(big.Int).Set(revision.unexpectedBalanceDelta)
+	s.arbExtraData.unexpectedBalanceDelta = new(big.Int).Set(revision.unexpectedBalanceDelta)
 
 	// Replay the journal to undo changes and remove invalidated snapshots
 	s.journal.revert(s, snapshot)
@@ -1006,8 +1006,8 @@ func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 	s.txIndex = ti
 
 	// Arbitrum: clear memory charging state for new tx
-	s.openWasmPages = 0
-	s.everWasmPages = 0
+	s.arbExtraData.openWasmPages = 0
+	s.arbExtraData.everWasmPages = 0
 }
 
 func (s *StateDB) clearJournalAndRefund() {
@@ -1284,11 +1284,11 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	}
 
 	// Arbitrum: write Stylus programs to disk
-	for moduleHash, info := range s.activatedWasms {
+	for moduleHash, info := range s.arbExtraData.activatedWasms {
 		rawdb.WriteActivation(codeWriter, moduleHash, info.Asm, info.Module)
 	}
-	if len(s.activatedWasms) > 0 {
-		s.activatedWasms = make(map[common.Hash]*ActivatedWasm)
+	if len(s.arbExtraData.activatedWasms) > 0 {
+		s.arbExtraData.activatedWasms = make(map[common.Hash]*ActivatedWasm)
 	}
 
 	if codeWriter.ValueSize() > 0 {
@@ -1348,7 +1348,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		s.snap = nil
 	}
 
-	s.unexpectedBalanceDelta.Set(new(big.Int))
+	s.arbExtraData.unexpectedBalanceDelta.Set(new(big.Int))
 
 	if root == (common.Hash{}) {
 		root = types.EmptyRootHash

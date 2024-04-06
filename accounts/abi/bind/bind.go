@@ -77,6 +77,21 @@ func isKeyWord(arg string) bool {
 	return true
 }
 
+func duplicates(methods map[string]abi.Method) map[string]bool {
+	var (
+		identifiers = make(map[string]bool)
+		dups        = make(map[string]bool)
+	)
+	for _, method := range methods {
+		identifiers, dups := identifiers, dups
+		if identifiers[method.RawName] {
+			dups[method.RawName] = true
+		}
+		identifiers[method.RawName] = true
+	}
+	return dups
+}
+
 // Bind generates a Go wrapper around a contract ABI. This wrapper isn't meant
 // to be used as is in client code, but rather as an intermediate struct which
 // enforces compile time type safety and naming convention opposed to having to
@@ -121,6 +136,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			callIdentifiers     = make(map[string]bool)
 			transactIdentifiers = make(map[string]bool)
 			eventIdentifiers    = make(map[string]bool)
+			dups                = duplicates(evmABI.Methods)
 		)
 
 		for _, input := range evmABI.Constructor.Inputs {
@@ -132,12 +148,16 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		for _, original := range evmABI.Methods {
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
 			normalized := original
-			normalizedName := methodNormalizer[lang](alias(aliases, original.Name))
 			// Ensure there is no duplicated identifier
 			var identifiers = callIdentifiers
 			if !original.IsConstant() {
 				identifiers = transactIdentifiers
 			}
+			name := original.RawName
+			if dups[original.RawName] {
+				name = fmt.Sprintf("%s%x", original.RawName, original.ID)
+			}
+			normalizedName := methodNormalizer[lang](alias(aliases, name))
 			// Name shouldn't start with a digit. It will make the generated code invalid.
 			if len(normalizedName) > 0 && unicode.IsDigit(rune(normalizedName[0])) {
 				normalizedName = fmt.Sprintf("M%s", normalizedName)

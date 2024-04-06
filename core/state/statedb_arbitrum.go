@@ -23,6 +23,7 @@ import (
 	"math/big"
 
 	"errors"
+	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -74,11 +75,11 @@ func NewStylusPrefix(dictionary byte) []byte {
 }
 
 func (s *StateDB) ActivateWasm(moduleHash common.Hash, asm, module []byte) {
-	_, exists := s.activatedWasms[moduleHash]
+	_, exists := s.arbExtraData.activatedWasms[moduleHash]
 	if exists {
 		return
 	}
-	s.activatedWasms[moduleHash] = &ActivatedWasm{
+	s.arbExtraData.activatedWasms[moduleHash] = &ActivatedWasm{
 		Asm:    asm,
 		Module: module,
 	}
@@ -88,7 +89,7 @@ func (s *StateDB) ActivateWasm(moduleHash common.Hash, asm, module []byte) {
 }
 
 func (s *StateDB) GetActivatedAsm(moduleHash common.Hash) []byte {
-	info, exists := s.activatedWasms[moduleHash]
+	info, exists := s.arbExtraData.activatedWasms[moduleHash]
 	if exists {
 		return info.Asm
 	}
@@ -100,7 +101,7 @@ func (s *StateDB) GetActivatedAsm(moduleHash common.Hash) []byte {
 }
 
 func (s *StateDB) GetActivatedModule(moduleHash common.Hash) []byte {
-	info, exists := s.activatedWasms[moduleHash]
+	info, exists := s.arbExtraData.activatedWasms[moduleHash]
 	if exists {
 		return info.Module
 	}
@@ -112,27 +113,27 @@ func (s *StateDB) GetActivatedModule(moduleHash common.Hash) []byte {
 }
 
 func (s *StateDB) GetStylusPages() (uint16, uint16) {
-	return s.openWasmPages, s.everWasmPages
+	return s.arbExtraData.openWasmPages, s.arbExtraData.everWasmPages
 }
 
 func (s *StateDB) GetStylusPagesOpen() uint16 {
-	return s.openWasmPages
+	return s.arbExtraData.openWasmPages
 }
 
 func (s *StateDB) SetStylusPagesOpen(open uint16) {
-	s.openWasmPages = open
+	s.arbExtraData.openWasmPages = open
 }
 
 // Tracks that `new` additional pages have been opened, returning the previous counts
 func (s *StateDB) AddStylusPages(new uint16) (uint16, uint16) {
 	open, ever := s.GetStylusPages()
-	s.openWasmPages = common.SaturatingUAdd(open, new)
-	s.everWasmPages = common.MaxInt(ever, s.openWasmPages)
+	s.arbExtraData.openWasmPages = common.SaturatingUAdd(open, new)
+	s.arbExtraData.everWasmPages = common.MaxInt(ever, s.arbExtraData.openWasmPages)
 	return open, ever
 }
 
 func (s *StateDB) AddStylusPagesEver(new uint16) {
-	s.everWasmPages = common.SaturatingUAdd(s.everWasmPages, new)
+	s.arbExtraData.everWasmPages = common.SaturatingUAdd(s.arbExtraData.everWasmPages, new)
 }
 
 func NewDeterministic(root common.Hash, db Database) (*StateDB, error) {
@@ -148,13 +149,25 @@ func (s *StateDB) Deterministic() bool {
 	return s.deterministic
 }
 
+type ArbitrumExtraData struct {
+	unexpectedBalanceDelta *big.Int                       // total balance change across all accounts
+	userWasms              UserWasms                      // user wasms encountered during execution
+	openWasmPages          uint16                         // number of pages currently open
+	everWasmPages          uint16                         // largest number of pages ever allocated during this tx's execution
+	activatedWasms         map[common.Hash]*ActivatedWasm // newly activated WASMs
+}
+
+func (s *StateDB) SetArbFinalizer(f func(*ArbitrumExtraData)) {
+	runtime.SetFinalizer(s.arbExtraData, f)
+}
+
 func (s *StateDB) GetCurrentTxLogs() []*types.Log {
 	return s.logs[s.thash]
 }
 
 // GetUnexpectedBalanceDelta returns the total unexpected change in balances since the last commit to the database.
 func (s *StateDB) GetUnexpectedBalanceDelta() *big.Int {
-	return new(big.Int).Set(s.unexpectedBalanceDelta)
+	return new(big.Int).Set(s.arbExtraData.unexpectedBalanceDelta)
 }
 
 func (s *StateDB) GetSelfDestructs() []common.Address {
@@ -218,12 +231,12 @@ func forEachStorage(s *StateDB, addr common.Address, cb func(key, value common.H
 type UserWasms map[common.Hash]ActivatedWasm
 
 func (s *StateDB) StartRecording() {
-	s.userWasms = make(UserWasms)
+	s.arbExtraData.userWasms = make(UserWasms)
 }
 
 func (s *StateDB) RecordProgram(moduleHash common.Hash) {
-	if s.userWasms != nil {
-		s.userWasms[moduleHash] = ActivatedWasm{
+	if s.arbExtraData.userWasms != nil {
+		s.arbExtraData.userWasms[moduleHash] = ActivatedWasm{
 			Asm:    s.GetActivatedAsm(moduleHash),
 			Module: s.GetActivatedModule(moduleHash),
 		}
@@ -231,5 +244,5 @@ func (s *StateDB) RecordProgram(moduleHash common.Hash) {
 }
 
 func (s *StateDB) UserWasms() UserWasms {
-	return s.userWasms
+	return s.arbExtraData.userWasms
 }
