@@ -14,6 +14,8 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/trie"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -22,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/filters"
@@ -30,6 +33,13 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+)
+
+var (
+	liveStatesReferencedCounter        = metrics.NewRegisteredCounter("arb/apibackend/states/live/referenced", nil)
+	liveStatesDereferencedCounter      = metrics.NewRegisteredCounter("arb/apibackend/states/live/dereferenced", nil)
+	recreatedStatesReferencedCounter   = metrics.NewRegisteredCounter("arb/apibackend/states/recreated/referenced", nil)
+	recreatedStatesDereferencedCounter = metrics.NewRegisteredCounter("arb/apibackend/states/recreated/dereferenced", nil)
 )
 
 type APIBackend struct {
@@ -145,7 +155,7 @@ func (a *APIBackend) GetAPIs(filterSystem *filters.FilterSystem) []rpc.API {
 }
 
 func (a *APIBackend) BlockChain() *core.BlockChain {
-	return a.b.arb.BlockChain()
+	return a.b.BlockChain()
 }
 
 func (a *APIBackend) GetArbitrumNode() interface{} {
@@ -444,21 +454,75 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 		return nil, header, types.ErrUseFallback
 	}
 	bc := a.BlockChain()
-	stateFor := func(header *types.Header) (*state.StateDB, error) {
-		return bc.StateAt(header.Root)
+	stateFor := func(db state.Database, snapshots *snapshot.Tree) func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
+		return func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
+			if header.Root != (common.Hash{}) {
+				// Try referencing the root, if it isn't in dirties cache then Reference will have no effect
+				db.TrieDB().Reference(header.Root, common.Hash{})
+			}
+			statedb, err := state.New(header.Root, db, snapshots)
+			if err != nil {
+				return nil, nil, err
+			}
+			if header.Root != (common.Hash{}) {
+				headerRoot := header.Root
+				return statedb, func() { db.TrieDB().Dereference(headerRoot) }, nil
+			}
+			return statedb, NoopStateRelease, nil
+		}
 	}
-	state, lastHeader, err := FindLastAvailableState(ctx, bc, stateFor, header, nil, a.b.config.MaxRecreateStateDepth)
+	liveState, liveStateRelease, err := stateFor(bc.StateCache(), bc.Snapshots())(header)
+	if err == nil {
+		liveStatesReferencedCounter.Inc(1)
+		liveState.SetArbFinalizer(func(*state.ArbitrumExtraData) {
+			liveStateRelease()
+			liveStatesDereferencedCounter.Inc(1)
+		})
+		return liveState, header, nil
+	}
+	// else err != nil => we don't need to call liveStateRelease
+
+	// Create an ephemeral trie.Database for isolating the live one
+	// note: triedb cleans cache is disabled in trie.HashDefaults
+	// note: only states committed to diskdb can be found as we're creating new triedb
+	// note: snapshots are not used here
+	ephemeral := state.NewDatabaseWithConfig(a.ChainDb(), trie.HashDefaults)
+	lastState, lastHeader, lastStateRelease, err := FindLastAvailableState(ctx, bc, stateFor(ephemeral, nil), header, nil, a.b.config.MaxRecreateStateDepth)
 	if err != nil {
 		return nil, nil, err
 	}
+	// make sure that we haven't found the state in diskdb
 	if lastHeader == header {
-		return state, header, nil
+		liveStatesReferencedCounter.Inc(1)
+		lastState.SetArbFinalizer(func(*state.ArbitrumExtraData) {
+			lastStateRelease()
+			liveStatesDereferencedCounter.Inc(1)
+		})
+		return lastState, header, nil
 	}
-	state, err = AdvanceStateUpToBlock(ctx, bc, state, header, lastHeader, nil)
+	defer lastStateRelease()
+	targetBlock := bc.GetBlockByNumber(header.Number.Uint64())
+	if targetBlock == nil {
+		return nil, nil, errors.New("target block not found")
+	}
+	lastBlock := bc.GetBlockByNumber(lastHeader.Number.Uint64())
+	if lastBlock == nil {
+		return nil, nil, errors.New("last block not found")
+	}
+	reexec := uint64(0)
+	checkLive := false
+	preferDisk := false // preferDisk is ignored in this case
+	statedb, release, err := eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(ctx, targetBlock, reexec, lastState, lastBlock, checkLive, preferDisk)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to recreate state: %w", err)
 	}
-	return state, header, err
+	// we are setting finalizer instead of returning a StateReleaseFunc to avoid changing ethapi.Backend interface to minimize diff to upstream
+	recreatedStatesReferencedCounter.Inc(1)
+	statedb.SetArbFinalizer(func(*state.ArbitrumExtraData) {
+		release()
+		recreatedStatesDereferencedCounter.Inc(1)
+	})
+	return statedb, header, err
 }
 
 func (a *APIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
@@ -468,6 +532,12 @@ func (a *APIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.Bloc
 
 func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
 	header, err := a.HeaderByNumberOrHash(ctx, blockNrOrHash)
+	hash, ishash := blockNrOrHash.Hash()
+	bc := a.BlockChain()
+	// check if we are not trying to get recent state that is not yet triedb referenced or committed in Blockchain.writeBlockWithState
+	if ishash && header.Number.Cmp(bc.CurrentBlock().Number) > 0 && bc.GetCanonicalHash(header.Number.Uint64()) != hash {
+		return nil, nil, errors.New("requested block ahead of current block and the hash is not currently canonical")
+	}
 	return a.stateAndHeaderFromHeader(ctx, header, err)
 }
 
@@ -476,7 +546,7 @@ func (a *APIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexe
 		return nil, nil, types.ErrUseFallback
 	}
 	// DEV: This assumes that `StateAtBlock` only accesses the blockchain and chainDb fields
-	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(ctx, block, reexec, base, checkLive, preferDisk)
+	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(ctx, block, reexec, base, nil, checkLive, preferDisk)
 }
 
 func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*core.Message, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
@@ -607,7 +677,7 @@ func (a *APIBackend) ChainConfig() *params.ChainConfig {
 }
 
 func (a *APIBackend) Engine() consensus.Engine {
-	return a.BlockChain().Engine()
+	return a.b.Engine()
 }
 
 func (b *APIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {

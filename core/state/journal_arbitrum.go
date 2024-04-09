@@ -7,7 +7,7 @@ type wasmActivation struct {
 }
 
 func (ch wasmActivation) revert(s *StateDB) {
-	delete(s.activatedWasms, ch.moduleHash)
+	delete(s.arbExtraData.activatedWasms, ch.moduleHash)
 }
 
 func (ch wasmActivation) dirtied() *common.Address {

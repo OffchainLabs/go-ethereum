@@ -1071,7 +1071,8 @@ func (bc *BlockChain) Stop() {
 		//  - HEAD:     So we don't need to reprocess any blocks in the general case
 		//  - HEAD-1:   So we don't do large reorgs if our HEAD becomes an uncle
 		//  - HEAD-127: So we have a hard limit on the number of blocks reexecuted
-		if !bc.cacheConfig.TrieDirtyDisabled {
+		// It applies for both full node and sparse archive node
+		if !bc.cacheConfig.TrieDirtyDisabled || bc.cacheConfig.MaxNumberOfBlocksToSkipStateSaving > 0 || bc.cacheConfig.MaxAmountOfGasToSkipStateSaving > 0 {
 			triedb := bc.triedb
 
 			for _, offset := range []uint64{0, 1, bc.cacheConfig.TriesInMemory - 1, math.MaxUint64} {
@@ -1496,7 +1497,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		return nil
 	}
 	// If we're running an archive node, flush
-	// If MaxNumberOfBlocksToSkipStateSaving or MaxAmountOfGasToSkipStateSaving is not zero, then flushing of some blocks will be skipped:
+	// Sparse archive: if MaxNumberOfBlocksToSkipStateSaving or MaxAmountOfGasToSkipStateSaving is not zero, then flushing of some blocks will be skipped:
 	// * at most MaxNumberOfBlocksToSkipStateSaving block state commits will be skipped
 	// * sum of gas used in skipped blocks will be at most MaxAmountOfGasToSkipStateSaving
 	archiveNode := bc.cacheConfig.TrieDirtyDisabled
@@ -1526,7 +1527,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// we are skipping saving the trie to diskdb, so we need to keep the trie in memory and garbage collect it later
 	}
 
-	// Full node or archive node that's not keeping all states, do proper garbage collection
+	// Full node or sparse archive node that's not keeping all states, do proper garbage collection
 	bc.triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
 	bc.triegc.Push(trieGcEntry{root, block.Header().Time}, -int64(block.NumberU64()))
 
