@@ -383,7 +383,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		if head.Number.Uint64() <= bc.genesisBlock.NumberU64() {
 			// The genesis state is missing, which is only possible in the path-based
 			// scheme. This situation occurs when the initial state sync is not finished
-			// yet, or the chain head is rewound below the pivot point. In both scenario,
+			// yet, or the chain head is rewound below the pivot point. In both scenarios,
 			// there is no possible recovery approach except for rerunning a snap sync.
 			// Do nothing here until the state syncer picks it up.
 			log.Info("Genesis state is missing, wait state sync")
