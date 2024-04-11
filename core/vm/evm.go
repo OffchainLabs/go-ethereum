@@ -138,7 +138,8 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 	// gas prices were specified, lower the basefee to 0 to avoid breaking EVM
 	// invariants (basefee < feecap)
 	if config.NoBaseFee {
-		if txCtx.GasPrice.BitLen() == 0 {
+		// Currently we don't set block context's BaseFee to zero, since nitro uses this field
+		if txCtx.GasPrice.BitLen() == 0 && !chainConfig.IsArbitrum() {
 			blockCtx.BaseFee = new(big.Int)
 		}
 		if txCtx.BlobFeeCap != nil && txCtx.BlobFeeCap.BitLen() == 0 {
