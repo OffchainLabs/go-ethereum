@@ -261,7 +261,8 @@ func (s *StateDB) GetRecentWasms() RecentWasms {
 	return s.arbExtraData.recentWasms
 }
 
-// Type for managing recent program access
+// Type for managing recent program access.
+// The cache contained is discarded at the end of each block.
 type RecentWasms struct {
 	cache *lru.BasicLRU[common.Hash, struct{}]
 }
