@@ -18,14 +18,16 @@ func (ch wasmActivation) dirtied() *common.Address {
 
 // Updates the Rust-side recent program cache
 var CacheWasmRust func(asm []byte, moduleHash common.Hash, version uint16, debug bool) = func([]byte, common.Hash, uint16, bool) {}
-var EvictWasmRust func(moduleHash common.Hash) = func(common.Hash) {}
+var EvictWasmRust func(moduleHash common.Hash, version uint16, debug bool) = func(common.Hash, uint16, bool) {}
 
 type CacheWasm struct {
 	ModuleHash common.Hash
+	Version    uint16
+	Debug      bool
 }
 
 func (ch CacheWasm) revert(s *StateDB) {
-	EvictWasmRust(ch.ModuleHash)
+	EvictWasmRust(ch.ModuleHash, ch.Version, ch.Debug)
 }
 
 func (ch CacheWasm) dirtied() *common.Address {
