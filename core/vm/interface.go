@@ -27,10 +27,13 @@ import (
 
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
-	// Arbitrum: manage compiled wasms
+	// Arbitrum: manage Stylus wasms
 	ActivateWasm(moduleHash common.Hash, asm, module []byte)
 	GetActivatedAsm(moduleHash common.Hash) (asm []byte)
 	GetActivatedModule(moduleHash common.Hash) (module []byte)
+	RecordCacheWasm(wasm state.CacheWasm)
+	RecordEvictWasm(wasm state.EvictWasm)
+	GetRecentWasms() state.RecentWasms
 
 	// Arbitrum: track stylus's memory footprint
 	GetStylusPages() (uint16, uint16)

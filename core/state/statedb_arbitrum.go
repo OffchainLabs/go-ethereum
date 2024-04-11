@@ -26,6 +26,7 @@ import (
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -155,6 +156,7 @@ type ArbitrumExtraData struct {
 	openWasmPages          uint16                         // number of pages currently open
 	everWasmPages          uint16                         // largest number of pages ever allocated during this tx's execution
 	activatedWasms         map[common.Hash]*ActivatedWasm // newly activated WASMs
+	recentWasms            RecentWasms
 }
 
 func (s *StateDB) SetArbFinalizer(f func(*ArbitrumExtraData)) {
@@ -245,4 +247,52 @@ func (s *StateDB) RecordProgram(moduleHash common.Hash) {
 
 func (s *StateDB) UserWasms() UserWasms {
 	return s.arbExtraData.userWasms
+}
+
+func (s *StateDB) RecordCacheWasm(wasm CacheWasm) {
+	s.journal.entries = append(s.journal.entries, wasm)
+}
+
+func (s *StateDB) RecordEvictWasm(wasm EvictWasm) {
+	s.journal.entries = append(s.journal.entries, wasm)
+}
+
+func (s *StateDB) GetRecentWasms() RecentWasms {
+	return s.arbExtraData.recentWasms
+}
+
+// Type for managing recent program access
+type RecentWasms struct {
+	cache *lru.BasicLRU[common.Hash, struct{}]
+}
+
+// Creates an un uninitialized cache
+func NewRecentWasms() RecentWasms {
+	return RecentWasms{cache: nil}
+}
+
+// Inserts a new item, returning true if already present.
+func (p RecentWasms) Insert(item common.Hash, retain uint16) bool {
+	if p.cache == nil {
+		cache := lru.NewBasicLRU[common.Hash, struct{}](int(retain))
+		p.cache = &cache
+	}
+	if _, hit := p.cache.Get(item); hit {
+		println("hit!")
+		return hit
+	}
+	p.cache.Add(item, struct{}{})
+	return false
+}
+
+// Copies all entries into a new LRU.
+func (p RecentWasms) Copy() RecentWasms {
+	if p.cache == nil {
+		return NewRecentWasms()
+	}
+	cache := lru.NewBasicLRU[common.Hash, struct{}](p.cache.Capacity())
+	for _, item := range p.cache.Keys() {
+		cache.Add(item, struct{}{})
+	}
+	return RecentWasms{cache: &cache}
 }

@@ -160,6 +160,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 			openWasmPages:          0,
 			everWasmPages:          0,
 			activatedWasms:         make(map[common.Hash]*ActivatedWasm),
+			recentWasms:            NewRecentWasms(),
 		},
 
 		db:                   db,
@@ -725,6 +726,7 @@ func (s *StateDB) Copy() *StateDB {
 		arbExtraData: &ArbitrumExtraData{
 			unexpectedBalanceDelta: new(big.Int).Set(s.arbExtraData.unexpectedBalanceDelta),
 			activatedWasms:         make(map[common.Hash]*ActivatedWasm, len(s.arbExtraData.activatedWasms)),
+			recentWasms:            s.arbExtraData.recentWasms.Copy(),
 			openWasmPages:          s.arbExtraData.openWasmPages,
 			everWasmPages:          s.arbExtraData.everWasmPages,
 		},
