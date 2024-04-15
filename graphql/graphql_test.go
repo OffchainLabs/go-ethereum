@@ -139,6 +139,7 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 		// should return `estimateGas` as decimal
 		{
 			body: `{"query": "{block{ estimateGas(data:{}) }}"}`,
+			// want: `{"data":{"block":{"estimateGas":"0xd221"}}}`, Nitro needs estimateGas to provide exact estimation i.e gasestimatior's ErrorRatio option is zero
 			want: `{"data":{"block":{"estimateGas":"0xcf08"}}}`,
 			code: 200,
 		},
