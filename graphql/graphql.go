@@ -42,7 +42,8 @@ import (
 )
 
 var (
-	errBlockInvariant = errors.New("block objects must be instantiated with at least one of num or hash")
+	errBlockInvariant    = errors.New("block objects must be instantiated with at least one of num or hash")
+	errInvalidBlockRange = errors.New("invalid from and to block combination: from > to")
 )
 
 type Long int64
@@ -618,13 +619,13 @@ func (t *Transaction) V(ctx context.Context) hexutil.Big {
 	return hexutil.Big(*v)
 }
 
-func (t *Transaction) YParity(ctx context.Context) (*hexutil.Uint64, error) {
+func (t *Transaction) YParity(ctx context.Context) (*hexutil.Big, error) {
 	tx, _ := t.resolve(ctx)
 	if tx == nil || tx.Type() == types.LegacyTxType {
 		return nil, nil
 	}
 	v, _, _ := tx.RawSignatureValues()
-	ret := hexutil.Uint64(v.Int64())
+	ret := hexutil.Big(*v)
 	return &ret, nil
 }
 
@@ -1329,6 +1330,9 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 	From *Long
 	To   *Long
 }) ([]*Block, error) {
+	if args.From == nil {
+		return nil, errors.New("from block number must be specified")
+	}
 	from := rpc.BlockNumber(*args.From)
 
 	var to rpc.BlockNumber
@@ -1338,7 +1342,7 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 		to = rpc.BlockNumber(r.backend.CurrentBlock().Number.Int64())
 	}
 	if to < from {
-		return []*Block{}, nil
+		return nil, errInvalidBlockRange
 	}
 	var ret []*Block
 	for i := from; i <= to; i++ {
@@ -1420,6 +1424,9 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 	end := rpc.LatestBlockNumber.Int64()
 	if args.Filter.ToBlock != nil {
 		end = int64(*args.Filter.ToBlock)
+	}
+	if begin > 0 && end > 0 && begin > end {
+		return nil, errInvalidBlockRange
 	}
 	var addresses []common.Address
 	if args.Filter.Addresses != nil {
