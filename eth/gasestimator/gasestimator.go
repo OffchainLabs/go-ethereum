@@ -32,6 +32,10 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// EstimateGasErrorRatio is the amount of overestimation eth_estimateGas is
+// allowed to produce in order to speed up calculations.
+const EstimateGasErrorRatio = 0.015
+
 // Options are the contextual parameters to execute the requested call.
 //
 // Whilst it would be possible to pass a blockchain object that aggregates all
