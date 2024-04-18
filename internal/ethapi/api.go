@@ -1288,15 +1288,11 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		ErrorRatio: gasestimator.EstimateGasErrorRatio,
 	}
 	// Run the gas estimation andwrap any revertals into a custom return
+	// Arbitrum: this also appropriately recursively calls another args.ToMessage with increased gasCap by posterCostInL2Gas amount
 	call, err := args.ToMessage(gasCap, header, state, core.MessageGasEstimationMode)
 	if err != nil {
 		return 0, err
 	}
-
-	// Arbitrum: earlier we were running executeEstimate with vanillaGasCap and that increased the gasCap with posterCostInL2Gas when args.ToMessage was called and that sets msg.GasLimit
-	// We were then additionally increasing gasCap by the same amount using args.L2OnlyGasCap, the issue is we used this new updated gasCap in the later calls for executeEstimate,
-	// Which in turn calls args.ToMessage thus incrementing the already updated gasCap with posterCostInL2Gas and adding posterCostInL2Gas twice to msg.GasLimit.
-	// With v1.13.6, args.ToMessage is called initially in DoEstimateGas and we then raise the gasCap to also include posterCostInL2Gas avoiding twice increments
 
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	{
