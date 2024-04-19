@@ -42,8 +42,10 @@ type (
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	var precompiles map[common.Address]PrecompiledContract
 	switch {
+	case evm.chainRules.IsStylus:
+		precompiles = PrecompiledContractsArbitrumStylus
 	case evm.chainRules.IsArbitrum:
-		precompiles = PrecompiledContractsArbitrum
+		precompiles = PrecompiledContractsArbitrumNitro
 	case evm.chainRules.IsCancun:
 		precompiles = PrecompiledContractsCancun
 	case evm.chainRules.IsBerlin:
@@ -523,7 +525,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		err = ErrInvalidCode
 
 		// Arbitrum: retain Stylus programs and instead store them in the DB alongside normal EVM bytecode.
-		if evm.IsStylus() && state.IsStylusProgram(ret) {
+		if evm.chainRules.IsStylus && state.IsStylusProgram(ret) {
 			err = nil
 		}
 	}

@@ -150,8 +150,10 @@ func init() {
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
+	case rules.IsStylus:
+		return PrecompiledAddressesArbitrumStylus
 	case rules.IsArbitrum:
-		return PrecompiledAddressesArbitrum
+		return PrecompiledAddressesArbitrumNitro
 	case rules.IsCancun:
 		return PrecompiledAddressesCancun
 	case rules.IsBerlin:
