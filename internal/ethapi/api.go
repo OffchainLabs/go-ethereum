@@ -1129,6 +1129,15 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 	}
 
 	// Arbitrum: a tx can schedule another (see retryables)
+	result, err = runScheduledTxes(ctx, b, state, header, blockCtx, core.MessageGasEstimationMode, result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func runScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, state *state.StateDB, header *types.Header, blockCtx vm.BlockContext, runMode core.MessageRunMode, result *core.ExecutionResult) (*core.ExecutionResult, error) {
 	scheduled := result.ScheduledTxes
 	for runMode == core.MessageGasEstimationMode && len(scheduled) > 0 {
 		// This will panic if the scheduled tx is signed, but we only schedule unsigned ones
@@ -1152,7 +1161,7 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 			evm.Cancel()
 		}()
 
-		scheduledTxResult, err := core.ApplyMessage(evm, msg, gp)
+		scheduledTxResult, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(math.MaxUint64))
 		if err != nil {
 			return nil, err // Bail out
 		}
@@ -1166,7 +1175,6 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 		result.UsedGas += scheduledTxResult.UsedGas
 		scheduled = append(scheduled[1:], scheduledTxResult.ScheduledTxes...)
 	}
-
 	return result, nil
 }
 
@@ -1280,12 +1288,13 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 
 	// Construct the gas estimator option from the user input
 	opts := &gasestimator.Options{
-		Config:     b.ChainConfig(),
-		Chain:      NewChainContext(ctx, b),
-		Header:     header,
-		State:      state,
-		Backend:    b,
-		ErrorRatio: gasestimator.EstimateGasErrorRatio,
+		Config:           b.ChainConfig(),
+		Chain:            NewChainContext(ctx, b),
+		Header:           header,
+		State:            state,
+		Backend:          b,
+		ErrorRatio:       gasestimator.EstimateGasErrorRatio,
+		RunScheduledTxes: runScheduledTxes,
 	}
 	// Run the gas estimation andwrap any revertals into a custom return
 	// Arbitrum: this also appropriately recursively calls another args.ToMessage with increased gasCap by posterCostInL2Gas amount

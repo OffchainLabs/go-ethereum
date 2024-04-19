@@ -42,11 +42,12 @@ const EstimateGasErrorRatio = 0.015
 // these together, it would be excessively hard to test. Splitting the parts out
 // allows testing without needing a proper live chain.
 type Options struct {
-	Config  *params.ChainConfig // Chain configuration for hard fork selection
-	Chain   core.ChainContext   // Chain context to access past block hashes
-	Header  *types.Header       // Header defining the block context to execute in
-	State   *state.StateDB      // Pre-state on top of which to estimate the gas
-	Backend core.NodeInterfaceBackendAPI
+	Config           *params.ChainConfig // Chain configuration for hard fork selection
+	Chain            core.ChainContext   // Chain context to access past block hashes
+	Header           *types.Header       // Header defining the block context to execute in
+	State            *state.StateDB      // Pre-state on top of which to estimate the gas
+	Backend          core.NodeInterfaceBackendAPI
+	RunScheduledTxes func(context.Context, core.NodeInterfaceBackendAPI, *state.StateDB, *types.Header, vm.BlockContext, core.MessageRunMode, *core.ExecutionResult) (*core.ExecutionResult, error)
 
 	ErrorRatio float64 // Allowed overestimation ratio for faster estimation termination
 }
@@ -235,8 +236,7 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 		evm.Cancel()
 	}()
 	// Execute the call, returning a wrapped error or the result
-	gp := new(core.GasPool).AddGas(math.MaxUint64)
-	result, err := core.ApplyMessage(evm, call, gp)
+	result, err := core.ApplyMessage(evm, call, new(core.GasPool).AddGas(math.MaxUint64))
 	if vmerr := dirtyState.Error(); vmerr != nil {
 		return nil, vmerr
 	}
@@ -245,42 +245,9 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	}
 
 	// Arbitrum: a tx can schedule another (see retryables)
-	scheduled := result.ScheduledTxes
-	for len(scheduled) > 0 {
-		// This will panic if the scheduled tx is signed, but we only schedule unsigned ones
-		msg, err := core.TransactionToMessage(scheduled[0], types.NewArbitrumSigner(nil), opts.Header.BaseFee)
-		if err != nil {
-			return nil, err
-		}
-		// The scheduling transaction will "use" all of the gas available to it,
-		// but it's really just passing it on to the scheduled tx, so we subtract it out here.
-		if result.UsedGas >= msg.GasLimit {
-			result.UsedGas -= msg.GasLimit
-		} else {
-			log.Warn("Scheduling tx used less gas than scheduled tx has available", "usedGas", result.UsedGas, "scheduledGas", msg.GasLimit)
-			result.UsedGas = 0
-		}
-		msg.TxRunMode = core.MessageGasEstimationMode
-		// make a new EVM for the scheduled Tx (an EVM must never be reused)
-		evm := opts.Backend.GetEVM(ctx, msg, dirtyState, opts.Header, &vm.Config{NoBaseFee: true}, &evmContext)
-		go func() {
-			<-ctx.Done()
-			evm.Cancel()
-		}()
-
-		scheduledTxResult, err := core.ApplyMessage(evm, msg, gp)
-		if err != nil {
-			return nil, err // Bail out
-		}
-		if err := dirtyState.Error(); err != nil {
-			return nil, err
-		}
-		if scheduledTxResult.Failed() {
-			return scheduledTxResult, nil
-		}
-		// Add back in any gas used by the scheduled transaction.
-		result.UsedGas += scheduledTxResult.UsedGas
-		scheduled = append(scheduled[1:], scheduledTxResult.ScheduledTxes...)
+	result, err = opts.RunScheduledTxes(ctx, opts.Backend, dirtyState, opts.Header, evmContext, core.MessageGasEstimationMode, result)
+	if err != nil {
+		return nil, err
 	}
 
 	return result, nil
