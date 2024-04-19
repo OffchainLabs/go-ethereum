@@ -22,6 +22,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+const ArbosVersion_FixRedeemGas = uint64(11)
+const ArbosVersion_Stylus = uint64(30)
+
 type ArbitrumChainParams struct {
 	EnableArbOS               bool
 	AllowDebugPrecompiles     bool

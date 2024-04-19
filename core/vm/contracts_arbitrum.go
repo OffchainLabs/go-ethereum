@@ -3,6 +3,8 @@ package vm
 import "github.com/ethereum/go-ethereum/common"
 
 var (
-	PrecompiledContractsArbitrum = make(map[common.Address]PrecompiledContract)
-	PrecompiledAddressesArbitrum []common.Address
+	PrecompiledContractsArbitrumNitro  = make(map[common.Address]PrecompiledContract)
+	PrecompiledContractsArbitrumStylus = make(map[common.Address]PrecompiledContract)
+	PrecompiledAddressesArbitrumNitro  []common.Address
+	PrecompiledAddressesArbitrumStylus []common.Address
 )

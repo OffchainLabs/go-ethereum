@@ -37,10 +37,6 @@ func (evm *EVM) DecrementDepth() {
 	evm.depth -= 1
 }
 
-func (evm *EVM) IsStylus() bool {
-	return evm.chainRules.IsArbitrum && evm.Context.ArbOSVersion >= types.ArbosVersion_Stylus
-}
-
 type TxProcessingHook interface {
 	StartTxHook() (bool, uint64, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
 	GasChargingHook(gasRemaining *uint64) (common.Address, error)
