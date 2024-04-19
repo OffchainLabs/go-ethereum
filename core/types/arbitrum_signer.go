@@ -6,6 +6,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+const ArbosVersion_FixRedeemGas = uint64(11)
+const ArbosVersion_Stylus = uint64(30)
+
 var ArbosAddress = common.HexToAddress("0xa4b05")
 var ArbosStateAddress = common.HexToAddress("0xA4B05FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 var ArbSysAddress = common.HexToAddress("0x64")

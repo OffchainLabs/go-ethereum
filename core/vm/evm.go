@@ -521,9 +521,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
 	if err == nil && len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
 		err = ErrInvalidCode
-		// Arbitrum: We do not reject Stylus programs and instead store them in the DB
-		// alongside normal EVM bytecode.
-		if evm.chainRules.IsArbitrum && state.IsStylusProgram(ret) {
+
+		// Arbitrum: retain Stylus programs and instead store them in the DB alongside normal EVM bytecode.
+		if evm.IsStylus() && state.IsStylusProgram(ret) {
 			err = nil
 		}
 	}
