@@ -162,11 +162,10 @@ func init() {
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
 	case rules.IsArbitrum:
-		var ret []common.Address
 		if rules.ArbOSVersion >= 30 {
-			ret = append(ret, PrecompiledAddressesP256Verify...)
+			return PrecompiledAddressesArbOS30
 		}
-		return append(ret, PrecompiledAddressesArbitrum...)
+		return PrecompiledAddressesArbitrum
 	case rules.IsCancun:
 		return PrecompiledAddressesCancun
 	case rules.IsBerlin:
