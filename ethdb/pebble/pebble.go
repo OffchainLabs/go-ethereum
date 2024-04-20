@@ -47,7 +47,7 @@ const (
 
 	// metricsGatheringInterval specifies the interval to retrieve pebble database
 	// compaction, io and pause stats to report to the user.
-	metricsGatheringInterval = 3 * time.Second
+	metricsGatheringInterval = 100 * time.Millisecond //3 * time.Second
 )
 
 // Database is a persistent key-value store based on the pebble storage engine.
@@ -70,6 +70,9 @@ type Database struct {
 	nonlevel0CompGauge  metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
 	seekCompGauge       metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
 	manualMemAllocGauge metrics.Gauge // Gauge for tracking amount of non-managed memory currently allocated
+
+	compDebtGauge       metrics.Gauge
+	compInProgressGauge metrics.Gauge
 
 	levelsGauge []metrics.Gauge // Gauge for tracking the number of tables in levels
 
@@ -138,7 +141,7 @@ func (l panicLogger) Fatalf(format string, args ...interface{}) {
 
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string, readonly bool, ephemeral bool) (*Database, error) {
+func New(file string, cache int, handles int, namespace string, readonly bool, ephemeral bool, extraOptions *ExtraOptions) (*Database, error) {
 	// Ensure we have some minimal caching and file guarantees
 	if cache < minCache {
 		cache = minCache
@@ -181,7 +184,16 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		quitChan:     make(chan chan error),
 		writeOptions: &pebble.WriteOptions{Sync: !ephemeral},
 	}
-	opt := &pebble.Options{
+
+	if extraOptions == nil {
+		extraOptions = &ExtraOptions{}
+	}
+	if extraOptions.MaxConcurrentCompactions == nil {
+		extraOptions.MaxConcurrentCompactions = func() int { return runtime.NumCPU() }
+	}
+
+	var opt *pebble.Options
+	opt = &pebble.Options{
 		// Pebble has a single combined cache area and the write
 		// buffers are taken from this too. Assign all available
 		// memory allowance for cache.
@@ -195,16 +207,16 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		// MemTableStopWritesThreshold places a hard limit on the size
 		// of the existent MemTables(including the frozen one).
 		// Note, this must be the number of tables not the size of all memtables
-		// according to https://github.com/cockroachdb/pebble/blob/master/options.go#L738-L742
+		// according to https://github.com/cockroachdb/pebble/blob/master/extraOptions.go#L738-L742
 		// and to https://github.com/cockroachdb/pebble/blob/master/db.go#L1892-L1903.
 		MemTableStopWritesThreshold: memTableLimit,
 
 		// The default compaction concurrency(1 thread),
 		// Here use all available CPUs for faster compaction.
-		MaxConcurrentCompactions: func() int { return runtime.NumCPU() },
+		MaxConcurrentCompactions: extraOptions.MaxConcurrentCompactions,
 
-		// Per-level options. Options for at least one level must be specified. The
-		// options for the last level are used for all subsequent levels.
+		// Per-level extraOptions. Options for at least one level must be specified. The
+		// extraOptions for the last level are used for all subsequent levels.
 		Levels: []pebble.LevelOptions{
 			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
 			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
@@ -222,10 +234,31 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 			WriteStallEnd:   db.onWriteStallEnd,
 		},
 		Logger: panicLogger{}, // TODO(karalabe): Delete when this is upstreamed in Pebble
+
+		BytesPerSync:                extraOptions.BytesPerSync,
+		L0CompactionFileThreshold:   extraOptions.L0CompactionFileThreshold,
+		L0CompactionThreshold:       extraOptions.L0CompactionThreshold,
+		L0StopWritesThreshold:       extraOptions.L0StopWritesThreshold,
+		LBaseMaxBytes:               extraOptions.LBaseMaxBytes,
+		DisableAutomaticCompactions: extraOptions.DisableAutomaticCompactions,
+		WALBytesPerSync:             extraOptions.WALBytesPerSync,
+		WALDir:                      extraOptions.WALDir,
+		WALMinSyncInterval:          extraOptions.WALMinSyncInterval,
+		TargetByteDeletionRate:      extraOptions.TargetByteDeletionRate,
 	}
+
 	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
 	// for more details.
 	opt.Experimental.ReadSamplingMultiplier = -1
+
+	if opt.Experimental.ReadSamplingMultiplier != 0 {
+		opt.Experimental.ReadSamplingMultiplier = extraOptions.Experimental.ReadSamplingMultiplier
+	}
+	opt.Experimental.L0CompactionConcurrency = extraOptions.Experimental.L0CompactionConcurrency
+	opt.Experimental.CompactionDebtConcurrency = extraOptions.Experimental.CompactionDebtConcurrency
+	opt.Experimental.ReadCompactionRate = extraOptions.Experimental.ReadCompactionRate
+	opt.Experimental.MaxWriterConcurrency = extraOptions.Experimental.MaxWriterConcurrency
+	opt.Experimental.ForceWriterParallelism = extraOptions.Experimental.ForceWriterParallelism
 
 	// Open the db and recover any potential corruptions
 	innerDB, err := pebble.Open(file, opt)
@@ -247,6 +280,9 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	db.nonlevel0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/nonlevel0", nil)
 	db.seekCompGauge = metrics.NewRegisteredGauge(namespace+"compact/seek", nil)
 	db.manualMemAllocGauge = metrics.NewRegisteredGauge(namespace+"memory/manualalloc", nil)
+
+	db.compDebtGauge = metrics.NewRegisteredGauge(namespace+"compact/debt", nil)
+	db.compInProgressGauge = metrics.NewRegisteredGauge(namespace+"compact/inprogress", nil)
 
 	// Start up the metrics gathering and return
 	go db.meter(metricsGatheringInterval, namespace)
@@ -524,6 +560,9 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		d.nonlevel0CompGauge.Update(nonLevel0CompCount)
 		d.level0CompGauge.Update(level0CompCount)
 		d.seekCompGauge.Update(stats.Compact.ReadCount)
+
+		d.compDebtGauge.Update(int64(stats.Compact.EstimatedDebt))
+		d.compInProgressGauge.Update(stats.Compact.NumInProgress)
 
 		for i, level := range stats.Levels {
 			// Append metrics for additional layers
