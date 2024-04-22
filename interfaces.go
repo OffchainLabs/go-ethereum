@@ -121,6 +121,18 @@ type SyncProgress struct {
 
 	HealingTrienodes uint64 // Number of state trie nodes pending
 	HealingBytecode  uint64 // Number of bytecodes pending
+
+	// "transaction indexing" fields
+	TxIndexFinishedBlocks  uint64 // Number of blocks whose transactions are already indexed
+	TxIndexRemainingBlocks uint64 // Number of blocks whose transactions are not indexed yet
+}
+
+// Done returns the indicator if the initial sync is finished or not.
+func (prog SyncProgress) Done() bool {
+	if prog.CurrentBlock < prog.HighestBlock {
+		return false
+	}
+	return prog.TxIndexRemainingBlocks == 0
 }
 
 func (progress SyncProgress) ToMap() map[string]interface{} {
