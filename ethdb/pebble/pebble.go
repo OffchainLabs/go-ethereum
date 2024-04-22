@@ -192,8 +192,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		extraOptions.MaxConcurrentCompactions = func() int { return runtime.NumCPU() }
 	}
 
-	var opt *pebble.Options
-	opt = &pebble.Options{
+	opt := &pebble.Options{
 		// Pebble has a single combined cache area and the write
 		// buffers are taken from this too. Assign all available
 		// memory allowance for cache.
