@@ -15,6 +15,7 @@ type ExtraOptions struct {
 	WALMinSyncInterval          func() time.Duration
 	TargetByteDeletionRate      int
 	Experimental                ExtraOptionsExperimental
+	Levels                      []ExtraLevelOptions
 }
 
 type ExtraOptionsExperimental struct {
@@ -24,4 +25,8 @@ type ExtraOptionsExperimental struct {
 	ReadSamplingMultiplier    int64
 	MaxWriterConcurrency      int
 	ForceWriterParallelism    bool
+}
+
+type ExtraLevelOptions struct {
+	TargetFileSize int64
 }

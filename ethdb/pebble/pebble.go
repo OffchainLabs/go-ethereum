@@ -191,7 +191,22 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	if extraOptions.MaxConcurrentCompactions == nil {
 		extraOptions.MaxConcurrentCompactions = func() int { return runtime.NumCPU() }
 	}
-
+	var levels []pebble.LevelOptions
+	if len(extraOptions.Levels) == 0 {
+		levels = []pebble.LevelOptions{
+			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+		}
+	} else {
+		for _, level := range extraOptions.Levels {
+			levels = append(levels, pebble.LevelOptions{TargetFileSize: level.TargetFileSize, FilterPolicy: bloom.FilterPolicy(10)})
+		}
+	}
 	opt := &pebble.Options{
 		// Pebble has a single combined cache area and the write
 		// buffers are taken from this too. Assign all available
@@ -216,15 +231,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 
 		// Per-level extraOptions. Options for at least one level must be specified. The
 		// extraOptions for the last level are used for all subsequent levels.
-		Levels: []pebble.LevelOptions{
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-		},
+		Levels:   levels,
 		ReadOnly: readonly,
 		EventListener: &pebble.EventListener{
 			CompactionBegin: db.onCompactionBegin,
