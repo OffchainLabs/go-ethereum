@@ -47,7 +47,7 @@ const (
 
 	// metricsGatheringInterval specifies the interval to retrieve pebble database
 	// compaction, io and pause stats to report to the user.
-	metricsGatheringInterval = 100 * time.Millisecond //3 * time.Second
+	metricsGatheringInterval = 3 * time.Second
 )
 
 // Database is a persistent key-value store based on the pebble storage engine.
