@@ -145,6 +145,9 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	if extraOptions == nil {
 		extraOptions = &ExtraOptions{}
 	}
+	if extraOptions.MemTableStopWritesThreshold <= 0 {
+		extraOptions.MemTableStopWritesThreshold = 2
+	}
 	if extraOptions.MaxConcurrentCompactions == nil {
 		extraOptions.MaxConcurrentCompactions = func() int { return runtime.NumCPU() }
 	}
