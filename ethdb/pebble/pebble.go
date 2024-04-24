@@ -74,6 +74,24 @@ type Database struct {
 	compDebtGauge       metrics.Gauge
 	compInProgressGauge metrics.Gauge
 
+	commitCountMeter               metrics.Meter
+	commitTotalDurationMeter       metrics.Meter
+	commitSemaphoreWaitMeter       metrics.Meter
+	commitWALQueueWaitMeter        metrics.Meter
+	commitMemTableWriteStallMeter  metrics.Meter
+	commitL0ReadAmpWriteStallMeter metrics.Meter
+	commitWALRotationMeter         metrics.Meter
+	commitWaitMeter                metrics.Meter
+
+	commitCount               atomic.Int64
+	commitTotalDuration       atomic.Int64
+	commitSemaphoreWait       atomic.Int64
+	commitWALQueueWait        atomic.Int64
+	commitMemTableWriteStall  atomic.Int64
+	commitL0ReadAmpWriteStall atomic.Int64
+	commitWALRotation         atomic.Int64
+	commitWait                atomic.Int64
+
 	levelsGauge []metrics.Gauge // Gauge for tracking the number of tables in levels
 
 	quitLock sync.RWMutex    // Mutex protecting the quit channel and the closed flag
@@ -299,6 +317,15 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	db.compDebtGauge = metrics.NewRegisteredGauge(namespace+"compact/debt", nil)
 	db.compInProgressGauge = metrics.NewRegisteredGauge(namespace+"compact/inprogress", nil)
 
+	db.commitCountMeter = metrics.NewRegisteredMeter(namespace+"commit/counter", nil)
+	db.commitTotalDurationMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/total", nil)
+	db.commitSemaphoreWaitMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/semaphorewait", nil)
+	db.commitWALQueueWaitMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/walqueuewait", nil)
+	db.commitMemTableWriteStallMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/memtablewritestall", nil)
+	db.commitL0ReadAmpWriteStallMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/l0readampwritestall", nil)
+	db.commitWALRotationMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/walrotation", nil)
+	db.commitWaitMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/commitwait", nil)
+
 	// Start up the metrics gathering and return
 	go db.meter(metricsGatheringInterval, namespace)
 	return db, nil
@@ -511,6 +538,15 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		compReads        [2]int64
 
 		nWrites [2]int64
+
+		commitCounts               [2]int64
+		commitTotalDurations       [2]int64
+		commitSemaphoreWaits       [2]int64
+		commitWALQueueWaits        [2]int64
+		commitMemTableWriteStalls  [2]int64
+		commitL0ReadAmpWriteStalls [2]int64
+		commitWALRotations         [2]int64
+		commitWaits                [2]int64
 	)
 
 	// Iterate ad infinitum and collect the stats
@@ -526,6 +562,15 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 			writeDelayTime     = d.writeDelayTime.Load()
 			nonLevel0CompCount = int64(d.nonLevel0Comp.Load())
 			level0CompCount    = int64(d.level0Comp.Load())
+
+			commitCount               = d.commitCount.Load()
+			commitTotalDuration       = d.commitTotalDuration.Load()
+			commitSemaphoreWait       = d.commitSemaphoreWait.Load()
+			commitWALQueueWait        = d.commitWALQueueWait.Load()
+			commitMemTableWriteStall  = d.commitMemTableWriteStall.Load()
+			commitL0ReadAmpWriteStall = d.commitL0ReadAmpWriteStall.Load()
+			commitWALRotation         = d.commitWALRotation.Load()
+			commitWait                = d.commitWait.Load()
 		)
 		writeDelayTimes[i%2] = writeDelayTime
 		writeDelayCounts[i%2] = writeDelayCount
@@ -575,6 +620,24 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		d.nonlevel0CompGauge.Update(nonLevel0CompCount)
 		d.level0CompGauge.Update(level0CompCount)
 		d.seekCompGauge.Update(stats.Compact.ReadCount)
+
+		commitCounts[i%2] = commitCount
+		commitTotalDurations[i%2] = commitTotalDuration
+		commitSemaphoreWaits[i%2] = commitSemaphoreWait
+		commitWALQueueWaits[i%2] = commitWALQueueWait
+		commitMemTableWriteStalls[i%2] = commitMemTableWriteStall
+		commitL0ReadAmpWriteStalls[i%2] = commitL0ReadAmpWriteStall
+		commitWALRotations[i%2] = commitWALRotation
+		commitWaits[i%2] = commitWait
+
+		d.commitCountMeter.Mark(commitCounts[i%2] - commitCounts[(i-1)%2])
+		d.commitTotalDurationMeter.Mark(commitTotalDurations[i%2] - commitTotalDurations[(i-1)%2])
+		d.commitSemaphoreWaitMeter.Mark(commitSemaphoreWaits[i%2] - commitSemaphoreWaits[(i-1)%2])
+		d.commitWALQueueWaitMeter.Mark(commitWALQueueWaits[i%2] - commitWALQueueWaits[(i-1)%2])
+		d.commitMemTableWriteStallMeter.Mark(commitMemTableWriteStalls[i%2] - commitMemTableWriteStalls[(i-1)%2])
+		d.commitL0ReadAmpWriteStallMeter.Mark(commitL0ReadAmpWriteStalls[i%2] - commitL0ReadAmpWriteStalls[(i-1)%2])
+		d.commitWALRotationMeter.Mark(commitWALRotations[i%2] - commitWALRotations[(i-1)%2])
+		d.commitWaitMeter.Mark(commitWaits[i%2] - commitWaits[(i-1)%2])
 
 		d.compDebtGauge.Update(int64(stats.Compact.EstimatedDebt))
 		d.compInProgressGauge.Update(stats.Compact.NumInProgress)
@@ -633,7 +696,20 @@ func (b *batch) Write() error {
 	if b.db.closed {
 		return pebble.ErrClosed
 	}
-	return b.b.Commit(b.db.writeOptions)
+	err := b.b.Commit(b.db.writeOptions)
+	if err != nil {
+		return err
+	}
+	stats := b.b.CommitStats()
+	b.db.commitCount.Add(1)
+	b.db.commitTotalDuration.Add(int64(stats.TotalDuration))
+	b.db.commitSemaphoreWait.Add(int64(stats.SemaphoreWaitDuration))
+	b.db.commitWALQueueWait.Add(int64(stats.WALQueueWaitDuration))
+	b.db.commitMemTableWriteStall.Add(int64(stats.MemTableWriteStallDuration))
+	b.db.commitL0ReadAmpWriteStall.Add(int64(stats.L0ReadAmpWriteStallDuration))
+	b.db.commitWALRotation.Add(int64(stats.WALRotationDuration))
+	b.db.commitWait.Add(int64(stats.CommitWaitDuration))
+	return nil
 }
 
 // Reset resets the batch for reuse.
