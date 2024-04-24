@@ -204,7 +204,12 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		}
 	} else {
 		for _, level := range extraOptions.Levels {
-			levels = append(levels, pebble.LevelOptions{TargetFileSize: level.TargetFileSize, FilterPolicy: bloom.FilterPolicy(10)})
+			levels = append(levels, pebble.LevelOptions{
+				BlockSize:      level.BlockSize,
+				IndexBlockSize: level.IndexBlockSize,
+				TargetFileSize: level.TargetFileSize,
+				FilterPolicy:   bloom.FilterPolicy(10),
+			})
 		}
 	}
 	opt := &pebble.Options{

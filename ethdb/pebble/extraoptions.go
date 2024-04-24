@@ -28,5 +28,7 @@ type ExtraOptionsExperimental struct {
 }
 
 type ExtraLevelOptions struct {
+	BlockSize      int
+	IndexBlockSize int
 	TargetFileSize int64
 }
