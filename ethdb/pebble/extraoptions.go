@@ -8,6 +8,7 @@ type ExtraOptions struct {
 	L0CompactionThreshold       int
 	L0StopWritesThreshold       int
 	LBaseMaxBytes               int64
+	MemTableStopWritesThreshold int
 	MaxConcurrentCompactions    func() int
 	DisableAutomaticCompactions bool
 	WALBytesPerSync             int

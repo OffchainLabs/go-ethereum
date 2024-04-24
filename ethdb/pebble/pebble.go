@@ -142,49 +142,6 @@ func (l panicLogger) Fatalf(format string, args ...interface{}) {
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
 func New(file string, cache int, handles int, namespace string, readonly bool, ephemeral bool, extraOptions *ExtraOptions) (*Database, error) {
-	// Ensure we have some minimal caching and file guarantees
-	if cache < minCache {
-		cache = minCache
-	}
-	if handles < minHandles {
-		handles = minHandles
-	}
-	logger := log.New("database", file)
-	logger.Info("Allocated cache and file handles", "cache", common.StorageSize(cache*1024*1024), "handles", handles)
-
-	// The max memtable size is limited by the uint32 offsets stored in
-	// internal/arenaskl.node, DeferredBatchOp, and flushableBatchEntry.
-	//
-	// - MaxUint32 on 64-bit platforms;
-	// - MaxInt on 32-bit platforms.
-	//
-	// It is used when slices are limited to Uint32 on 64-bit platforms (the
-	// length limit for slices is naturally MaxInt on 32-bit platforms).
-	//
-	// Taken from https://github.com/cockroachdb/pebble/blob/master/internal/constants/constants.go
-	maxMemTableSize := (1<<31)<<(^uint(0)>>63) - 1
-
-	// Two memory tables is configured which is identical to leveldb,
-	// including a frozen memory table and another live one.
-	memTableLimit := 2
-	memTableSize := cache * 1024 * 1024 / 2 / memTableLimit
-
-	// The memory table size is currently capped at maxMemTableSize-1 due to a
-	// known bug in the pebble where maxMemTableSize is not recognized as a
-	// valid size.
-	//
-	// TODO use the maxMemTableSize as the maximum table size once the issue
-	// in pebble is fixed.
-	if memTableSize >= maxMemTableSize {
-		memTableSize = maxMemTableSize - 1
-	}
-	db := &Database{
-		fn:           file,
-		log:          logger,
-		quitChan:     make(chan chan error),
-		writeOptions: &pebble.WriteOptions{Sync: !ephemeral},
-	}
-
 	if extraOptions == nil {
 		extraOptions = &ExtraOptions{}
 	}
@@ -212,6 +169,50 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 			})
 		}
 	}
+
+	// Ensure we have some minimal caching and file guarantees
+	if cache < minCache {
+		cache = minCache
+	}
+	if handles < minHandles {
+		handles = minHandles
+	}
+	logger := log.New("database", file)
+	logger.Info("Allocated cache and file handles", "cache", common.StorageSize(cache*1024*1024), "handles", handles)
+
+	// The max memtable size is limited by the uint32 offsets stored in
+	// internal/arenaskl.node, DeferredBatchOp, and flushableBatchEntry.
+	//
+	// - MaxUint32 on 64-bit platforms;
+	// - MaxInt on 32-bit platforms.
+	//
+	// It is used when slices are limited to Uint32 on 64-bit platforms (the
+	// length limit for slices is naturally MaxInt on 32-bit platforms).
+	//
+	// Taken from https://github.com/cockroachdb/pebble/blob/master/internal/constants/constants.go
+	maxMemTableSize := (1<<31)<<(^uint(0)>>63) - 1
+
+	// Two memory tables is configured which is identical to leveldb,
+	// including a frozen memory table and another live one.
+	memTableLimit := extraOptions.MemTableStopWritesThreshold
+	memTableSize := cache * 1024 * 1024 / 2 / memTableLimit
+
+	// The memory table size is currently capped at maxMemTableSize-1 due to a
+	// known bug in the pebble where maxMemTableSize is not recognized as a
+	// valid size.
+	//
+	// TODO use the maxMemTableSize as the maximum table size once the issue
+	// in pebble is fixed.
+	if memTableSize >= maxMemTableSize {
+		memTableSize = maxMemTableSize - 1
+	}
+	db := &Database{
+		fn:           file,
+		log:          logger,
+		quitChan:     make(chan chan error),
+		writeOptions: &pebble.WriteOptions{Sync: !ephemeral},
+	}
+
 	opt := &pebble.Options{
 		// Pebble has a single combined cache area and the write
 		// buffers are taken from this too. Assign all available
