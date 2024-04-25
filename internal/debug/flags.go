@@ -174,6 +174,8 @@ var (
 
 func init() {
 	glogger = log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))
+	glogger.Verbosity(log.LvlInfo)
+	log.SetDefault(log.NewLogger(glogger))
 }
 
 // Setup initializes profiling and logging based on the CLI flags.
