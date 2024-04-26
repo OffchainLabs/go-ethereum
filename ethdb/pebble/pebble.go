@@ -77,7 +77,6 @@ type Database struct {
 	commitCountMeter               metrics.Meter
 	commitTotalDurationMeter       metrics.Meter
 	commitSemaphoreWaitMeter       metrics.Meter
-	commitWALQueueWaitMeter        metrics.Meter
 	commitMemTableWriteStallMeter  metrics.Meter
 	commitL0ReadAmpWriteStallMeter metrics.Meter
 	commitWALRotationMeter         metrics.Meter
@@ -86,7 +85,6 @@ type Database struct {
 	commitCount               atomic.Int64
 	commitTotalDuration       atomic.Int64
 	commitSemaphoreWait       atomic.Int64
-	commitWALQueueWait        atomic.Int64
 	commitMemTableWriteStall  atomic.Int64
 	commitL0ReadAmpWriteStall atomic.Int64
 	commitWALRotation         atomic.Int64
@@ -320,7 +318,6 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	db.commitCountMeter = metrics.NewRegisteredMeter(namespace+"commit/counter", nil)
 	db.commitTotalDurationMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/total", nil)
 	db.commitSemaphoreWaitMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/semaphorewait", nil)
-	db.commitWALQueueWaitMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/walqueuewait", nil)
 	db.commitMemTableWriteStallMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/memtablewritestall", nil)
 	db.commitL0ReadAmpWriteStallMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/l0readampwritestall", nil)
 	db.commitWALRotationMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/walrotation", nil)
@@ -542,7 +539,6 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		commitCounts               [2]int64
 		commitTotalDurations       [2]int64
 		commitSemaphoreWaits       [2]int64
-		commitWALQueueWaits        [2]int64
 		commitMemTableWriteStalls  [2]int64
 		commitL0ReadAmpWriteStalls [2]int64
 		commitWALRotations         [2]int64
@@ -566,7 +562,6 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 			commitCount               = d.commitCount.Load()
 			commitTotalDuration       = d.commitTotalDuration.Load()
 			commitSemaphoreWait       = d.commitSemaphoreWait.Load()
-			commitWALQueueWait        = d.commitWALQueueWait.Load()
 			commitMemTableWriteStall  = d.commitMemTableWriteStall.Load()
 			commitL0ReadAmpWriteStall = d.commitL0ReadAmpWriteStall.Load()
 			commitWALRotation         = d.commitWALRotation.Load()
@@ -624,7 +619,6 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		commitCounts[i%2] = commitCount
 		commitTotalDurations[i%2] = commitTotalDuration
 		commitSemaphoreWaits[i%2] = commitSemaphoreWait
-		commitWALQueueWaits[i%2] = commitWALQueueWait
 		commitMemTableWriteStalls[i%2] = commitMemTableWriteStall
 		commitL0ReadAmpWriteStalls[i%2] = commitL0ReadAmpWriteStall
 		commitWALRotations[i%2] = commitWALRotation
@@ -633,7 +627,6 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		d.commitCountMeter.Mark(commitCounts[i%2] - commitCounts[(i-1)%2])
 		d.commitTotalDurationMeter.Mark(commitTotalDurations[i%2] - commitTotalDurations[(i-1)%2])
 		d.commitSemaphoreWaitMeter.Mark(commitSemaphoreWaits[i%2] - commitSemaphoreWaits[(i-1)%2])
-		d.commitWALQueueWaitMeter.Mark(commitWALQueueWaits[i%2] - commitWALQueueWaits[(i-1)%2])
 		d.commitMemTableWriteStallMeter.Mark(commitMemTableWriteStalls[i%2] - commitMemTableWriteStalls[(i-1)%2])
 		d.commitL0ReadAmpWriteStallMeter.Mark(commitL0ReadAmpWriteStalls[i%2] - commitL0ReadAmpWriteStalls[(i-1)%2])
 		d.commitWALRotationMeter.Mark(commitWALRotations[i%2] - commitWALRotations[(i-1)%2])
@@ -704,11 +697,11 @@ func (b *batch) Write() error {
 	b.db.commitCount.Add(1)
 	b.db.commitTotalDuration.Add(int64(stats.TotalDuration))
 	b.db.commitSemaphoreWait.Add(int64(stats.SemaphoreWaitDuration))
-	b.db.commitWALQueueWait.Add(int64(stats.WALQueueWaitDuration))
 	b.db.commitMemTableWriteStall.Add(int64(stats.MemTableWriteStallDuration))
 	b.db.commitL0ReadAmpWriteStall.Add(int64(stats.L0ReadAmpWriteStallDuration))
 	b.db.commitWALRotation.Add(int64(stats.WALRotationDuration))
 	b.db.commitWait.Add(int64(stats.CommitWaitDuration))
+	// TODO add metric for stats.WALQueueWaitDuration when it will be used by pebble (currently it is always 0)
 	return nil
 }
 
