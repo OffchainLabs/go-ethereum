@@ -32,7 +32,10 @@ type api struct {
 
 func (a *api) loop() {
 	var (
-		newTxs = make(chan core.NewTxsEvent)
+		// Arbitrum: we need to make newTxs a buffered channel because by the current design of simulated beacon
+		// it would deadlock with this cycle a.sim.Commit() -> txpool.Sync() -> subpools reset -> update feeds (newTxs is one of the recievers)
+		// Note: capacity of this channel should be the worst-case estimate of number of transactions all arriving simultaneously to the pool
+		newTxs = make(chan core.NewTxsEvent, 15)
 		sub    = a.sim.eth.TxPool().SubscribeTransactions(newTxs, true)
 	)
 	defer sub.Unsubscribe()
