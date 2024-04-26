@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -119,7 +120,7 @@ type flatCallTracer struct {
 	tracer            *callTracer
 	config            flatCallTracerConfig
 	ctx               *tracers.Context // Holds tracer context data
-	reason            error            // Textual reason for the interruption
+	interrupt         atomic.Bool      // Atomic flag to signal execution interruption
 	activePrecompiles []common.Address // Updated on CaptureStart based on given rules
 }
 
@@ -159,6 +160,9 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *flatCallTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.CaptureStart(env, from, to, create, input, gas, value)
 	// Update list of precompiles based on current block
 	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil, env.Context.Time, env.Context.ArbOSVersion)
@@ -167,21 +171,33 @@ func (t *flatCallTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *flatCallTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.CaptureEnd(output, gasUsed, err)
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (t *flatCallTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.CaptureState(pc, op, gas, cost, scope, rData, depth, err)
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
 func (t *flatCallTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.CaptureFault(pc, op, gas, cost, scope, depth, err)
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *flatCallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.CaptureEnter(typ, from, to, input, gas, value)
 
 	// Child calls must have a value, even if it's zero.
@@ -194,6 +210,9 @@ func (t *flatCallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to com
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
 func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.CaptureExit(output, gasUsed, err)
 
 	// Parity traces don't include CALL/STATICCALLs to precompiles.
@@ -216,10 +235,16 @@ func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
 func (t *flatCallTracer) CaptureTxStart(gasLimit uint64) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.CaptureTxStart(gasLimit)
 }
 
 func (t *flatCallTracer) CaptureTxEnd(restGas uint64) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.CaptureTxEnd(restGas)
 }
 
@@ -243,12 +268,13 @@ func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return res, t.reason
+	return res, t.tracer.reason
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
 func (t *flatCallTracer) Stop(err error) {
 	t.tracer.Stop(err)
+	t.interrupt.Store(true)
 }
 
 // isPrecompiled returns whether the addr is a precompile.
