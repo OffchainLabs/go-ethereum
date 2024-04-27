@@ -59,6 +59,9 @@ func (*noopTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address
 func (*prestateTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
 }
 func (t *flatCallTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
+	if t.interrupt.Load() {
+		return
+	}
 	transfer := arbitrumTransfer{
 		Purpose: purpose,
 		Value:   bigToHex(value),

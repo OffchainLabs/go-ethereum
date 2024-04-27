@@ -1087,8 +1087,7 @@ func TestABI_ErrorByID(t *testing.T) {
 	}
 	for name, m := range abi.Errors {
 		a := fmt.Sprintf("%v", &m)
-		var id [4]byte
-		copy(id[:], m.ID[:4])
+		id := [4]byte(m.ID.Bytes())
 		m2, err := abi.ErrorByID(id)
 		if err != nil {
 			t.Fatalf("Failed to look up ABI error: %v", err)
