@@ -917,6 +917,7 @@ func (err *ConfigCompatError) Error() string {
 type Rules struct {
 	IsArbitrum                                              bool
 	ChainID                                                 *big.Int
+	ArbOSVersion                                            uint64
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
@@ -933,6 +934,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, curren
 	return Rules{
 		IsArbitrum:       c.IsArbitrum(),
 		ChainID:          new(big.Int).Set(chainID),
+		ArbOSVersion:     currentArbosVersion,
 		IsHomestead:      c.IsHomestead(num),
 		IsEIP150:         c.IsEIP150(num),
 		IsEIP155:         c.IsEIP155(num),

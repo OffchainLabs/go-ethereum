@@ -42,6 +42,10 @@ func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	var precompiles map[common.Address]PrecompiledContract
 	switch {
 	case evm.chainRules.IsArbitrum:
+		if evm.chainRules.ArbOSVersion >= 30 {
+			precompiles = PrecompiledContractsArbOS30
+			break
+		}
 		precompiles = PrecompiledContractsArbitrum
 	case evm.chainRules.IsCancun:
 		precompiles = PrecompiledContractsCancun
