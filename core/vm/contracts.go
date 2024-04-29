@@ -109,7 +109,7 @@ var PrecompiledContractsCancun = map[common.Address]PrecompiledContract{
 }
 
 // PrecompiledContractsP256Verify contains the precompiled Ethereum
-// contract specified in EIP-7212. This is exported for testing purposes.
+// contract specified in EIP-7212.
 var PrecompiledContractsP256Verify = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{0x01, 0x00}): &p256Verify{},
 }
@@ -129,12 +129,11 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 }
 
 var (
-	PrecompiledAddressesP256Verify []common.Address
-	PrecompiledAddressesCancun     []common.Address
-	PrecompiledAddressesBerlin     []common.Address
-	PrecompiledAddressesIstanbul   []common.Address
-	PrecompiledAddressesByzantium  []common.Address
-	PrecompiledAddressesHomestead  []common.Address
+	PrecompiledAddressesCancun    []common.Address
+	PrecompiledAddressesBerlin    []common.Address
+	PrecompiledAddressesIstanbul  []common.Address
+	PrecompiledAddressesByzantium []common.Address
+	PrecompiledAddressesHomestead []common.Address
 )
 
 func init() {
@@ -152,9 +151,6 @@ func init() {
 	}
 	for k := range PrecompiledContractsCancun {
 		PrecompiledAddressesCancun = append(PrecompiledAddressesCancun, k)
-	}
-	for k := range PrecompiledContractsP256Verify {
-		PrecompiledAddressesP256Verify = append(PrecompiledAddressesP256Verify, k)
 	}
 }
 
