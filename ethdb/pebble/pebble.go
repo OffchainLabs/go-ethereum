@@ -27,7 +27,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/bloom"
 	"github.com/ethereum/go-ethereum/common"
@@ -129,8 +128,11 @@ type panicLogger struct{}
 func (l panicLogger) Infof(format string, args ...interface{}) {
 }
 
+func (l panicLogger) Errorf(format string, args ...interface{}) {
+}
+
 func (l panicLogger) Fatalf(format string, args ...interface{}) {
-	panic(errors.Errorf("fatal: "+format, args...))
+	panic(fmt.Errorf("fatal: "+format, args...))
 }
 
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
@@ -162,8 +164,15 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	// including a frozen memory table and another live one.
 	memTableLimit := 2
 	memTableSize := cache * 1024 * 1024 / 2 / memTableLimit
-	if memTableSize > maxMemTableSize {
-		memTableSize = maxMemTableSize
+
+	// The memory table size is currently capped at maxMemTableSize-1 due to a
+	// known bug in the pebble where maxMemTableSize is not recognized as a
+	// valid size.
+	//
+	// TODO use the maxMemTableSize as the maximum table size once the issue
+	// in pebble is fixed.
+	if memTableSize >= maxMemTableSize {
+		memTableSize = maxMemTableSize - 1
 	}
 	db := &Database{
 		fn:           file,
