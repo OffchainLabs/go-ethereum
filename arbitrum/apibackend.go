@@ -603,9 +603,9 @@ func (a *APIBackend) SendConditionalTx(ctx context.Context, signedTx *types.Tran
 	return a.b.EnqueueL2Message(ctx, signedTx, options)
 }
 
-func (a *APIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+func (a *APIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
 	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(a.b.chainDb, txHash)
-	return tx, blockHash, blockNumber, index, nil
+	return true, tx, blockHash, blockNumber, index, nil
 }
 
 func (a *APIBackend) GetPoolTransactions() (types.Transactions, error) {
