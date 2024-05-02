@@ -311,16 +311,16 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	db.seekCompGauge = metrics.GetOrRegisterGauge(namespace+"compact/seek", nil)
 	db.manualMemAllocGauge = metrics.GetOrRegisterGauge(namespace+"memory/manualalloc", nil)
 
-	db.compDebtGauge = metrics.NewRegisteredGauge(namespace+"compact/debt", nil)
-	db.compInProgressGauge = metrics.NewRegisteredGauge(namespace+"compact/inprogress", nil)
+	db.compDebtGauge = metrics.GetOrRegisterGauge(namespace+"compact/debt", nil)
+	db.compInProgressGauge = metrics.GetOrRegisterGauge(namespace+"compact/inprogress", nil)
 
-	db.commitCountMeter = metrics.NewRegisteredMeter(namespace+"commit/counter", nil)
-	db.commitTotalDurationMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/total", nil)
-	db.commitSemaphoreWaitMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/semaphorewait", nil)
-	db.commitMemTableWriteStallMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/memtablewritestall", nil)
-	db.commitL0ReadAmpWriteStallMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/l0readampwritestall", nil)
-	db.commitWALRotationMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/walrotation", nil)
-	db.commitWaitMeter = metrics.NewRegisteredMeter(namespace+"commit/duration/commitwait", nil)
+	db.commitCountMeter = metrics.GetOrRegisterMeter(namespace+"commit/counter", nil)
+	db.commitTotalDurationMeter = metrics.GetOrRegisterMeter(namespace+"commit/duration/total", nil)
+	db.commitSemaphoreWaitMeter = metrics.GetOrRegisterMeter(namespace+"commit/duration/semaphorewait", nil)
+	db.commitMemTableWriteStallMeter = metrics.GetOrRegisterMeter(namespace+"commit/duration/memtablewritestall", nil)
+	db.commitL0ReadAmpWriteStallMeter = metrics.GetOrRegisterMeter(namespace+"commit/duration/l0readampwritestall", nil)
+	db.commitWALRotationMeter = metrics.GetOrRegisterMeter(namespace+"commit/duration/walrotation", nil)
+	db.commitWaitMeter = metrics.GetOrRegisterMeter(namespace+"commit/duration/commitwait", nil)
 
 	// Start up the metrics gathering and return
 	go db.meter(metricsGatheringInterval, namespace)
