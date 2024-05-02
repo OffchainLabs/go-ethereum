@@ -282,7 +282,7 @@ func (a *APIBackend) FeeHistory(
 			currentTimestampGasUsed = 0
 		}
 
-		receipts := a.BlockChain().GetReceiptsByHash(header.ReceiptHash)
+		receipts := a.BlockChain().GetReceiptsByHash(header.Hash())
 		for _, receipt := range receipts {
 			if receipt.GasUsed > receipt.GasUsedForL1 {
 				currentTimestampGasUsed += receipt.GasUsed - receipt.GasUsedForL1
