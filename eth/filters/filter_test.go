@@ -99,6 +99,7 @@ func BenchmarkFilters(b *testing.B) {
 	filter := sys.NewRangeFilter(0, -1, []common.Address{addr1, addr2, addr3, addr4}, nil)
 
 	for i := 0; i < b.N; i++ {
+		filter.begin = 0
 		logs, _ := filter.Logs(context.Background())
 		if len(logs) != 4 {
 			b.Fatal("expected 4 logs, got", len(logs))
@@ -353,7 +354,7 @@ func TestFilters(t *testing.T) {
 		},
 		{
 			f:   sys.NewRangeFilter(int64(rpc.PendingBlockNumber), int64(rpc.LatestBlockNumber), nil, nil),
-			err: "invalid block range",
+			err: errInvalidBlockRange.Error(),
 		},
 	} {
 		logs, err := tc.f.Logs(context.Background())

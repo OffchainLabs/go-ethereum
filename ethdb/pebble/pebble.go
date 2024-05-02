@@ -27,7 +27,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/bloom"
 	"github.com/ethereum/go-ethereum/common"
@@ -152,7 +151,7 @@ func (l panicLogger) Errorf(format string, args ...interface{}) {
 }
 
 func (l panicLogger) Fatalf(format string, args ...interface{}) {
-	panic(errors.Errorf("fatal: "+format, args...))
+	panic(fmt.Errorf("fatal: "+format, args...))
 }
 
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
@@ -298,19 +297,19 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	}
 	db.db = innerDB
 
-	db.compTimeMeter = metrics.NewRegisteredMeter(namespace+"compact/time", nil)
-	db.compReadMeter = metrics.NewRegisteredMeter(namespace+"compact/input", nil)
-	db.compWriteMeter = metrics.NewRegisteredMeter(namespace+"compact/output", nil)
-	db.diskSizeGauge = metrics.NewRegisteredGauge(namespace+"disk/size", nil)
-	db.diskReadMeter = metrics.NewRegisteredMeter(namespace+"disk/read", nil)
-	db.diskWriteMeter = metrics.NewRegisteredMeter(namespace+"disk/write", nil)
-	db.writeDelayMeter = metrics.NewRegisteredMeter(namespace+"compact/writedelay/duration", nil)
-	db.writeDelayNMeter = metrics.NewRegisteredMeter(namespace+"compact/writedelay/counter", nil)
-	db.memCompGauge = metrics.NewRegisteredGauge(namespace+"compact/memory", nil)
-	db.level0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/level0", nil)
-	db.nonlevel0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/nonlevel0", nil)
-	db.seekCompGauge = metrics.NewRegisteredGauge(namespace+"compact/seek", nil)
-	db.manualMemAllocGauge = metrics.NewRegisteredGauge(namespace+"memory/manualalloc", nil)
+	db.compTimeMeter = metrics.GetOrRegisterMeter(namespace+"compact/time", nil)
+	db.compReadMeter = metrics.GetOrRegisterMeter(namespace+"compact/input", nil)
+	db.compWriteMeter = metrics.GetOrRegisterMeter(namespace+"compact/output", nil)
+	db.diskSizeGauge = metrics.GetOrRegisterGauge(namespace+"disk/size", nil)
+	db.diskReadMeter = metrics.GetOrRegisterMeter(namespace+"disk/read", nil)
+	db.diskWriteMeter = metrics.GetOrRegisterMeter(namespace+"disk/write", nil)
+	db.writeDelayMeter = metrics.GetOrRegisterMeter(namespace+"compact/writedelay/duration", nil)
+	db.writeDelayNMeter = metrics.GetOrRegisterMeter(namespace+"compact/writedelay/counter", nil)
+	db.memCompGauge = metrics.GetOrRegisterGauge(namespace+"compact/memory", nil)
+	db.level0CompGauge = metrics.GetOrRegisterGauge(namespace+"compact/level0", nil)
+	db.nonlevel0CompGauge = metrics.GetOrRegisterGauge(namespace+"compact/nonlevel0", nil)
+	db.seekCompGauge = metrics.GetOrRegisterGauge(namespace+"compact/seek", nil)
+	db.manualMemAllocGauge = metrics.GetOrRegisterGauge(namespace+"memory/manualalloc", nil)
 
 	db.compDebtGauge = metrics.NewRegisteredGauge(namespace+"compact/debt", nil)
 	db.compInProgressGauge = metrics.NewRegisteredGauge(namespace+"compact/inprogress", nil)
@@ -638,7 +637,7 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		for i, level := range stats.Levels {
 			// Append metrics for additional layers
 			if i >= len(d.levelsGauge) {
-				d.levelsGauge = append(d.levelsGauge, metrics.NewRegisteredGauge(namespace+fmt.Sprintf("tables/level%v", i), nil))
+				d.levelsGauge = append(d.levelsGauge, metrics.GetOrRegisterGauge(namespace+fmt.Sprintf("tables/level%v", i), nil))
 			}
 			d.levelsGauge[i].Update(level.NumFiles)
 		}

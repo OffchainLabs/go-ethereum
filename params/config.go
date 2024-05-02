@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params/forks"
 )
 
 // Genesis hashes to enforce below configs on.
@@ -81,6 +82,7 @@ var (
 		TerminalTotalDifficultyPassed: true,
 		MergeNetsplitBlock:            nil,
 		ShanghaiTime:                  newUint64(1696000704),
+		CancunTime:                    newUint64(1707305664),
 		Ethash:                        new(EthashConfig),
 	}
 	// SepoliaChainConfig contains the chain parameters to run a node on the Sepolia test network.
@@ -105,6 +107,7 @@ var (
 		TerminalTotalDifficultyPassed: true,
 		MergeNetsplitBlock:            big.NewInt(1735371),
 		ShanghaiTime:                  newUint64(1677557088),
+		CancunTime:                    newUint64(1706655072),
 		Ethash:                        new(EthashConfig),
 	}
 	// GoerliChainConfig contains the chain parameters to run a node on the Görli test network.
@@ -127,6 +130,7 @@ var (
 		TerminalTotalDifficulty:       big.NewInt(10_790_000),
 		TerminalTotalDifficultyPassed: true,
 		ShanghaiTime:                  newUint64(1678832736),
+		CancunTime:                    newUint64(1705473120),
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
@@ -181,7 +185,6 @@ var (
 		ShanghaiTime:                  newUint64(0),
 		TerminalTotalDifficulty:       big.NewInt(0),
 		TerminalTotalDifficultyPassed: true,
-		IsDevMode:                     true,
 	}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
@@ -244,6 +247,36 @@ var (
 		Ethash:                        new(EthashConfig),
 		Clique:                        nil,
 		ArbitrumChainParams:           DisableArbitrumParams(),
+	}
+
+	// MergedTestChainConfig contains every protocol change (EIPs) introduced
+	// and accepted by the Ethereum core developers for testing purposes.
+	MergedTestChainConfig = &ChainConfig{
+		ChainID:                       big.NewInt(1),
+		HomesteadBlock:                big.NewInt(0),
+		DAOForkBlock:                  nil,
+		DAOForkSupport:                false,
+		EIP150Block:                   big.NewInt(0),
+		EIP155Block:                   big.NewInt(0),
+		EIP158Block:                   big.NewInt(0),
+		ByzantiumBlock:                big.NewInt(0),
+		ConstantinopleBlock:           big.NewInt(0),
+		PetersburgBlock:               big.NewInt(0),
+		IstanbulBlock:                 big.NewInt(0),
+		MuirGlacierBlock:              big.NewInt(0),
+		BerlinBlock:                   big.NewInt(0),
+		LondonBlock:                   big.NewInt(0),
+		ArrowGlacierBlock:             big.NewInt(0),
+		GrayGlacierBlock:              big.NewInt(0),
+		MergeNetsplitBlock:            big.NewInt(0),
+		ShanghaiTime:                  newUint64(0),
+		CancunTime:                    newUint64(0),
+		PragueTime:                    nil,
+		VerkleTime:                    nil,
+		TerminalTotalDifficulty:       big.NewInt(0),
+		TerminalTotalDifficultyPassed: true,
+		Ethash:                        new(EthashConfig),
+		Clique:                        nil,
 	}
 
 	// NonActivatedConfig defines the chain configuration without activating
@@ -333,9 +366,8 @@ type ChainConfig struct {
 	TerminalTotalDifficultyPassed bool `json:"terminalTotalDifficultyPassed,omitempty"`
 
 	// Various consensus engines
-	Ethash    *EthashConfig `json:"ethash,omitempty"`
-	Clique    *CliqueConfig `json:"clique,omitempty"`
-	IsDevMode bool          `json:"isDev,omitempty"`
+	Ethash *EthashConfig `json:"ethash,omitempty"`
+	Clique *CliqueConfig `json:"clique,omitempty"`
 
 	ArbitrumChainParams ArbitrumChainParams `json:"arbitrum,omitempty"`
 }
@@ -739,6 +771,23 @@ func (c *ChainConfig) ElasticityMultiplier() uint64 {
 	return DefaultElasticityMultiplier
 }
 
+// LatestFork returns the latest time-based fork that would be active for the given time.
+func (c *ChainConfig) LatestFork(time uint64, currentArbosVersion uint64) forks.Fork {
+	// Assume last non-time-based fork has passed.
+	london := c.LondonBlock
+
+	switch {
+	case c.IsPrague(london, time):
+		return forks.Prague
+	case c.IsCancun(london, time, currentArbosVersion):
+		return forks.Cancun
+	case c.IsShanghai(london, time, currentArbosVersion):
+		return forks.Shanghai
+	default:
+		return forks.Paris
+	}
+}
+
 // isForkBlockIncompatible returns true if a fork scheduled at block s1 cannot be
 // rescheduled to block s2 because head is already past the fork.
 func isForkBlockIncompatible(s1, s2, head *big.Int) bool {
@@ -868,6 +917,7 @@ func (err *ConfigCompatError) Error() string {
 type Rules struct {
 	IsArbitrum                                              bool
 	ChainID                                                 *big.Int
+	ArbOSVersion                                            uint64
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
@@ -884,6 +934,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, curren
 	return Rules{
 		IsArbitrum:       c.IsArbitrum(),
 		ChainID:          new(big.Int).Set(chainID),
+		ArbOSVersion:     currentArbosVersion,
 		IsHomestead:      c.IsHomestead(num),
 		IsEIP150:         c.IsEIP150(num),
 		IsEIP155:         c.IsEIP155(num),
