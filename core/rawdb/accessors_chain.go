@@ -278,23 +278,6 @@ func WriteTxIndexTail(db ethdb.KeyValueWriter, number uint64) {
 	}
 }
 
-// ReadFastTxLookupLimit retrieves the tx lookup limit used in fast sync.
-func ReadFastTxLookupLimit(db ethdb.KeyValueReader) *uint64 {
-	data, _ := db.Get(fastTxLookupLimitKey)
-	if len(data) != 8 {
-		return nil
-	}
-	number := binary.BigEndian.Uint64(data)
-	return &number
-}
-
-// WriteFastTxLookupLimit stores the txlookup limit used in fast sync into database.
-func WriteFastTxLookupLimit(db ethdb.KeyValueWriter, number uint64) {
-	if err := db.Put(fastTxLookupLimitKey, encodeBlockNumber(number)); err != nil {
-		log.Crit("Failed to store transaction lookup limit for fast sync", "err", err)
-	}
-}
-
 // ReadHeaderRange returns the rlp-encoded headers, starting at 'number', and going
 // backwards towards genesis. This method assumes that the caller already has
 // placed a cap on count, to prevent DoS issues.
@@ -334,13 +317,18 @@ func ReadHeaderRange(db ethdb.Reader, number uint64, count uint64) []rlp.RawValu
 		return rlpHeaders
 	}
 	// read remaining from ancients
-	max := count * 700
-	data, err := db.AncientRange(ChainFreezerHeaderTable, i+1-count, count, max)
-	if err == nil && uint64(len(data)) == count {
-		// the data is on the order [h, h+1, .., n] -- reordering needed
-		for i := range data {
-			rlpHeaders = append(rlpHeaders, data[len(data)-1-i])
-		}
+	data, err := db.AncientRange(ChainFreezerHeaderTable, i+1-count, count, 0)
+	if err != nil {
+		log.Error("Failed to read headers from freezer", "err", err)
+		return rlpHeaders
+	}
+	if uint64(len(data)) != count {
+		log.Warn("Incomplete read of headers from freezer", "wanted", count, "read", len(data))
+		return rlpHeaders
+	}
+	// The data is on the order [h, h+1, .., n] -- reordering needed
+	for i := range data {
+		rlpHeaders = append(rlpHeaders, data[len(data)-1-i])
 	}
 	return rlpHeaders
 }

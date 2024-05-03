@@ -42,7 +42,8 @@ import (
 )
 
 var (
-	errBlockInvariant = errors.New("block objects must be instantiated with at least one of num or hash")
+	errBlockInvariant    = errors.New("block objects must be instantiated with at least one of num or hash")
+	errInvalidBlockRange = errors.New("invalid from and to block combination: from > to")
 )
 
 type Long int64
@@ -100,7 +101,7 @@ func (a *Account) Balance(ctx context.Context) (hexutil.Big, error) {
 	if err != nil {
 		return hexutil.Big{}, err
 	}
-	balance := state.GetBalance(a.address)
+	balance := state.GetBalance(a.address).ToBig()
 	if balance == nil {
 		return hexutil.Big{}, fmt.Errorf("failed to load balance %x", a.address)
 	}
@@ -230,8 +231,8 @@ func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, *Block) 
 		return t.tx, t.block
 	}
 	// Try to return an already finalized transaction
-	tx, blockHash, _, index, err := t.r.backend.GetTransaction(ctx, t.hash)
-	if err == nil && tx != nil {
+	found, tx, blockHash, _, index, _ := t.r.backend.GetTransaction(ctx, t.hash)
+	if found {
 		t.tx = tx
 		blockNrOrHash := rpc.BlockNumberOrHashWithHash(blockHash, false)
 		t.block = &Block{
@@ -618,13 +619,13 @@ func (t *Transaction) V(ctx context.Context) hexutil.Big {
 	return hexutil.Big(*v)
 }
 
-func (t *Transaction) YParity(ctx context.Context) (*hexutil.Uint64, error) {
+func (t *Transaction) YParity(ctx context.Context) (*hexutil.Big, error) {
 	tx, _ := t.resolve(ctx)
 	if tx == nil || tx.Type() == types.LegacyTxType {
 		return nil, nil
 	}
 	v, _, _ := tx.RawSignatureValues()
-	ret := hexutil.Uint64(v.Int64())
+	ret := hexutil.Big(*v)
 	return &ret, nil
 }
 
@@ -1329,6 +1330,9 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 	From *Long
 	To   *Long
 }) ([]*Block, error) {
+	if args.From == nil {
+		return nil, errors.New("from block number must be specified")
+	}
 	from := rpc.BlockNumber(*args.From)
 
 	var to rpc.BlockNumber
@@ -1338,7 +1342,7 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 		to = rpc.BlockNumber(r.backend.CurrentBlock().Number.Int64())
 	}
 	if to < from {
-		return []*Block{}, nil
+		return nil, errInvalidBlockRange
 	}
 	var ret []*Block
 	for i := from; i <= to; i++ {
@@ -1420,6 +1424,9 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 	end := rpc.LatestBlockNumber.Int64()
 	if args.Filter.ToBlock != nil {
 		end = int64(*args.Filter.ToBlock)
+	}
+	if begin > 0 && end > 0 && begin > end {
+		return nil, errInvalidBlockRange
 	}
 	var addresses []common.Address
 	if args.Filter.Addresses != nil {
@@ -1507,6 +1514,12 @@ func (s *SyncState) HealingTrienodes() hexutil.Uint64 {
 func (s *SyncState) HealingBytecode() hexutil.Uint64 {
 	return hexutil.Uint64(s.progress.HealingBytecode)
 }
+func (s *SyncState) TxIndexFinishedBlocks() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.TxIndexFinishedBlocks)
+}
+func (s *SyncState) TxIndexRemainingBlocks() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.TxIndexRemainingBlocks)
+}
 
 // Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not
 // yet received the latest block headers from its pears. In case it is synchronizing:
@@ -1525,11 +1538,13 @@ func (s *SyncState) HealingBytecode() hexutil.Uint64 {
 // - healedBytecodeBytes: number of bytecodes persisted to disk
 // - healingTrienodes:    number of state trie nodes pending
 // - healingBytecode:     number of bytecodes pending
+// - txIndexFinishedBlocks:  number of blocks whose transactions are indexed
+// - txIndexRemainingBlocks: number of blocks whose transactions are not indexed yet
 func (r *Resolver) Syncing() (*SyncState, error) {
 	progress := r.backend.SyncProgress()
 
 	// Return not syncing if the synchronisation already completed
-	if progress.CurrentBlock >= progress.HighestBlock {
+	if progress.Done() {
 		return nil, nil
 	}
 	// Otherwise gather the block sync stats

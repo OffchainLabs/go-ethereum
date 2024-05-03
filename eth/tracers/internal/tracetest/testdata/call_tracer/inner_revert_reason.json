@@ -54,7 +54,7 @@
         "purpose": "feePayment",
         "from": "0x3623191d4CCfBbdf09E8EBf6382A1F8257417bC1",
         "to": null,
-        "value": "0x2ff62db077c000"
+        "value": "0x254db1c2244000"
       }
     ],
     "afterEVMTransfers": [
@@ -62,7 +62,7 @@
         "purpose": "gasRefund",
         "from": null,
         "to": "0x3623191d4CCfBbdf09E8EBf6382A1F8257417bC1",
-        "value": "0x2d8416efd77000"
+        "value": "0x2366bc81a79000"
       },
       {
         "purpose": "tip",
