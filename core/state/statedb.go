@@ -47,6 +47,7 @@ const (
 type revision struct {
 	id           int
 	journalIndex int
+
 	// Arbitrum: track the total balance change across all accounts
 	unexpectedBalanceDelta *big.Int
 }
@@ -157,6 +158,10 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	sdb := &StateDB{
 		arbExtraData: &ArbitrumExtraData{
 			unexpectedBalanceDelta: new(big.Int),
+			openWasmPages:          0,
+			everWasmPages:          0,
+			activatedWasms:         make(map[common.Hash]*ActivatedWasm),
+			recentWasms:            NewRecentWasms(),
 		},
 
 		db:                   db,
@@ -181,15 +186,6 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	if sdb.snaps != nil {
 		sdb.snap = sdb.snaps.Snapshot(root)
 	}
-	return sdb, nil
-}
-
-func NewDeterministic(root common.Hash, db Database) (*StateDB, error) {
-	sdb, err := New(root, db, nil)
-	if err != nil {
-		return nil, err
-	}
-	sdb.deterministic = true
 	return sdb, nil
 }
 
@@ -726,6 +722,10 @@ func (s *StateDB) Copy() *StateDB {
 	state := &StateDB{
 		arbExtraData: &ArbitrumExtraData{
 			unexpectedBalanceDelta: new(big.Int).Set(s.arbExtraData.unexpectedBalanceDelta),
+			activatedWasms:         make(map[common.Hash]*ActivatedWasm, len(s.arbExtraData.activatedWasms)),
+			recentWasms:            s.arbExtraData.recentWasms.Copy(),
+			openWasmPages:          s.arbExtraData.openWasmPages,
+			everWasmPages:          s.arbExtraData.everWasmPages,
 		},
 
 		db:                   s.db,
@@ -817,6 +817,18 @@ func (s *StateDB) Copy() *StateDB {
 	// in the middle of a transaction.
 	state.accessList = s.accessList.Copy()
 	state.transientStorage = s.transientStorage.Copy()
+
+	// Arbitrum: copy wasm calls and activated WASMs
+	if s.arbExtraData.userWasms != nil {
+		state.arbExtraData.userWasms = make(UserWasms, len(s.arbExtraData.userWasms))
+		for call, wasm := range s.arbExtraData.userWasms {
+			state.arbExtraData.userWasms[call] = wasm
+		}
+	}
+	for moduleHash, info := range s.arbExtraData.activatedWasms {
+		// It's fine to skip a deep copy since activations are immutable.
+		state.arbExtraData.activatedWasms[moduleHash] = info
+	}
 
 	// If there's a prefetcher running, make an inactive copy of it that can
 	// only access data but does not actively preload (since the user will not
@@ -991,6 +1003,10 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 	s.thash = thash
 	s.txIndex = ti
+
+	// Arbitrum: clear memory charging state for new tx
+	s.arbExtraData.openWasmPages = 0
+	s.arbExtraData.everWasmPages = 0
 }
 
 func (s *StateDB) clearJournalAndRefund() {
@@ -1267,6 +1283,15 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 			storageTrieNodesDeleted += deleted
 		}
 	}
+
+	// Arbitrum: write Stylus programs to disk
+	for moduleHash, info := range s.arbExtraData.activatedWasms {
+		rawdb.WriteActivation(codeWriter, moduleHash, info.Asm, info.Module)
+	}
+	if len(s.arbExtraData.activatedWasms) > 0 {
+		s.arbExtraData.activatedWasms = make(map[common.Hash]*ActivatedWasm)
+	}
+
 	if codeWriter.ValueSize() > 0 {
 		if err := codeWriter.Write(); err != nil {
 			log.Crit("Failed to commit dirty codes", "error", err)

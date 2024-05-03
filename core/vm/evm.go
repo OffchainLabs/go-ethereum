@@ -23,6 +23,7 @@ import (
 	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -41,11 +42,9 @@ type (
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	var precompiles map[common.Address]PrecompiledContract
 	switch {
+	case evm.chainRules.IsStylus:
+		precompiles = PrecompiledContractsArbOS30
 	case evm.chainRules.IsArbitrum:
-		if evm.chainRules.ArbOSVersion >= 30 {
-			precompiles = PrecompiledContractsArbOS30
-			break
-		}
 		precompiles = PrecompiledContractsArbitrum
 	case evm.chainRules.IsCancun:
 		precompiles = PrecompiledContractsCancun
@@ -324,6 +323,10 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
 		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
+
+		// Arbitrum: note the callcode
+		contract.delegateOrCallcode = true
+
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
 	}
@@ -377,6 +380,10 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		// Initialise a new contract and make initialise the delegate values
 		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
 		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
+
+		// Arbitrum: note the delegate call
+		contract.delegateOrCallcode = true
+
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
 	}
@@ -521,6 +528,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
 	if err == nil && len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
 		err = ErrInvalidCode
+
+		// Arbitrum: retain Stylus programs and instead store them in the DB alongside normal EVM bytecode.
+		if evm.chainRules.IsStylus && state.IsStylusProgram(ret) {
+			err = nil
+		}
 	}
 
 	// if the contract creation ran successfully and no errors were returned

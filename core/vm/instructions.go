@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -835,6 +836,13 @@ func opSelfdestruct6780(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCon
 	if interpreter.readOnly {
 		return nil, ErrWriteProtection
 	}
+
+	// Arbitrum: revert if acting account is a Stylus program
+	actingAddress := scope.Contract.Address()
+	if code := interpreter.evm.StateDB.GetCode(actingAddress); state.IsStylusProgram(code) {
+		return nil, ErrExecutionReverted
+	}
+
 	beneficiary := scope.Stack.pop()
 	balance := interpreter.evm.StateDB.GetBalance(scope.Contract.Address())
 	interpreter.evm.StateDB.SubBalance(scope.Contract.Address(), balance)

@@ -19,6 +19,7 @@ package vm
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -107,9 +108,9 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
-	in.evm.ProcessingHook.PushCaller(contract.Caller())
+	in.evm.ProcessingHook.PushContract(contract)
 	defer func() { in.evm.depth-- }()
-	defer func() { in.evm.ProcessingHook.PopCaller() }()
+	defer func() { in.evm.ProcessingHook.PopContract() }()
 
 	// Make sure the readOnly is only set if we aren't in readOnly yet.
 	// This also makes sure that the readOnly flag isn't removed for child calls.
@@ -167,6 +168,13 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 		}()
 	}
+
+	// Arbitrum: handle Stylus programs
+	if in.evm.chainRules.IsStylus && state.IsStylusProgram(contract.Code) {
+		ret, err = in.evm.ProcessingHook.ExecuteWASM(callContext, input, in)
+		return
+	}
+
 	// The Interpreter main run loop (contextual). This loop runs until either an
 	// explicit STOP, RETURN or SELFDESTRUCT is executed, an error occurred during
 	// the execution of one of the operations or until the done flag is set by the

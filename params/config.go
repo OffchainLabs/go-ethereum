@@ -915,7 +915,7 @@ func (err *ConfigCompatError) Error() string {
 // Rules is a one time interface meaning that it shouldn't be used in between transition
 // phases.
 type Rules struct {
-	IsArbitrum                                              bool
+	IsArbitrum, IsStylus                                    bool
 	ChainID                                                 *big.Int
 	ArbOSVersion                                            uint64
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
@@ -933,6 +933,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, curren
 	}
 	return Rules{
 		IsArbitrum:       c.IsArbitrum(),
+		IsStylus:         c.IsArbitrum() && currentArbosVersion >= ArbosVersion_Stylus,
 		ChainID:          new(big.Int).Set(chainID),
 		ArbOSVersion:     currentArbosVersion,
 		IsHomestead:      c.IsHomestead(num),

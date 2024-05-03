@@ -274,6 +274,9 @@ func appendU256(dst []byte, n *uint256.Int) []byte {
 // appendEscapeString writes the string s to the given writer, with
 // escaping/quoting if needed.
 func appendEscapeString(dst []byte, s string) []byte {
+	// Arbitrum: remove console colors introduced in Arbitrator
+	s = Uncolor(s)
+
 	needsQuoting := false
 	needsEscaping := false
 	for _, r := range s {
@@ -307,6 +310,9 @@ func appendEscapeString(dst []byte, s string) []byte {
 // to escapeString. The difference is that this method is more lenient: it allows
 // for spaces and linebreaks to occur without needing quoting.
 func escapeMessage(s string) string {
+	// Arbitrum: remove console colors introduced in Arbitrator
+	s = Uncolor(s)
+
 	needsQuoting := false
 	for _, r := range s {
 		// Allow CR/LF/TAB. This is to make multi-line messages work.

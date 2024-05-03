@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,19 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !wasm
-// +build !wasm
+package types
 
-package rawdb
-
-import "github.com/gofrs/flock"
-
-type FileLock interface {
-	Unlock() error
-	TryLock() (bool, error)
-	TryRLock() (bool, error)
-}
-
-func NewFileLock(fileName string) FileLock {
-	return flock.New(fileName)
+func (r *Receipt) GasUsedForL2() uint64 {
+	return r.GasUsed - r.GasUsedForL1
 }
