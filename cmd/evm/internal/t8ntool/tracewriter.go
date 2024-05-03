@@ -84,3 +84,5 @@ func (t *traceWriter) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Addr
 
 func (t *traceWriter) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)        {}
 func (t *traceWriter) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
+
+func (t *traceWriter) CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64) {}
