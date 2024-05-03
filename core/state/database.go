@@ -33,6 +33,9 @@ import (
 )
 
 const (
+	// Arbitrum: Cache size granted for caching clean compiled wasm code.
+	activatedWasmCacheSize = 64 * 1024 * 1024
+
 	// Number of codehash->size associations to keep.
 	codeSizeCacheSize = 100000
 
@@ -48,6 +51,10 @@ const (
 
 // Database wraps access to tries and contract code.
 type Database interface {
+	// Arbitrum: Read activated Stylus contracts
+	ActivatedAsm(moduleHash common.Hash) (asm []byte, err error)
+	ActivatedModule(moduleHash common.Hash) (module []byte, err error)
+
 	// OpenTrie opens the main account trie.
 	OpenTrie(root common.Hash) (Trie, error)
 
@@ -152,6 +159,10 @@ func NewDatabase(db ethdb.Database) Database {
 // large memory cache.
 func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 	cdb := &cachingDB{
+		// Arbitrum only
+		activatedAsmCache:    lru.NewSizeConstrainedCache[common.Hash, []byte](activatedWasmCacheSize),
+		activatedModuleCache: lru.NewSizeConstrainedCache[common.Hash, []byte](activatedWasmCacheSize),
+
 		disk:          db,
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
@@ -163,6 +174,10 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 // NewDatabaseWithNodeDB creates a state database with an already initialized node database.
 func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
 	cdb := &cachingDB{
+		// Arbitrum only
+		activatedAsmCache:    lru.NewSizeConstrainedCache[common.Hash, []byte](activatedWasmCacheSize),
+		activatedModuleCache: lru.NewSizeConstrainedCache[common.Hash, []byte](activatedWasmCacheSize),
+
 		disk:          db,
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
@@ -172,6 +187,10 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
 }
 
 type cachingDB struct {
+	// Arbitrum
+	activatedAsmCache    *lru.SizeConstrainedCache[common.Hash, []byte]
+	activatedModuleCache *lru.SizeConstrainedCache[common.Hash, []byte]
+
 	disk          ethdb.KeyValueStore
 	codeSizeCache *lru.Cache[common.Hash, int]
 	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]

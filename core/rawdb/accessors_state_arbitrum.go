@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,25 +14,23 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build js
-// +build js
-
-package rpc
+package rawdb
 
 import (
-	"context"
-	"errors"
-	"net"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 )
 
-var errNotSupported = errors.New("rpc: not supported")
+// Stores the activated asm and module for a given codeHash
+func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asm, module []byte) {
+	key := ActivatedAsmKey(moduleHash)
+	if err := db.Put(key[:], asm); err != nil {
+		log.Crit("Failed to store activated wasm asm", "err", err)
+	}
 
-// ipcListen will create a named pipe on the given endpoint.
-func ipcListen(endpoint string) (net.Listener, error) {
-	return nil, errNotSupported
-}
-
-// newIPCConnection will connect to a named pipe with the given endpoint as name.
-func newIPCConnection(ctx context.Context, endpoint string) (net.Conn, error) {
-	return nil, errNotSupported
+	key = ActivatedModuleKey(moduleHash)
+	if err := db.Put(key[:], module); err != nil {
+		log.Crit("Failed to store activated wasm module", "err", err)
+	}
 }

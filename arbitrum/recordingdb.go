@@ -55,6 +55,12 @@ func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 		// Retrieving code
 		copy(hash[:], key[len(rawdb.CodePrefix):])
 		res, err = db.diskDb.Get(key)
+	} else if ok, _ := rawdb.IsActivatedAsmKey(key); ok {
+		// Arbitrum: the asm is non-consensus
+		return db.diskDb.Get(key)
+	} else if ok, _ := rawdb.IsActivatedModuleKey(key); ok {
+		// Arbitrum: the module is non-consensus (only its hash is)
+		return db.diskDb.Get(key)
 	} else {
 		err = fmt.Errorf("recording KV attempted to access non-hash key %v", hex.EncodeToString(key))
 	}
@@ -278,6 +284,7 @@ func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeade
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create recordingStateDb: %w", err)
 	}
+	recordingStateDb.StartRecording()
 	var recordingChainContext *RecordingChainContext
 	if lastBlockHeader != nil {
 		if !lastBlockHeader.Number.IsUint64() {

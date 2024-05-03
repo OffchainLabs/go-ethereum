@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,19 +14,28 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !wasm
-// +build !wasm
+package vm
 
-package rawdb
-
-import "github.com/gofrs/flock"
-
-type FileLock interface {
-	Unlock() error
-	TryLock() (bool, error)
-	TryRLock() (bool, error)
+func (in *EVMInterpreter) Config() *Config {
+	return &in.evm.Config
 }
 
-func NewFileLock(fileName string) FileLock {
-	return flock.New(fileName)
+func (in *EVMInterpreter) Depth() int {
+	return in.evm.depth
+}
+
+func (in *EVMInterpreter) Evm() *EVM {
+	return in.evm
+}
+
+func (in *EVMInterpreter) ReadOnly() bool {
+	return in.readOnly
+}
+
+func (in *EVMInterpreter) GetReturnData() []byte {
+	return in.returnData
+}
+
+func (in *EVMInterpreter) SetReturnData(data []byte) {
+	in.returnData = data
 }

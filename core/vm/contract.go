@@ -48,6 +48,9 @@ type Contract struct {
 	caller        ContractRef
 	self          ContractRef
 
+	// Arbitrum
+	delegateOrCallcode bool
+
 	jumpdests map[common.Hash]bitvec // Aggregated result of JUMPDEST analysis.
 	analysis  bitvec                 // Locally cached result of JUMPDEST analysis
 

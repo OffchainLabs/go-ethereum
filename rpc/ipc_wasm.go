@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,19 +14,25 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !wasm
-// +build !wasm
+//go:build wasm
+// +build wasm
 
-package rawdb
+package rpc
 
-import "github.com/gofrs/flock"
+import (
+	"context"
+	"errors"
+	"net"
+)
 
-type FileLock interface {
-	Unlock() error
-	TryLock() (bool, error)
-	TryRLock() (bool, error)
+var errNotSupported = errors.New("rpc: not supported")
+
+// ipcListen will create a named pipe on the given endpoint.
+func ipcListen(endpoint string) (net.Listener, error) {
+	return nil, errNotSupported
 }
 
-func NewFileLock(fileName string) FileLock {
-	return flock.New(fileName)
+// newIPCConnection will connect to a named pipe with the given endpoint as name.
+func newIPCConnection(ctx context.Context, endpoint string) (net.Conn, error) {
+	return nil, errNotSupported
 }
