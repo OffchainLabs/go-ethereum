@@ -282,7 +282,7 @@ func (a *APIBackend) FeeHistory(
 			currentTimestampGasUsed = 0
 		}
 
-		receipts := a.BlockChain().GetReceiptsByHash(header.ReceiptHash)
+		receipts := a.BlockChain().GetReceiptsByHash(header.Hash())
 		for _, receipt := range receipts {
 			if receipt.GasUsed > receipt.GasUsedForL1 {
 				currentTimestampGasUsed += receipt.GasUsed - receipt.GasUsedForL1
@@ -535,7 +535,7 @@ func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOr
 	hash, ishash := blockNrOrHash.Hash()
 	bc := a.BlockChain()
 	// check if we are not trying to get recent state that is not yet triedb referenced or committed in Blockchain.writeBlockWithState
-	if ishash && header.Number.Cmp(bc.CurrentBlock().Number) > 0 && bc.GetCanonicalHash(header.Number.Uint64()) != hash {
+	if ishash && header != nil && header.Number.Cmp(bc.CurrentBlock().Number) > 0 && bc.GetCanonicalHash(header.Number.Uint64()) != hash {
 		return nil, nil, errors.New("requested block ahead of current block and the hash is not currently canonical")
 	}
 	return a.stateAndHeaderFromHeader(ctx, header, err)
@@ -568,8 +568,7 @@ func (a *APIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	return nil
 }
 
-func (a *APIBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) (*vm.EVM, func() error) {
-	vmError := func() error { return nil }
+func (a *APIBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
 	if vmConfig == nil {
 		vmConfig = a.BlockChain().GetVMConfig()
 	}
@@ -580,7 +579,7 @@ func (a *APIBackend) GetEVM(ctx context.Context, msg *core.Message, state *state
 	} else {
 		context = core.NewEVMBlockContext(header, a.BlockChain(), nil)
 	}
-	return vm.NewEVM(context, txContext, state, a.BlockChain().Config(), *vmConfig), vmError
+	return vm.NewEVM(context, txContext, state, a.BlockChain().Config(), *vmConfig)
 }
 
 func (a *APIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
@@ -604,9 +603,9 @@ func (a *APIBackend) SendConditionalTx(ctx context.Context, signedTx *types.Tran
 	return a.b.EnqueueL2Message(ctx, signedTx, options)
 }
 
-func (a *APIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+func (a *APIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
 	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(a.b.chainDb, txHash)
-	return tx, blockHash, blockNumber, index, nil
+	return true, tx, blockHash, blockNumber, index, nil
 }
 
 func (a *APIBackend) GetPoolTransactions() (types.Transactions, error) {

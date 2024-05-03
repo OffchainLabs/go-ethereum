@@ -27,7 +27,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/bloom"
 	"github.com/ethereum/go-ethereum/common"
@@ -129,8 +128,11 @@ type panicLogger struct{}
 func (l panicLogger) Infof(format string, args ...interface{}) {
 }
 
+func (l panicLogger) Errorf(format string, args ...interface{}) {
+}
+
 func (l panicLogger) Fatalf(format string, args ...interface{}) {
-	panic(errors.Errorf("fatal: "+format, args...))
+	panic(fmt.Errorf("fatal: "+format, args...))
 }
 
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
@@ -148,15 +150,29 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 
 	// The max memtable size is limited by the uint32 offsets stored in
 	// internal/arenaskl.node, DeferredBatchOp, and flushableBatchEntry.
-	// Taken from https://github.com/cockroachdb/pebble/blob/master/open.go#L38
-	maxMemTableSize := 4<<30 - 1 // Capped by 4 GB
+	//
+	// - MaxUint32 on 64-bit platforms;
+	// - MaxInt on 32-bit platforms.
+	//
+	// It is used when slices are limited to Uint32 on 64-bit platforms (the
+	// length limit for slices is naturally MaxInt on 32-bit platforms).
+	//
+	// Taken from https://github.com/cockroachdb/pebble/blob/master/internal/constants/constants.go
+	maxMemTableSize := (1<<31)<<(^uint(0)>>63) - 1
 
 	// Two memory tables is configured which is identical to leveldb,
 	// including a frozen memory table and another live one.
 	memTableLimit := 2
 	memTableSize := cache * 1024 * 1024 / 2 / memTableLimit
-	if memTableSize > maxMemTableSize {
-		memTableSize = maxMemTableSize
+
+	// The memory table size is currently capped at maxMemTableSize-1 due to a
+	// known bug in the pebble where maxMemTableSize is not recognized as a
+	// valid size.
+	//
+	// TODO use the maxMemTableSize as the maximum table size once the issue
+	// in pebble is fixed.
+	if memTableSize >= maxMemTableSize {
+		memTableSize = maxMemTableSize - 1
 	}
 	db := &Database{
 		fn:           file,
@@ -217,19 +233,19 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	}
 	db.db = innerDB
 
-	db.compTimeMeter = metrics.NewRegisteredMeter(namespace+"compact/time", nil)
-	db.compReadMeter = metrics.NewRegisteredMeter(namespace+"compact/input", nil)
-	db.compWriteMeter = metrics.NewRegisteredMeter(namespace+"compact/output", nil)
-	db.diskSizeGauge = metrics.NewRegisteredGauge(namespace+"disk/size", nil)
-	db.diskReadMeter = metrics.NewRegisteredMeter(namespace+"disk/read", nil)
-	db.diskWriteMeter = metrics.NewRegisteredMeter(namespace+"disk/write", nil)
-	db.writeDelayMeter = metrics.NewRegisteredMeter(namespace+"compact/writedelay/duration", nil)
-	db.writeDelayNMeter = metrics.NewRegisteredMeter(namespace+"compact/writedelay/counter", nil)
-	db.memCompGauge = metrics.NewRegisteredGauge(namespace+"compact/memory", nil)
-	db.level0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/level0", nil)
-	db.nonlevel0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/nonlevel0", nil)
-	db.seekCompGauge = metrics.NewRegisteredGauge(namespace+"compact/seek", nil)
-	db.manualMemAllocGauge = metrics.NewRegisteredGauge(namespace+"memory/manualalloc", nil)
+	db.compTimeMeter = metrics.GetOrRegisterMeter(namespace+"compact/time", nil)
+	db.compReadMeter = metrics.GetOrRegisterMeter(namespace+"compact/input", nil)
+	db.compWriteMeter = metrics.GetOrRegisterMeter(namespace+"compact/output", nil)
+	db.diskSizeGauge = metrics.GetOrRegisterGauge(namespace+"disk/size", nil)
+	db.diskReadMeter = metrics.GetOrRegisterMeter(namespace+"disk/read", nil)
+	db.diskWriteMeter = metrics.GetOrRegisterMeter(namespace+"disk/write", nil)
+	db.writeDelayMeter = metrics.GetOrRegisterMeter(namespace+"compact/writedelay/duration", nil)
+	db.writeDelayNMeter = metrics.GetOrRegisterMeter(namespace+"compact/writedelay/counter", nil)
+	db.memCompGauge = metrics.GetOrRegisterGauge(namespace+"compact/memory", nil)
+	db.level0CompGauge = metrics.GetOrRegisterGauge(namespace+"compact/level0", nil)
+	db.nonlevel0CompGauge = metrics.GetOrRegisterGauge(namespace+"compact/nonlevel0", nil)
+	db.seekCompGauge = metrics.GetOrRegisterGauge(namespace+"compact/seek", nil)
+	db.manualMemAllocGauge = metrics.GetOrRegisterGauge(namespace+"memory/manualalloc", nil)
 
 	// Start up the metrics gathering and return
 	go db.meter(metricsGatheringInterval, namespace)
@@ -511,7 +527,7 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		for i, level := range stats.Levels {
 			// Append metrics for additional layers
 			if i >= len(d.levelsGauge) {
-				d.levelsGauge = append(d.levelsGauge, metrics.NewRegisteredGauge(namespace+fmt.Sprintf("tables/level%v", i), nil))
+				d.levelsGauge = append(d.levelsGauge, metrics.GetOrRegisterGauge(namespace+fmt.Sprintf("tables/level%v", i), nil))
 			}
 			d.levelsGauge[i].Update(level.NumFiles)
 		}

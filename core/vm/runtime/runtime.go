@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // Config is a basic type specifying certain configuration flags for running
@@ -46,6 +47,7 @@ type Config struct {
 	BaseFee     *big.Int
 	BlobBaseFee *big.Int
 	BlobHashes  []common.Hash
+	BlobFeeCap  *big.Int
 	Random      *common.Hash
 
 	State     *state.StateDB
@@ -97,7 +99,7 @@ func setDefaults(cfg *Config) {
 		cfg.BaseFee = big.NewInt(params.InitialBaseFee)
 	}
 	if cfg.BlobBaseFee == nil {
-		cfg.BlobBaseFee = new(big.Int)
+		cfg.BlobBaseFee = big.NewInt(params.BlobTxMinBlobGasprice)
 	}
 }
 
@@ -134,7 +136,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		common.BytesToAddress([]byte("contract")),
 		input,
 		cfg.GasLimit,
-		cfg.Value,
+		uint256.MustFromBig(cfg.Value),
 	)
 	return ret, cfg.State, err
 }
@@ -163,7 +165,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		sender,
 		input,
 		cfg.GasLimit,
-		cfg.Value,
+		uint256.MustFromBig(cfg.Value),
 	)
 	return code, address, leftOverGas, err
 }
@@ -178,7 +180,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 
 	var (
 		vmenv   = NewEnv(cfg)
-		sender  = cfg.State.GetOrNewStateObject(cfg.Origin)
+		sender  = vm.AccountRef(cfg.Origin)
 		statedb = cfg.State
 		rules   = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time, vmenv.Context.ArbOSVersion)
 	)
@@ -193,7 +195,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 		address,
 		input,
 		cfg.GasLimit,
-		cfg.Value,
+		uint256.MustFromBig(cfg.Value),
 	)
 	return ret, leftOverGas, err
 }

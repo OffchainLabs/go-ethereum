@@ -18,10 +18,10 @@ package vm
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // Computes the cost of doing a state load in wasm
@@ -104,7 +104,7 @@ func WasmStateStoreCost(db StateDB, program common.Address, key, value common.Ha
 // The code here is adapted from the following functions with the most recent parameters as of The Merge
 //   - operations_acl.go makeCallVariantGasCallEIP2929()
 //   - gas_table.go      gasCall()
-func WasmCallCost(db StateDB, contract common.Address, value *big.Int, budget uint64) (uint64, error) {
+func WasmCallCost(db StateDB, contract common.Address, value *uint256.Int, budget uint64) (uint64, error) {
 	total := uint64(0)
 	apply := func(amount uint64) bool {
 		total += amount
