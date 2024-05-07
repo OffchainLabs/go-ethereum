@@ -140,8 +140,11 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 	}
 }
 
-func TestSimulatedBeaconAPIDeadlocksInExtremeConditions(t *testing.T) {
-	txs := make(map[common.Hash]types.Transaction)
+// Tests that zero-period dev mode can handle a lot of simultaneous
+// transactions/withdrawals
+func TestOnDemandSpam(t *testing.T) {
+	var withdrawals []types.Withdrawal
+	txs := make(map[common.Hash]*types.Transaction)
 
 	var (
 		// testKey is a private key to use for funding a tester account.
@@ -158,23 +161,29 @@ func TestSimulatedBeaconAPIDeadlocksInExtremeConditions(t *testing.T) {
 	_ = mock
 	defer node.Close()
 
-	// simulated beacon api
-	mockApi := &api{mock}
-	go mockApi.loop()
+	api := &api{mock}
+	go api.loop()
 
 	chainHeadCh := make(chan core.ChainHeadEvent, 10)
 	subscription := ethService.BlockChain().SubscribeChainHeadEvent(chainHeadCh)
 	defer subscription.Unsubscribe()
 
-	// generate a bunch of transactions to overload simulated beacon api
-	// current capacity of core.NewTxsEvent channel is 15, we send 30 txs
+	// generate some withdrawals
+	for i := 0; i < 0; i++ {
+		withdrawals = append(withdrawals, types.Withdrawal{Index: uint64(i)})
+		if err := mock.withdrawals.add(&withdrawals[i]); err != nil {
+			t.Fatal("addWithdrawal failed", err)
+		}
+	}
+
+	// generate a bunch of transactions
 	signer := types.NewEIP155Signer(ethService.BlockChain().Config().ChainID)
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 20000; i++ {
 		tx, err := types.SignTx(types.NewTransaction(uint64(i), common.Address{}, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil), signer, testKey)
 		if err != nil {
 			t.Fatalf("error signing transaction, err=%v", err)
 		}
-		txs[tx.Hash()] = *tx
+		txs[tx.Hash()] = tx
 
 		if err := ethService.APIBackend.SendTx(context.Background(), tx); err != nil {
 			t.Fatal("SendTx failed", err)
@@ -182,21 +191,25 @@ func TestSimulatedBeaconAPIDeadlocksInExtremeConditions(t *testing.T) {
 	}
 
 	includedTxs := make(map[common.Hash]struct{})
+	var includedWithdrawals []uint64
 
-	timer := time.NewTimer(12 * time.Second)
+	timer := time.NewTimer(20 * time.Second)
 	for {
 		select {
 		case evt := <-chainHeadCh:
 			for _, includedTx := range evt.Block.Transactions() {
 				includedTxs[includedTx.Hash()] = struct{}{}
 			}
+			for _, includedWithdrawal := range evt.Block.Withdrawals() {
+				includedWithdrawals = append(includedWithdrawals, includedWithdrawal.Index)
+			}
 
 			// ensure all withdrawals/txs included. this will take two blocks b/c number of withdrawals > 10
-			if len(includedTxs) == len(txs) {
-				t.Fatal("all txs were included, the simulated beacon api did not deadlock")
+			if len(includedTxs) == len(txs) && len(includedWithdrawals) == len(withdrawals) {
+				return
 			}
 		case <-timer.C:
-			return
+			t.Fatal("timed out without including all withdrawals/txs")
 		}
 	}
 }
