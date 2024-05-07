@@ -279,7 +279,6 @@ func (p RecentWasms) Insert(item common.Hash, retain uint16) bool {
 		p.cache = &cache
 	}
 	if _, hit := p.cache.Get(item); hit {
-		println("hit!")
 		return hit
 	}
 	p.cache.Add(item, struct{}{})
