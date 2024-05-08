@@ -190,6 +190,7 @@ type RecordingDatabase struct {
 func NewRecordingDatabase(config *RecordingDatabaseConfig, ethdb ethdb.Database, blockchain *core.BlockChain) *RecordingDatabase {
 	hashConfig := *hashdb.Defaults
 	hashConfig.CleanCacheSize = config.TrieCleanCache
+	//TODO pathdb
 	trieConfig := trie.Config{
 		Preimages: false,
 		HashDB:    &hashConfig,

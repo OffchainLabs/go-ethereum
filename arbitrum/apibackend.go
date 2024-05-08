@@ -482,6 +482,11 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 	}
 	// else err != nil => we don't need to call liveStateRelease
 
+	if a.b.BlockChain().TrieDB().Scheme() == rawdb.PathScheme {
+		// Path scheme doesn't support recreating historical state yet
+		return nil, nil, err
+	}
+
 	// Create an ephemeral trie.Database for isolating the live one
 	// note: triedb cleans cache is disabled in trie.HashDefaults
 	// note: only states committed to diskdb can be found as we're creating new triedb
