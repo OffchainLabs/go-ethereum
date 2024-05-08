@@ -40,6 +40,15 @@ type freezerdb struct {
 	ancientRoot string
 	ethdb.KeyValueStore
 	ethdb.AncientStore
+	wasmDB ethdb.KeyValueStore
+}
+
+// AncientDatadir returns the path of root ancient directory.
+func (frdb *freezerdb) WasmDataBase() ethdb.KeyValueStore {
+	if frdb.wasmDB == nil {
+		return frdb
+	}
+	return frdb.wasmDB
 }
 
 // AncientDatadir returns the path of root ancient directory.
@@ -163,6 +172,11 @@ func (db *nofreezedb) MigrateTable(kind string, convert convertLegacyFn) error {
 // AncientDatadir returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) AncientDatadir() (string, error) {
 	return "", errNotSupported
+}
+
+// AncientDatadir returns the path of root ancient directory.
+func (db *nofreezedb) WasmDataBase() ethdb.KeyValueStore {
+	return db
 }
 
 // NewDatabase creates a high level database on top of a given key-value data
@@ -360,6 +374,7 @@ type OpenOptions struct {
 	Directory         string // the datadir
 	AncientsDirectory string // the ancients-dir
 	Namespace         string // the namespace for database relevant metrics
+	WasmDirectory     string // the wasm-dir
 	Cache             int    // the capacity(in megabytes) of the data caching
 	Handles           int    // number of files to be open simultaneously
 	ReadOnly          bool
@@ -415,6 +430,15 @@ func Open(o OpenOptions) (ethdb.Database, error) {
 	if err != nil {
 		kvdb.Close()
 		return nil, err
+	}
+	if len(o.WasmDirectory) != 0 {
+		wasmOptions := o
+		wasmOptions.Directory = o.WasmDirectory
+		wasmDb, err := openKeyValueDatabase(wasmOptions)
+		if err != nil {
+			return nil, err
+		}
+		frdb.(*freezerdb).wasmDB = wasmDb
 	}
 	return frdb, nil
 }

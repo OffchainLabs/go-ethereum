@@ -797,6 +797,34 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient 
 			ReadOnly:          readonly,
 		})
 	}
+	if err == nil {
+		db = n.wrapDatabase(db)
+	}
+	return db, err
+}
+
+func (n *Node) OpenDatabaseWithFreezerAndWasm(name string, wasmPath string, cache, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+	if n.state == closedState {
+		return nil, ErrNodeStopped
+	}
+	var db ethdb.Database
+	var err error
+	if n.config.DataDir == "" {
+		db = rawdb.NewMemoryDatabase()
+	} else {
+		db, err = rawdb.Open(rawdb.OpenOptions{
+			Type:              n.config.DBEngine,
+			Directory:         n.ResolvePath(name),
+			AncientsDirectory: n.ResolveAncient(name, ancient),
+			Namespace:         namespace,
+			WasmDirectory:     n.ResolvePath(wasmPath),
+			Cache:             cache,
+			Handles:           handles,
+			ReadOnly:          readonly,
+		})
+	}
 
 	if err == nil {
 		db = n.wrapDatabase(db)
