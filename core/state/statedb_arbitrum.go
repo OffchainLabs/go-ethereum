@@ -89,12 +89,16 @@ func (s *StateDB) ActivateWasm(moduleHash common.Hash, asm, module []byte) {
 	})
 }
 
-func (s *StateDB) GetActivatedAsm(moduleHash common.Hash) []byte {
+func (s *StateDB) TryGetActivatedAsm(moduleHash common.Hash) ([]byte, error) {
 	info, exists := s.arbExtraData.activatedWasms[moduleHash]
 	if exists {
-		return info.Asm
+		return info.Asm, nil
 	}
-	asm, err := s.db.ActivatedAsm(moduleHash)
+	return s.db.ActivatedAsm(moduleHash)
+}
+
+func (s *StateDB) GetActivatedAsm(moduleHash common.Hash) []byte {
+	asm, err := s.TryGetActivatedAsm(moduleHash)
 	if err != nil {
 		s.setError(fmt.Errorf("failed to load asm for %x: %v", moduleHash, err))
 	}
