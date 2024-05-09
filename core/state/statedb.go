@@ -1249,6 +1249,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		storageTrieNodesDeleted int
 		nodes                   = trienode.NewMergedNodeSet()
 		codeWriter              = s.db.DiskDB().NewBatch()
+		wasmCodeWriter          = s.db.WasmStore().NewBatch()
 	)
 	// Handle all state deletions first
 	incomplete, err := s.handleDestruction(nodes)
@@ -1286,7 +1287,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 
 	// Arbitrum: write Stylus programs to disk
 	for moduleHash, info := range s.arbExtraData.activatedWasms {
-		rawdb.WriteActivation(codeWriter, moduleHash, info.Asm, info.Module)
+		rawdb.WriteActivation(wasmCodeWriter, moduleHash, info.Asm, info.Module)
 	}
 	if len(s.arbExtraData.activatedWasms) > 0 {
 		s.arbExtraData.activatedWasms = make(map[common.Hash]*ActivatedWasm)
@@ -1295,6 +1296,11 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	if codeWriter.ValueSize() > 0 {
 		if err := codeWriter.Write(); err != nil {
 			log.Crit("Failed to commit dirty codes", "error", err)
+		}
+	}
+	if wasmCodeWriter.ValueSize() > 0 {
+		if err := wasmCodeWriter.Write(); err != nil {
+			log.Crit("Failed to commit dirty stylus codes", "error", err)
 		}
 	}
 	// Write the account trie changes, measuring the amount of wasted time

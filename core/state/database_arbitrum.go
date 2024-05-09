@@ -12,7 +12,7 @@ func (db *cachingDB) ActivatedAsm(moduleHash common.Hash) ([]byte, error) {
 		return asm, nil
 	}
 	wasmKey := rawdb.ActivatedAsmKey(moduleHash)
-	asm, err := db.disk.Get(wasmKey[:])
+	asm, err := db.wasmdb.Get(wasmKey[:])
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +28,7 @@ func (db *cachingDB) ActivatedModule(moduleHash common.Hash) ([]byte, error) {
 		return module, nil
 	}
 	wasmKey := rawdb.ActivatedModuleKey(moduleHash)
-	module, err := db.disk.Get(wasmKey[:])
+	module, err := db.wasmdb.Get(wasmKey[:])
 	if err != nil {
 		return nil, err
 	}
