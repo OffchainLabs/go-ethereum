@@ -32,12 +32,13 @@ var (
 type RecordingKV struct {
 	inner         *trie.Database
 	diskDb        ethdb.KeyValueStore
+	wasmDb        ethdb.KeyValueStore
 	readDbEntries map[common.Hash][]byte
 	enableBypass  bool
 }
 
-func newRecordingKV(inner *trie.Database, diskDb ethdb.KeyValueStore) *RecordingKV {
-	return &RecordingKV{inner, diskDb, make(map[common.Hash][]byte), false}
+func newRecordingKV(inner *trie.Database, diskDb ethdb.KeyValueStore, wasmDb ethdb.KeyValueStore) *RecordingKV {
+	return &RecordingKV{inner, diskDb, wasmDb, make(map[common.Hash][]byte), false}
 }
 
 func (db *RecordingKV) Has(key []byte) (bool, error) {
@@ -57,10 +58,10 @@ func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 		res, err = db.diskDb.Get(key)
 	} else if ok, _ := rawdb.IsActivatedAsmKey(key); ok {
 		// Arbitrum: the asm is non-consensus
-		return db.diskDb.Get(key)
+		return db.wasmDb.Get(key)
 	} else if ok, _ := rawdb.IsActivatedModuleKey(key); ok {
 		// Arbitrum: the module is non-consensus (only its hash is)
-		return db.diskDb.Get(key)
+		return db.wasmDb.Get(key)
 	} else {
 		err = fmt.Errorf("recording KV attempted to access non-hash key %v", hex.EncodeToString(key))
 	}
@@ -273,7 +274,7 @@ func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeade
 	}
 	finalDereference := lastBlockHeader // dereference in case of error
 	defer func() { r.Dereference(finalDereference) }()
-	recordingKeyValue := newRecordingKV(r.db.TrieDB(), r.db.DiskDB())
+	recordingKeyValue := newRecordingKV(r.db.TrieDB(), r.db.DiskDB(), r.db.WasmStore())
 
 	recordingStateDatabase := state.NewDatabase(rawdb.NewDatabase(recordingKeyValue))
 	var prevRoot common.Hash
