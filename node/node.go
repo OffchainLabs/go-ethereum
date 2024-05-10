@@ -803,35 +803,6 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient 
 	return db, err
 }
 
-func (n *Node) OpenDatabaseWithFreezerAndWasm(name string, wasmPath string, cache, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-	if n.state == closedState {
-		return nil, ErrNodeStopped
-	}
-	var db ethdb.Database
-	var err error
-	if n.config.DataDir == "" {
-		db = rawdb.NewMemoryDatabase()
-	} else {
-		db, err = rawdb.Open(rawdb.OpenOptions{
-			Type:              n.config.DBEngine,
-			Directory:         n.ResolvePath(name),
-			AncientsDirectory: n.ResolveAncient(name, ancient),
-			Namespace:         namespace,
-			WasmDirectory:     n.ResolvePath(wasmPath),
-			Cache:             cache,
-			Handles:           handles,
-			ReadOnly:          readonly,
-		})
-	}
-
-	if err == nil {
-		db = n.wrapDatabase(db)
-	}
-	return db, err
-}
-
 // ResolvePath returns the absolute path of a resource in the instance directory.
 func (n *Node) ResolvePath(x string) string {
 	return n.config.ResolvePath(x)
@@ -846,6 +817,28 @@ func (n *Node) ResolveAncient(name string, ancient string) string {
 		ancient = n.ResolvePath(ancient)
 	}
 	return ancient
+}
+
+type dbWithWasmEntry struct {
+	ethdb.Database
+	wasmDb ethdb.KeyValueStore
+}
+
+func (db *dbWithWasmEntry) WasmDataBase() ethdb.KeyValueStore {
+	return db.wasmDb
+}
+
+func (db *dbWithWasmEntry) Close() error {
+	dbErr := db.Database.Close()
+	wasmErr := db.wasmDb.Close()
+	if dbErr != nil {
+		return dbErr
+	}
+	return wasmErr
+}
+
+func (n *Node) WrapDatabaseWithWasm(db ethdb.Database, wasm ethdb.KeyValueStore) ethdb.Database {
+	return &dbWithWasmEntry{db, wasm}
 }
 
 // closeTrackingDB wraps the Close method of a database. When the database is closed by the

@@ -40,15 +40,11 @@ type freezerdb struct {
 	ancientRoot string
 	ethdb.KeyValueStore
 	ethdb.AncientStore
-	wasmDB ethdb.KeyValueStore
 }
 
 // AncientDatadir returns the path of root ancient directory.
 func (frdb *freezerdb) WasmDataBase() ethdb.KeyValueStore {
-	if frdb.wasmDB == nil {
-		return frdb
-	}
-	return frdb.wasmDB
+	return frdb
 }
 
 // AncientDatadir returns the path of root ancient directory.
@@ -374,7 +370,6 @@ type OpenOptions struct {
 	Directory         string // the datadir
 	AncientsDirectory string // the ancients-dir
 	Namespace         string // the namespace for database relevant metrics
-	WasmDirectory     string // the wasm-dir
 	Cache             int    // the capacity(in megabytes) of the data caching
 	Handles           int    // number of files to be open simultaneously
 	ReadOnly          bool
@@ -430,15 +425,6 @@ func Open(o OpenOptions) (ethdb.Database, error) {
 	if err != nil {
 		kvdb.Close()
 		return nil, err
-	}
-	if len(o.WasmDirectory) != 0 {
-		wasmOptions := o
-		wasmOptions.Directory = o.WasmDirectory
-		wasmDb, err := openKeyValueDatabase(wasmOptions)
-		if err != nil {
-			return nil, err
-		}
-		frdb.(*freezerdb).wasmDB = wasmDb
 	}
 	return frdb, nil
 }
