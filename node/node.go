@@ -821,28 +821,6 @@ func (n *Node) ResolveAncient(name string, ancient string) string {
 	return ancient
 }
 
-type dbWithWasmEntry struct {
-	ethdb.Database
-	wasmDb ethdb.KeyValueStore
-}
-
-func (db *dbWithWasmEntry) WasmDataBase() ethdb.KeyValueStore {
-	return db.wasmDb
-}
-
-func (db *dbWithWasmEntry) Close() error {
-	dbErr := db.Database.Close()
-	wasmErr := db.wasmDb.Close()
-	if dbErr != nil {
-		return dbErr
-	}
-	return wasmErr
-}
-
-func (n *Node) WrapDatabaseWithWasm(db ethdb.Database, wasm ethdb.KeyValueStore) ethdb.Database {
-	return &dbWithWasmEntry{db, wasm}
-}
-
 // closeTrackingDB wraps the Close method of a database. When the database is closed by the
 // service, the wrapper removes it from the node's database map. This ensures that Node
 // won't auto-close the database if it is closed by the service that opened it.

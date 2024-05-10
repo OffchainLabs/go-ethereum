@@ -181,6 +181,28 @@ func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
 	return &nofreezedb{KeyValueStore: db}
 }
 
+type dbWithWasmEntry struct {
+	ethdb.Database
+	wasmDb ethdb.KeyValueStore
+}
+
+func (db *dbWithWasmEntry) WasmDataBase() ethdb.KeyValueStore {
+	return db.wasmDb
+}
+
+func (db *dbWithWasmEntry) Close() error {
+	dbErr := db.Database.Close()
+	wasmErr := db.wasmDb.Close()
+	if dbErr != nil {
+		return dbErr
+	}
+	return wasmErr
+}
+
+func WrapDatabaseWithWasm(db ethdb.Database, wasm ethdb.KeyValueStore) ethdb.Database {
+	return &dbWithWasmEntry{db, wasm}
+}
+
 // resolveChainFreezerDir is a helper function which resolves the absolute path
 // of chain freezer by considering backward compatibility.
 func resolveChainFreezerDir(ancient string) string {
