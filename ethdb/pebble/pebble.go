@@ -230,7 +230,6 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		quitChan:     make(chan chan error),
 		writeOptions: &pebble.WriteOptions{Sync: !ephemeral},
 	}
-
 	opt := &pebble.Options{
 		// Pebble has a single combined cache area and the write
 		// buffers are taken from this too. Assign all available
@@ -276,7 +275,6 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		WALMinSyncInterval:          extraOptions.WALMinSyncInterval,
 		TargetByteDeletionRate:      extraOptions.TargetByteDeletionRate,
 	}
-
 	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
 	// for more details.
 	opt.Experimental.ReadSamplingMultiplier = -1
