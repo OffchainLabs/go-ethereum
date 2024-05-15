@@ -962,16 +962,14 @@ type OverrideAccount struct {
 // StateOverride is the collection of overridden accounts.
 type StateOverride map[common.Address]OverrideAccount
 
-var arbStorageAddress = common.HexToAddress("0xA4B05FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
-
 // Apply overrides the fields of specified accounts into the given state.
 func (diff *StateOverride) Apply(state *state.StateDB) error {
 	if diff == nil {
 		return nil
 	}
 	for addr, account := range *diff {
-		if addr == arbStorageAddress {
-			return errors.New("overriding 0xA4B05FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF not allowed")
+		if addr == types.ArbosStateAddress {
+			return fmt.Errorf("overriding address %v  not allowed", types.ArbosStateAddress)
 		}
 		// Override account nonce.
 		if account.Nonce != nil {
