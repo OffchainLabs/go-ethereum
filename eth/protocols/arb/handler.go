@@ -81,13 +81,14 @@ func HandleMessage(backend Backend, peer *Peer) error {
 	}
 	switch {
 	case msg.Code == GetLastConfirmedMsg:
-		confirmed, node, err := backend.LastConfirmed()
+		confirmed, l1BlockNumber, node, err := backend.LastConfirmed()
 		if err != nil || confirmed == nil {
 			return err
 		}
 		response := LastConfirmedMsgPacket{
-			Header: confirmed,
-			Node:   node,
+			Header:        confirmed,
+			L1BlockNumber: l1BlockNumber,
+			Node:          node,
 		}
 		return p2p.Send(peer.rw, LastConfirmedMsg, &response)
 	case msg.Code == LastConfirmedMsg:
@@ -99,7 +100,7 @@ func HandleMessage(backend Backend, peer *Peer) error {
 		if incoming.Header == nil {
 			return nil
 		}
-		backend.HandleLastConfirmed(peer, incoming.Header, incoming.Node)
+		backend.HandleLastConfirmed(peer, incoming.Header, incoming.L1BlockNumber, incoming.Node)
 		return nil
 	case msg.Code == GetLastCheckpointMsg:
 		checkpoint, err := backend.LastCheckpoint()
