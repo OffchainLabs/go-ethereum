@@ -80,6 +80,8 @@ func GenerateTrie(snaptree *Tree, root common.Hash, src ethdb.Database, dst ethd
 				return common.Hash{}, errors.New("failed to read contract code")
 			}
 			rawdb.WriteCode(dst, codeHash, code)
+
+			// TODO: How do we migrate the compiled wasm code
 		}
 		// Then migrate all storage trie nodes into the tmp db.
 		storageIt, err := snaptree.StorageIterator(root, accountHash, common.Hash{})
@@ -362,21 +364,15 @@ func generateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, accou
 }
 
 func stackTrieGenerate(db ethdb.KeyValueWriter, scheme string, owner common.Hash, in chan trieKV, out chan common.Hash) {
-	var nodeWriter trie.NodeWriteFunc
+	options := trie.NewStackTrieOptions()
 	if db != nil {
-		nodeWriter = func(owner common.Hash, path []byte, hash common.Hash, blob []byte) {
+		options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
 			rawdb.WriteTrieNode(db, owner, path, hash, blob, scheme)
-		}
+		})
 	}
-	t := trie.NewStackTrieWithOwner(nodeWriter, owner)
+	t := trie.NewStackTrie(options)
 	for leaf := range in {
 		t.Update(leaf.key[:], leaf.value)
 	}
-	var root common.Hash
-	if db == nil {
-		root = t.Hash()
-	} else {
-		root, _ = t.Commit()
-	}
-	out <- root
+	out <- t.Commit()
 }

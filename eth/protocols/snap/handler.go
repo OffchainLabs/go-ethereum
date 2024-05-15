@@ -24,13 +24,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 const (
@@ -325,7 +325,7 @@ func ServiceGetAccountRangeQuery(backend Backend, req *GetAccountRangePacket) ([
 	it.Release()
 
 	// Generate the Merkle proofs for the first and last account
-	proof := light.NewNodeSet()
+	proof := trienode.NewProofSet()
 	if err := tr.Prove(req.Origin[:], proof); err != nil {
 		log.Warn("Failed to prove account range", "origin", req.Origin, "err", err)
 		return nil, nil
@@ -337,7 +337,7 @@ func ServiceGetAccountRangeQuery(backend Backend, req *GetAccountRangePacket) ([
 		}
 	}
 	var proofs [][]byte
-	for _, blob := range proof.NodeList() {
+	for _, blob := range proof.List() {
 		proofs = append(proofs, blob)
 	}
 	return accounts, proofs
@@ -371,7 +371,7 @@ func ServiceGetStorageRangesQuery(backend Backend, req *GetStorageRangesPacket) 
 		if len(req.Origin) > 0 {
 			origin, req.Origin = common.BytesToHash(req.Origin), nil
 		}
-		var limit = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+		var limit = common.MaxHash
 		if len(req.Limit) > 0 {
 			limit, req.Limit = common.BytesToHash(req.Limit), nil
 		}
@@ -431,7 +431,7 @@ func ServiceGetStorageRangesQuery(backend Backend, req *GetStorageRangesPacket) 
 			if err != nil {
 				return nil, nil
 			}
-			proof := light.NewNodeSet()
+			proof := trienode.NewProofSet()
 			if err := stTrie.Prove(origin[:], proof); err != nil {
 				log.Warn("Failed to prove storage range", "origin", req.Origin, "err", err)
 				return nil, nil
@@ -442,7 +442,7 @@ func ServiceGetStorageRangesQuery(backend Backend, req *GetStorageRangesPacket) 
 					return nil, nil
 				}
 			}
-			for _, blob := range proof.NodeList() {
+			for _, blob := range proof.List() {
 				proofs = append(proofs, blob)
 			}
 			// Proof terminates the reply as proofs are only added if a node

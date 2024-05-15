@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	flag "github.com/spf13/pflag"
 )
 
@@ -54,6 +55,12 @@ func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 		// Retrieving code
 		copy(hash[:], key[len(rawdb.CodePrefix):])
 		res, err = db.diskDb.Get(key)
+	} else if ok, _ := rawdb.IsActivatedAsmKey(key); ok {
+		// Arbitrum: the asm is non-consensus
+		return db.diskDb.Get(key)
+	} else if ok, _ := rawdb.IsActivatedModuleKey(key); ok {
+		// Arbitrum: the module is non-consensus (only its hash is)
+		return db.diskDb.Get(key)
 	} else {
 		err = fmt.Errorf("recording KV attempted to access non-hash key %v", hex.EncodeToString(key))
 	}
@@ -181,9 +188,15 @@ type RecordingDatabase struct {
 }
 
 func NewRecordingDatabase(config *RecordingDatabaseConfig, ethdb ethdb.Database, blockchain *core.BlockChain) *RecordingDatabase {
+	hashConfig := *hashdb.Defaults
+	hashConfig.CleanCacheSize = config.TrieCleanCache
+	trieConfig := trie.Config{
+		Preimages: false,
+		HashDB:    &hashConfig,
+	}
 	return &RecordingDatabase{
 		config: config,
-		db:     state.NewDatabaseWithConfig(ethdb, &trie.Config{Cache: config.TrieCleanCache}),
+		db:     state.NewDatabaseWithConfig(ethdb, &trieConfig),
 		bc:     blockchain,
 	}
 }
@@ -241,13 +254,13 @@ func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected comm
 	}
 	r.referenceRootLockHeld(result)
 
-	size, _ := r.db.TrieDB().Size()
+	_, size, _ := r.db.TrieDB().Size()
 	limit := common.StorageSize(r.config.TrieDirtyCache) * 1024 * 1024
 	recordingDbSize.Update(int64(size))
 	if size > limit {
 		log.Info("Recording DB: flushing to disk", "size", size, "limit", limit)
 		r.db.TrieDB().Cap(limit - ethdb.IdealBatchSize)
-		size, _ = r.db.TrieDB().Size()
+		_, size, _ = r.db.TrieDB().Size()
 		recordingDbSize.Update(int64(size))
 	}
 	return state.New(result, statedb.Database(), nil)
@@ -271,6 +284,7 @@ func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeade
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create recordingStateDb: %w", err)
 	}
+	recordingStateDb.StartRecording()
 	var recordingChainContext *RecordingChainContext
 	if lastBlockHeader != nil {
 		if !lastBlockHeader.Number.IsUint64() {
@@ -302,7 +316,12 @@ func (r *RecordingDatabase) PreimagesFromRecording(chainContextIf core.ChainCont
 }
 
 func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, error) {
-	state, currentHeader, err := FindLastAvailableState(ctx, r.bc, r.StateFor, header, logFunc, -1)
+	stateFor := func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
+		state, err := r.StateFor(header)
+		// we don't use the release functor pattern here yet
+		return state, NoopStateRelease, err
+	}
+	state, currentHeader, _, err := FindLastAvailableState(ctx, r.bc, stateFor, header, logFunc, -1)
 	if err != nil {
 		return nil, err
 	}

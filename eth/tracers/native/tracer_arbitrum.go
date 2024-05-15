@@ -59,6 +59,9 @@ func (*noopTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address
 func (*prestateTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
 }
 func (t *flatCallTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
+	if t.interrupt.Load() {
+		return
+	}
 	transfer := arbitrumTransfer{
 		Purpose: purpose,
 		Value:   bigToHex(value),
@@ -89,6 +92,12 @@ func (*fourByteTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth i
 func (*noopTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)     {}
 func (*prestateTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
 func (*flatCallTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
+
+func (*callTracer) CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64)     {}
+func (*fourByteTracer) CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64) {}
+func (*noopTracer) CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64)     {}
+func (*prestateTracer) CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64) {}
+func (*flatCallTracer) CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64) {}
 
 func bigToHex(n *big.Int) string {
 	if n == nil {

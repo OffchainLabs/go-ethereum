@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 const basefeeWiggleMultiplier = 2
@@ -48,6 +49,7 @@ type CallOpts struct {
 	Pending     bool            // Whether to operate on the pending state or the last known one
 	From        common.Address  // Optional the sender address, otherwise the first account is used
 	BlockNumber *big.Int        // Optional the block number on which the call should be performed
+	BlockHash   common.Hash     // Optional the block hash on which the call should be performed
 	Context     context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 }
 
@@ -150,6 +152,48 @@ func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend Co
 	return c.address, tx, c, nil
 }
 
+// parseError takes in an RPC error and attempts to parse any "execution reverted"
+// data as an ABI error, returning an improved error if possible.
+func (c *BoundContract) parseError(originalError error) error {
+	var dataErr rpc.DataError
+	if !errors.As(originalError, &dataErr) {
+		return originalError
+	}
+	dataString, ok := dataErr.ErrorData().(string)
+	if !ok {
+		return originalError
+	}
+	data := common.FromHex(dataString)
+	if len(data) < 4 {
+		return originalError
+	}
+	errAbi, _ := c.abi.ErrorByID([4]byte(data[:4]))
+	if errAbi == nil {
+		return originalError
+	}
+	vals, decodingErr := errAbi.Unpack(data)
+	if decodingErr != nil {
+		return fmt.Errorf("%w: failed to decode error as %v: %w", originalError, errAbi.Name, decodingErr)
+	}
+	for i, val := range vals {
+		bytes, ok := val.([32]byte)
+		if ok {
+			vals[i] = common.Hash(bytes)
+		}
+	}
+	fmtStr := "%w: %v("
+	for i := range vals {
+		if i > 0 {
+			fmtStr += ", "
+		}
+		fmtStr += "%v"
+	}
+	fmtStr += ")"
+	fmtArgs := []any{originalError, errAbi.Name}
+	fmtArgs = append(fmtArgs, vals...)
+	return fmt.Errorf(fmtStr, fmtArgs...)
+}
+
 // Call invokes the (constant) contract method with params as input values and
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
@@ -180,7 +224,7 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 		}
 		output, err = pb.PendingCallContract(ctx, msg)
 		if err != nil {
-			return err
+			return c.parseError(err)
 		}
 		if len(output) == 0 {
 			// Make sure we have a contract to operate on, and bail out otherwise.
@@ -190,10 +234,27 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 				return ErrNoCode
 			}
 		}
+	} else if opts.BlockHash != (common.Hash{}) {
+		bh, ok := c.caller.(BlockHashContractCaller)
+		if !ok {
+			return ErrNoBlockHashState
+		}
+		output, err = bh.CallContractAtHash(ctx, msg, opts.BlockHash)
+		if err != nil {
+			return err
+		}
+		if len(output) == 0 {
+			// Make sure we have a contract to operate on, and bail out otherwise.
+			if code, err = bh.CodeAtHash(ctx, c.address, opts.BlockHash); err != nil {
+				return err
+			} else if len(code) == 0 {
+				return ErrNoCode
+			}
+		}
 	} else {
 		output, err = c.caller.CallContract(ctx, msg, opts.BlockNumber)
 		if err != nil {
-			return err
+			return c.parseError(err)
 		}
 		if len(output) == 0 {
 			// Make sure we have a contract to operate on, and bail out otherwise.
@@ -221,7 +282,7 @@ func (c *BoundContract) Transact(opts *TransactOpts, method string, params ...in
 	if err != nil {
 		return nil, err
 	}
-	// todo(rjl493456442) check the method is payable or not,
+	// todo(rjl493456442) check whether the method is payable or not,
 	// reject invalid transaction at the first place
 	return c.transact(opts, &c.address, input)
 }
@@ -229,7 +290,7 @@ func (c *BoundContract) Transact(opts *TransactOpts, method string, params ...in
 // RawTransact initiates a transaction with the given raw calldata as the input.
 // It's usually used to initiate transactions for invoking **Fallback** function.
 func (c *BoundContract) RawTransact(opts *TransactOpts, calldata []byte) (*types.Transaction, error) {
-	// todo(rjl493456442) check the method is payable or not,
+	// todo(rjl493456442) check whether the method is payable or not,
 	// reject invalid transaction at the first place
 	return c.transact(opts, &c.address, calldata)
 }
@@ -338,7 +399,7 @@ func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Addr
 }
 
 func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Address, input []byte, gasPrice, gasTipCap, gasFeeCap, value *big.Int) (uint64, error) {
-	if contract != nil && (contract.Hash().Big().BitLen() > 16) {
+	if contract != nil && (contract.Big().BitLen() > 16) {
 		// Gas estimation cannot succeed without code for method invocations, unless precompile.
 		if code, err := c.transactor.PendingCodeAt(ensureContext(opts.Context), c.address); err != nil {
 			return 0, err
@@ -357,7 +418,7 @@ func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Ad
 	}
 	gasLimit, err := c.transactor.EstimateGas(ensureContext(opts.Context), msg)
 	if err != nil {
-		return 0, err
+		return 0, c.parseError(err)
 	}
 	// Arbitrum: adjust the estimate
 	adjustedLimit := gasLimit * (10000 + opts.GasMargin) / 10000

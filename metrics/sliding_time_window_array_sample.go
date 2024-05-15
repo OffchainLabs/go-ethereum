@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"math"
 	"sync"
 	"time"
 )
@@ -52,65 +53,6 @@ func (s *SlidingTimeWindowArraySample) Clear() {
 	s.measurements.Clear()
 }
 
-// Count returns the number of samples recorded, which may exceed the
-// reservoir size.
-func (s *SlidingTimeWindowArraySample) Count() int64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	return s.count
-}
-
-// Max returns the maximum value in the sample, which may not be the maximum
-// value ever to be part of the sample.
-func (s *SlidingTimeWindowArraySample) Max() int64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.trim()
-	return SampleMax(s.measurements.Values())
-}
-
-// Mean returns the mean of the values in the sample.
-func (s *SlidingTimeWindowArraySample) Mean() float64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.trim()
-	return SampleMean(s.measurements.Values())
-}
-
-// Min returns the minimum value in the sample, which may not be the minimum
-// value ever to be part of the sample.
-func (s *SlidingTimeWindowArraySample) Min() int64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.trim()
-	return SampleMin(s.measurements.Values())
-}
-
-// Percentile returns an arbitrary percentile of values in the sample.
-func (s *SlidingTimeWindowArraySample) Percentile(p float64) float64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.trim()
-	return SamplePercentile(s.measurements.Values(), p)
-}
-
-// Percentiles returns a slice of arbitrary percentiles of values in the
-// sample.
-func (s *SlidingTimeWindowArraySample) Percentiles(ps []float64) []float64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.trim()
-	return SamplePercentiles(s.measurements.Values(), ps)
-}
-
-// Size returns the size of the sample, which is at most the reservoir size.
-func (s *SlidingTimeWindowArraySample) Size() int {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.trim()
-	return s.measurements.Size()
-}
-
 // trim requires s.mutex to already be acquired
 func (s *SlidingTimeWindowArraySample) trim() {
 	now := s.getTick()
@@ -139,33 +81,28 @@ func (s *SlidingTimeWindowArraySample) getTick() int64 {
 }
 
 // Snapshot returns a read-only copy of the sample.
-func (s *SlidingTimeWindowArraySample) Snapshot() Sample {
+func (s *SlidingTimeWindowArraySample) Snapshot() SampleSnapshot {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.trim()
-	origValues := s.measurements.Values()
-	values := make([]int64, len(origValues))
-	copy(values, origValues)
-	return &SampleSnapshot{
-		count:  s.count,
-		values: values,
+	var (
+		samples       = s.measurements.Values()
+		values        = make([]int64, len(samples))
+		max     int64 = math.MinInt64
+		min     int64 = math.MaxInt64
+		sum     int64
+	)
+	for i, v := range samples {
+		values[i] = v
+		sum += v
+		if v > max {
+			max = v
+		}
+		if v < min {
+			min = v
+		}
 	}
-}
-
-// StdDev returns the standard deviation of the values in the sample.
-func (s *SlidingTimeWindowArraySample) StdDev() float64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.trim()
-	return SampleStdDev(s.measurements.Values())
-}
-
-// Sum returns the sum of the values in the sample.
-func (s *SlidingTimeWindowArraySample) Sum() int64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.trim()
-	return SampleSum(s.measurements.Values())
+	return newSampleSnapshotPrecalculated(s.count, values, min, max, sum)
 }
 
 // Update samples a new value.
@@ -183,23 +120,4 @@ func (s *SlidingTimeWindowArraySample) Update(v int64) {
 		s.measurements.Clear()
 	}
 	s.measurements.Put(newTick, v)
-}
-
-// Values returns a copy of the values in the sample.
-func (s *SlidingTimeWindowArraySample) Values() []int64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.trim()
-	origValues := s.measurements.Values()
-	values := make([]int64, len(origValues))
-	copy(values, origValues)
-	return values
-}
-
-// Variance returns the variance of the values in the sample.
-func (s *SlidingTimeWindowArraySample) Variance() float64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.trim()
-	return SampleVariance(s.measurements.Values())
 }

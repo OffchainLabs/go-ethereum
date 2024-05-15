@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/holiman/uint256"
 )
 
 // Proof-of-stake protocol constants.
@@ -261,23 +262,30 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if err := eip1559.VerifyEIP1559Header(chain.Config(), parent, header); err != nil {
 		return err
 	}
+	arbosVersion := types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion
 	// Verify existence / non-existence of withdrawalsHash.
-	shanghai := chain.Config().IsShanghai(header.Number, header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion)
+	shanghai := chain.Config().IsShanghai(header.Number, header.Time, arbosVersion)
 	if shanghai && header.WithdrawalsHash == nil {
 		return errors.New("missing withdrawalsHash")
 	}
 	if !shanghai && header.WithdrawalsHash != nil {
 		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
 	}
-	// Verify the existence / non-existence of excessBlobGas
-	cancun := chain.Config().IsCancun(header.Number, header.Time)
-	if !cancun && header.ExcessBlobGas != nil {
-		return fmt.Errorf("invalid excessBlobGas: have %d, expected nil", header.ExcessBlobGas)
-	}
-	if !cancun && header.BlobGasUsed != nil {
-		return fmt.Errorf("invalid blobGasUsed: have %d, expected nil", header.BlobGasUsed)
-	}
-	if cancun {
+	// Verify the existence / non-existence of cancun-specific header fields
+	cancun := chain.Config().IsCancun(header.Number, header.Time, arbosVersion)
+	if !cancun {
+		switch {
+		case header.ExcessBlobGas != nil:
+			return fmt.Errorf("invalid excessBlobGas: have %d, expected nil", header.ExcessBlobGas)
+		case header.BlobGasUsed != nil:
+			return fmt.Errorf("invalid blobGasUsed: have %d, expected nil", header.BlobGasUsed)
+		case header.ParentBeaconRoot != nil:
+			return fmt.Errorf("invalid parentBeaconRoot, have %#x, expected nil", header.ParentBeaconRoot)
+		}
+	} else {
+		if header.ParentBeaconRoot == nil {
+			return errors.New("header is missing beaconRoot")
+		}
 		if err := eip4844.VerifyEIP4844Header(parent, header); err != nil {
 			return err
 		}
@@ -349,8 +357,8 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 	// Withdrawals processing.
 	for _, w := range withdrawals {
 		// Convert amount from gwei to wei.
-		amount := new(big.Int).SetUint64(w.Amount)
-		amount = amount.Mul(amount, big.NewInt(params.GWei))
+		amount := new(uint256.Int).SetUint64(w.Amount)
+		amount = amount.Mul(amount, uint256.NewInt(params.GWei))
 		state.AddBalance(w.Address, amount)
 	}
 	// No block reward which is issued by consensus layer instead.

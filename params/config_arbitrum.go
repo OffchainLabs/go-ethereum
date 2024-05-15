@@ -22,6 +22,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+const ArbosVersion_FixRedeemGas = uint64(11)
+const ArbosVersion_Stylus = uint64(30)
+
 type ArbitrumChainParams struct {
 	EnableArbOS               bool
 	AllowDebugPrecompiles     bool
@@ -29,8 +32,8 @@ type ArbitrumChainParams struct {
 	InitialArbOSVersion       uint64
 	InitialChainOwner         common.Address
 	GenesisBlockNum           uint64
-	MaxCodeSize               uint64 `json:"MaxCodeSize,omitempty"`     // Maximum bytecode to permit for a contract. 0 value implies params.MaxCodeSize
-	MaxInitCodeSize           uint64 `json:"MaxInitCodeSize,omitempty"` // Maximum initcode to permit in a creation transaction and create instructions. 0 value implies params.MaxInitCodeSize
+	MaxCodeSize               uint64 `json:"MaxCodeSize,omitempty"`     // Maximum bytecode to permit for a contract. 0 value implies params.DefaultMaxCodeSize
+	MaxInitCodeSize           uint64 `json:"MaxInitCodeSize,omitempty"` // Maximum initcode to permit in a creation transaction and create instructions. 0 value implies params.DefaultMaxInitCodeSize
 }
 
 func (c *ChainConfig) IsArbitrum() bool {
@@ -43,7 +46,7 @@ func (c *ChainConfig) IsArbitrumNitro(num *big.Int) bool {
 
 func (c *ChainConfig) MaxCodeSize() uint64 {
 	if c.ArbitrumChainParams.MaxCodeSize == 0 {
-		return MaxCodeSize
+		return DefaultMaxCodeSize
 	}
 	return c.ArbitrumChainParams.MaxCodeSize
 }
@@ -110,7 +113,7 @@ func ArbitrumDevTestParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     true,
 		DataAvailabilityCommittee: false,
-		InitialArbOSVersion:       11,
+		InitialArbOSVersion:       30,
 		InitialChainOwner:         common.Address{},
 	}
 }
@@ -120,7 +123,7 @@ func ArbitrumDevTestDASParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     true,
 		DataAvailabilityCommittee: true,
-		InitialArbOSVersion:       11,
+		InitialArbOSVersion:       30,
 		InitialChainOwner:         common.Address{},
 	}
 }

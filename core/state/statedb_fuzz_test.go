@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/big"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -31,11 +30,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/trie/triestate"
+	"github.com/holiman/uint256"
 )
 
 // A stateTest checks that the state changes are correctly captured. Instances
@@ -58,7 +60,7 @@ func newStateTestAction(addr common.Address, r *rand.Rand, index int) testAction
 		{
 			name: "SetBalance",
 			fn: func(a testAction, s *StateDB) {
-				s.SetBalance(addr, big.NewInt(a.args[0]))
+				s.SetBalance(addr, uint256.NewInt(uint64(a.args[0])))
 			},
 			args: make([]int64, 1),
 		},
@@ -179,19 +181,33 @@ func (test *stateTest) run() bool {
 			storageList = append(storageList, copy2DSet(states.Storages))
 		}
 		disk      = rawdb.NewMemoryDatabase()
-		tdb       = trie.NewDatabaseWithConfig(disk, &trie.Config{OnCommit: onCommit})
+		tdb       = trie.NewDatabase(disk, &trie.Config{PathDB: pathdb.Defaults})
 		sdb       = NewDatabaseWithNodeDB(disk, tdb)
 		byzantium = rand.Intn(2) == 0
 	)
+	defer disk.Close()
+	defer tdb.Close()
+
+	var snaps *snapshot.Tree
+	if rand.Intn(3) == 0 {
+		snaps, _ = snapshot.New(snapshot.Config{
+			CacheSize:  1,
+			Recovery:   false,
+			NoBuild:    false,
+			AsyncBuild: false,
+		}, disk, tdb, types.EmptyRootHash)
+	}
 	for i, actions := range test.actions {
 		root := types.EmptyRootHash
 		if i != 0 {
 			root = roots[len(roots)-1]
 		}
-		state, err := New(root, sdb, nil)
+		state, err := New(root, sdb, snaps)
 		if err != nil {
 			panic(err)
 		}
+		state.onCommit = onCommit
+
 		for i, action := range actions {
 			if i%test.chunk == 0 && i != 0 {
 				if byzantium {

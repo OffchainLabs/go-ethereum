@@ -44,5 +44,5 @@ func updateServeTimeHistogram(method string, success bool, elapsed time.Duration
 	sampler := func() metrics.Sample {
 		return metrics.NewBoundedHistogramSample()
 	}
-	metrics.GetOrRegisterHistogramLazy(h, nil, sampler).Update(elapsed.Microseconds())
+	metrics.GetOrRegisterHistogramLazy(h, nil, sampler).Update(elapsed.Nanoseconds())
 }
