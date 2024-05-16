@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -89,16 +90,12 @@ func (s *StateDB) ActivateWasm(moduleHash common.Hash, asm, module []byte) {
 	})
 }
 
-func (s *StateDB) GetActivatedAsm(moduleHash common.Hash) []byte {
+func (s *StateDB) TryGetActivatedAsm(moduleHash common.Hash) ([]byte, error) {
 	info, exists := s.arbExtraData.activatedWasms[moduleHash]
 	if exists {
-		return info.Asm
+		return info.Asm, nil
 	}
-	asm, err := s.db.ActivatedAsm(moduleHash)
-	if err != nil {
-		s.setError(fmt.Errorf("failed to load asm for %x: %v", moduleHash, err))
-	}
-	return asm
+	return s.db.ActivatedAsm(moduleHash)
 }
 
 func (s *StateDB) GetActivatedModule(moduleHash common.Hash) []byte {
@@ -237,9 +234,13 @@ func (s *StateDB) StartRecording() {
 }
 
 func (s *StateDB) RecordProgram(moduleHash common.Hash) {
+	asm, err := s.TryGetActivatedAsm(moduleHash)
+	if err != nil {
+		log.Crit("can't find activated wasm while recording", "modulehash", moduleHash)
+	}
 	if s.arbExtraData.userWasms != nil {
 		s.arbExtraData.userWasms[moduleHash] = ActivatedWasm{
-			Asm:    s.GetActivatedAsm(moduleHash),
+			Asm:    asm,
 			Module: s.GetActivatedModule(moduleHash),
 		}
 	}

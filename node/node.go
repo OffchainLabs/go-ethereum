@@ -799,7 +799,6 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient 
 			ReadOnly:          readonly,
 		})
 	}
-
 	if err == nil {
 		db = n.wrapDatabase(db)
 	}
