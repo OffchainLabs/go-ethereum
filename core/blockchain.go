@@ -176,6 +176,11 @@ func (c *CacheConfig) triedbConfig() *trie.Config {
 	return config
 }
 
+// arbitrum: expose triedbConfig
+func (c *CacheConfig) TriedbConfig() *trie.Config {
+	return c.triedbConfig()
+}
+
 // defaultCacheConfig are the default caching values if none are specified by the
 // user (also used during testing).
 var defaultCacheConfig = &CacheConfig{
@@ -2609,4 +2614,8 @@ func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
 // GetTrieFlushInterval gets the in-memory tries flush interval
 func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 	return time.Duration(bc.flushInterval.Load())
+}
+
+func (bc *BlockChain) CacheConfig() *CacheConfig {
+	return bc.cacheConfig
 }
