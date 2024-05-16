@@ -384,17 +384,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-<<<<<<< HEAD
-			if filled := s.filler.Suspend(); filled != nil {
-				// If something was filled, try to delete stale sync helpers. If
-				// unsuccessful, warn the user, but not much else we can do (it's
-				// a programming error, just let users report an issue and don't
-				// choke in the meantime).
-				if err := s.cleanStales(filled); err != nil {
-					log.Error("Failed to clean stale beacon headers", "err", err)
-				}
-=======
-			filled := s.filler.suspend()
+			filled := s.filler.Suspend()
 			if filled == nil {
 				log.Error("Latest filled block is not available")
 				return
@@ -405,7 +395,6 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 			// choke in the meantime).
 			if err := s.cleanStales(filled); err != nil {
 				log.Error("Failed to clean stale beacon headers", "err", err)
->>>>>>> master
 			}
 		}()
 		// Wait for the suspend to finish, consuming head events in the meantime
