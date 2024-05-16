@@ -80,7 +80,7 @@ func makechain() (bc *core.BlockChain, addresses []common.Address, txHashes []co
 			addresses = append(addresses, addr)
 			txHashes = append(txHashes, tx.Hash())
 		})
-	bc, _ = core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
+	bc, _ = core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	if _, err := bc.InsertChain(blocks); err != nil {
 		panic(err)
 	}

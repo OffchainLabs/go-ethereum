@@ -194,7 +194,7 @@ func TestSimpleSync(t *testing.T) {
 			testUser2Address: {Balance: new(big.Int).Lsh(big.NewInt(1), 250)},
 		},
 	}
-	sourceChain, _ := core.NewArbBlockChain(sourceDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
+	sourceChain, _ := core.NewBlockChain(sourceDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	signer := types.MakeSigner(sourceChain.Config(), big.NewInt(1), 0)
 
 	firstAddress := common.Address{}
@@ -302,7 +302,7 @@ func TestSimpleSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	badChain, _ := core.NewArbBlockChain(badDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
+	badChain, _ := core.NewBlockChain(badDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	if _, err := badChain.InsertChain(badBlocks[:pivotBlockNum]); err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +344,7 @@ func TestSimpleSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	destChain, _ := core.NewArbBlockChain(destDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
+	destChain, _ := core.NewBlockChain(destDb, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	destHandler := NewProtocolHandler(destDb, destChain, &dummySyncHelper{syncBlock.Header(), nil}, true)
 	destStack.RegisterProtocols(destHandler.MakeProtocols(iter))
 

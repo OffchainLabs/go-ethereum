@@ -259,16 +259,9 @@ type trieGcEntry struct {
 }
 
 func NewArbBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, forceTriedbCommitHook ForceTriedbCommitHook) (*BlockChain, error) {
-	bc, err := NewBlockChain(db, cacheConfig, chainConfig, genesis, overrides, engine, vmConfig, shouldPreserve)
+	bc, err := NewBlockChain(db, cacheConfig, chainConfig, genesis, overrides, engine, vmConfig, shouldPreserve, txLookupLimit)
 	if err != nil {
 		return nil, err
-	}
-	// Start tx indexer/unindexer if required.
-	if txLookupLimit != nil {
-		bc.txLookupLimit = *txLookupLimit
-
-		bc.wg.Add(1)
-		go bc.maintainTxIndex()
 	}
 	bc.forceTriedbCommitHook = forceTriedbCommitHook
 	return bc, nil
@@ -277,7 +270,7 @@ func NewArbBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -483,6 +476,13 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			bc.SetHead(compat.RewindToBlock)
 		}
 		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
+	}
+	// Start tx indexer/unindexer if required.
+	if txLookupLimit != nil {
+		bc.txLookupLimit = *txLookupLimit
+
+		bc.wg.Add(1)
+		go bc.maintainTxIndex()
 	}
 	return bc, nil
 }

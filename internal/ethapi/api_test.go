@@ -358,7 +358,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 	// Generate blocks for testing
 	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
 	txlookupLimit := uint64(0)
-	chain, err := core.NewArbBlockChain(db, cacheConfig, nil, gspec, nil, engine, vm.Config{}, nil, &txlookupLimit, nil)
+	chain, err := core.NewBlockChain(db, cacheConfig, nil, gspec, nil, engine, vm.Config{}, nil, &txlookupLimit)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}

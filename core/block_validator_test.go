@@ -45,7 +45,7 @@ func TestHeaderVerification(t *testing.T) {
 		headers[i] = block.Header()
 	}
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
-	chain, _ := NewBlockChain(rawdb.NewMemoryDatabase(), nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
+	chain, _ := NewBlockChain(rawdb.NewMemoryDatabase(), nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer chain.Stop()
 
 	for i := 0; i < len(blocks); i++ {
@@ -158,7 +158,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		t.Logf("Post-merge header: %d", block.NumberU64())
 	}
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
-	chain, _ := NewBlockChain(rawdb.NewMemoryDatabase(), nil, nil, gspec, nil, engine, vm.Config{}, nil)
+	chain, _ := NewBlockChain(rawdb.NewMemoryDatabase(), nil, nil, gspec, nil, engine, vm.Config{}, nil, nil)
 	defer chain.Stop()
 
 	// Verify the blocks before the merging
