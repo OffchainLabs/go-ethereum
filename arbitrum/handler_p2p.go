@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
-	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/protocols/arb"
@@ -383,7 +382,7 @@ func (h *ethHandler) Chain() *core.BlockChain { return h.chain }
 
 type dummyTxPool struct{}
 
-func (d *dummyTxPool) Get(hash common.Hash) *txpool.Transaction {
+func (d *dummyTxPool) Get(hash common.Hash) *types.Transaction {
 	return nil
 }
 
@@ -429,10 +428,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 	case *eth.NewBlockPacket:
 		return fmt.Errorf("unexpected eth packet type for nitro: %T", packet)
 
-	case *eth.NewPooledTransactionHashesPacket66:
-		return fmt.Errorf("unexpected eth packet type for nitro: %T", packet)
-
-	case *eth.NewPooledTransactionHashesPacket68:
+	case *eth.NewPooledTransactionHashesPacket:
 		return fmt.Errorf("unexpected eth packet type for nitro: %T", packet)
 
 	case *eth.TransactionsPacket:
@@ -460,13 +456,14 @@ func (h *snapHandler) Snapshot(root common.Hash) snapshot.Snapshot {
 }
 
 type trieIteratorWrapper struct {
-	iter *trie.Iterator
+	iter   *trie.Iterator
+	triedb *trie.Database
 }
 
 func (i trieIteratorWrapper) Next() bool        { return i.iter.Next() }
 func (i trieIteratorWrapper) Error() error      { return i.iter.Err }
 func (i trieIteratorWrapper) Hash() common.Hash { return common.BytesToHash(i.iter.Key) }
-func (i trieIteratorWrapper) Release()          {}
+func (i trieIteratorWrapper) Release()          { i.triedb.Close() }
 
 type trieAccountIterator struct {
 	trieIteratorWrapper
@@ -475,7 +472,7 @@ type trieAccountIterator struct {
 func (i trieAccountIterator) Account() []byte { return i.iter.Value }
 
 func (h *snapHandler) AccountIterator(root, account common.Hash) (snapshot.AccountIterator, error) {
-	triedb := trie.NewDatabase(h.db)
+	triedb := trie.NewDatabase(h.db, h.chain.CacheConfig().TriedbConfig())
 	t, err := trie.NewStateTrie(trie.StateTrieID(root), triedb)
 	if err != nil {
 		log.Error("Failed to open trie", "root", root, "err", err)
@@ -487,7 +484,8 @@ func (h *snapHandler) AccountIterator(root, account common.Hash) (snapshot.Accou
 		return nil, err
 	}
 	return trieAccountIterator{trieIteratorWrapper{
-		iter: trie.NewIterator((accIter)),
+		iter:   trie.NewIterator((accIter)),
+		triedb: triedb,
 	}}, nil
 }
 
@@ -506,7 +504,7 @@ func (i nilStoreageIterator) Release()          {}
 func (i nilStoreageIterator) Slot() []byte      { return nil }
 
 func (h *snapHandler) StorageIterator(root, account, origin common.Hash) (snapshot.StorageIterator, error) {
-	triedb := trie.NewDatabase(h.db)
+	triedb := trie.NewDatabase(h.db, h.chain.CacheConfig().TriedbConfig())
 	t, err := trie.NewStateTrie(trie.StateTrieID(root), triedb)
 	if err != nil {
 		log.Error("Failed to open trie", "root", root, "err", err)
@@ -532,7 +530,8 @@ func (h *snapHandler) StorageIterator(root, account, origin common.Hash) (snapsh
 		return nil, err
 	}
 	return trieStoreageIterator{trieIteratorWrapper{
-		iter: trie.NewIterator(nodeIter),
+		iter:   trie.NewIterator(nodeIter),
+		triedb: triedb,
 	}}, nil
 }
 
