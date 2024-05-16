@@ -51,7 +51,8 @@ func NewBeaconBackfiller(dl *Downloader, success func()) Backfiller {
 }
 
 // suspend cancels any background downloader threads and returns the last header
-// that has been successfully backfilled.
+// that has been successfully backfilled (potentially in a previous run), or the
+// genesis.
 func (b *beaconBackfiller) Suspend() *types.Header {
 	// If no filling is running, don't waste cycles
 	b.lock.Lock()

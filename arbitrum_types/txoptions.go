@@ -91,14 +91,8 @@ func (o *ConditionalOptions) Check(l1BlockNumber uint64, l2Timestamp uint64, sta
 	}
 	for address, rootHashOrSlots := range o.KnownAccounts {
 		if rootHashOrSlots.RootHash != nil {
-			trie, err := statedb.StorageTrie(address)
-			if err != nil {
-				return err
-			}
-			if trie == nil {
-				return NewRejectedError("Storage trie not found for address key in knownAccounts option")
-			}
-			if trie.Hash() != *rootHashOrSlots.RootHash {
+			storageRoot := statedb.GetStorageRoot(address)
+			if storageRoot != *rootHashOrSlots.RootHash {
 				return NewRejectedError("Storage root hash condition not met")
 			}
 		} else if len(rootHashOrSlots.SlotValue) > 0 {

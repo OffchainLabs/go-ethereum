@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/holiman/uint256"
 )
 
@@ -46,6 +47,11 @@ type txJSON struct {
 	R                    *hexutil.Big    `json:"r"`
 	S                    *hexutil.Big    `json:"s"`
 	YParity              *hexutil.Uint64 `json:"yParity,omitempty"`
+
+	// Blob transaction sidecar encoding:
+	Blobs       []kzg4844.Blob       `json:"blobs,omitempty"`
+	Commitments []kzg4844.Commitment `json:"commitments,omitempty"`
+	Proofs      []kzg4844.Proof      `json:"proofs,omitempty"`
 
 	// Arbitrum fields:
 	From                *common.Address `json:"from,omitempty"`                // Contract SubmitRetryable Unsigned Retry
@@ -74,18 +80,18 @@ func (tx *txJSON) yParityValue() (*big.Int, error) {
 	if tx.YParity != nil {
 		val := uint64(*tx.YParity)
 		if val != 0 && val != 1 {
-			return nil, errors.New("'yParity' field must be 0 or 1")
+			return nil, errInvalidYParity
 		}
 		bigval := new(big.Int).SetUint64(val)
 		if tx.V != nil && tx.V.ToInt().Cmp(bigval) != 0 {
-			return nil, errors.New("'v' and 'yParity' fields do not match")
+			return nil, errVYParityMismatch
 		}
 		return bigval, nil
 	}
 	if tx.V != nil {
 		return tx.V.ToInt(), nil
 	}
-	return nil, errors.New("missing 'yParity' or 'v' field in transaction")
+	return nil, errVYParityMissing
 }
 
 // MarshalJSON marshals as JSON with a hash.
@@ -241,6 +247,11 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.S = (*hexutil.Big)(itx.S.ToBig())
 		yparity := itx.V.Uint64()
 		enc.YParity = (*hexutil.Uint64)(&yparity)
+		if sidecar := itx.Sidecar; sidecar != nil {
+			enc.Blobs = itx.Sidecar.Blobs
+			enc.Commitments = itx.Sidecar.Commitments
+			enc.Proofs = itx.Sidecar.Proofs
+		}
 	}
 	return json.Marshal(&enc)
 }
@@ -393,9 +404,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'input' in transaction")
 		}
 		itx.Data = *dec.Input
-		if dec.V == nil {
-			return errors.New("missing required field 'v' in transaction")
-		}
 		if dec.AccessList != nil {
 			itx.AccessList = *dec.AccessList
 		}
@@ -722,9 +730,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'input' in transaction")
 		}
 		itx.Data = *dec.Input
-		if dec.V == nil {
-			return errors.New("missing required field 'v' in transaction")
-		}
 		if dec.AccessList != nil {
 			itx.AccessList = *dec.AccessList
 		}
@@ -734,20 +739,20 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		itx.BlobHashes = dec.BlobVersionedHashes
 
 		// signature R
-		var ok bool
+		var overflow bool
 		if dec.R == nil {
 			return errors.New("missing required field 'r' in transaction")
 		}
-		itx.R, ok = uint256.FromBig((*big.Int)(dec.R))
-		if !ok {
+		itx.R, overflow = uint256.FromBig((*big.Int)(dec.R))
+		if overflow {
 			return errors.New("'r' value overflows uint256")
 		}
 		// signature S
 		if dec.S == nil {
 			return errors.New("missing required field 's' in transaction")
 		}
-		itx.S, ok = uint256.FromBig((*big.Int)(dec.S))
-		if !ok {
+		itx.S, overflow = uint256.FromBig((*big.Int)(dec.S))
+		if overflow {
 			return errors.New("'s' value overflows uint256")
 		}
 		// signature V
@@ -755,8 +760,8 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if err != nil {
 			return err
 		}
-		itx.V, ok = uint256.FromBig(vbig)
-		if !ok {
+		itx.V, overflow = uint256.FromBig(vbig)
+		if overflow {
 			return errors.New("'v' value overflows uint256")
 		}
 		if itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0 {

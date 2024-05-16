@@ -21,18 +21,23 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/holiman/uint256"
 )
 
 func TestState(t *testing.T) {
@@ -58,14 +63,6 @@ func TestState(t *testing.T) {
 	// EOF is not part of cancun
 	st.skipLoad(`^stEOF/`)
 
-	// EIP-4844 tests need to be regenerated due to the data-to-blob rename
-	st.skipLoad(`^stEIP4844-blobtransactions/`)
-
-	// Expected failures:
-	// These EIP-4844 tests need to be regenerated.
-	st.fails(`stEIP4844-blobtransactions/opcodeBlobhashOutOfRange.json`, "test has incorrect state root")
-	st.fails(`stEIP4844-blobtransactions/opcodeBlobhBounds.json`, "test has incorrect state root")
-
 	// For Istanbul, older tests were moved into LegacyTests
 	for _, dir := range []string{
 		filepath.Join(baseDir, "EIPTests", "StateTests"),
@@ -74,25 +71,60 @@ func TestState(t *testing.T) {
 		benchmarksDir,
 	} {
 		st.walk(t, dir, func(t *testing.T, name string, test *StateTest) {
+			if runtime.GOARCH == "386" && runtime.GOOS == "windows" && rand.Int63()%2 == 0 {
+				t.Skip("test (randomly) skipped on 32-bit windows")
+				return
+			}
 			for _, subtest := range test.Subtests() {
 				subtest := subtest
 				key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
 
-				t.Run(key+"/trie", func(t *testing.T) {
+				t.Run(key+"/hash/trie", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-						_, _, err := test.Run(subtest, vmconfig, false)
-						return st.checkFailure(t, err)
+						var result error
+						test.Run(subtest, vmconfig, false, rawdb.HashScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
+							result = st.checkFailure(t, err)
+						})
+						return result
 					})
 				})
-				t.Run(key+"/snap", func(t *testing.T) {
+				t.Run(key+"/hash/snap", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-						snaps, statedb, err := test.Run(subtest, vmconfig, true)
-						if snaps != nil && statedb != nil {
-							if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil {
-								return err
+						var result error
+						test.Run(subtest, vmconfig, true, rawdb.HashScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
+							if snaps != nil && state != nil {
+								if _, err := snaps.Journal(state.IntermediateRoot(false)); err != nil {
+									result = err
+									return
+								}
 							}
-						}
-						return st.checkFailure(t, err)
+							result = st.checkFailure(t, err)
+						})
+						return result
+					})
+				})
+				t.Run(key+"/path/trie", func(t *testing.T) {
+					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
+						var result error
+						test.Run(subtest, vmconfig, false, rawdb.PathScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
+							result = st.checkFailure(t, err)
+						})
+						return result
+					})
+				})
+				t.Run(key+"/path/snap", func(t *testing.T) {
+					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
+						var result error
+						test.Run(subtest, vmconfig, true, rawdb.PathScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
+							if snaps != nil && state != nil {
+								if _, err := snaps.Journal(state.IntermediateRoot(false)); err != nil {
+									result = err
+									return
+								}
+							}
+							result = st.checkFailure(t, err)
+						})
+						return result
 					})
 				})
 			}
@@ -190,7 +222,8 @@ func runBenchmark(b *testing.B, t *StateTest) {
 
 			vmconfig.ExtraEips = eips
 			block := t.genesis(config).ToBlock()
-			_, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, false)
+			triedb, _, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, false, rawdb.HashScheme)
+			defer triedb.Close()
 
 			var baseFee *big.Int
 			if rules.IsLondon {
@@ -247,7 +280,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				start := time.Now()
 
 				// Execute the message.
-				_, leftOverGas, err := evm.Call(sender, *msg.To, msg.Data, msg.GasLimit, msg.Value)
+				_, leftOverGas, err := evm.Call(sender, *msg.To, msg.Data, msg.GasLimit, uint256.MustFromBig(msg.Value))
 				if err != nil {
 					b.Error(err)
 					return

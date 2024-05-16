@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // Depth returns the current depth
@@ -39,8 +40,8 @@ func (evm *EVM) DecrementDepth() {
 type TxProcessingHook interface {
 	StartTxHook() (bool, uint64, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
 	GasChargingHook(gasRemaining *uint64) (common.Address, error)
-	PushCaller(addr common.Address)
-	PopCaller()
+	PushContract(contract *Contract)
+	PopContract()
 	ForceRefundGas() uint64
 	NonrefundableGas() uint64
 	DropTip() bool
@@ -51,6 +52,7 @@ type TxProcessingHook interface {
 	GasPriceOp(evm *EVM) *big.Int
 	FillReceiptInfo(receipt *types.Receipt)
 	MsgIsNonMutating() bool
+	ExecuteWASM(scope *ScopeContext, input []byte, interpreter *EVMInterpreter) ([]byte, error)
 }
 
 type DefaultTxProcessor struct {
@@ -65,9 +67,9 @@ func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) (common.Addres
 	return p.evm.Context.Coinbase, nil
 }
 
-func (p DefaultTxProcessor) PushCaller(addr common.Address) {}
+func (p DefaultTxProcessor) PushContract(contract *Contract) {}
 
-func (p DefaultTxProcessor) PopCaller() {}
+func (p DefaultTxProcessor) PopContract() {}
 
 func (p DefaultTxProcessor) ForceRefundGas() uint64 { return 0 }
 
@@ -97,4 +99,9 @@ func (p DefaultTxProcessor) FillReceiptInfo(*types.Receipt) {}
 
 func (p DefaultTxProcessor) MsgIsNonMutating() bool {
 	return false
+}
+
+func (p DefaultTxProcessor) ExecuteWASM(scope *ScopeContext, input []byte, interpreter *EVMInterpreter) ([]byte, error) {
+	log.Crit("tried to execute WASM with default processing hook")
+	return nil, nil
 }

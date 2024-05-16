@@ -20,17 +20,37 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
+	// Arbitrum: manage Stylus wasms
+	ActivateWasm(moduleHash common.Hash, asm, module []byte)
+	GetActivatedAsm(moduleHash common.Hash) (asm []byte)
+	GetActivatedModule(moduleHash common.Hash) (module []byte)
+	RecordCacheWasm(wasm state.CacheWasm)
+	RecordEvictWasm(wasm state.EvictWasm)
+	GetRecentWasms() state.RecentWasms
+
+	// Arbitrum: track stylus's memory footprint
+	GetStylusPages() (uint16, uint16)
+	GetStylusPagesOpen() uint16
+	SetStylusPagesOpen(open uint16)
+	AddStylusPages(new uint16) (uint16, uint16)
+	AddStylusPagesEver(new uint16)
+
+	Deterministic() bool
+	Database() state.Database
+
 	CreateAccount(common.Address)
 
-	SubBalance(common.Address, *big.Int)
-	AddBalance(common.Address, *big.Int)
-	GetBalance(common.Address) *big.Int
+	SubBalance(common.Address, *uint256.Int)
+	AddBalance(common.Address, *uint256.Int)
+	GetBalance(common.Address) *uint256.Int
 	ExpectBalanceBurn(*big.Int)
 
 	GetNonce(common.Address) uint64
