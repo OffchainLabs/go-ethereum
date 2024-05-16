@@ -117,9 +117,7 @@ func TestSimpleSync(t *testing.T) {
 	const syncBlockNum = 70
 	const extraBlocks = 200
 
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.LvlTrace)
-	log.Root().SetHandler(glogger)
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, false)))
 
 	// key for source node p2p
 	sourceKey, err := crypto.GenerateKey()
