@@ -968,6 +968,9 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 		return nil
 	}
 	for addr, account := range *diff {
+		if addr == types.ArbosStateAddress {
+			return fmt.Errorf("overriding address %v  not allowed", types.ArbosStateAddress)
+		}
 		// Override account nonce.
 		if account.Nonce != nil {
 			state.SetNonce(addr, uint64(*account.Nonce))
