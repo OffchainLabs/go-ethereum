@@ -54,6 +54,7 @@ type Database interface {
 	// Arbitrum: Read activated Stylus contracts
 	ActivatedAsm(moduleHash common.Hash) (asm []byte, err error)
 	ActivatedModule(moduleHash common.Hash) (module []byte, err error)
+	WasmStore() ethdb.KeyValueStore
 
 	// OpenTrie opens the main account trie.
 	OpenTrie(root common.Hash) (Trie, error)
@@ -164,6 +165,7 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 		activatedModuleCache: lru.NewSizeConstrainedCache[common.Hash, []byte](activatedWasmCacheSize),
 
 		disk:          db,
+		wasmdb:        db.WasmDataBase(),
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		triedb:        trie.NewDatabase(db, config),
@@ -179,6 +181,7 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
 		activatedModuleCache: lru.NewSizeConstrainedCache[common.Hash, []byte](activatedWasmCacheSize),
 
 		disk:          db,
+		wasmdb:        db.WasmDataBase(),
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		triedb:        triedb,
@@ -192,9 +195,14 @@ type cachingDB struct {
 	activatedModuleCache *lru.SizeConstrainedCache[common.Hash, []byte]
 
 	disk          ethdb.KeyValueStore
+	wasmdb        ethdb.KeyValueStore
 	codeSizeCache *lru.Cache[common.Hash, int]
 	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
 	triedb        *trie.Database
+}
+
+func (db *cachingDB) WasmStore() ethdb.KeyValueStore {
+	return db.wasmdb
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
