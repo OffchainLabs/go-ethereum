@@ -107,7 +107,7 @@ func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fal
 	dbForAPICalls := backend.chainDb
 	wasmStore, tag := backend.chainDb.WasmDataBase()
 	if tag != 0 {
-		dbForAPICalls = rawdb.WrapDatabaseWithWasm(backend.chainDb, wasmStore, tag)
+		dbForAPICalls = rawdb.WrapDatabaseWithWasm(backend.chainDb, wasmStore, 0)
 	}
 	backend.apiBackend = &APIBackend{
 		b:              backend,
