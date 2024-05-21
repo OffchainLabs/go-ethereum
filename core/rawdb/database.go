@@ -43,8 +43,8 @@ type freezerdb struct {
 }
 
 // AncientDatadir returns the path of root ancient directory.
-func (frdb *freezerdb) WasmDataBase() ethdb.KeyValueStore {
-	return frdb
+func (frdb *freezerdb) WasmDataBase() (ethdb.KeyValueStore, uint32) {
+	return frdb, 0
 }
 
 // AncientDatadir returns the path of root ancient directory.
@@ -171,8 +171,8 @@ func (db *nofreezedb) AncientDatadir() (string, error) {
 }
 
 // AncientDatadir returns the path of root ancient directory.
-func (db *nofreezedb) WasmDataBase() ethdb.KeyValueStore {
-	return db
+func (db *nofreezedb) WasmDataBase() (ethdb.KeyValueStore, uint32) {
+	return db, 0
 }
 
 // NewDatabase creates a high level database on top of a given key-value data
@@ -183,11 +183,12 @@ func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
 
 type dbWithWasmEntry struct {
 	ethdb.Database
-	wasmDb ethdb.KeyValueStore
+	wasmDb       ethdb.KeyValueStore
+	wasmCacheTag uint32
 }
 
-func (db *dbWithWasmEntry) WasmDataBase() ethdb.KeyValueStore {
-	return db.wasmDb
+func (db *dbWithWasmEntry) WasmDataBase() (ethdb.KeyValueStore, uint32) {
+	return db.wasmDb, db.wasmCacheTag
 }
 
 func (db *dbWithWasmEntry) Close() error {
@@ -199,8 +200,8 @@ func (db *dbWithWasmEntry) Close() error {
 	return wasmErr
 }
 
-func WrapDatabaseWithWasm(db ethdb.Database, wasm ethdb.KeyValueStore) ethdb.Database {
-	return &dbWithWasmEntry{db, wasm}
+func WrapDatabaseWithWasm(db ethdb.Database, wasm ethdb.KeyValueStore, cacheTag uint32) ethdb.Database {
+	return &dbWithWasmEntry{db, wasm, cacheTag}
 }
 
 // resolveChainFreezerDir is a helper function which resolves the absolute path

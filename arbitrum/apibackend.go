@@ -45,6 +45,8 @@ var (
 type APIBackend struct {
 	b *Backend
 
+	dbForAPICalls ethdb.Database
+
 	fallbackClient types.FallbackClient
 	sync           SyncProgressBackend
 }
@@ -101,8 +103,15 @@ func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fal
 	if err != nil {
 		return nil, err
 	}
+	// discard stylus-tag on any call made from api database
+	dbForAPICalls := backend.chainDb
+	wasmStore, tag := backend.chainDb.WasmDataBase()
+	if tag != 0 {
+		dbForAPICalls = rawdb.WrapDatabaseWithWasm(backend.chainDb, wasmStore, 0)
+	}
 	backend.apiBackend = &APIBackend{
 		b:              backend,
+		dbForAPICalls:  dbForAPICalls,
 		fallbackClient: fallbackClient,
 	}
 	filterSystem := filters.NewFilterSystem(backend.apiBackend, filterConfig)
@@ -314,7 +323,7 @@ func (a *APIBackend) FeeHistory(
 }
 
 func (a *APIBackend) ChainDb() ethdb.Database {
-	return a.b.chainDb
+	return a.dbForAPICalls
 }
 
 func (a *APIBackend) AccountManager() *accounts.Manager {
