@@ -40,6 +40,10 @@ func (t *table) Close() error {
 	return nil
 }
 
+func (t *table) WasmDataBase() (ethdb.KeyValueStore, uint32) {
+	return t.db.WasmDataBase()
+}
+
 // Has retrieves if a prefixed version of a key is present in the database.
 func (t *table) Has(key []byte) (bool, error) {
 	return t.db.Has(append([]byte(t.prefix), key...))

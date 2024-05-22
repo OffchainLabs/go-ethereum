@@ -17,17 +17,18 @@ func (ch wasmActivation) dirtied() *common.Address {
 }
 
 // Updates the Rust-side recent program cache
-var CacheWasmRust func(asm []byte, moduleHash common.Hash, version uint16, debug bool) = func([]byte, common.Hash, uint16, bool) {}
-var EvictWasmRust func(moduleHash common.Hash, version uint16, debug bool) = func(common.Hash, uint16, bool) {}
+var CacheWasmRust func(asm []byte, moduleHash common.Hash, version uint16, tag uint32, debug bool) = func([]byte, common.Hash, uint16, uint32, bool) {}
+var EvictWasmRust func(moduleHash common.Hash, version uint16, tag uint32, debug bool) = func(common.Hash, uint16, uint32, bool) {}
 
 type CacheWasm struct {
 	ModuleHash common.Hash
 	Version    uint16
+	Tag        uint32
 	Debug      bool
 }
 
 func (ch CacheWasm) revert(s *StateDB) {
-	EvictWasmRust(ch.ModuleHash, ch.Version, ch.Debug)
+	EvictWasmRust(ch.ModuleHash, ch.Version, ch.Tag, ch.Debug)
 }
 
 func (ch CacheWasm) dirtied() *common.Address {
@@ -37,12 +38,16 @@ func (ch CacheWasm) dirtied() *common.Address {
 type EvictWasm struct {
 	ModuleHash common.Hash
 	Version    uint16
+	Tag        uint32
 	Debug      bool
 }
 
 func (ch EvictWasm) revert(s *StateDB) {
-	asm := s.GetActivatedAsm(ch.ModuleHash) // only happens in native mode
-	CacheWasmRust(asm, ch.ModuleHash, ch.Version, ch.Debug)
+	asm, err := s.TryGetActivatedAsm(ch.ModuleHash) // only happens in native mode
+	if err == nil && len(asm) != 0 {
+		//if we failed to get it - it's not in the current rust cache
+		CacheWasmRust(asm, ch.ModuleHash, ch.Version, ch.Tag, ch.Debug)
+	}
 }
 
 func (ch EvictWasm) dirtied() *common.Address {

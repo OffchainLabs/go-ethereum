@@ -810,7 +810,6 @@ func (n *Node) OpenDatabaseWithFreezerWithExtraOptions(name string, cache, handl
 			PebbleExtraOptions: pebbleExtraOptions,
 		})
 	}
-
 	if err == nil {
 		db = n.wrapDatabase(db)
 	}
