@@ -38,7 +38,7 @@ const (
 	wsPingInterval     = 30 * time.Second
 	wsPingWriteTimeout = 5 * time.Second
 	wsPongTimeout      = 30 * time.Second
-	wsDefaultReadLimit = 32 * 1024 * 1024
+	wsDefaultReadLimit = 1024 * 1024 * 1024
 )
 
 var wsBufferPool = new(sync.Pool)
