@@ -40,7 +40,7 @@ func (t *table) Close() error {
 	return nil
 }
 
-func (t *table) WasmDataBase() ethdb.KeyValueStore {
+func (t *table) WasmDataBase() (ethdb.KeyValueStore, uint32) {
 	return t.db.WasmDataBase()
 }
 

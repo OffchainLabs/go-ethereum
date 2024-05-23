@@ -179,7 +179,7 @@ type AncientStore interface {
 }
 
 type WasmDataBaseRetriever interface {
-	WasmDataBase() KeyValueStore
+	WasmDataBase() (KeyValueStore, uint32)
 }
 
 // Database contains all the methods required by the high level database to not
