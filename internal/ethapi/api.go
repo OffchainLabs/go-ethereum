@@ -1155,7 +1155,7 @@ func runScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, state
 	scheduled := result.ScheduledTxes
 	for runMode == core.MessageGasEstimationMode && len(scheduled) > 0 {
 		// This will panic if the scheduled tx is signed, but we only schedule unsigned ones
-		msg, err := core.TransactionToMessage(scheduled[0], types.NewArbitrumSigner(nil), header.BaseFee)
+		msg, err := core.TransactionToMessage(scheduled[0], types.NewArbitrumSigner(nil), header.BaseFee, core.MessageReplayMode)
 		if err != nil {
 			return nil, err
 		}
