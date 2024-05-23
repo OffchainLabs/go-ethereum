@@ -168,6 +168,11 @@ const (
 	MessageReplayMode
 )
 
+// these message modes are executed onchain so cannot make any gas shortcuts
+func (m MessageRunMode) ExecutedOnChain() bool {
+	return m == MessageCommitMode || m == MessageReplayMode
+}
+
 // TransactionToMessage converts a transaction into a Message.
 func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int, runmode MessageRunMode) (*Message, error) {
 	msg := &Message{
