@@ -21,9 +21,9 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum-arbitrum/common"
+	"github.com/ethereum/go-ethereum-arbitrum/common/hexutil"
+	"github.com/ethereum/go-ethereum-arbitrum/crypto/kzg4844"
 	"github.com/holiman/uint256"
 )
 

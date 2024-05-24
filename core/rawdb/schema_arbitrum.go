@@ -21,7 +21,7 @@ package rawdb
 import (
 	"bytes"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum-arbitrum/common"
 )
 
 var (

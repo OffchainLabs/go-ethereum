@@ -22,13 +22,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers/logger"
-	"github.com/ethereum/go-ethereum/tests"
+	"github.com/ethereum/go-ethereum-arbitrum/common"
+	"github.com/ethereum/go-ethereum-arbitrum/core/rawdb"
+	"github.com/ethereum/go-ethereum-arbitrum/core/state"
+	"github.com/ethereum/go-ethereum-arbitrum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum-arbitrum/core/vm"
+	"github.com/ethereum/go-ethereum-arbitrum/eth/tracers/logger"
+	"github.com/ethereum/go-ethereum-arbitrum/tests"
 	"github.com/urfave/cli/v2"
 )
 

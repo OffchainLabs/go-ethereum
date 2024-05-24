@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum-arbitrum/core/types"
+	"github.com/ethereum/go-ethereum-arbitrum/params"
 )
 
 var (

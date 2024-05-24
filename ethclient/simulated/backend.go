@@ -19,19 +19,19 @@ package simulated
 import (
 	"time"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/catalyst"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum-arbitrum"
+	"github.com/ethereum/go-ethereum-arbitrum/common"
+	"github.com/ethereum/go-ethereum-arbitrum/core"
+	"github.com/ethereum/go-ethereum-arbitrum/eth"
+	"github.com/ethereum/go-ethereum-arbitrum/eth/catalyst"
+	"github.com/ethereum/go-ethereum-arbitrum/eth/downloader"
+	"github.com/ethereum/go-ethereum-arbitrum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum-arbitrum/eth/filters"
+	"github.com/ethereum/go-ethereum-arbitrum/ethclient"
+	"github.com/ethereum/go-ethereum-arbitrum/node"
+	"github.com/ethereum/go-ethereum-arbitrum/p2p"
+	"github.com/ethereum/go-ethereum-arbitrum/params"
+	"github.com/ethereum/go-ethereum-arbitrum/rpc"
 )
 
 // Client exposes the methods provided by the Ethereum RPC client.

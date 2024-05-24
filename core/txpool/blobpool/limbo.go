@@ -19,10 +19,10 @@ package blobpool
 import (
 	"errors"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum-arbitrum/common"
+	"github.com/ethereum/go-ethereum-arbitrum/core/types"
+	"github.com/ethereum/go-ethereum-arbitrum/log"
+	"github.com/ethereum/go-ethereum-arbitrum/rlp"
 	"github.com/holiman/billy"
 )
 

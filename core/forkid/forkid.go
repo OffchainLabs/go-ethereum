@@ -26,9 +26,9 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum-arbitrum/core/types"
+	"github.com/ethereum/go-ethereum-arbitrum/log"
+	"github.com/ethereum/go-ethereum-arbitrum/params"
 	"golang.org/x/exp/slices"
 )
 
