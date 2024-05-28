@@ -1155,7 +1155,7 @@ func runScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, state
 	scheduled := result.ScheduledTxes
 	for runMode == core.MessageGasEstimationMode && len(scheduled) > 0 {
 		// This will panic if the scheduled tx is signed, but we only schedule unsigned ones
-		msg, err := core.TransactionToMessage(scheduled[0], types.NewArbitrumSigner(nil), header.BaseFee, core.MessageReplayMode)
+		msg, err := core.TransactionToMessage(scheduled[0], types.NewArbitrumSigner(nil), header.BaseFee, runMode)
 		if err != nil {
 			return nil, err
 		}
@@ -1167,7 +1167,6 @@ func runScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, state
 			log.Warn("Scheduling tx used less gas than scheduled tx has available", "usedGas", result.UsedGas, "scheduledGas", msg.GasLimit)
 			result.UsedGas = 0
 		}
-		msg.TxRunMode = runMode
 		// make a new EVM for the scheduled Tx (an EVM must never be reused)
 		evm := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true}, &blockCtx)
 		go func() {
