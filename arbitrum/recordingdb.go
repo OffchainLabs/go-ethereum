@@ -30,14 +30,13 @@ var (
 )
 
 type RecordingKV struct {
-	inner         *trie.Database
 	diskDb        ethdb.KeyValueStore
 	readDbEntries map[common.Hash][]byte
 	enableBypass  bool
 }
 
-func newRecordingKV(inner *trie.Database, diskDb ethdb.KeyValueStore) *RecordingKV {
-	return &RecordingKV{inner, diskDb, make(map[common.Hash][]byte), false}
+func newRecordingKV(diskDb ethdb.KeyValueStore) *RecordingKV {
+	return &RecordingKV{diskDb, make(map[common.Hash][]byte), false}
 }
 
 func (db *RecordingKV) Has(key []byte) (bool, error) {
@@ -49,8 +48,9 @@ func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 	var res []byte
 	var err error
 	if len(key) == 32 {
-		copy(hash[:], key)
-		res, err = db.inner.Node(hash)
+		// this means this key is related to a trie node, and
+		// the trie node layer wasn't able to retrieve from its cache.
+		res, err = db.diskDb.Get(key)
 	} else if len(key) == len(rawdb.CodePrefix)+32 && bytes.HasPrefix(key, rawdb.CodePrefix) {
 		// Retrieving code
 		copy(hash[:], key[len(rawdb.CodePrefix):])
@@ -267,9 +267,15 @@ func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeade
 	}
 	finalDereference := lastBlockHeader // dereference in case of error
 	defer func() { r.Dereference(finalDereference) }()
-	recordingKeyValue := newRecordingKV(r.db.TrieDB(), r.db.DiskDB())
+	recordingKeyValue := newRecordingKV(r.db.DiskDB())
 
-	recordingStateDatabase := state.NewDatabase(rawdb.WrapDatabaseWithWasm(rawdb.NewDatabase(recordingKeyValue), r.db.WasmStore(), 0))
+	trieConfig := trie.HashDefaults
+	trieConfig.RecordAccess = true
+	trieConfig.FallbackDatabase = r.db.TrieDB()
+	recordingStateDatabase := state.NewDatabaseWithConfig(
+		rawdb.WrapDatabaseWithWasm(rawdb.NewDatabase(recordingKeyValue), r.db.WasmStore(), 0),
+		trieConfig,
+	)
 	var prevRoot common.Hash
 	if lastBlockHeader != nil {
 		prevRoot = lastBlockHeader.Root
@@ -290,7 +296,7 @@ func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeade
 	return recordingStateDb, recordingChainContext, recordingKeyValue, nil
 }
 
-func (r *RecordingDatabase) PreimagesFromRecording(chainContextIf core.ChainContext, recordingDb *RecordingKV) (map[common.Hash][]byte, error) {
+func (r *RecordingDatabase) PreimagesFromRecording(chainContextIf core.ChainContext, recordingDb *RecordingKV, recordingStateDb *state.StateDB) (map[common.Hash][]byte, error) {
 	entries := recordingDb.GetRecordedEntries()
 	recordingChainContext, ok := chainContextIf.(*RecordingChainContext)
 	if (recordingChainContext == nil) || (!ok) {
@@ -306,6 +312,11 @@ func (r *RecordingDatabase) PreimagesFromRecording(chainContextIf core.ChainCont
 		}
 		entries[hash] = bytes
 	}
+
+	for hash, v := range recordingStateDb.Database().TrieDB().Accesses() {
+		entries[hash] = v
+	}
+
 	return entries, nil
 }
 

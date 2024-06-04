@@ -34,6 +34,9 @@ type Config struct {
 	IsVerkle  bool           // Flag whether the db is holding a verkle tree
 	HashDB    *hashdb.Config // Configs for hash-based scheme
 	PathDB    *pathdb.Config // Configs for experimental path-based scheme
+
+	RecordAccess     bool // Flag whether access to trie nodes is recorded
+	FallbackDatabase *Database // Should only be used when RecordAccess is true.
 }
 
 // HashDefaults represents a config for using hash-based scheme with
@@ -84,6 +87,9 @@ type Database struct {
 	diskdb    ethdb.Database // Persistent database to store the snapshot
 	preimages *preimageStore // The store for caching preimages
 	backend   backend        // The backend for managing trie nodes
+
+	accessedEntries  map[common.Hash][]byte // Only populated when RecordAccess is true
+	fallbackDatabase *Database
 }
 
 // NewDatabase initializes the trie database with default settings, note
@@ -110,12 +116,19 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 	} else {
 		db.backend = hashdb.New(diskdb, config.HashDB, mptResolver{})
 	}
+	if config.RecordAccess {
+		db.accessedEntries = make(map[common.Hash][]byte)
+		db.fallbackDatabase = config.FallbackDatabase
+	}
 	return db
 }
 
-// Reader returns a reader for accessing all trie nodes with provided state root.
-// An error will be returned if the requested state is not available.
-func (db *Database) Reader(blockRoot common.Hash) (Reader, error) {
+// Accesses returns the entries accessed through the database.
+func (db *Database) Accesses() map[common.Hash][]byte {
+	return db.accessedEntries
+}
+
+func (db *Database) ReaderWithoutFallbackDatabase(blockRoot common.Hash) (Reader, error) {
 	switch b := db.backend.(type) {
 	case *hashdb.Database:
 		return b.Reader(blockRoot)
@@ -123,6 +136,26 @@ func (db *Database) Reader(blockRoot common.Hash) (Reader, error) {
 		return b.Reader(blockRoot)
 	}
 	return nil, errors.New("unknown backend")
+}
+
+// Reader returns a reader for accessing all trie nodes with provided state root.
+// An error will be returned if the requested state is not available.
+func (db *Database) Reader(blockRoot common.Hash) (Reader, error) {
+	if db.fallbackDatabase != nil {
+		switch b := db.fallbackDatabase.backend.(type) {
+		case *hashdb.Database:
+			fallbackDatabaseReader, err := b.Reader(blockRoot)
+			if err != nil {
+				return nil, err
+			}
+			reader := hashdb.ReaderWithRecording(db.accessedEntries, fallbackDatabaseReader)
+			return reader, nil
+		case *pathdb.Database:
+			return b.Reader(blockRoot)
+		}
+		return nil, errors.New("unknown backend")
+	}
+	return db.ReaderWithoutFallbackDatabase(blockRoot)
 }
 
 // Update performs a state transition by committing dirty nodes contained in the
