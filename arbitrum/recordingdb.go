@@ -50,6 +50,7 @@ func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 	if len(key) == 32 {
 		// this means this key is related to a trie node, and
 		// the trie node layer wasn't able to retrieve from its cache.
+		copy(hash[:], key)
 		res, err = db.diskDb.Get(key)
 	} else if len(key) == len(rawdb.CodePrefix)+32 && bytes.HasPrefix(key, rawdb.CodePrefix) {
 		// Retrieving code
@@ -261,6 +262,7 @@ func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected comm
 }
 
 func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeader *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
+	// log.Error("PrepareRecording", "lastBlockHeader.Hash()", lastBlockHeader.Hash())
 	_, err := r.GetOrRecreateState(ctx, lastBlockHeader, logFunc)
 	if err != nil {
 		return nil, nil, nil, err
@@ -269,6 +271,14 @@ func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeade
 	defer func() { r.Dereference(finalDereference) }()
 	recordingKeyValue := newRecordingKV(r.db.DiskDB())
 
+	if lastBlockHeader != nil {
+		// Guarantees that recordingKV will have access to the state trie related
+		// to lastBlockHeader directly through disk.
+		err := r.db.TrieDB().Commit(lastBlockHeader.Root, true)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
 	trieConfig := trie.HashDefaults
 	trieConfig.RecordAccess = true
 	trieConfig.FallbackDatabase = r.db.TrieDB()

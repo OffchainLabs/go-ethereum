@@ -658,23 +658,3 @@ func (reader *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]
 	blob, _ := reader.db.node(hash)
 	return blob, nil
 }
-
-// readerWithRecording wraps a reader in order to record entries that are
-// accessed through the reader
-type readerWithRecording struct {
-	reader          *reader
-	accessedEntries map[common.Hash][]byte
-}
-
-func ReaderWithRecording(
-	accessedEntries map[common.Hash][]byte,
-	fallbackReader *reader,
-) *readerWithRecording {
-	return &readerWithRecording{reader: fallbackReader, accessedEntries: accessedEntries}
-}
-
-func (r *readerWithRecording) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
-	blob, err := r.reader.Node(owner, path, hash)
-	r.accessedEntries[hash] = blob
-	return blob, err
-}

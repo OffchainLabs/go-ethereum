@@ -216,26 +216,6 @@ func (db *Database) Reader(root common.Hash) (layer, error) {
 	return l, nil
 }
 
-// layerWithRecording wraps a layer in order to record entries that are
-// accessed through the layer
-type layerWithRecording struct {
-	layer           layer
-	accessedEntries map[common.Hash][]byte
-}
-
-func LayerWithRecording(
-	accessedEntries map[common.Hash][]byte,
-	fallbackLayer layer,
-) *layerWithRecording {
-	return &layerWithRecording{layer: fallbackLayer, accessedEntries: accessedEntries}
-}
-
-func (l *layerWithRecording) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
-	blob, err := l.layer.Node(owner, path, hash)
-	l.accessedEntries[hash] = blob
-	return blob, err
-}
-
 // Update adds a new layer into the tree, if that can be linked to an existing
 // old parent. It is disallowed to insert a disk layer (the origin of all). Apart
 // from that this function will flatten the extra diff layers at bottom into disk

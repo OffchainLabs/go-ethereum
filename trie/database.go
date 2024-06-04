@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie/triedb/database"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -128,7 +129,7 @@ func (db *Database) Accesses() map[common.Hash][]byte {
 	return db.accessedEntries
 }
 
-func (db *Database) ReaderWithoutFallbackDatabase(blockRoot common.Hash) (Reader, error) {
+func (db *Database) ReaderWithoutFallbackDatabase(blockRoot common.Hash) (database.Reader, error) {
 	switch b := db.backend.(type) {
 	case *hashdb.Database:
 		return b.Reader(blockRoot)
@@ -140,27 +141,26 @@ func (db *Database) ReaderWithoutFallbackDatabase(blockRoot common.Hash) (Reader
 
 // Reader returns a reader for accessing all trie nodes with provided state root.
 // An error will be returned if the requested state is not available.
-func (db *Database) Reader(blockRoot common.Hash) (Reader, error) {
-	if db.fallbackDatabase != nil {
-		switch b := db.fallbackDatabase.backend.(type) {
-		case *hashdb.Database:
-			fallbackDatabaseReader, err := b.Reader(blockRoot)
-			if err != nil {
-				return nil, err
-			}
-			reader := hashdb.ReaderWithRecording(db.accessedEntries, fallbackDatabaseReader)
-			return reader, nil
-		case *pathdb.Database:
-			fallbackDatabaseLayer, err := b.Reader(blockRoot)
-			if err != nil {
-				return nil, err
-			}
-			layer := pathdb.LayerWithRecording(db.accessedEntries, fallbackDatabaseLayer)
-			return layer, nil
-		}
-		return nil, errors.New("unknown backend")
+func (db *Database) Reader(blockRoot common.Hash) (database.Reader, error) {
+	readerWithoutFallbackDatabase, err := db.ReaderWithoutFallbackDatabase(blockRoot)
+	if err != nil {
+		return nil, err
 	}
-	return db.ReaderWithoutFallbackDatabase(blockRoot)
+
+	if db.fallbackDatabase != nil {
+		fallbackDatabaseReader, err := db.fallbackDatabase.Reader(blockRoot)
+		if err != nil {
+			return nil, err
+		}
+		readerWithFallbackDatabase := database.ReaderWithRecording(
+			readerWithoutFallbackDatabase,
+			fallbackDatabaseReader,
+			db.accessedEntries,
+		)
+		return readerWithFallbackDatabase, nil
+	}
+
+	return readerWithoutFallbackDatabase, nil
 }
 
 // Update performs a state transition by committing dirty nodes contained in the
