@@ -35,7 +35,7 @@ type Config struct {
 	HashDB    *hashdb.Config // Configs for hash-based scheme
 	PathDB    *pathdb.Config // Configs for experimental path-based scheme
 
-	RecordAccess     bool // Flag whether access to trie nodes is recorded
+	RecordAccess     bool      // Flag whether access to trie nodes is recorded
 	FallbackDatabase *Database // Should only be used when RecordAccess is true.
 }
 
@@ -151,7 +151,12 @@ func (db *Database) Reader(blockRoot common.Hash) (Reader, error) {
 			reader := hashdb.ReaderWithRecording(db.accessedEntries, fallbackDatabaseReader)
 			return reader, nil
 		case *pathdb.Database:
-			return b.Reader(blockRoot)
+			fallbackDatabaseLayer, err := b.Reader(blockRoot)
+			if err != nil {
+				return nil, err
+			}
+			layer := pathdb.LayerWithRecording(db.accessedEntries, fallbackDatabaseLayer)
+			return layer, nil
 		}
 		return nil, errors.New("unknown backend")
 	}
