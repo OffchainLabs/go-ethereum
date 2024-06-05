@@ -165,11 +165,19 @@ const (
 	MessageCommitMode MessageRunMode = iota
 	MessageGasEstimationMode
 	MessageEthcallMode
+	MessageReplayMode
 )
 
+// these message modes are executed onchain so cannot make any gas shortcuts
+func (m MessageRunMode) ExecutedOnChain() bool {
+	return m == MessageCommitMode || m == MessageReplayMode
+}
+
 // TransactionToMessage converts a transaction into a Message.
-func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
+func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int, runmode MessageRunMode) (*Message, error) {
 	msg := &Message{
+		TxRunMode: runmode,
+
 		Tx: tx,
 
 		Nonce:             tx.Nonce(),
