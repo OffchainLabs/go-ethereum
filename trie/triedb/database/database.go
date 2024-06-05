@@ -32,36 +32,3 @@ type Reader interface {
 	// TODO(rjl493456442): remove the 'hash' parameter, it's redundant in PBSS.
 	Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
 }
-
-type readerWithRecording struct {
-	reader          Reader
-	fallbackReader  Reader
-	accessedEntries map[common.Hash][]byte
-}
-
-func ReaderWithRecording(
-	reader Reader,
-	fallbackReader Reader,
-	accessedEntries map[common.Hash][]byte,
-) *readerWithRecording {
-	return &readerWithRecording{
-		reader:          reader,
-		fallbackReader:  fallbackReader,
-		accessedEntries: accessedEntries,
-	}
-}
-
-func (r *readerWithRecording) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
-	blob, err := r.reader.Node(owner, path, hash)
-	if err != nil {
-		return nil, err
-	}
-	if len(blob) == 0 {
-		blob, err = r.fallbackReader.Node(owner, path, hash)
-		if err != nil {
-			return nil, err
-		}
-		r.accessedEntries[hash] = blob
-	}
-	return blob, err
-}

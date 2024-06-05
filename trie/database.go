@@ -129,38 +129,23 @@ func (db *Database) Accesses() map[common.Hash][]byte {
 	return db.accessedEntries
 }
 
-func (db *Database) ReaderWithoutFallbackDatabase(blockRoot common.Hash) (database.Reader, error) {
+// Reader returns a reader for accessing all trie nodes with provided state root.
+// An error will be returned if the requested state is not available.
+func (db *Database) Reader(blockRoot common.Hash) (database.Reader, error) {
 	switch b := db.backend.(type) {
 	case *hashdb.Database:
+		if db.config.RecordAccess {
+			fallbackDatabaseReader, err := db.fallbackDatabase.Reader(blockRoot)
+			if err != nil {
+				return nil, err
+			}
+			return b.ReaderWithRecording(blockRoot, db.accessedEntries, fallbackDatabaseReader)
+		}
 		return b.Reader(blockRoot)
 	case *pathdb.Database:
 		return b.Reader(blockRoot)
 	}
 	return nil, errors.New("unknown backend")
-}
-
-// Reader returns a reader for accessing all trie nodes with provided state root.
-// An error will be returned if the requested state is not available.
-func (db *Database) Reader(blockRoot common.Hash) (database.Reader, error) {
-	readerWithoutFallbackDatabase, err := db.ReaderWithoutFallbackDatabase(blockRoot)
-	if err != nil {
-		return nil, err
-	}
-
-	if db.fallbackDatabase != nil {
-		fallbackDatabaseReader, err := db.fallbackDatabase.Reader(blockRoot)
-		if err != nil {
-			return nil, err
-		}
-		readerWithFallbackDatabase := database.ReaderWithRecording(
-			readerWithoutFallbackDatabase,
-			fallbackDatabaseReader,
-			db.accessedEntries,
-		)
-		return readerWithFallbackDatabase, nil
-	}
-
-	return readerWithoutFallbackDatabase, nil
 }
 
 // Update performs a state transition by committing dirty nodes contained in the

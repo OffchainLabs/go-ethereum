@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie/triedb/database"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 )
@@ -656,5 +657,34 @@ type reader struct {
 // returned if the node is not found.
 func (reader *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
 	blob, _ := reader.db.node(hash)
+	return blob, nil
+}
+
+func (db *Database) ReaderWithRecording(
+	root common.Hash,
+	accessedEntries map[common.Hash][]byte,
+	fallbackReader database.Reader,
+) (*readerWithRecording, error) {
+	return &readerWithRecording{
+		db:              db,
+		accessedEntries: accessedEntries,
+		fallbackReader:  fallbackReader,
+	}, nil
+}
+
+type readerWithRecording struct {
+	db              *Database
+	accessedEntries map[common.Hash][]byte
+	fallbackReader  database.Reader
+}
+
+func (r *readerWithRecording) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
+	blob, _ := r.db.node(hash)
+	if len(blob) == 0 {
+		blob, _ = r.fallbackReader.Node(owner, path, hash)
+		r.accessedEntries[hash] = blob
+	} else {
+		log.Error("notFallingBack")
+	}
 	return blob, nil
 }
