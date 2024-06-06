@@ -157,7 +157,7 @@ func (h *protocolHandler) peerDrop(id string) {
 	defer hPeer.mutex.Unlock()
 	hPeer.arb = nil
 	if hPeer.eth != nil {
-		hPeer.eth.Disconnect(p2p.DiscSelf)
+		hPeer.eth.Disconnect(p2p.DiscUselessPeer)
 		err := h.downloader.UnregisterPeer(id)
 		if err != nil {
 			log.Warn("failed deregistering peer from downloader", "err", err)
@@ -329,11 +329,9 @@ func (h *arbHandler) HandleCheckpoint(peer *arb.Peer, checkpoint *types.Header, 
 		skeleton := rawdb.ReadSkeletonHeader(h.db, number)
 		if skeleton == nil {
 			log.Error("arbitrum handler_p2p: canonical not found", "number", number, "peer", peer.ID())
+			return
 		}
 		canonical = skeleton.Hash()
-	}
-	if canonical == (common.Hash{}) {
-		log.Error("arbitrum handler_p2p: did not find a canonical hash", "number", number, "peer", peer.ID())
 	}
 	if canonical != checkpoint.Hash() {
 		log.Warn("got bad header from peer - bad hash", "peer", peer.ID(), "number", number, "expected", canonical, "peer", checkpoint.Hash())
@@ -526,7 +524,7 @@ func (h *snapHandler) StorageIterator(root, account, origin common.Hash) (snapsh
 	}
 	nodeIter, err := storageTrie.NodeIterator(origin[:])
 	if err != nil {
-		log.Error("Failed node iterator to open storage trie", "root", acc.Root, "err", err)
+		log.Error("Failed creating node iterator to open storage trie", "root", acc.Root, "err", err)
 		return nil, err
 	}
 	return trieStoreageIterator{trieIteratorWrapper{
