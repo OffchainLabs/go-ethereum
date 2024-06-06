@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/pkg/errors"
 )
 
@@ -30,6 +31,7 @@ type StateForHeaderFunction func(header *types.Header) (*state.StateDB, StateRel
 // otherwise only targetHeader state is checked and no search is performed
 func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor StateForHeaderFunction, targetHeader *types.Header, logFunc StateBuildingLogFunction, maxDepthInL2Gas int64) (*state.StateDB, *types.Header, StateReleaseFunc, error) {
 	genesis := bc.Config().ArbitrumChainParams.GenesisBlockNum
+	log.Error("FindLastAvailableState", "genesis", genesis, "targetHeader", targetHeader.Number.Uint64())
 	currentHeader := targetHeader
 	var state *state.StateDB
 	var err error
@@ -39,6 +41,7 @@ func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor S
 		lastHeader := currentHeader
 		state, release, err = stateFor(currentHeader)
 		if err == nil {
+			log.Error("FindLastAvailableState.forBreaking")
 			break
 		}
 		if maxDepthInL2Gas > 0 {
@@ -58,6 +61,7 @@ func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor S
 		if logFunc != nil {
 			logFunc(targetHeader, currentHeader, false)
 		}
+		log.Error("FindLastAvailableState.for", "currentHeader", currentHeader.Number.Uint64())
 		if currentHeader.Number.Uint64() <= genesis {
 			return nil, lastHeader, nil, errors.Wrap(err, fmt.Sprintf("moved beyond genesis looking for state %d, genesis %d", targetHeader.Number.Uint64(), genesis))
 		}

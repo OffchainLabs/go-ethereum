@@ -683,8 +683,7 @@ func (r *readerWithRecording) Node(owner common.Hash, path []byte, hash common.H
 	if len(blob) == 0 {
 		blob, _ = r.fallbackReader.Node(owner, path, hash)
 		r.accessedEntries[hash] = blob
-	} else {
-		log.Error("notFallingBack")
+		log.Error("recording", "hash", hash.String())
 	}
 	return blob, nil
 }

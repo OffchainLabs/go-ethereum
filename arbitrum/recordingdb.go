@@ -196,19 +196,26 @@ func NewRecordingDatabase(config *RecordingDatabaseConfig, ethdb ethdb.Database,
 // Normal geth state.New + Reference is not atomic vs Dereference. This one is.
 // This function does not recreate a state
 func (r *RecordingDatabase) StateFor(header *types.Header) (*state.StateDB, error) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
+	log.Error("StateFor", "header.Root", header.Root)
+	if r.db.TrieDB().Scheme() == rawdb.HashScheme {
+		r.mutex.Lock()
+		defer r.mutex.Unlock()
 
-	sdb, err := state.NewDeterministic(header.Root, r.db)
-	if err == nil {
-		r.referenceRootLockHeld(header.Root)
+		sdb, err := state.NewDeterministic(header.Root, r.db)
+		if err == nil {
+			r.referenceRootLockHeld(header.Root)
+		}
+		return sdb, err
 	}
-	return sdb, err
+	r.db.TrieDB().Commit(header.Root, true)
+	return state.NewDeterministic(header.Root, r.db)
 }
 
 func (r *RecordingDatabase) Dereference(header *types.Header) {
 	if header != nil {
-		r.dereferenceRoot(header.Root)
+		if r.db.TrieDB().Scheme() == rawdb.HashScheme {
+			r.dereferenceRoot(header.Root)
+		}
 	}
 }
 
@@ -221,17 +228,21 @@ func (r *RecordingDatabase) WriteStateToDatabase(header *types.Header) error {
 
 // lock must be held when calling that
 func (r *RecordingDatabase) referenceRootLockHeld(root common.Hash) {
-	r.references++
-	recordingDbReferences.Update(r.references)
-	r.db.TrieDB().Reference(root, common.Hash{})
+	if r.db.TrieDB().Scheme() == rawdb.HashScheme {
+		r.references++
+		recordingDbReferences.Update(r.references)
+		r.db.TrieDB().Reference(root, common.Hash{})
+	}
 }
 
 func (r *RecordingDatabase) dereferenceRoot(root common.Hash) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	r.references--
-	recordingDbReferences.Update(r.references)
-	r.db.TrieDB().Dereference(root)
+	if r.db.TrieDB().Scheme() == rawdb.HashScheme {
+		r.mutex.Lock()
+		defer r.mutex.Unlock()
+		r.references--
+		recordingDbReferences.Update(r.references)
+		r.db.TrieDB().Dereference(root)
+	}
 }
 
 func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected common.Hash, blockNumber uint64) (*state.StateDB, error) {
@@ -244,16 +255,19 @@ func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected comm
 	if result != expected {
 		return nil, fmt.Errorf("bad root hash expected: %v got: %v", expected, result)
 	}
-	r.referenceRootLockHeld(result)
 
-	_, size, _ := r.db.TrieDB().Size()
-	limit := common.StorageSize(r.config.TrieDirtyCache) * 1024 * 1024
-	recordingDbSize.Update(int64(size))
-	if size > limit {
-		log.Info("Recording DB: flushing to disk", "size", size, "limit", limit)
-		r.db.TrieDB().Cap(limit - ethdb.IdealBatchSize)
-		_, size, _ = r.db.TrieDB().Size()
+	if r.db.TrieDB().Scheme() == rawdb.HashScheme {
+		r.referenceRootLockHeld(result)
+
+		_, size, _ := r.db.TrieDB().Size()
+		limit := common.StorageSize(r.config.TrieDirtyCache) * 1024 * 1024
 		recordingDbSize.Update(int64(size))
+		if size > limit {
+			log.Info("Recording DB: flushing to disk", "size", size, "limit", limit)
+			r.db.TrieDB().Cap(limit - ethdb.IdealBatchSize)
+			_, size, _ = r.db.TrieDB().Size()
+			recordingDbSize.Update(int64(size))
+		}
 	}
 	return state.New(result, statedb.Database(), nil)
 }
