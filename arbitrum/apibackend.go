@@ -452,17 +452,16 @@ func (a *APIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
-func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types.Header, err error) (*state.StateDB, *types.Header, error) {
+func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *core.BlockChain, maxRecreateStateDepth int64, header *types.Header, err error) (*state.StateDB, *types.Header, error) {
 	if err != nil {
 		return nil, header, err
 	}
 	if header == nil {
 		return nil, nil, errors.New("header not found")
 	}
-	if !a.BlockChain().Config().IsArbitrumNitro(header.Number) {
+	if !bc.Config().IsArbitrumNitro(header.Number) {
 		return nil, header, types.ErrUseFallback
 	}
-	bc := a.BlockChain()
 	stateFor := func(db state.Database, snapshots *snapshot.Tree) func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
 		return func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
 			if header.Root != (common.Hash{}) {
@@ -495,8 +494,8 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 	// note: triedb cleans cache is disabled in trie.HashDefaults
 	// note: only states committed to diskdb can be found as we're creating new triedb
 	// note: snapshots are not used here
-	ephemeral := state.NewDatabaseWithConfig(a.ChainDb(), trie.HashDefaults)
-	lastState, lastHeader, lastStateRelease, err := FindLastAvailableState(ctx, bc, stateFor(ephemeral, nil), header, nil, a.b.config.MaxRecreateStateDepth)
+	ephemeral := state.NewDatabaseWithConfig(chainDb, trie.HashDefaults)
+	lastState, lastHeader, lastStateRelease, err := FindLastAvailableState(ctx, bc, stateFor(ephemeral, nil), header, nil, maxRecreateStateDepth)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -521,7 +520,7 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 	reexec := uint64(0)
 	checkLive := false
 	preferDisk := false // preferDisk is ignored in this case
-	statedb, release, err := eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(ctx, targetBlock, reexec, lastState, lastBlock, checkLive, preferDisk)
+	statedb, release, err := eth.NewArbEthereum(bc, chainDb).StateAtBlock(ctx, targetBlock, reexec, lastState, lastBlock, checkLive, preferDisk)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to recreate state: %w", err)
 	}
@@ -536,7 +535,7 @@ func (a *APIBackend) stateAndHeaderFromHeader(ctx context.Context, header *types
 
 func (a *APIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	header, err := a.HeaderByNumber(ctx, number)
-	return a.stateAndHeaderFromHeader(ctx, header, err)
+	return StateAndHeaderFromHeader(ctx, a.ChainDb(), a.b.arb.BlockChain(), a.b.config.MaxRecreateStateDepth, header, err)
 }
 
 func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
@@ -547,7 +546,7 @@ func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOr
 	if ishash && header != nil && header.Number.Cmp(bc.CurrentBlock().Number) > 0 && bc.GetCanonicalHash(header.Number.Uint64()) != hash {
 		return nil, nil, errors.New("requested block ahead of current block and the hash is not currently canonical")
 	}
-	return a.stateAndHeaderFromHeader(ctx, header, err)
+	return StateAndHeaderFromHeader(ctx, a.ChainDb(), a.b.arb.BlockChain(), a.b.config.MaxRecreateStateDepth, header, err)
 }
 
 func (a *APIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
