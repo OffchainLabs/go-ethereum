@@ -39,10 +39,10 @@ import (
 )
 
 type SyncHelper interface {
-	LastConfirmed() (*types.Header, uint64, error)
+	LastConfirmed() (*types.Header, uint64, uint64, error)
 	LastCheckpoint() (*types.Header, error)
 	CheckpointSupported(*types.Header) (bool, error)
-	ValidateConfirmed(*types.Header, uint64) (bool, error)
+	ValidateConfirmed(*types.Header, uint64, uint64) (bool, error)
 }
 
 type Peer struct {
@@ -271,7 +271,7 @@ func (h *arbHandler) PeerInfo(id enode.ID) interface{} {
 	return nil
 }
 
-func (h *arbHandler) HandleLastConfirmed(peer *arb.Peer, confirmed *types.Header, node uint64) {
+func (h *arbHandler) HandleLastConfirmed(peer *arb.Peer, confirmed *types.Header, l1BlockNumber uint64, node uint64) {
 	protoHandler := (*protocolHandler)(h)
 	validated := false
 	valid := false
@@ -284,7 +284,7 @@ func (h *arbHandler) HandleLastConfirmed(peer *arb.Peer, confirmed *types.Header
 	}
 	if !validated {
 		var err error
-		valid, err = h.helper.ValidateConfirmed(confirmed, node)
+		valid, err = h.helper.ValidateConfirmed(confirmed, l1BlockNumber, node)
 		if err != nil {
 			log.Error("error in validate confirmed", "id", peer.ID(), "err", err)
 			return
@@ -341,7 +341,7 @@ func (h *arbHandler) HandleCheckpoint(peer *arb.Peer, checkpoint *types.Header, 
 	protoHandler.advanceCheckpoint(checkpoint)
 }
 
-func (h *arbHandler) LastConfirmed() (*types.Header, uint64, error) {
+func (h *arbHandler) LastConfirmed() (*types.Header, uint64, uint64, error) {
 	return h.helper.LastConfirmed()
 }
 

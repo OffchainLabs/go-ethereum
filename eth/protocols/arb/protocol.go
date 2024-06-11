@@ -34,8 +34,9 @@ const (
 )
 
 type LastConfirmedMsgPacket struct {
-	Header *types.Header
-	Node   uint64
+	Header        *types.Header
+	L1BlockNumber uint64
+	Node          uint64
 }
 
 type CheckpointMsgPacket struct {
@@ -62,9 +63,9 @@ type Handler func(peer *Peer) error
 // callback methods to invoke on remote deliveries.
 type Backend interface {
 	PeerInfo(id enode.ID) interface{}
-	HandleLastConfirmed(peer *Peer, confirmed *types.Header, node uint64)
+	HandleLastConfirmed(peer *Peer, confirmed *types.Header, l1BlockNumber uint64, node uint64)
 	HandleCheckpoint(peer *Peer, header *types.Header, supported bool)
-	LastConfirmed() (*types.Header, uint64, error)
+	LastConfirmed() (*types.Header, uint64, uint64, error)
 	LastCheckpoint() (*types.Header, error)
 	CheckpointSupported(*types.Header) (bool, error)
 	// RunPeer is invoked when a peer joins on the `eth` protocol. The handler

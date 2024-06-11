@@ -61,8 +61,8 @@ type dummySyncHelper struct {
 	checkpoint *types.Header
 }
 
-func (d *dummySyncHelper) LastConfirmed() (*types.Header, uint64, error) {
-	return d.confirmed, 0, nil
+func (d *dummySyncHelper) LastConfirmed() (*types.Header, uint64, uint64, error) {
+	return d.confirmed, 0, 0, nil
 }
 
 func (d *dummySyncHelper) LastCheckpoint() (*types.Header, error) {
@@ -76,7 +76,7 @@ func (d *dummySyncHelper) CheckpointSupported(*types.Header) (bool, error) {
 	return true, nil
 }
 
-func (d *dummySyncHelper) ValidateConfirmed(header *types.Header, node uint64) (bool, error) {
+func (d *dummySyncHelper) ValidateConfirmed(header *types.Header, l1BlockNumber uint64, node uint64) (bool, error) {
 	if d.confirmed == nil {
 		return true, nil
 	}
