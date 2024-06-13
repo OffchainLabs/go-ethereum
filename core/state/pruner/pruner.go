@@ -385,7 +385,10 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 				output.Put(data.CodeHash, nil)
 			}
 			if data.Root != (common.Hash{}) {
-				storageTr, err := trie.NewStateTrie(trie.StorageTrieID(root, key, data.Root), sdb.TrieDB())
+				// note: we are passing data.Root as stateRoot here, to skip the check for stateRoot existence in trie.newTrieReader,
+				// we already check that when opening state trie and reading the account node
+				trieID := trie.StorageTrieID(data.Root, key, data.Root)
+				storageTr, err := trie.NewStateTrie(trieID, sdb.TrieDB())
 				if err != nil {
 					return err
 				}
