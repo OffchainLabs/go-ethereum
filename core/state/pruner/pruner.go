@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 )
 
 const (
@@ -56,9 +57,10 @@ const (
 
 // Config includes all the configurations for pruning.
 type Config struct {
-	Datadir   string // The directory of the state database
-	BloomSize uint64 // The Megabytes of memory allocated to bloom-filter
-	Threads   int    // maximum number of threads spawned in dumpRawTrieDescendants and removeOtherRoots
+	Datadir        string // The directory of the state database
+	BloomSize      uint64 // The Megabytes of memory allocated to bloom-filter
+	Threads        int    // The maximum number of threads spawned in dumpRawTrieDescendants and removeOtherRoots
+	CleanCacheSize int    // The Megabytes of clean cache size used in dumpRawTrieDescendants
 }
 
 // Pruner is an offline tool to prune the stale state with the
@@ -337,8 +339,16 @@ func prune(snaptree *snapshot.Tree, allRoots []common.Hash, maindb ethdb.Databas
 }
 
 // We assume state blooms do not need the value, only the key
-func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBloom, threads int) error {
-	sdb := state.NewDatabase(db)
+func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBloom, config *Config) error {
+	// Offline pruning is only supported in legacy hash based scheme.
+	hashConfig := *hashdb.Defaults
+	hashConfig.CleanCacheSize = config.CleanCacheSize * 1024 * 1024
+	trieConfig := &trie.Config{
+		Preimages: false,
+		HashDB:    &hashConfig,
+	}
+	sdb := state.NewDatabaseWithConfig(db, trieConfig)
+	defer sdb.TrieDB().Close()
 	tr, err := sdb.OpenTrie(root)
 	if err != nil {
 		return err
@@ -354,6 +364,7 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 	// To do so, we create a semaphore out of a channel's buffer.
 	// Before launching a new goroutine, we acquire the semaphore by taking an entry from this channel.
 	// This channel doubles as a mechanism for the background goroutine to report an error on release.
+	threads := config.Threads
 	results := make(chan error, threads)
 	for i := 0; i < threads; i++ {
 		results <- nil
@@ -531,14 +542,14 @@ func (p *Pruner) Prune(inputRoots []common.Hash) error {
 				return err
 			}
 		} else {
-			if err := dumpRawTrieDescendants(p.db, root, p.stateBloom, p.config.Threads); err != nil {
+			if err := dumpRawTrieDescendants(p.db, root, p.stateBloom, &p.config); err != nil {
 				return err
 			}
 		}
 	}
 	// Traverse the genesis, put all genesis state entries into the
 	// bloom filter too.
-	if err := extractGenesis(p.db, p.stateBloom, p.config.Threads); err != nil {
+	if err := extractGenesis(p.db, p.stateBloom, &p.config); err != nil {
 		return err
 	}
 
@@ -603,7 +614,7 @@ func RecoverPruning(datadir string, db ethdb.Database, threads int) error {
 
 // extractGenesis loads the genesis state and commits all the state entries
 // into the given bloomfilter.
-func extractGenesis(db ethdb.Database, stateBloom *stateBloom, threads int) error {
+func extractGenesis(db ethdb.Database, stateBloom *stateBloom, config *Config) error {
 	genesisHash := rawdb.ReadCanonicalHash(db, 0)
 	if genesisHash == (common.Hash{}) {
 		return errors.New("missing genesis hash")
@@ -613,7 +624,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom, threads int) erro
 		return errors.New("missing genesis block")
 	}
 
-	return dumpRawTrieDescendants(db, genesis.Root(), stateBloom, threads)
+	return dumpRawTrieDescendants(db, genesis.Root(), stateBloom, config)
 }
 
 func bloomFilterPath(datadir string) string {
