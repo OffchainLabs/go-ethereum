@@ -24,7 +24,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"time"
 
@@ -58,6 +57,7 @@ const (
 type Config struct {
 	Datadir   string // The directory of the state database
 	BloomSize uint64 // The Megabytes of memory allocated to bloom-filter
+	Threads   int    // maximum number of threads spawned in dumpRawTrieDescendants and removeOtherRoots
 }
 
 // Pruner is an offline tool to prune the stale state with the
@@ -107,6 +107,10 @@ func NewPruner(db ethdb.Database, config Config) (*Pruner, error) {
 	if err != nil {
 		return nil, err
 	}
+	// sanitize threads number, if set too low
+	if config.Threads <= 0 {
+		config.Threads = 1
+	}
 	return &Pruner{
 		config:      config,
 		chainHeader: headBlock.Header(),
@@ -124,7 +128,7 @@ func readStoredChainConfig(db ethdb.Database) *params.ChainConfig {
 	return rawdb.ReadChainConfig(db, block0Hash)
 }
 
-func removeOtherRoots(db ethdb.Database, rootsList []common.Hash, stateBloom *stateBloom) error {
+func removeOtherRoots(db ethdb.Database, rootsList []common.Hash, stateBloom *stateBloom, threads int) error {
 	chainConfig := readStoredChainConfig(db)
 	var genesisBlockNum uint64
 	if chainConfig != nil {
@@ -139,7 +143,6 @@ func removeOtherRoots(db ethdb.Database, rootsList []common.Hash, stateBloom *st
 		return errors.New("failed to load head block")
 	}
 	blockRange := headBlock.NumberU64() - genesisBlockNum
-	threads := runtime.NumCPU()
 	var wg sync.WaitGroup
 	errors := make(chan error, threads)
 	for thread := 0; thread < threads; thread++ {
@@ -207,7 +210,7 @@ func removeOtherRoots(db ethdb.Database, rootsList []common.Hash, stateBloom *st
 }
 
 // Arbitrum: snaptree and root are for the final snapshot kept
-func prune(snaptree *snapshot.Tree, allRoots []common.Hash, maindb ethdb.Database, stateBloom *stateBloom, bloomPath string, start time.Time) error {
+func prune(snaptree *snapshot.Tree, allRoots []common.Hash, maindb ethdb.Database, stateBloom *stateBloom, bloomPath string, start time.Time, threads int) error {
 	// Delete all stale trie nodes in the disk. With the help of state bloom
 	// the trie nodes(and codes) belong to the active state will be filtered
 	// out. A very small part of stale tries will also be filtered because of
@@ -297,7 +300,7 @@ func prune(snaptree *snapshot.Tree, allRoots []common.Hash, maindb ethdb.Databas
 	}
 
 	// Clean up any false positives that are top-level state roots.
-	err := removeOtherRoots(maindb, allRoots, stateBloom)
+	err := removeOtherRoots(maindb, allRoots, stateBloom, threads)
 	if err != nil {
 		return err
 	}
@@ -333,7 +336,7 @@ func prune(snaptree *snapshot.Tree, allRoots []common.Hash, maindb ethdb.Databas
 }
 
 // We assume state blooms do not need the value, only the key
-func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBloom) error {
+func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBloom, threads int) error {
 	sdb := state.NewDatabase(db)
 	tr, err := sdb.OpenTrie(root)
 	if err != nil {
@@ -350,7 +353,6 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 	// To do so, we create a semaphore out of a channel's buffer.
 	// Before launching a new goroutine, we acquire the semaphore by taking an entry from this channel.
 	// This channel doubles as a mechanism for the background goroutine to report an error on release.
-	threads := runtime.NumCPU()
 	results := make(chan error, threads)
 	for i := 0; i < threads; i++ {
 		results <- nil
@@ -448,7 +450,7 @@ func (p *Pruner) Prune(inputRoots []common.Hash) error {
 		return err
 	}
 	if bloomExists {
-		return RecoverPruning(p.config.Datadir, p.db)
+		return RecoverPruning(p.config.Datadir, p.db, p.config.Threads)
 	}
 	// Retrieve all snapshot layers from the current HEAD.
 	// In theory there are 128 difflayers + 1 disk layer present,
@@ -514,14 +516,14 @@ func (p *Pruner) Prune(inputRoots []common.Hash) error {
 				return err
 			}
 		} else {
-			if err := dumpRawTrieDescendants(p.db, root, p.stateBloom); err != nil {
+			if err := dumpRawTrieDescendants(p.db, root, p.stateBloom, p.config.Threads); err != nil {
 				return err
 			}
 		}
 	}
 	// Traverse the genesis, put all genesis state entries into the
 	// bloom filter too.
-	if err := extractGenesis(p.db, p.stateBloom); err != nil {
+	if err := extractGenesis(p.db, p.stateBloom, p.config.Threads); err != nil {
 		return err
 	}
 
@@ -532,7 +534,7 @@ func (p *Pruner) Prune(inputRoots []common.Hash) error {
 		return err
 	}
 	log.Info("State bloom filter committed", "name", filterName, "roots", roots)
-	return prune(p.snaptree, roots, p.db, p.stateBloom, filterName, start)
+	return prune(p.snaptree, roots, p.db, p.stateBloom, filterName, start, p.config.Threads)
 }
 
 // RecoverPruning will resume the pruning procedure during the system restart.
@@ -542,7 +544,7 @@ func (p *Pruner) Prune(inputRoots []common.Hash) error {
 // pruning can be resumed. What's more if the bloom filter is constructed, the
 // pruning **has to be resumed**. Otherwise a lot of dangling nodes may be left
 // in the disk.
-func RecoverPruning(datadir string, db ethdb.Database) error {
+func RecoverPruning(datadir string, db ethdb.Database, threads int) error {
 	exists, err := bloomFilterExists(datadir)
 	if err != nil {
 		return err
@@ -581,12 +583,12 @@ func RecoverPruning(datadir string, db ethdb.Database) error {
 	}
 	log.Info("Loaded state bloom filter", "path", stateBloomPath, "roots", stateBloomRoots)
 
-	return prune(snaptree, stateBloomRoots, db, stateBloom, stateBloomPath, time.Now())
+	return prune(snaptree, stateBloomRoots, db, stateBloom, stateBloomPath, time.Now(), threads)
 }
 
 // extractGenesis loads the genesis state and commits all the state entries
 // into the given bloomfilter.
-func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
+func extractGenesis(db ethdb.Database, stateBloom *stateBloom, threads int) error {
 	genesisHash := rawdb.ReadCanonicalHash(db, 0)
 	if genesisHash == (common.Hash{}) {
 		return errors.New("missing genesis hash")
@@ -596,7 +598,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 		return errors.New("missing genesis block")
 	}
 
-	return dumpRawTrieDescendants(db, genesis.Root(), stateBloom)
+	return dumpRawTrieDescendants(db, genesis.Root(), stateBloom, threads)
 }
 
 func bloomFilterPath(datadir string) string {
