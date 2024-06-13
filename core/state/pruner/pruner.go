@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -357,6 +358,7 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 	for i := 0; i < threads; i++ {
 		results <- nil
 	}
+	var threadsRunning atomic.Int32
 
 	for accountIt.Next(true) {
 		accountTrieHash := accountIt.Hash()
@@ -399,14 +401,20 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 					return err
 				}
 				go func() {
+					threadsRunning.Add(1)
+					defer threadsRunning.Add(-1)
 					var err error
 					defer func() {
 						results <- err
 					}()
+					threadStartedAt := time.Now()
+					threadLastLog := time.Now()
+
 					storageIt, err := storageTr.NodeIterator(nil)
 					if err != nil {
 						return
 					}
+					var processedNodes uint64
 					for storageIt.Next(true) {
 						storageTrieHash := storageIt.Hash()
 						if storageTrieHash != (common.Hash{}) {
@@ -415,6 +423,13 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 							if err != nil {
 								return
 							}
+						}
+						processedNodes++
+						if time.Since(threadLastLog) > 5*time.Minute {
+							elapsedTotal := time.Since(startedAt)
+							elapsedThread := time.Since(threadStartedAt)
+							log.Info("traversing trie database - traversing storage trie taking long", "key", key, "elapsedTotal", elapsedTotal, "elapsedThread", elapsedThread, "processedNodes", processedNodes, "threadsRunning", threadsRunning.Load())
+							threadLastLog = time.Now()
 						}
 					}
 					err = storageIt.Error()
