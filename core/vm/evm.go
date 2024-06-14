@@ -83,8 +83,8 @@ type BlockContext struct {
 	Random      *common.Hash   // Provides information for PREVRANDAO
 
 	// Arbitrum information
-	ArbOSVersion uint64
-	BaseFeeCopy  *big.Int // Copy of BaseFee to be used in arbitrum's geth hooks and precompiles when BaseFee is lowered to 0 when vm runs with NoBaseFee flag and 0 gas price. Is nil when BaseFee isn't lowered to 0
+	ArbOSVersion   uint64
+	BaseFeeInBlock *big.Int // Copy of BaseFee to be used in arbitrum's geth hooks and precompiles when BaseFee is lowered to 0 when vm runs with NoBaseFee flag and 0 gas price. Is nil when BaseFee isn't lowered to 0
 }
 
 // TxContext provides the EVM with information about a transaction.
@@ -143,7 +143,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 	// invariants (basefee < feecap)
 	if config.NoBaseFee {
 		if txCtx.GasPrice.BitLen() == 0 {
-			blockCtx.BaseFeeCopy = new(big.Int).Set(blockCtx.BaseFee)
+			blockCtx.BaseFeeInBlock = new(big.Int).Set(blockCtx.BaseFee)
 			blockCtx.BaseFee = new(big.Int)
 		}
 		if txCtx.BlobFeeCap != nil && txCtx.BlobFeeCap.BitLen() == 0 {
