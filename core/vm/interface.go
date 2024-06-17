@@ -42,6 +42,7 @@ type StateDB interface {
 	SetStylusPagesOpen(open uint16)
 	AddStylusPages(new uint16) (uint16, uint16)
 	AddStylusPagesEver(new uint16)
+	GetCodeFromHash(common.Hash) ([]byte, error)
 
 	Deterministic() bool
 	Database() state.Database

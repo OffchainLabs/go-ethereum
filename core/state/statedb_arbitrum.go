@@ -297,3 +297,8 @@ func (p RecentWasms) Copy() RecentWasms {
 	}
 	return RecentWasms{cache: &cache}
 }
+
+func (s *StateDB) GetCodeFromHash(codeHash common.Hash) ([]byte, error) {
+	// Not passing in an address is supported pre-Verkle, as in Blockchain's ContractCodeWithPrefix method.
+	return s.db.ContractCode(common.Address{}, codeHash)
+}
