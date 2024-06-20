@@ -1279,10 +1279,6 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	{
-		state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-		if state == nil || err != nil {
-			return 0, err
-		}
 		gasCap, err = args.L2OnlyGasCap(gasCap, header, state, core.MessageGasEstimationMode)
 		if err != nil {
 			return 0, err
