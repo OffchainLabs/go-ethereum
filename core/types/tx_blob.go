@@ -43,7 +43,7 @@ type BlobTx struct {
 	BlobHashes []common.Hash
 
 	// A blob transaction can optionally contain blobs. This field must be set when BlobTx
-	// is used to create a transaction for sigining.
+	// is used to create a transaction for signing.
 	Sidecar *BlobTxSidecar `rlp:"-"`
 
 	// Signature values
@@ -189,6 +189,12 @@ func (tx *BlobTx) setSignatureValues(chainID, v, r, s *big.Int) {
 func (tx *BlobTx) withoutSidecar() *BlobTx {
 	cpy := *tx
 	cpy.Sidecar = nil
+	return &cpy
+}
+
+func (tx *BlobTx) withSidecar(sideCar *BlobTxSidecar) *BlobTx {
+	cpy := *tx
+	cpy.Sidecar = sideCar
 	return &cpy
 }
 

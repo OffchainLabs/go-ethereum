@@ -39,6 +39,10 @@ func (db *Database) Has(key []byte) (bool, error) {
 	return true, nil
 }
 
+func (t *Database) WasmDataBase() (ethdb.KeyValueStore, uint32) {
+	return t, 0
+}
+
 func (db *Database) Get(key []byte) ([]byte, error) {
 	var resp hexutil.Bytes
 	err := db.remote.Call(&resp, "debug_dbGet", hexutil.Bytes(key))
