@@ -54,8 +54,8 @@ import (
 
 var errBlobTxNotSupported = errors.New("signing blob transactions not supported")
 var (
-	gasUsedEthEstimateGasGauge = metrics.NewRegisteredGauge("api/eth_call/gas", nil)
-	gasUsedEthCallGauge        = metrics.NewRegisteredGauge("api/eth_estimateGas/gas", nil)
+	gasUsedEthEstimateGasGauge = metrics.NewRegisteredCounter("rpc/gas_used/eth_estimate", nil)
+	gasUsedEthCallGauge        = metrics.NewRegisteredCounter("rpc/gas_used/eth_call", nil)
 )
 
 func fallbackClientFor(b Backend, err error) types.FallbackClient {
