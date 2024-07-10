@@ -24,6 +24,7 @@ import (
 
 const ArbosVersion_FixRedeemGas = uint64(11)
 const ArbosVersion_Stylus = uint64(30)
+const ArbosVersion_StylusFixes = uint64(31)
 
 type ArbitrumChainParams struct {
 	EnableArbOS               bool
@@ -113,7 +114,7 @@ func ArbitrumDevTestParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     true,
 		DataAvailabilityCommittee: false,
-		InitialArbOSVersion:       30,
+		InitialArbOSVersion:       31,
 		InitialChainOwner:         common.Address{},
 	}
 }
@@ -123,7 +124,7 @@ func ArbitrumDevTestDASParams() ArbitrumChainParams {
 		EnableArbOS:               true,
 		AllowDebugPrecompiles:     true,
 		DataAvailabilityCommittee: true,
-		InitialArbOSVersion:       30,
+		InitialArbOSVersion:       31,
 		InitialChainOwner:         common.Address{},
 	}
 }
