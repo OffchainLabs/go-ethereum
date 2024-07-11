@@ -54,7 +54,7 @@ import (
 
 var errBlobTxNotSupported = errors.New("signing blob transactions not supported")
 var (
-	gasUsedEthEstimateGasGauge = metrics.NewRegisteredCounter("rpc/gas_used/eth_estimate", nil)
+	gasUsedEthEstimateGasGauge = metrics.NewRegisteredCounter("rpc/gas_used/eth_estimategas", nil)
 	gasUsedEthCallGauge        = metrics.NewRegisteredCounter("rpc/gas_used/eth_call", nil)
 )
 
