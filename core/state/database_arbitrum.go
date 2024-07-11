@@ -7,16 +7,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
-func (db *cachingDB) ActivatedAsm(moduleHash common.Hash) ([]byte, error) {
+func (db *cachingDB) ActivatedAsm(arch string, moduleHash common.Hash) ([]byte, error) {
 	if asm, _ := db.activatedAsmCache.Get(moduleHash); len(asm) > 0 {
 		return asm, nil
 	}
-	wasmKey := rawdb.ActivatedAsmKey(moduleHash)
-	asm, err := db.wasmdb.Get(wasmKey[:])
-	if err != nil {
-		return nil, err
-	}
-	if len(asm) > 0 {
+	if asm := rawdb.ReadActivatedAsm(arch, moduleHash); len(asm) > 0 {
 		db.activatedAsmCache.Add(moduleHash, asm)
 		return asm, nil
 	}
@@ -27,12 +22,7 @@ func (db *cachingDB) ActivatedModule(moduleHash common.Hash) ([]byte, error) {
 	if module, _ := db.activatedModuleCache.Get(moduleHash); len(module) > 0 {
 		return module, nil
 	}
-	wasmKey := rawdb.ActivatedModuleKey(moduleHash)
-	module, err := db.wasmdb.Get(wasmKey[:])
-	if err != nil {
-		return nil, err
-	}
-	if len(module) > 0 {
+	if module := rawdb.ReadActivatedModule(db.wasmdb, moduleHash); len(module) > 0 {
 		db.activatedModuleCache.Add(moduleHash, module)
 		return module, nil
 	}

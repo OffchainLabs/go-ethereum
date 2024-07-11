@@ -19,48 +19,30 @@
 package rawdb
 
 import (
-	"bytes"
-
 	"github.com/ethereum/go-ethereum/common"
 )
 
+const wasmSchemaVersion byte = 0x01
+
 var (
-	activatedAsmPrefix    = []byte{0x00, 'w', 'a'} // (prefix, moduleHash) -> stylus asm
-	activatedModulePrefix = []byte{0x00, 'w', 'm'} // (prefix, moduleHash) -> stylus module
+	wasmSchemaVersionKey = []byte("WasmSchemaVersion")
+
+	// TODO do we need 0x00 prefix? or even: do we need also 'w' there?
+	activatedAsmArmPrefix  = []byte{0x00, 'w', 'r'} // (prefix, moduleHash) -> stylus asm for ARM system
+	activatedAsmX86Prefix  = []byte{0x00, 'w', 'x'} // (prefix, moduleHash) -> stylus asm for x86 system
+	activatedAsmHostPrefix = []byte{0x00, 'w', 'h'} // (prefix, moduleHash) -> stylus asm for system other then ARM and x86
+	activatedModulePrefix  = []byte{0x00, 'w', 'm'} // (prefix, moduleHash) -> stylus module
 )
 
 // WasmKeyLen = CompiledWasmCodePrefix + moduleHash
-const WasmKeyLen = 3 + 32
+const WasmKeyLen = 3 + common.HashLength
 
 type WasmKey = [WasmKeyLen]byte
 
-func ActivatedAsmKey(moduleHash common.Hash) WasmKey {
-	return newWasmKey(activatedAsmPrefix, moduleHash)
-}
-
-func ActivatedModuleKey(moduleHash common.Hash) WasmKey {
-	return newWasmKey(activatedModulePrefix, moduleHash)
-}
-
 // key = prefix + moduleHash
-func newWasmKey(prefix []byte, moduleHash common.Hash) WasmKey {
+func activatedKey(prefix []byte, moduleHash common.Hash) WasmKey {
 	var key WasmKey
 	copy(key[:3], prefix)
 	copy(key[3:], moduleHash[:])
 	return key
-}
-
-func IsActivatedAsmKey(key []byte) (bool, common.Hash) {
-	return extractWasmKey(activatedAsmPrefix, key)
-}
-
-func IsActivatedModuleKey(key []byte) (bool, common.Hash) {
-	return extractWasmKey(activatedModulePrefix, key)
-}
-
-func extractWasmKey(prefix, key []byte) (bool, common.Hash) {
-	if !bytes.HasPrefix(key, prefix) || len(key) != WasmKeyLen {
-		return false, common.Hash{}
-	}
-	return true, common.BytesToHash(key[len(prefix):])
 }

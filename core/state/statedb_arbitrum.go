@@ -50,7 +50,7 @@ var (
 )
 
 type ActivatedWasm struct {
-	Asm    []byte
+	Asm    map[string][]byte
 	Module []byte
 }
 

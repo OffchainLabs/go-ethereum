@@ -52,7 +52,7 @@ const (
 // Database wraps access to tries and contract code.
 type Database interface {
 	// Arbitrum: Read activated Stylus contracts
-	ActivatedAsm(moduleHash common.Hash) (asm []byte, err error)
+	ActivatedAsm(arch string, moduleHash common.Hash) (asm []byte, err error)
 	ActivatedModule(moduleHash common.Hash) (module []byte, err error)
 	WasmStore() ethdb.KeyValueStore
 	WasmCacheTag() uint32
@@ -196,6 +196,7 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
 
 type cachingDB struct {
 	// Arbitrum
+	// asm cache caches only asm compiled for the machine architecture
 	activatedAsmCache    *lru.SizeConstrainedCache[common.Hash, []byte]
 	activatedModuleCache *lru.SizeConstrainedCache[common.Hash, []byte]
 	wasmTag              uint32
