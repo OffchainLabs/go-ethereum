@@ -17,16 +17,36 @@
 package eth
 
 import (
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // snapHandler implements the snap.Backend interface to handle the various network
 // packets that are sent as replies or broadcasts.
 type snapHandler handler
 
-func (h *snapHandler) Chain() *core.BlockChain { return h.chain }
+func (h *snapHandler) ContractCodeWithPrefix(codeHash common.Hash) ([]byte, error) {
+	return (*handler)(h).chain.ContractCodeWithPrefix(codeHash)
+}
+
+func (h *snapHandler) TrieDB() *trie.Database {
+	return (*handler)(h).chain.StateCache().TrieDB()
+}
+
+func (h *snapHandler) Snapshot(root common.Hash) snapshot.Snapshot {
+	return (*handler)(h).chain.Snapshots().Snapshot(root)
+}
+
+func (h *snapHandler) AccountIterator(root, account common.Hash) (snapshot.AccountIterator, error) {
+	return (*handler)(h).chain.Snapshots().AccountIterator(root, account)
+}
+
+func (h *snapHandler) StorageIterator(root, account, origin common.Hash) (snapshot.StorageIterator, error) {
+	return (*handler)(h).chain.Snapshots().StorageIterator(root, account, origin)
+}
 
 // RunPeer is invoked when a peer joins on the `snap` protocol.
 func (h *snapHandler) RunPeer(peer *snap.Peer, hand snap.Handler) error {

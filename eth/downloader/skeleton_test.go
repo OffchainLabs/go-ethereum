@@ -46,7 +46,7 @@ type hookedBackfiller struct {
 
 // newHookedBackfiller creates a hooked backfiller with all callbacks disabled,
 // essentially acting as a noop.
-func newHookedBackfiller() backfiller {
+func newHookedBackfiller() Backfiller {
 	return new(hookedBackfiller)
 }
 
@@ -54,7 +54,7 @@ func newHookedBackfiller() backfiller {
 // based on the skeleton chain as it might be invalid. The backfiller should
 // gracefully handle multiple consecutive suspends without a resume, even
 // on initial startup.
-func (hf *hookedBackfiller) suspend() *types.Header {
+func (hf *hookedBackfiller) Suspend() *types.Header {
 	if hf.suspendHook != nil {
 		return hf.suspendHook()
 	}
@@ -64,11 +64,13 @@ func (hf *hookedBackfiller) suspend() *types.Header {
 // resume requests the backfiller to start running fill or snap sync based on
 // the skeleton chain as it has successfully been linked. Appending new heads
 // to the end of the chain will not result in suspend/resume cycles.
-func (hf *hookedBackfiller) resume() {
+func (hf *hookedBackfiller) Resume() {
 	if hf.resumeHook != nil {
 		hf.resumeHook()
 	}
 }
+
+func (hf *hookedBackfiller) SetMode(SyncMode) {}
 
 // skeletonTestPeer is a mock peer that can only serve header requests from a
 // pre-perated header chain (which may be arbitrarily wrong for testing).

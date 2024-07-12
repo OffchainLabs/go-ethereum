@@ -17,6 +17,7 @@
 package downloader
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -41,8 +42,8 @@ type beaconBackfiller struct {
 	lock       sync.Mutex    // Mutex protecting the sync lock
 }
 
-// newBeaconBackfiller is a helper method to create the backfiller.
-func newBeaconBackfiller(dl *Downloader, success func()) backfiller {
+// NewBeaconBackfiller is a helper method to create the backfiller.
+func NewBeaconBackfiller(dl *Downloader, success func()) Backfiller {
 	return &beaconBackfiller{
 		downloader: dl,
 		success:    success,
@@ -52,7 +53,7 @@ func newBeaconBackfiller(dl *Downloader, success func()) backfiller {
 // suspend cancels any background downloader threads and returns the last header
 // that has been successfully backfilled (potentially in a previous run), or the
 // genesis.
-func (b *beaconBackfiller) suspend() *types.Header {
+func (b *beaconBackfiller) Suspend() *types.Header {
 	// If no filling is running, don't waste cycles
 	b.lock.Lock()
 	filling := b.filling
@@ -80,7 +81,7 @@ func (b *beaconBackfiller) suspend() *types.Header {
 }
 
 // resume starts the downloader threads for backfilling state and chain data.
-func (b *beaconBackfiller) resume() {
+func (b *beaconBackfiller) Resume() {
 	b.lock.Lock()
 	if b.filling {
 		// If a previous filling cycle is still running, just ignore this start
@@ -120,7 +121,7 @@ func (b *beaconBackfiller) resume() {
 
 // setMode updates the sync mode from the current one to the requested one. If
 // there's an active sync in progress, it will be cancelled and restarted.
-func (b *beaconBackfiller) setMode(mode SyncMode) {
+func (b *beaconBackfiller) SetMode(mode SyncMode) {
 	// Update the old sync mode and track if it was changed
 	b.lock.Lock()
 	updated := b.syncMode != mode
@@ -134,8 +135,8 @@ func (b *beaconBackfiller) setMode(mode SyncMode) {
 		return
 	}
 	log.Error("Downloader sync mode changed mid-run", "old", mode.String(), "new", mode.String())
-	b.suspend()
-	b.resume()
+	b.Suspend()
+	b.Resume()
 }
 
 // SetBadBlockCallback sets the callback to run when a bad block is hit by the
@@ -165,6 +166,18 @@ func (d *Downloader) BeaconExtend(mode SyncMode, head *types.Header) error {
 	return d.beaconSync(mode, head, nil, false)
 }
 
+// PivotSync sets an explicit pivot and syncs from there. Pivot state will be read from peers.
+func (d *Downloader) PivotSync(head *types.Header, pivot *types.Header) error {
+	if pivot != nil && head.Number.Cmp(pivot.Number) < 0 {
+		return errors.New("pivot must be behind head")
+	}
+	d.pivotLock.Lock()
+	d.pivotHeader = pivot
+	d.pivotExplicit = true
+	d.pivotLock.Unlock()
+	return d.beaconSync(SnapSync, head, nil, true)
+}
+
 // beaconSync is the post-merge version of the chain synchronization, where the
 // chain is not downloaded from genesis onward, rather from trusted head announces
 // backwards.
@@ -178,7 +191,7 @@ func (d *Downloader) beaconSync(mode SyncMode, head *types.Header, final *types.
 	//
 	// Super crazy dangerous type cast. Should be fine (TM), we're only using a
 	// different backfiller implementation for skeleton tests.
-	d.skeleton.filler.(*beaconBackfiller).setMode(mode)
+	d.skeleton.filler.SetMode(mode)
 
 	// Signal the skeleton sync to switch to a new head, however it wants
 	if err := d.skeleton.Sync(head, final, force); err != nil {
@@ -268,6 +281,14 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 	return start, nil
 }
 
+func (d *Downloader) SkeletonHead() (*types.Header, error) {
+	head, _, _, err := d.skeleton.Bounds()
+	if err != nil {
+		return nil, err
+	}
+	return head, nil
+}
+
 // fetchBeaconHeaders feeds skeleton headers to the downloader queue for scheduling
 // until sync errors or is finished.
 func (d *Downloader) fetchBeaconHeaders(from uint64) error {
@@ -299,7 +320,7 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 		// If the pivot became stale (older than 2*64-8 (bit of wiggle room)),
 		// move it ahead to HEAD-64
 		d.pivotLock.Lock()
-		if d.pivotHeader != nil {
+		if d.pivotHeader != nil && !d.pivotExplicit {
 			if head.Number.Uint64() > d.pivotHeader.Number.Uint64()+2*uint64(fsMinFullBlocks)-8 {
 				// Retrieve the next pivot header, either from skeleton chain
 				// or the filled chain
