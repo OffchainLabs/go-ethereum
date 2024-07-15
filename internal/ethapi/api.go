@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasestimator"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -52,6 +53,10 @@ import (
 )
 
 var errBlobTxNotSupported = errors.New("signing blob transactions not supported")
+var (
+	gasUsedEthEstimateGasGauge = metrics.NewRegisteredCounter("rpc/gas_used/eth_estimategas", nil)
+	gasUsedEthCallGauge        = metrics.NewRegisteredCounter("rpc/gas_used/eth_call", nil)
+)
 
 func fallbackClientFor(b Backend, err error) types.FallbackClient {
 	if !errors.Is(err, types.ErrUseFallback) {
@@ -1242,6 +1247,7 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 	if len(result.Revert()) > 0 {
 		return nil, newRevertError(result.Revert())
 	}
+	gasUsedEthCallGauge.Inc(int64(result.UsedGas))
 	return result.Return(), result.Err
 }
 
@@ -1279,10 +1285,6 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	{
-		state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-		if state == nil || err != nil {
-			return 0, err
-		}
 		gasCap, err = args.L2OnlyGasCap(gasCap, header, state, core.MessageGasEstimationMode)
 		if err != nil {
 			return 0, err
@@ -1315,6 +1317,9 @@ func (s *BlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, b
 		var res hexutil.Uint64
 		err := client.CallContext(ctx, &res, "eth_estimateGas", args, blockNrOrHash, overrides)
 		return res, err
+	}
+	if err != nil {
+		gasUsedEthEstimateGasGauge.Inc(int64(res))
 	}
 	return res, err
 }
