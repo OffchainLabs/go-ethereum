@@ -184,9 +184,6 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 	if args.BlobFeeCap != nil && args.BlobFeeCap.ToInt().Sign() == 0 {
 		return errors.New("maxFeePerBlobGas, if specified, must be non-zero")
 	}
-	if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
-		return err
-	}
 	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
@@ -204,7 +201,10 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 		if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
 			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
 		}
-		return nil // No need to set anything, user already set MaxFeePerGas and MaxPriorityFeePerGas
+		// No need to set anything other than CancunFeeDefaults, user already set MaxFeePerGas and MaxPriorityFeePerGas
+		if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
+			return err
+		}
 	}
 
 	// Sanity check the non-EIP-1559 fee parameters.
@@ -260,7 +260,7 @@ func (args *TransactionArgs) setCancunFeeDefaults(ctx context.Context, head *typ
 		val := new(big.Int).Mul(blobBaseFee, big.NewInt(2))
 		args.BlobFeeCap = (*hexutil.Big)(val)
 	}
-	return nil
+	return args.setLondonFeeDefaults(ctx, head, b)
 }
 
 // setLondonFeeDefaults fills in reasonable default fee values for unspecified fields.
