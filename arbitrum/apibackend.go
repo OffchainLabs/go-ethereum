@@ -10,14 +10,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/arbitrum_types"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/trie"
-
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/arbitrum_types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
@@ -27,12 +21,17 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/filters"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 var (
@@ -494,7 +493,7 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 	// note: triedb cleans cache is disabled in trie.HashDefaults
 	// note: only states committed to diskdb can be found as we're creating new triedb
 	// note: snapshots are not used here
-	ephemeral := state.NewDatabaseWithConfig(chainDb, trie.HashDefaults)
+	ephemeral := state.NewDatabaseWithConfig(chainDb, triedb.HashDefaults)
 	lastState, lastHeader, lastStateRelease, err := FindLastAvailableState(ctx, bc, stateFor(ephemeral, nil), header, nil, maxRecreateStateDepth)
 	if err != nil {
 		return nil, nil, err
