@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -362,7 +363,7 @@ func opCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	)
 	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
 	if overflow {
-		uint64CodeOffset = 0xffffffffffffffff
+		uint64CodeOffset = math.MaxUint64
 	}
 	codeCopy := getData(scope.Contract.Code, uint64CodeOffset, length.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
@@ -380,7 +381,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	)
 	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
 	if overflow {
-		uint64CodeOffset = 0xffffffffffffffff
+		uint64CodeOffset = math.MaxUint64
 	}
 	addr := common.Address(a.Bytes20())
 	codeCopy := getData(interpreter.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())

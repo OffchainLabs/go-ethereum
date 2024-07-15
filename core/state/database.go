@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 const (
@@ -76,7 +77,7 @@ type Database interface {
 	DiskDB() ethdb.KeyValueStore
 
 	// TrieDB returns the underlying trie database for managing trie nodes.
-	TrieDB() *trie.Database
+	TrieDB() *triedb.Database
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -159,7 +160,7 @@ func NewDatabase(db ethdb.Database) Database {
 // NewDatabaseWithConfig creates a backing store for state. The returned database
 // is safe for concurrent use and retains a lot of collapsed RLP trie nodes in a
 // large memory cache.
-func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
+func NewDatabaseWithConfig(db ethdb.Database, config *triedb.Config) Database {
 	wasmdb, wasmTag := db.WasmDataBase()
 	cdb := &cachingDB{
 		// Arbitrum only
@@ -171,13 +172,13 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 		wasmdb:        wasmdb,
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
-		triedb:        trie.NewDatabase(db, config),
+		triedb:        triedb.NewDatabase(db, config),
 	}
 	return cdb
 }
 
 // NewDatabaseWithNodeDB creates a state database with an already initialized node database.
-func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
+func NewDatabaseWithNodeDB(db ethdb.Database, triedb *triedb.Database) Database {
 	wasmdb, wasmTag := db.WasmDataBase()
 	cdb := &cachingDB{
 		// Arbitrum only
@@ -204,7 +205,7 @@ type cachingDB struct {
 	wasmdb        ethdb.KeyValueStore
 	codeSizeCache *lru.Cache[common.Hash, int]
 	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
-	triedb        *trie.Database
+	triedb        *triedb.Database
 }
 
 func (db *cachingDB) WasmStore() ethdb.KeyValueStore {
@@ -299,6 +300,6 @@ func (db *cachingDB) DiskDB() ethdb.KeyValueStore {
 }
 
 // TrieDB retrieves any intermediate trie-node caching layer.
-func (db *cachingDB) TrieDB() *trie.Database {
+func (db *cachingDB) TrieDB() *triedb.Database {
 	return db.triedb
 }
