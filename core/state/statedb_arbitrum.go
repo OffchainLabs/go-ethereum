@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -76,7 +77,7 @@ func NewStylusPrefix(dictionary byte) []byte {
 	return append(prefix, dictionary)
 }
 
-func (s *StateDB) ActivateWasm(moduleHash common.Hash, asm, module []byte) {
+func (s *StateDB) ActivateWasm(moduleHash common.Hash, asm map[string][]byte, module []byte) {
 	_, exists := s.arbExtraData.activatedWasms[moduleHash]
 	if exists {
 		return
@@ -90,12 +91,34 @@ func (s *StateDB) ActivateWasm(moduleHash common.Hash, asm, module []byte) {
 	})
 }
 
-func (s *StateDB) TryGetActivatedAsm(moduleHash common.Hash) ([]byte, error) {
+func (s *StateDB) TryGetActivatedAsm(targetName string, moduleHash common.Hash) ([]byte, error) {
+	info, exists := s.arbExtraData.activatedWasms[moduleHash]
+	if exists {
+		if asm, exists := info.Asm[targetName]; exists {
+			return asm, nil
+		}
+	}
+	return s.db.ActivatedAsm(targetName, moduleHash)
+}
+
+func (s *StateDB) TryGetActivatedAsmMap(moduleHash common.Hash) (map[string][]byte, error) {
 	info, exists := s.arbExtraData.activatedWasms[moduleHash]
 	if exists {
 		return info.Asm, nil
 	}
-	return s.db.ActivatedAsm(moduleHash)
+	asmMap := make(map[string][]byte)
+	var err error
+	for _, target := range rawdb.Targets {
+		var asm []byte
+		asm, err = s.db.ActivatedAsm(target, moduleHash)
+		if err == nil {
+			asmMap[target] = asm
+		}
+	}
+	if len(asmMap) == 0 {
+		return nil, err
+	}
+	return asmMap, nil
 }
 
 func (s *StateDB) GetActivatedModule(moduleHash common.Hash) []byte {
@@ -234,13 +257,14 @@ func (s *StateDB) StartRecording() {
 }
 
 func (s *StateDB) RecordProgram(moduleHash common.Hash) {
-	asm, err := s.TryGetActivatedAsm(moduleHash)
+	asmMap, err := s.TryGetActivatedAsmMap(moduleHash)
 	if err != nil {
 		log.Crit("can't find activated wasm while recording", "modulehash", moduleHash)
 	}
 	if s.arbExtraData.userWasms != nil {
 		s.arbExtraData.userWasms[moduleHash] = ActivatedWasm{
-			Asm:    asm,
+			// TODO should we make a copy of the asmMap?
+			Asm:    asmMap,
 			Module: s.GetActivatedModule(moduleHash),
 		}
 	}

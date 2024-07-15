@@ -23,10 +23,20 @@ import (
 )
 
 const (
-	AsmArm  = "arm"
-	AsmX86  = "x86"
-	AsmHost = "host"
+	// TODO do we want to just use os.GOARCH names here? "arm64" / "amd64"? or make it an enum?
+	TargetArm  = "arm"
+	TargetX86  = "x86"
+	TargetHost = "host"
 )
+
+var Targets = []string{TargetArm, TargetX86, TargetHost}
+
+func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asmMap map[string][]byte, module []byte) {
+	for target, asm := range asmMap {
+		WriteActivatedAsm(db, moduleHash, target, asm)
+	}
+	WriteActivatedModule(db, moduleHash, module)
+}
 
 // Stores the activated module for a given moduleHash
 func WriteActivatedModule(db ethdb.KeyValueWriter, moduleHash common.Hash, module []byte) {
@@ -45,18 +55,18 @@ func ReadActivatedModule(db ethdb.KeyValueReader, moduleHash common.Hash) []byte
 	return module
 }
 
-// Stores the activated asm for a given arch and moduleHash
-func WriteActivatedAsm(db ethdb.KeyValueWriter, arch string, moduleHash common.Hash, asm []byte) {
+// Stores the activated asm for a given moduleHash and targetName
+func WriteActivatedAsm(db ethdb.KeyValueWriter, moduleHash common.Hash, targetName string, asm []byte) {
 	var prefix []byte
-	switch arch {
-	case AsmArm:
+	switch targetName {
+	case TargetArm:
 		prefix = activatedAsmArmPrefix
-	case AsmX86:
+	case TargetX86:
 		prefix = activatedAsmX86Prefix
-	case AsmHost:
+	case TargetHost:
 		prefix = activatedAsmHostPrefix
 	default:
-		log.Crit("Failed to store activated wasm asm, invalid arch specified", "arch", arch)
+		log.Crit("Failed to store activated wasm asm, invalid targetName specified", "targetName", targetName)
 	}
 	key := activatedKey(prefix, moduleHash)
 	if err := db.Put(key[:], asm); err != nil {
@@ -64,17 +74,17 @@ func WriteActivatedAsm(db ethdb.KeyValueWriter, arch string, moduleHash common.H
 	}
 }
 
-func ReadActivatedAsm(db ethdb.KeyValueReader, arch string, moduleHash common.Hash) []byte {
+func ReadActivatedAsm(db ethdb.KeyValueReader, targetName string, moduleHash common.Hash) []byte {
 	var prefix []byte
-	switch arch {
-	case AsmArm:
+	switch targetName {
+	case TargetArm:
 		prefix = activatedAsmArmPrefix
-	case AsmX86:
+	case TargetX86:
 		prefix = activatedAsmX86Prefix
-	case AsmHost:
+	case TargetHost:
 		prefix = activatedAsmHostPrefix
 	default:
-		log.Crit("Failed to store activated wasm asm, invalid arch specified", "arch", arch)
+		log.Crit("Failed to store activated wasm asm, invalid targetName specified", "targetName", targetName)
 	}
 	key := activatedKey(prefix, moduleHash)
 	asm, err := db.Get(key[:])
