@@ -5,10 +5,10 @@ package logger
 import (
 	"encoding/json"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common/hexutil"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common/math"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core/vm"
 	"github.com/holiman/uint256"
 )
 

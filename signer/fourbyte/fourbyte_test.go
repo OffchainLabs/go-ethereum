@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/paxosglobal/go-ethereum-arbitrum/accounts/abi"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 )
 
 // Tests that all the selectors contained in the 4byte database are valid.

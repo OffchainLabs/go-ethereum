@@ -3,7 +3,7 @@ package influxdb
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/paxosglobal/go-ethereum-arbitrum/metrics"
 )
 
 func readMeter(namespace, name string, i interface{}) (string, map[string]interface{}) {
