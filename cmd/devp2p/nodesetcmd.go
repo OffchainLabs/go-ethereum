@@ -25,11 +25,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core/forkid"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p/enr"
+	"github.com/paxosglobal/go-ethereum-arbitrum/params"
+	"github.com/paxosglobal/go-ethereum-arbitrum/rlp"
 	"github.com/urfave/cli/v2"
 )
 

@@ -1,5 +1,5 @@
 language: go
-go_import_path: github.com/ethereum/go-ethereum
+go_import_path: github.com/paxosglobal/go-ethereum-arbitrum
 sudo: false
 jobs:
   allow_failures:

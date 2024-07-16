@@ -19,13 +19,13 @@ package backends
 import (
 	"context"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/ethclient/simulated"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core"
+	"github.com/paxosglobal/go-ethereum-arbitrum/ethclient/simulated"
 )
 
 // SimulatedBackend is a simulated blockchain.
-// Deprecated: use package github.com/ethereum/go-ethereum/ethclient/simulated instead.
+// Deprecated: use package github.com/paxosglobal/go-ethereum-arbitrum/ethclient/simulated instead.
 type SimulatedBackend struct {
 	*simulated.Backend
 	simulated.Client
@@ -42,7 +42,7 @@ func (b *SimulatedBackend) Fork(ctx context.Context, parentHash common.Hash) err
 // A simulated backend always uses chainID 1337.
 //
 // Deprecated: please use simulated.Backend from package
-// github.com/ethereum/go-ethereum/ethclient/simulated instead.
+// github.com/paxosglobal/go-ethereum-arbitrum/ethclient/simulated instead.
 func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
 	b := simulated.NewBackend(alloc, simulated.WithBlockGasLimit(gasLimit))
 	return &SimulatedBackend{
