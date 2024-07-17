@@ -14,11 +14,13 @@ import "unsafe"
 // recoverable Go panics.
 
 //export secp256k1GoPanicIllegal
+//go:cgo_ldflag "-weak"
 func secp256k1GoPanicIllegal(msg *C.char, data unsafe.Pointer) {
 	panic("illegal argument: " + C.GoString(msg))
 }
 
 //export secp256k1GoPanicError
+//go:cgo_ldflag "-weak"
 func secp256k1GoPanicError(msg *C.char, data unsafe.Pointer) {
 	panic("internal error: " + C.GoString(msg))
 }
