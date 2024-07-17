@@ -319,7 +319,7 @@ SECP256K1_API int secp256k1_ecdsa_signature_parse_der(
     secp256k1_ecdsa_signature* sig,
     const unsigned char *input,
     size_t inputlen
-) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) __attribute__((weak));
 
 /** Serialize an ECDSA signature in DER format.
  *
@@ -337,7 +337,7 @@ SECP256K1_API int secp256k1_ecdsa_signature_serialize_der(
     unsigned char *output,
     size_t *outputlen,
     const secp256k1_ecdsa_signature* sig
-) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4);
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4) __attribute__((weak));
 
 /** Serialize an ECDSA signature in compact (64 byte) format.
  *
@@ -352,7 +352,7 @@ SECP256K1_API int secp256k1_ecdsa_signature_serialize_compact(
     const secp256k1_context* ctx,
     unsigned char *output64,
     const secp256k1_ecdsa_signature* sig
-) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) __attribute__((weak));
 
 /** Verify an ECDSA signature.
  *
@@ -483,7 +483,7 @@ SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ec_pubkey_create(
     const secp256k1_context* ctx,
     secp256k1_pubkey *pubkey,
     const unsigned char *seckey
-) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) __attribute__((weak));
 
 /** Tweak a private key by adding tweak to it.
  * Returns: 0 if the tweak was out of range (chance of around 1 in 2^128 for
@@ -498,7 +498,7 @@ SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ec_privkey_tweak_add(
     const secp256k1_context* ctx,
     unsigned char *seckey,
     const unsigned char *tweak
-) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) __attribute__((weak));
 
 /** Tweak a public key by adding tweak times the generator to it.
  * Returns: 0 if the tweak was out of range (chance of around 1 in 2^128 for
@@ -552,7 +552,7 @@ SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ec_pubkey_tweak_mul(
 SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_context_randomize(
     secp256k1_context* ctx,
     const unsigned char *seed32
-) SECP256K1_ARG_NONNULL(1);
+) SECP256K1_ARG_NONNULL(1) __attribute__((weak));
 
 /** Add a number of public keys together.
  *  Returns: 1: the sum of the public keys is valid.
@@ -568,7 +568,7 @@ SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ec_pubkey_combine(
     secp256k1_pubkey *out,
     const secp256k1_pubkey * const * ins,
     size_t n
-) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
+) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) __attribute__((weak));
 
 # ifdef __cplusplus
 }
