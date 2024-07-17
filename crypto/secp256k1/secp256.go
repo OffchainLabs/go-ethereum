@@ -11,7 +11,6 @@ package secp256k1
 /*
 #cgo CFLAGS: -I./libsecp256k1
 #cgo CFLAGS: -I./libsecp256k1/src/
-#cgo LDFLAGS: -Wl,--defsym,secp256k1GoPanicIllegal=0 -Wl,--defsym,secp256k1GoPanicError=0
 
 #ifdef __SIZEOF_INT128__
 #  define HAVE___INT128
