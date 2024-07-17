@@ -50,7 +50,7 @@ SECP256K1_API int secp256k1_ecdsa_recoverable_signature_convert(
     const secp256k1_context* ctx,
     secp256k1_ecdsa_signature* sig,
     const secp256k1_ecdsa_recoverable_signature* sigin
-) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) __attribute__((weak));
 
 /** Serialize an ECDSA signature in compact format (64 bytes + recovery id).
  *
@@ -85,7 +85,7 @@ SECP256K1_API int secp256k1_ecdsa_sign_recoverable(
     const unsigned char *seckey,
     secp256k1_nonce_function noncefp,
     const void *ndata
-) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4);
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4) __attribute__((weak));
 
 /** Recover an ECDSA public key from a signature.
  *
@@ -101,7 +101,7 @@ SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ecdsa_recover(
     secp256k1_pubkey *pubkey,
     const secp256k1_ecdsa_recoverable_signature *sig,
     const unsigned char *msg32
-) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4);
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4) __attribute__((weak));
 
 # ifdef __cplusplus
 }
