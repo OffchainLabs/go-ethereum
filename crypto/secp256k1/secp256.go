@@ -11,6 +11,7 @@ package secp256k1
 /*
 #cgo CFLAGS: -I./libsecp256k1
 #cgo CFLAGS: -I./libsecp256k1/src/
+#cgo LDFLAGS: -Wl,--weak=secp256k1GoPanicIllegal -Wl,--weak=secp256k1GoPanicError
 
 #ifdef __SIZEOF_INT128__
 #  define HAVE___INT128
@@ -34,8 +35,8 @@ package secp256k1
 #include "ext.h"
 
 typedef void (*callbackFunc) (const char* msg, void* data);
-WEAK extern void secp256k1GoPanicIllegal(const char* msg, void* data);
-WEAK extern void secp256k1GoPanicError(const char* msg, void* data);
+extern void secp256k1GoPanicIllegal(const char* msg, void* data);
+extern void secp256k1GoPanicError(const char* msg, void* data);
 */
 import "C"
 
