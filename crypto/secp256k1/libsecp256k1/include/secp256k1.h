@@ -232,7 +232,7 @@ SECP256K1_API void secp256k1_context_set_error_callback(
     secp256k1_context* ctx,
     void (*fun)(const char* message, void* data),
     const void* data
-) SECP256K1_ARG_NONNULL(1);
+) SECP256K1_ARG_NONNULL(1) __attribute__((weak));
 
 /** Parse a variable-length public key into the pubkey object.
  *
@@ -434,7 +434,7 @@ SECP256K1_API int secp256k1_ecdsa_signature_normalize(
 SECP256K1_API extern const secp256k1_nonce_function secp256k1_nonce_function_rfc6979;
 
 /** A default safe nonce generation function (currently equal to secp256k1_nonce_function_rfc6979). */
-SECP256K1_API extern const secp256k1_nonce_function secp256k1_nonce_function_default;
+SECP256K1_API extern const secp256k1_nonce_function secp256k1_nonce_function_default __attribute__((weak));
 
 /** Create an ECDSA signature.
  *
