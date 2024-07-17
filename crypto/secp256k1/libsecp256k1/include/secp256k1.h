@@ -276,7 +276,7 @@ SECP256K1_API int secp256k1_ec_pubkey_serialize(
     size_t *outputlen,
     const secp256k1_pubkey* pubkey,
     unsigned int flags
-) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4);
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4) __attribute__((weak));
 
 /** Parse an ECDSA signature in compact (64 bytes) format.
  *
