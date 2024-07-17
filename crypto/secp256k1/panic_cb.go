@@ -7,7 +7,17 @@
 
 package secp256k1
 
-// #cgo LDFLAGS: -Wl,--weak,secp256k1GoPanicIllegal,--weak,secp256k1GoPanicError
+/*
+#include <stdlib.h>
+
+__attribute__((weak)) void secp256k1GoPanicIllegal(const char* msg) {
+    // C implementation
+}
+
+__attribute__((weak)) void secp256k1GoPanicError(const char* msg) {
+    // C implementation
+}
+*/
 import "C"
 import "unsafe"
 
