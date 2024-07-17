@@ -11,7 +11,8 @@ package secp256k1
 /*
 #cgo CFLAGS: -I./libsecp256k1
 #cgo CFLAGS: -I./libsecp256k1/src/
-#cgo LDFLAGS: -Wl,--weak
+#cgo linux LDFLAGS: -Wl,--weak
+#cgo darwin LDFLAGS: -Wl,-weak_library
 
 #ifdef __SIZEOF_INT128__
 #  define HAVE___INT128
