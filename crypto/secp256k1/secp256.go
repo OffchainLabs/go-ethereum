@@ -34,8 +34,8 @@ package secp256k1
 #include "ext.h"
 
 typedef void (*callbackFunc) (const char* msg, void* data);
-extern void secp256k1GoPanicIllegal(const char* msg, void* data) __attribute__((weak));
-extern void secp256k1GoPanicError(const char* msg, void* data) __attribute__((weak));
+extern __attribute__((weak)) void secp256k1GoPanicIllegal(const char* msg, void* data);
+extern __attribute__((weak)) void secp256k1GoPanicError(const char* msg, void* data);
 */
 import "C"
 
