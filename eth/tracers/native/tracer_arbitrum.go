@@ -20,7 +20,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 type arbitrumTransfer struct {
@@ -31,7 +30,7 @@ type arbitrumTransfer struct {
 }
 
 func (t *callTracer) CaptureArbitrumTransfer(
-	env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string,
+	from, to *common.Address, value *big.Int, before bool, purpose string,
 ) {
 	transfer := arbitrumTransfer{
 		Purpose: purpose,
@@ -52,13 +51,13 @@ func (t *callTracer) CaptureArbitrumTransfer(
 	}
 }
 
-func (*fourByteTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
+func (*fourByteTracer) CaptureArbitrumTransfer(from, to *common.Address, value *big.Int, before bool, purpose string) {
 }
-func (*noopTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
+func (*noopTracer) CaptureArbitrumTransfer(from, to *common.Address, value *big.Int, before bool, purpose string) {
 }
-func (*prestateTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
+func (*prestateTracer) CaptureArbitrumTransfer(from, to *common.Address, value *big.Int, before bool, purpose string) {
 }
-func (t *flatCallTracer) CaptureArbitrumTransfer(env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string) {
+func (t *flatCallTracer) CaptureArbitrumTransfer(from, to *common.Address, value *big.Int, before bool, purpose string) {
 	if t.interrupt.Load() {
 		return
 	}
