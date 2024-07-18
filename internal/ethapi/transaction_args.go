@@ -98,7 +98,7 @@ func (args *TransactionArgs) data() []byte {
 }
 
 // setDefaults fills in default values for unspecified tx fields.
-func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
+func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGasEstimation bool) error {
 	if err := args.setBlobTxSidecar(ctx); err != nil {
 		return err
 	}
@@ -138,28 +138,37 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 		}
 	}
 
-	// Estimate the gas usage if necessary.
 	if args.Gas == nil {
-		// These fields are immutable during the estimation, safe to
-		// pass the pointer directly.
-		data := args.data()
-		callArgs := TransactionArgs{
-			From:                 args.From,
-			To:                   args.To,
-			GasPrice:             args.GasPrice,
-			MaxFeePerGas:         args.MaxFeePerGas,
-			MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
-			Value:                args.Value,
-			Data:                 (*hexutil.Bytes)(&data),
-			AccessList:           args.AccessList,
+		if skipGasEstimation { // Skip gas usage estimation if a precise gas limit is not critical, e.g., in non-transaction calls.
+			gas := hexutil.Uint64(b.RPCGasCap())
+			if gas == 0 {
+				gas = hexutil.Uint64(math.MaxUint64 / 2)
+			}
+			args.Gas = &gas
+		} else { // Estimate the gas usage otherwise.
+			// These fields are immutable during the estimation, safe to
+			// pass the pointer directly.
+			data := args.data()
+			callArgs := TransactionArgs{
+				From:                 args.From,
+				To:                   args.To,
+				GasPrice:             args.GasPrice,
+				MaxFeePerGas:         args.MaxFeePerGas,
+				MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
+				Value:                args.Value,
+				Data:                 (*hexutil.Bytes)(&data),
+				AccessList:           args.AccessList,
+				BlobFeeCap:           args.BlobFeeCap,
+				BlobHashes:           args.BlobHashes,
+			}
+			latestBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+			estimated, err := DoEstimateGas(ctx, b, callArgs, latestBlockNr, nil, b.RPCGasCap())
+			if err != nil {
+				return err
+			}
+			args.Gas = &estimated
+			log.Trace("Estimate gas usage automatically", "gas", args.Gas)
 		}
-		latestBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-		estimated, err := DoEstimateGas(ctx, b, callArgs, latestBlockNr, nil, b.RPCGasCap())
-		if err != nil {
-			return err
-		}
-		args.Gas = &estimated
-		log.Trace("Estimate gas usage automatically", "gas", args.Gas)
 	}
 
 	// If chain id is provided, ensure it matches the local chain id. Otherwise, set the local
@@ -177,6 +186,11 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 
 // setFeeDefaults fills in default fee values for unspecified tx fields.
 func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) error {
+	head := b.CurrentHeader()
+	// Sanity check the EIP-4844 fee parameters.
+	if args.BlobFeeCap != nil && args.BlobFeeCap.ToInt().Sign() == 0 {
+		return errors.New("maxFeePerBlobGas, if specified, must be non-zero")
+	}
 	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
@@ -186,7 +200,6 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 	// other tx values. See https://github.com/ethereum/go-ethereum/pull/23274
 	// for more information.
 	eip1559ParamsSet := args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil
-
 	// Sanity check the EIP-1559 fee parameters if present.
 	if args.GasPrice == nil && eip1559ParamsSet {
 		if args.MaxFeePerGas.ToInt().Sign() == 0 {
@@ -195,16 +208,13 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 		if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
 			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
 		}
-		return nil // No need to set anything, user already set MaxFeePerGas and MaxPriorityFeePerGas
-	}
-
-	// Sanity check the EIP-4844 fee parameters.
-	if args.BlobFeeCap != nil && args.BlobFeeCap.ToInt().Sign() == 0 {
-		return errors.New("maxFeePerBlobGas must be non-zero")
+		// No need to set anything other than CancunFeeDefaults, user already set MaxFeePerGas and MaxPriorityFeePerGas
+		if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
+			return err
+		}
 	}
 
 	// Sanity check the non-EIP-1559 fee parameters.
-	head := b.CurrentHeader()
 	isLondon := b.ChainConfig().IsLondon(head.Number)
 	if args.GasPrice != nil && !eip1559ParamsSet {
 		// Zero gas-price is not allowed after London fork
@@ -228,8 +238,8 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 			return err
 		}
 	} else {
-		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil || args.BlobFeeCap != nil {
-			return errors.New("maxFeePerGas and maxPriorityFeePerGas and maxFeePerBlobGas are not valid before London is active")
+		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
+			return errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active")
 		}
 		// London not active, set gas price.
 		price, err := b.SuggestGasTipCap(ctx)
@@ -245,8 +255,12 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 func (args *TransactionArgs) setCancunFeeDefaults(ctx context.Context, head *types.Header, b Backend) error {
 	// Set maxFeePerBlobGas if it is missing.
 	if args.BlobHashes != nil && args.BlobFeeCap == nil {
+		var excessBlobGas uint64
+		if head.ExcessBlobGas != nil {
+			excessBlobGas = *head.ExcessBlobGas
+		}
 		// ExcessBlobGas must be set for a Cancun block.
-		blobBaseFee := eip4844.CalcBlobFee(*head.ExcessBlobGas)
+		blobBaseFee := eip4844.CalcBlobFee(excessBlobGas)
 		// Set the max fee to be 2 times larger than the previous block's blob base fee.
 		// The additional slack allows the tx to not become invalidated if the base
 		// fee is rising.

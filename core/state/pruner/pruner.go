@@ -38,7 +38,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/hashdb"
 )
 
 const (
@@ -89,7 +90,7 @@ func NewPruner(db ethdb.Database, config Config) (*Pruner, error) {
 		return nil, errors.New("failed to load head block")
 	}
 	// Offline pruning is only supported in legacy hash based scheme.
-	triedb := trie.NewDatabase(db, trie.HashDefaults)
+	triedb := triedb.NewDatabase(db, triedb.HashDefaults)
 
 	snapconfig := snapshot.Config{
 		CacheSize:  256,
@@ -343,7 +344,7 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 	// Offline pruning is only supported in legacy hash based scheme.
 	hashConfig := *hashdb.Defaults
 	hashConfig.CleanCacheSize = config.CleanCacheSize * 1024 * 1024
-	trieConfig := &trie.Config{
+	trieConfig := &triedb.Config{
 		Preimages: false,
 		HashDB:    &hashConfig,
 	}
@@ -597,7 +598,7 @@ func RecoverPruning(datadir string, db ethdb.Database, threads int) error {
 		AsyncBuild: false,
 	}
 	// Offline pruning is only supported in legacy hash based scheme.
-	triedb := trie.NewDatabase(db, trie.HashDefaults)
+	triedb := triedb.NewDatabase(db, triedb.HashDefaults)
 	snaptree, err := snapshot.New(snapconfig, db, triedb, headBlock.Root())
 	if err != nil {
 		return err // The relevant snapshot(s) might not exist
