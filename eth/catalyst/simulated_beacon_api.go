@@ -26,18 +26,44 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+type UnlimitedCapChannel[T any] struct {
+	SendSide    chan T
+	ReceiveSide chan T
+}
+
+func NewUnlimitedCapChannel[T any](size int) *UnlimitedCapChannel[T] {
+	if size == 0 {
+		panic("trying to create UnlimitedCapChannel with 0 initial size, need size to be atleast 1")
+	}
+	u := &UnlimitedCapChannel[T]{
+		SendSide:    make(chan T),
+		ReceiveSide: make(chan T, size),
+	}
+	go func(uc *UnlimitedCapChannel[T]) {
+		for {
+			if len(uc.ReceiveSide) == cap(u.ReceiveSide) {
+				tmp := make(chan T, cap(u.ReceiveSide)*2)
+				for len(u.ReceiveSide) > 0 {
+					tmp <- <-u.ReceiveSide
+				}
+				u.ReceiveSide = tmp
+			}
+			u.ReceiveSide <- <-uc.SendSide
+		}
+	}(u)
+	return u
+}
+
 type api struct {
 	sim *SimulatedBeacon
 }
 
 func (a *api) loop() {
-	var (
-		// Arbitrum: we need to make newTxs a buffered channel because by the current design of simulated beacon
-		// it would deadlock with this cycle a.sim.Commit() -> txpool.Sync() -> subpools reset -> update feeds (newTxs is one of the receivers)
-		// Note: capacity of this channel should be the worst-case estimate of number of transactions all arriving simultaneously to the pool
-		newTxs = make(chan core.NewTxsEvent, 15)
-		sub    = a.sim.eth.TxPool().SubscribeTransactions(newTxs, true)
-	)
+	// Arbitrum: we make a channel with dynamic capacity (UnlimitedCapChannel[core.NewTxsEvent]) and subscribe to tx-events on the SendSide
+	// and read events on the ReceiveSide because by the current design of simulated beacon
+	// it would deadlock with this cycle a.sim.Commit() -> txpool.Sync() -> subpools reset -> update feeds (newTxs is one of the receivers)
+	uc := NewUnlimitedCapChannel[core.NewTxsEvent](5)
+	sub := a.sim.eth.TxPool().SubscribeTransactions(uc.SendSide, true)
 	defer sub.Unsubscribe()
 
 	for {
@@ -49,7 +75,7 @@ func (a *api) loop() {
 			if err := a.sim.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
 				log.Warn("Error performing sealing work", "err", err)
 			}
-		case <-newTxs:
+		case <-uc.ReceiveSide:
 			a.sim.Commit()
 		}
 	}
