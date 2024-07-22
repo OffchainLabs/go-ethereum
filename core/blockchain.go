@@ -158,6 +158,11 @@ type CacheConfig struct {
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
 
+// arbitrum: exposing CacheConfig.triedbConfig to be used by Nitro when initializing arbos in database
+func (c *CacheConfig) TriedbConfig() *triedb.Config {
+	return c.triedbConfig()
+}
+
 // triedbConfig derives the configures for trie database.
 func (c *CacheConfig) triedbConfig() *triedb.Config {
 	config := &triedb.Config{Preimages: c.Preimages}
