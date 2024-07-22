@@ -109,10 +109,11 @@ func (s *StateDB) TryGetActivatedAsmMap(moduleHash common.Hash) (map[string][]by
 	asmMap := make(map[string][]byte)
 	var err error
 	for _, target := range rawdb.Targets {
-		var asm []byte
-		asm, err = s.db.ActivatedAsm(target, moduleHash)
-		if err == nil {
+		asm, dbErr := s.db.ActivatedAsm(target, moduleHash)
+		if dbErr == nil {
 			asmMap[target] = asm
+		} else {
+			err = errors.Join(dbErr)
 		}
 	}
 	if len(asmMap) == 0 {
