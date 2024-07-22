@@ -178,6 +178,10 @@ type CallMsg struct {
 
 	AccessList     types.AccessList // EIP-2930 access list.
 	SkipL1Charging bool             // L1 charging is disabled when SkipL1Charging is true
+
+	// For BlobTxType
+	BlobGasFeeCap *big.Int
+	BlobHashes    []common.Hash
 }
 
 // A ContractCaller provides contract calls, essentially transactions that are executed by

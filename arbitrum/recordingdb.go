@@ -19,8 +19,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	flag "github.com/spf13/pflag"
 )
 
@@ -30,13 +30,13 @@ var (
 )
 
 type RecordingKV struct {
-	inner         *trie.Database
+	inner         *triedb.Database
 	diskDb        ethdb.KeyValueStore
 	readDbEntries map[common.Hash][]byte
 	enableBypass  bool
 }
 
-func newRecordingKV(inner *trie.Database, diskDb ethdb.KeyValueStore) *RecordingKV {
+func newRecordingKV(inner *triedb.Database, diskDb ethdb.KeyValueStore) *RecordingKV {
 	return &RecordingKV{inner, diskDb, make(map[common.Hash][]byte), false}
 }
 
@@ -184,7 +184,7 @@ type RecordingDatabase struct {
 func NewRecordingDatabase(config *RecordingDatabaseConfig, ethdb ethdb.Database, blockchain *core.BlockChain) *RecordingDatabase {
 	hashConfig := *hashdb.Defaults
 	hashConfig.CleanCacheSize = config.TrieCleanCache
-	trieConfig := trie.Config{
+	trieConfig := triedb.Config{
 		Preimages: false,
 		HashDB:    &hashConfig,
 	}
