@@ -96,18 +96,16 @@ func ReadActivatedAsm(db ethdb.KeyValueReader, targetName string, moduleHash com
 
 // Stores wasm schema version
 func WriteWasmSchemaVersion(db ethdb.KeyValueWriter) {
-	if err := db.Put(wasmSchemaVersionKey, []byte{wasmSchemaVersion}); err != nil {
+	if err := db.Put(wasmSchemaVersionKey, []byte{WasmSchemaVersion}); err != nil {
 		log.Crit("Failed to store wasm schema version", "err", err)
 	}
 }
 
-// Retrieves wasm schema version, if the correspoding key is not foud returns version 0
-func ReadWasmSchemaVersion(db ethdb.KeyValueReader) byte {
+// Retrieves wasm schema version, if the corresponding key is not found returns version 0
+func ReadWasmSchemaVersion(db ethdb.KeyValueReader) []byte {
 	version, err := db.Get(wasmSchemaVersionKey)
 	if err != nil || len(version) == 0 {
-		return 0
-	} else if len(version) != 1 {
-		log.Crit("Invalid wasm schema version in database", "version", version)
+		return []byte{0}
 	}
-	return version[0]
+	return version
 }

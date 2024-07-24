@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-const wasmSchemaVersion byte = 0x01
+const WasmSchemaVersion byte = 0x01
 
 var (
 	wasmSchemaVersionKey = []byte("WasmSchemaVersion")
