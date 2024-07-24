@@ -16,6 +16,12 @@ func (ch wasmActivation) dirtied() *common.Address {
 	return nil
 }
 
+func (ch wasmActivation) copy() journalEntry {
+	return wasmActivation{
+		moduleHash: ch.moduleHash,
+	}
+}
+
 // Updates the Rust-side recent program cache
 var CacheWasmRust func(asm []byte, moduleHash common.Hash, version uint16, tag uint32, debug bool) = func([]byte, common.Hash, uint16, uint32, bool) {}
 var EvictWasmRust func(moduleHash common.Hash, version uint16, tag uint32, debug bool) = func(common.Hash, uint16, uint32, bool) {}
@@ -35,6 +41,15 @@ func (ch CacheWasm) dirtied() *common.Address {
 	return nil
 }
 
+func (ch CacheWasm) copy() journalEntry {
+	return CacheWasm{
+		ModuleHash: ch.ModuleHash,
+		Version:    ch.Version,
+		Tag:        ch.Tag,
+		Debug:      ch.Debug,
+	}
+}
+
 type EvictWasm struct {
 	ModuleHash common.Hash
 	Version    uint16
@@ -52,4 +67,13 @@ func (ch EvictWasm) revert(s *StateDB) {
 
 func (ch EvictWasm) dirtied() *common.Address {
 	return nil
+}
+
+func (ch EvictWasm) copy() journalEntry {
+	return EvictWasm{
+		ModuleHash: ch.ModuleHash,
+		Version:    ch.Version,
+		Tag:        ch.Tag,
+		Debug:      ch.Debug,
+	}
 }

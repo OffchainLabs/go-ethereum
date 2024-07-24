@@ -69,7 +69,6 @@ var (
 	accountCommitTimer = metrics.NewRegisteredResettingTimer("chain/account/commits", nil)
 
 	storageReadTimer   = metrics.NewRegisteredResettingTimer("chain/storage/reads", nil)
-	storageHashTimer   = metrics.NewRegisteredResettingTimer("chain/storage/hashes", nil)
 	storageUpdateTimer = metrics.NewRegisteredResettingTimer("chain/storage/updates", nil)
 	storageCommitTimer = metrics.NewRegisteredResettingTimer("chain/storage/commits", nil)
 
@@ -102,10 +101,8 @@ const (
 	blockCacheLimit      = 256
 	receiptsCacheLimit   = 32
 	txLookupCacheLimit   = 1024
-	maxFutureBlocks      = 256
-	maxTimeFutureBlocks  = 30
 	DefaultTriesInMemory = 128
-	TriesInMemory        = 128
+
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
 	// Changelog:
@@ -159,8 +156,8 @@ type CacheConfig struct {
 }
 
 // arbitrum: exposing CacheConfig.triedbConfig to be used by Nitro when initializing arbos in database
-func (c *CacheConfig) TriedbConfig() *triedb.Config {
-	return c.triedbConfig()
+func (c *CacheConfig) TriedbConfig(isVerkle bool) *triedb.Config {
+	return c.triedbConfig(isVerkle)
 }
 
 // triedbConfig derives the configures for trie database.
@@ -864,6 +861,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 		// Track the block number of the requested root hash
 		rootNumber uint64 // (no root == always 0)
 		rootFound  bool
+
 		// Retrieve the last pivot block to short circuit rollbacks beyond it
 		// and the current freezer limit to start nuking it's underflown.
 		pivot = rawdb.ReadLastPivotNumber(bc.db)
@@ -1375,7 +1373,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		// Delete block data from the main database.
 		var (
 			batch       = bc.db.NewBatch()
-			canonHashes = make(map[common.Hash]struct{})
+			canonHashes = make(map[common.Hash]struct{}, len(blockChain))
 		)
 		for _, block := range blockChain {
 			canonHashes[block.Hash()] = struct{}{}
@@ -1518,7 +1516,7 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 
 // writeBlockWithState writes block, metadata and corresponding state data to the
 // database.
-func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) error {
+func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, statedb *state.StateDB) error {
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
@@ -1535,12 +1533,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	rawdb.WriteTd(blockBatch, block.Hash(), block.NumberU64(), externTd)
 	rawdb.WriteBlock(blockBatch, block)
 	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
-	rawdb.WritePreimages(blockBatch, state.Preimages())
+	rawdb.WritePreimages(blockBatch, statedb.Preimages())
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
 	}
 	// Commit all cached state changes into underlying memory database.
-	root, err := state.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()))
+	root, err := statedb.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
 		return err
 	}
@@ -2037,8 +2035,7 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 	accountUpdateTimer.Update(statedb.AccountUpdates)               // Account updates are complete(in validation)
 	storageUpdateTimer.Update(statedb.StorageUpdates)               // Storage updates are complete(in validation)
 	accountHashTimer.Update(statedb.AccountHashes)                  // Account hashes are complete(in validation)
-	storageHashTimer.Update(statedb.StorageHashes)                  // Storage hashes are complete(in validation)
-	triehash := statedb.AccountHashes + statedb.StorageHashes       // The time spent on tries hashing
+	triehash := statedb.AccountHashes                               // The time spent on tries hashing
 	trieUpdate := statedb.AccountUpdates + statedb.StorageUpdates   // The time spent on tries update
 	trieRead := statedb.SnapshotAccountReads + statedb.AccountReads // The time spent on account read
 	trieRead += statedb.SnapshotStorageReads + statedb.StorageReads // The time spent on storage read
@@ -2065,7 +2062,7 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 	snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
 	triedbCommitTimer.Update(statedb.TrieDBCommits)     // Trie database commits are complete, we can mark them
 
-	blockWriteTimer.Update(time.Since(wstart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits - statedb.TrieDBCommits)
+	blockWriteTimer.Update(time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.SnapshotCommits - statedb.TrieDBCommits)
 	blockInsertTimer.UpdateSince(start)
 
 	return &blockProcessingResult{usedGas: usedGas, procTime: proctime, status: status}, nil
