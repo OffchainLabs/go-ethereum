@@ -301,13 +301,13 @@ func TestInternals(t *testing.T) {
 				byte(vm.CALL),
 			},
 			tracer: mkTracer("callTracer", nil),
-			want:   fmt.Sprintf(`{"from":"%s","gas":"0x13880","gasUsed":"0x54d8","to":"0x00000000000000000000000000000000deadbeef","input":"0x","calls":[{"from":"0x00000000000000000000000000000000deadbeef","gas":"0xe01a","gasUsed":"0x0","to":"0x00000000000000000000000000000000000000ff","input":"0x","value":"0x0","type":"CALL"}],"value":"0x0","type":"CALL"}`, originHex),
+			want:   fmt.Sprintf(`{"beforeEVMTransfers":[{"purpose":"feePayment","from":"%s","to":null,"value":"0x13880"}],"afterEVMTransfers":[{"purpose":"gasRefund","from":null,"to":"%s","value":"0xe3a8"},{"purpose":"tip","from":null,"to":"0x0000000000000000000000000000000000000000","value":"0x54d8"}],"from":"%s","gas":"0x13880","gasUsed":"0x54d8","to":"0x00000000000000000000000000000000deadbeef","input":"0x","calls":[{"from":"0x00000000000000000000000000000000deadbeef","gas":"0xe01a","gasUsed":"0x0","to":"0x00000000000000000000000000000000000000ff","input":"0x","value":"0x0","type":"CALL"}],"value":"0x0","type":"CALL"}`, origin.Hex(), origin.Hex(), originHex),
 		},
 		{
 			name:   "Stack depletion in LOG0",
 			code:   []byte{byte(vm.LOG3)},
 			tracer: mkTracer("callTracer", json.RawMessage(`{ "withLog": true }`)),
-			want:   fmt.Sprintf(`{"from":"%s","gas":"0x13880","gasUsed":"0x13880","to":"0x00000000000000000000000000000000deadbeef","input":"0x","error":"stack underflow (0 \u003c=\u003e 5)","value":"0x0","type":"CALL"}`, originHex),
+			want:   fmt.Sprintf(`{"beforeEVMTransfers":[{"purpose":"feePayment","from":"%s","to":null,"value":"0x13880"}],"afterEVMTransfers":[{"purpose":"gasRefund","from":null,"to":"%s","value":"0x0"},{"purpose":"tip","from":null,"to":"0x0000000000000000000000000000000000000000","value":"0x13880"}],"from":"%s","gas":"0x13880","gasUsed":"0x13880","to":"0x00000000000000000000000000000000deadbeef","input":"0x","error":"stack underflow (0 \u003c=\u003e 5)","value":"0x0","type":"CALL"}`, origin.Hex(), origin.Hex(), originHex),
 		},
 		{
 			name: "Mem expansion in LOG0",
@@ -320,7 +320,7 @@ func TestInternals(t *testing.T) {
 				byte(vm.LOG0),
 			},
 			tracer: mkTracer("callTracer", json.RawMessage(`{ "withLog": true }`)),
-			want:   fmt.Sprintf(`{"from":"%s","gas":"0x13880","gasUsed":"0x5b9e","to":"0x00000000000000000000000000000000deadbeef","input":"0x","logs":[{"address":"0x00000000000000000000000000000000deadbeef","topics":[],"data":"0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","position":"0x0"}],"value":"0x0","type":"CALL"}`, originHex),
+			want:   fmt.Sprintf(`{"beforeEVMTransfers":[{"purpose":"feePayment","from":"%s","to":null,"value":"0x13880"}],"afterEVMTransfers":[{"purpose":"gasRefund","from":null,"to":"%s","value":"0xdce2"},{"purpose":"tip","from":null,"to":"0x0000000000000000000000000000000000000000","value":"0x5b9e"}],"from":"%s","gas":"0x13880","gasUsed":"0x5b9e","to":"0x00000000000000000000000000000000deadbeef","input":"0x","logs":[{"address":"0x00000000000000000000000000000000deadbeef","topics":[],"data":"0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","position":"0x0"}],"value":"0x0","type":"CALL"}`, origin.Hex(), origin.Hex(), originHex),
 		},
 		{
 			// Leads to OOM on the prestate tracer
