@@ -377,7 +377,7 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context) error {
 // for the purpose of eth_call class of RPC methods.
 func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int, chainID *big.Int, gasLimitNotSetByUser bool) error {
 	// Reject invalid combinations of pre- and post-1559 fee styles
-	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+	if args.GasPrice != nil && ((args.MaxFeePerGas != nil && args.MaxFeePerGas.ToInt().Cmp(common.Big0) != 0) || (args.MaxPriorityFeePerGas != nil && args.MaxPriorityFeePerGas.ToInt().Cmp(common.Big0) != 0)) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 	if args.ChainID == nil {
