@@ -945,11 +945,12 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		config.BlockOverrides.Apply(&vmctx)
 	}
 	// Execute the trace
-	if err := args.CallDefaults(api.backend.RPCGasCap(), vmctx.BaseFee, api.backend.ChainConfig().ChainID); err != nil {
+	gasLimitNotSetByUser := args.Gas == nil
+	if err := args.CallDefaults(api.backend.RPCGasCap(), vmctx.BaseFee, api.backend.ChainConfig().ChainID, gasLimitNotSetByUser); err != nil {
 		return nil, err
 	}
 	var (
-		msg         = args.ToMessage(vmctx.BaseFee, api.backend.RPCGasCap(), block.Header(), statedb, core.MessageEthcallMode)
+		msg         = args.ToMessage(vmctx.BaseFee, api.backend.RPCGasCap(), block.Header(), statedb, core.MessageEthcallMode, api.backend.ChainConfig().ChainID, gasLimitNotSetByUser)
 		tx          = args.ToTransaction()
 		traceConfig *TraceConfig
 	)
