@@ -23,42 +23,26 @@ import (
 )
 
 const (
-	// TODO do we want to just use os.GOARCH names here? "arm64" / "amd64"? or make it an enum?
+	TargetWavm = "wavm"
 	TargetArm  = "arm"
 	TargetX86  = "x86"
 	TargetHost = "host"
 )
 
-var Targets = []string{TargetArm, TargetX86, TargetHost}
+var Targets = []string{TargetWavm, TargetArm, TargetX86, TargetHost}
 
-func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asmMap map[string][]byte, module []byte) {
+func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asmMap map[string][]byte) {
 	for target, asm := range asmMap {
-		WriteActivatedAsm(db, moduleHash, target, asm)
+		WriteActivatedAsm(db, target, moduleHash, asm)
 	}
-	WriteActivatedModule(db, moduleHash, module)
-}
-
-// Stores the activated module for a given moduleHash
-func WriteActivatedModule(db ethdb.KeyValueWriter, moduleHash common.Hash, module []byte) {
-	key := activatedKey(activatedModulePrefix, moduleHash)
-	if err := db.Put(key[:], module); err != nil {
-		log.Crit("Failed to store activated wasm module", "err", err)
-	}
-}
-
-func ReadActivatedModule(db ethdb.KeyValueReader, moduleHash common.Hash) []byte {
-	key := activatedKey(activatedModulePrefix, moduleHash)
-	module, err := db.Get(key[:])
-	if err != nil {
-		return nil
-	}
-	return module
 }
 
 // Stores the activated asm for a given moduleHash and targetName
-func WriteActivatedAsm(db ethdb.KeyValueWriter, moduleHash common.Hash, targetName string, asm []byte) {
+func WriteActivatedAsm(db ethdb.KeyValueWriter, targetName string, moduleHash common.Hash, asm []byte) {
 	var prefix []byte
 	switch targetName {
+	case TargetWavm:
+		prefix = activatedAsmWavmPrefix
 	case TargetArm:
 		prefix = activatedAsmArmPrefix
 	case TargetX86:
@@ -77,6 +61,8 @@ func WriteActivatedAsm(db ethdb.KeyValueWriter, moduleHash common.Hash, targetNa
 func ReadActivatedAsm(db ethdb.KeyValueReader, targetName string, moduleHash common.Hash) []byte {
 	var prefix []byte
 	switch targetName {
+	case TargetWavm:
+		prefix = activatedAsmWavmPrefix
 	case TargetArm:
 		prefix = activatedAsmArmPrefix
 	case TargetX86:

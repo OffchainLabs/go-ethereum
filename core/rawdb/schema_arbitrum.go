@@ -27,11 +27,11 @@ const WasmSchemaVersion byte = 0x01
 var (
 	wasmSchemaVersionKey = []byte("WasmSchemaVersion")
 
-	// TODO do we need 0x00 prefix? or even: do we need also 'w' there?
+	// 0x00 prefix to avoid conflicts when wasmdb is not separate database
+	activatedAsmWavmPrefix = []byte{0x00, 'w', 'w'} // (prefix, moduleHash) -> stylus module (wavm)
 	activatedAsmArmPrefix  = []byte{0x00, 'w', 'r'} // (prefix, moduleHash) -> stylus asm for ARM system
 	activatedAsmX86Prefix  = []byte{0x00, 'w', 'x'} // (prefix, moduleHash) -> stylus asm for x86 system
 	activatedAsmHostPrefix = []byte{0x00, 'w', 'h'} // (prefix, moduleHash) -> stylus asm for system other then ARM and x86
-	activatedModulePrefix  = []byte{0x00, 'w', 'm'} // (prefix, moduleHash) -> stylus module
 )
 
 // WasmKeyLen = CompiledWasmCodePrefix + moduleHash

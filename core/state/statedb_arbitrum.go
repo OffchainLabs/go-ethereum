@@ -19,7 +19,6 @@ package state
 
 import (
 	"bytes"
-	"fmt"
 	"math/big"
 
 	"errors"
@@ -50,10 +49,7 @@ var (
 	StylusDiscriminant = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersion}
 )
 
-type ActivatedWasm struct {
-	Asm    map[string][]byte
-	Module []byte
-}
+type ActivatedWasm map[string][]byte
 
 // checks if a valid Stylus prefix is present
 func IsStylusProgram(b []byte) bool {
@@ -77,36 +73,34 @@ func NewStylusPrefix(dictionary byte) []byte {
 	return append(prefix, dictionary)
 }
 
-func (s *StateDB) ActivateWasm(moduleHash common.Hash, asm map[string][]byte, module []byte) {
+func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[string][]byte) {
 	_, exists := s.arbExtraData.activatedWasms[moduleHash]
 	if exists {
 		return
 	}
-	s.arbExtraData.activatedWasms[moduleHash] = &ActivatedWasm{
-		Asm:    asm,
-		Module: module,
-	}
+	s.arbExtraData.activatedWasms[moduleHash] = asmMap
 	s.journal.append(wasmActivation{
 		moduleHash: moduleHash,
 	})
 }
 
 func (s *StateDB) TryGetActivatedAsm(targetName string, moduleHash common.Hash) ([]byte, error) {
-	info, exists := s.arbExtraData.activatedWasms[moduleHash]
+	asmMap, exists := s.arbExtraData.activatedWasms[moduleHash]
 	if exists {
-		if asm, exists := info.Asm[targetName]; exists {
+		if asm, exists := asmMap[targetName]; exists {
 			return asm, nil
 		}
 	}
 	return s.db.ActivatedAsm(targetName, moduleHash)
 }
 
+// TODO(stylus-target) take targetNames list as a parameter
 func (s *StateDB) TryGetActivatedAsmMap(moduleHash common.Hash) (map[string][]byte, error) {
-	info, exists := s.arbExtraData.activatedWasms[moduleHash]
+	asmMap, exists := s.arbExtraData.activatedWasms[moduleHash]
 	if exists {
-		return info.Asm, nil
+		return asmMap, nil
 	}
-	asmMap := make(map[string][]byte)
+	asmMap = make(map[string][]byte)
 	var err error
 	for _, target := range rawdb.Targets {
 		asm, dbErr := s.db.ActivatedAsm(target, moduleHash)
@@ -120,18 +114,6 @@ func (s *StateDB) TryGetActivatedAsmMap(moduleHash common.Hash) (map[string][]by
 		return nil, err
 	}
 	return asmMap, nil
-}
-
-func (s *StateDB) GetActivatedModule(moduleHash common.Hash) []byte {
-	info, exists := s.arbExtraData.activatedWasms[moduleHash]
-	if exists {
-		return info.Module
-	}
-	code, err := s.db.ActivatedModule(moduleHash)
-	if err != nil {
-		s.setError(fmt.Errorf("failed to load module for %x: %v", moduleHash, err))
-	}
-	return code
 }
 
 func (s *StateDB) GetStylusPages() (uint16, uint16) {
@@ -172,11 +154,11 @@ func (s *StateDB) Deterministic() bool {
 }
 
 type ArbitrumExtraData struct {
-	unexpectedBalanceDelta *big.Int                       // total balance change across all accounts
-	userWasms              UserWasms                      // user wasms encountered during execution
-	openWasmPages          uint16                         // number of pages currently open
-	everWasmPages          uint16                         // largest number of pages ever allocated during this tx's execution
-	activatedWasms         map[common.Hash]*ActivatedWasm // newly activated WASMs
+	unexpectedBalanceDelta *big.Int                      // total balance change across all accounts
+	userWasms              UserWasms                     // user wasms encountered during execution
+	openWasmPages          uint16                        // number of pages currently open
+	everWasmPages          uint16                        // largest number of pages ever allocated during this tx's execution
+	activatedWasms         map[common.Hash]ActivatedWasm // newly activated WASMs
 	recentWasms            RecentWasms
 }
 
@@ -263,11 +245,7 @@ func (s *StateDB) RecordProgram(moduleHash common.Hash) {
 		log.Crit("can't find activated wasm while recording", "modulehash", moduleHash)
 	}
 	if s.arbExtraData.userWasms != nil {
-		s.arbExtraData.userWasms[moduleHash] = ActivatedWasm{
-			// TODO should we make a copy of the asmMap?
-			Asm:    asmMap,
-			Module: s.GetActivatedModule(moduleHash),
-		}
+		s.arbExtraData.userWasms[moduleHash] = asmMap
 	}
 }
 
