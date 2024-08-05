@@ -1130,10 +1130,11 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 
 	// Get a new instance of the EVM.
 	var err error
-	if err = args.CallDefaults(globalGasCap, blockCtx.BaseFee, b.ChainConfig().ChainID); err != nil {
+	gasLimitNotSetByUser := args.Gas == nil
+	if err = args.CallDefaults(globalGasCap, blockCtx.BaseFee, b.ChainConfig().ChainID, gasLimitNotSetByUser); err != nil {
 		return nil, err
 	}
-	msg := args.ToMessage(blockCtx.BaseFee, globalGasCap, header, state, runMode)
+	msg := args.ToMessage(blockCtx.BaseFee, globalGasCap, header, state, runMode, b.ChainConfig().ChainID, gasLimitNotSetByUser)
 
 	// Arbitrum: support NodeInterface.sol by swapping out the message if needed
 	var res *core.ExecutionResult
@@ -1295,16 +1296,17 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		ErrorRatio:       gasestimator.EstimateGasErrorRatio,
 		RunScheduledTxes: runScheduledTxes,
 	}
-	if err := args.CallDefaults(gasCap, header.BaseFee, b.ChainConfig().ChainID); err != nil {
+	gasLimitNotSetByUser := args.Gas == nil
+	if err := args.CallDefaults(gasCap, header.BaseFee, b.ChainConfig().ChainID, gasLimitNotSetByUser); err != nil {
 		return 0, err
 	}
 	// Run the gas estimation andwrap any revertals into a custom return
 	// Arbitrum: this also appropriately recursively calls another args.ToMessage with increased gasCap by posterCostInL2Gas amount
-	call := args.ToMessage(header.BaseFee, gasCap, header, state, core.MessageGasEstimationMode)
+	call := args.ToMessage(header.BaseFee, gasCap, header, state, core.MessageGasEstimationMode, b.ChainConfig().ChainID, gasLimitNotSetByUser)
 
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	{
-		gasCap, err = args.L2OnlyGasCap(header.BaseFee, gasCap, header, state, core.MessageGasEstimationMode)
+		gasCap, err = args.L2OnlyGasCap(header.BaseFee, gasCap, header, state, core.MessageGasEstimationMode, b.ChainConfig().ChainID, gasLimitNotSetByUser)
 		if err != nil {
 			return 0, err
 		}
@@ -1723,6 +1725,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	}
 
 	// Ensure any missing fields are filled, extract the recipient and input data
+	gasLimitNotSetByUser := args.Gas == nil
 	if err := args.setDefaults(ctx, b, true); err != nil {
 		return nil, 0, nil, err
 	}
@@ -1753,7 +1756,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		statedb := db.Copy()
 		// Set the accesslist to the last al
 		args.AccessList = &accessList
-		msg := args.ToMessage(header.BaseFee, b.RPCGasCap(), header, statedb, core.MessageEthcallMode)
+		msg := args.ToMessage(header.BaseFee, b.RPCGasCap(), header, statedb, core.MessageEthcallMode, b.ChainConfig().ChainID, gasLimitNotSetByUser)
 
 		// Apply the transaction with the access list tracer
 		tracer := logger.NewAccessListTracer(accessList, args.from(), to, precompiles)
