@@ -157,8 +157,8 @@ type CacheConfig struct {
 }
 
 // arbitrum: exposing CacheConfig.triedbConfig to be used by Nitro when initializing arbos in database
-func (c *CacheConfig) TriedbConfig(sVerkle bool) *triedb.Config {
-	return c.triedbConfig(sVerkle)
+func (c *CacheConfig) TriedbConfig(isVerkle bool) *triedb.Config {
+	return c.triedbConfig(isVerkle)
 }
 
 // triedbConfig derives the configures for trie database.
