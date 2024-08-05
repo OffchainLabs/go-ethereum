@@ -77,3 +77,33 @@ func (ch EvictWasm) copy() journalEntry {
 		Debug:      ch.Debug,
 	}
 }
+
+// Arbitrum: only implemented by createZombieChange
+type possibleZombie interface {
+	// Arbitrum: return true if this change should, on its own, create an empty account.
+	// If combined with another non-zombie change the empty account will be cleaned up.
+	isZombie() bool
+}
+
+func isZombie(entry journalEntry) bool {
+	possiblyZombie, isPossiblyZombie := entry.(possibleZombie)
+	return isPossiblyZombie && possiblyZombie.isZombie()
+}
+
+func (ch createZombieChange) revert(s *StateDB) {
+	delete(s.stateObjects, *ch.account)
+}
+
+func (ch createZombieChange) dirtied() *common.Address {
+	return ch.account
+}
+
+func (ch createZombieChange) copy() journalEntry {
+	return createZombieChange{
+		account: ch.account,
+	}
+}
+
+func (ch createZombieChange) isZombie() bool {
+	return true
+}

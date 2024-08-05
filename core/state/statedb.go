@@ -436,6 +436,11 @@ func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, reason tr
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) {
+	// Arbitrum: this behavior created empty accounts in old geth versions.
+	if amount.IsZero() && s.getStateObject(addr) == nil {
+		s.createZombie(addr)
+		return
+	}
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		s.arbExtraData.unexpectedBalanceDelta.Sub(s.arbExtraData.unexpectedBalanceDelta, amount.ToBig())
@@ -695,6 +700,15 @@ func (s *StateDB) createObject(addr common.Address) *stateObject {
 	return obj
 }
 
+// createObject creates a new state object. The assumption is held there is no
+// existing account with the given address, otherwise it will be silently overwritten.
+func (s *StateDB) createZombie(addr common.Address) *stateObject {
+	obj := newObject(s, addr, nil)
+	s.journal.append(createZombieChange{account: &addr})
+	s.setStateObject(obj)
+	return obj
+}
+
 // CreateAccount explicitly creates a new state object, assuming that the
 // account did not previously exist in the state. If the account already
 // exists, this function will silently overwrite it which might lead to a
@@ -842,7 +856,8 @@ func (s *StateDB) GetRefund() uint64 {
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	addressesToPrefetch := make([][]byte, 0, len(s.journal.dirties))
-	for addr := range s.journal.dirties {
+	for addr, dirtyCount := range s.journal.dirties {
+		isZombie := s.journal.zombieEntries[addr] == dirtyCount
 		obj, exist := s.stateObjects[addr]
 		if !exist {
 			// ripeMD is 'touched' at block 1714175, in tx 0x1237f737031e40bcde4a8b7e717b2d15e3ecadfe49bb1bbc71ee9deb09c6fcf2
@@ -853,7 +868,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			// Thus, we can safely ignore it here
 			continue
 		}
-		if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
+		if obj.selfDestructed || (deleteEmptyObjects && obj.empty() && !isZombie) {
 			delete(s.stateObjects, obj.address)
 			s.markDelete(addr)
 
