@@ -70,7 +70,7 @@
         "purpose": "tip",
         "from": null,
         "to": "0x0000000000000000000000000000000000000000",
-        "value": "0x198f3fb76000"
+        "value": "0x0"
       }
     ],
     "error": "execution reverted",

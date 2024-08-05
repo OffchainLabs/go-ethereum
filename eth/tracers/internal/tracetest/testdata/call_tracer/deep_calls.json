@@ -128,7 +128,7 @@
         "purpose": "tip",
         "from": null,
         "to": "0x1977C248e1014Cc103929Dd7f154199C916E39Ec",
-        "value": "0x700fefccd9800"
+        "value": "0x0"
       }
     ],
 	"calls": [

@@ -69,7 +69,7 @@
         "purpose": "tip",
         "from": null,
         "to": "0x294e5d6c39A36Ce38aF1DCA70c1060f78Dee8070",
-        "value": "0x11c37937e08000"
+        "value": "0x0"
       }
     ],		
     "error": "invalid jump destination",

@@ -69,7 +69,7 @@
         "purpose": "tip",
         "from": null,
         "to": "0xc822ef32e6d26E170B70Cf761e204c1806265914",
-        "value": "0x216e3433f7200"
+        "value": "0x0"
       }
     ],
 	"type": "CALL",
