@@ -440,7 +440,6 @@ func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tr
 	if amount.IsZero() && s.getStateObject(addr) == nil {
 		if _, destructed := s.stateObjectsDestruct[addr]; destructed {
 			s.createZombie(addr)
-			return
 		}
 	}
 	stateObject := s.getOrNewStateObject(addr)
