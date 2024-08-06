@@ -31,7 +31,7 @@ type StateDB interface {
 	// Arbitrum: manage Stylus wasms
 	ActivateWasm(moduleHash common.Hash, asm map[string][]byte)
 	TryGetActivatedAsm(targetName string, moduleHash common.Hash) (asm []byte, err error)
-	TryGetActivatedAsmMap(moduleHash common.Hash) (asmMap map[string][]byte, err error)
+	TryGetActivatedAsmMap(targetNames []string, moduleHash common.Hash) (asmMap map[string][]byte, err error)
 	RecordCacheWasm(wasm state.CacheWasm)
 	RecordEvictWasm(wasm state.EvictWasm)
 	GetRecentWasms() state.RecentWasms

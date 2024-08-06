@@ -19,6 +19,7 @@ package state
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 
 	"errors"
@@ -26,7 +27,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -94,26 +94,24 @@ func (s *StateDB) TryGetActivatedAsm(targetName string, moduleHash common.Hash) 
 	return s.db.ActivatedAsm(targetName, moduleHash)
 }
 
-// TODO(stylus-target) take targetNames list as a parameter
-func (s *StateDB) TryGetActivatedAsmMap(moduleHash common.Hash) (map[string][]byte, error) {
-	asmMap, exists := s.arbExtraData.activatedWasms[moduleHash]
-	if exists {
-		return asmMap, nil
-	}
-	asmMap = make(map[string][]byte)
+func (s *StateDB) TryGetActivatedAsmMap(targetNames []string, moduleHash common.Hash) (map[string][]byte, error) {
+	asmMap := s.arbExtraData.activatedWasms[moduleHash]
 	var err error
-	for _, target := range rawdb.Targets {
-		asm, dbErr := s.db.ActivatedAsm(target, moduleHash)
-		if dbErr == nil {
-			asmMap[target] = asm
-		} else {
-			err = errors.Join(dbErr)
+	for _, target := range targetNames {
+		var asm []byte
+		if asmMap != nil {
+			asm = asmMap[target]
+		}
+		if asm == nil {
+			asm, dbErr := s.db.ActivatedAsm(target, moduleHash)
+			if dbErr == nil {
+				asmMap[target] = asm
+			} else {
+				err = errors.Join(fmt.Errorf("failed to read activated asm from database for target %v and module %v: %w", target, moduleHash, dbErr))
+			}
 		}
 	}
-	if len(asmMap) == 0 {
-		return nil, err
-	}
-	return asmMap, nil
+	return asmMap, err
 }
 
 func (s *StateDB) GetStylusPages() (uint16, uint16) {
@@ -239,10 +237,10 @@ func (s *StateDB) StartRecording() {
 	s.arbExtraData.userWasms = make(UserWasms)
 }
 
-func (s *StateDB) RecordProgram(moduleHash common.Hash) {
-	asmMap, err := s.TryGetActivatedAsmMap(moduleHash)
+func (s *StateDB) RecordProgram(targetNames []string, moduleHash common.Hash) {
+	asmMap, err := s.TryGetActivatedAsmMap(targetNames, moduleHash)
 	if err != nil {
-		log.Crit("can't find activated wasm while recording", "modulehash", moduleHash)
+		log.Crit("can't find activated wasm while recording", "modulehash", moduleHash, "err", err)
 	}
 	if s.arbExtraData.userWasms != nil {
 		s.arbExtraData.userWasms[moduleHash] = asmMap
