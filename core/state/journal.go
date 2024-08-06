@@ -40,6 +40,8 @@ type journalEntry interface {
 // commit. These are tracked to be able to be reverted in the case of an execution
 // exception or request for reversal.
 type journal struct {
+	zombieEntries map[common.Address]int // Arbitrum: number of createZombieChange entries for each address
+
 	entries []journalEntry         // Current changes tracked by the journal
 	dirties map[common.Address]int // Dirty accounts and the number of changes
 }
@@ -47,6 +49,8 @@ type journal struct {
 // newJournal creates a new initialized journal.
 func newJournal() *journal {
 	return &journal{
+		zombieEntries: make(map[common.Address]int),
+
 		dirties: make(map[common.Address]int),
 	}
 }
@@ -56,6 +60,10 @@ func (j *journal) append(entry journalEntry) {
 	j.entries = append(j.entries, entry)
 	if addr := entry.dirtied(); addr != nil {
 		j.dirties[*addr]++
+		// Arbitrum: also track the number of zombie changes
+		if isZombie(entry) {
+			j.zombieEntries[*addr]++
+		}
 	}
 }
 
@@ -70,6 +78,13 @@ func (j *journal) revert(statedb *StateDB, snapshot int) {
 		if addr := j.entries[i].dirtied(); addr != nil {
 			if j.dirties[*addr]--; j.dirties[*addr] == 0 {
 				delete(j.dirties, *addr)
+
+				// Revert zombieEntries tracking
+				if isZombie(j.entries[i]) {
+					if j.zombieEntries[*addr]--; j.zombieEntries[*addr] == 0 {
+						delete(j.zombieEntries, *addr)
+					}
+				}
 			}
 		}
 	}
@@ -95,6 +110,8 @@ func (j *journal) copy() *journal {
 		entries = append(entries, j.entries[i].copy())
 	}
 	return &journal{
+		zombieEntries: maps.Clone(j.zombieEntries),
+
 		entries: entries,
 		dirties: maps.Clone(j.dirties),
 	}
@@ -103,6 +120,11 @@ func (j *journal) copy() *journal {
 type (
 	// Changes to the account trie.
 	createObjectChange struct {
+		account *common.Address
+	}
+
+	// Changes to the account trie without being marked as dirty.
+	createZombieChange struct {
 		account *common.Address
 	}
 
