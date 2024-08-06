@@ -438,8 +438,10 @@ func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, reason tr
 func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) {
 	// Arbitrum: this behavior created empty accounts in old geth versions.
 	if amount.IsZero() && s.getStateObject(addr) == nil {
-		s.createZombie(addr)
-		return
+		if _, destructed := s.stateObjectsDestruct[addr]; destructed {
+			s.createZombie(addr)
+			return
+		}
 	}
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
