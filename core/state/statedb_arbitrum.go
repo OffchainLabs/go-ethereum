@@ -96,19 +96,22 @@ func (s *StateDB) TryGetActivatedAsm(targetName string, moduleHash common.Hash) 
 
 func (s *StateDB) TryGetActivatedAsmMap(targetNames []string, moduleHash common.Hash) (map[string][]byte, error) {
 	asmMap := s.arbExtraData.activatedWasms[moduleHash]
-	var err error
-	for _, target := range targetNames {
-		var asm []byte
-		if asmMap != nil {
-			asm = asmMap[target]
-		}
-		if asm == nil {
-			asm, dbErr := s.db.ActivatedAsm(target, moduleHash)
-			if dbErr == nil {
-				asmMap[target] = asm
-			} else {
-				err = errors.Join(fmt.Errorf("failed to read activated asm from database for target %v and module %v: %w", target, moduleHash, dbErr))
+	if asmMap != nil {
+		for _, target := range targetNames {
+			if _, exists := asmMap[target]; !exists {
+				return nil, fmt.Errorf("newly activated wasms for module %v exist, but they don't contain asm for target %v", moduleHash, target)
 			}
+		}
+		return asmMap, nil
+	}
+	var err error
+	asmMap = make(map[string][]byte, len(targetNames))
+	for _, target := range targetNames {
+		asm, dbErr := s.db.ActivatedAsm(target, moduleHash)
+		if dbErr == nil {
+			asmMap[target] = asm
+		} else {
+			err = errors.Join(fmt.Errorf("failed to read activated asm from database for target %v and module %v: %w", target, moduleHash, dbErr))
 		}
 	}
 	return asmMap, err
