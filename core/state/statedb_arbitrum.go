@@ -241,6 +241,10 @@ func (s *StateDB) StartRecording() {
 }
 
 func (s *StateDB) RecordProgram(targetNames []string, moduleHash common.Hash) {
+	if len(targetNames) == 0 {
+		// nothing to record
+		return
+	}
 	asmMap, err := s.TryGetActivatedAsmMap(targetNames, moduleHash)
 	if err != nil {
 		log.Crit("can't find activated wasm while recording", "modulehash", moduleHash, "err", err)
