@@ -22,15 +22,76 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// Stores the activated asm and module for a given codeHash
-func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asm, module []byte) {
-	key := ActivatedAsmKey(moduleHash)
+const (
+	TargetWavm  = "wavm"
+	TargetArm64 = "arm64"
+	TargetAmd64 = "amd64"
+	TargetHost  = "host"
+)
+
+var Targets = []string{TargetWavm, TargetArm64, TargetAmd64, TargetHost}
+
+func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asmMap map[string][]byte) {
+	for target, asm := range asmMap {
+		WriteActivatedAsm(db, target, moduleHash, asm)
+	}
+}
+
+// Stores the activated asm for a given moduleHash and targetName
+func WriteActivatedAsm(db ethdb.KeyValueWriter, targetName string, moduleHash common.Hash, asm []byte) {
+	var prefix []byte
+	switch targetName {
+	case TargetWavm:
+		prefix = activatedAsmWavmPrefix
+	case TargetArm64:
+		prefix = activatedAsmArmPrefix
+	case TargetAmd64:
+		prefix = activatedAsmX86Prefix
+	case TargetHost:
+		prefix = activatedAsmHostPrefix
+	default:
+		log.Crit("Failed to store activated wasm asm, invalid targetName specified", "targetName", targetName)
+	}
+	key := activatedKey(prefix, moduleHash)
 	if err := db.Put(key[:], asm); err != nil {
 		log.Crit("Failed to store activated wasm asm", "err", err)
 	}
+}
 
-	key = ActivatedModuleKey(moduleHash)
-	if err := db.Put(key[:], module); err != nil {
-		log.Crit("Failed to store activated wasm module", "err", err)
+func ReadActivatedAsm(db ethdb.KeyValueReader, targetName string, moduleHash common.Hash) []byte {
+	var prefix []byte
+	switch targetName {
+	case TargetWavm:
+		prefix = activatedAsmWavmPrefix
+	case TargetArm64:
+		prefix = activatedAsmArmPrefix
+	case TargetAmd64:
+		prefix = activatedAsmX86Prefix
+	case TargetHost:
+		prefix = activatedAsmHostPrefix
+	default:
+		log.Crit("Failed to store activated wasm asm, invalid targetName specified", "targetName", targetName)
 	}
+	key := activatedKey(prefix, moduleHash)
+	asm, err := db.Get(key[:])
+	if err != nil {
+		return nil
+	}
+	return asm
+}
+
+// Stores wasm schema version
+func WriteWasmSchemaVersion(db ethdb.KeyValueWriter) {
+	if err := db.Put(wasmSchemaVersionKey, []byte{WasmSchemaVersion}); err != nil {
+		log.Crit("Failed to store wasm schema version", "err", err)
+	}
+}
+
+// Retrieves wasm schema version, if the corresponding key is not found returns version 0
+func ReadWasmSchemaVersion(db ethdb.KeyValueReader) []byte {
+	version, err := db.Get(wasmSchemaVersionKey)
+	if err != nil || len(version) == 0 {
+		return []byte{0}
+	}
+	return version
 }
