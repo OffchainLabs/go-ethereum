@@ -23,13 +23,13 @@ import (
 )
 
 const (
-	TargetWavm = "wavm"
-	TargetArm  = "arm"
-	TargetX86  = "x86"
-	TargetHost = "host"
+	TargetWavm  = "wavm"
+	TargetArm64 = "arm64"
+	TargetAmd64 = "amd64"
+	TargetHost  = "host"
 )
 
-var Targets = []string{TargetWavm, TargetArm, TargetX86, TargetHost}
+var Targets = []string{TargetWavm, TargetArm64, TargetAmd64, TargetHost}
 
 func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asmMap map[string][]byte) {
 	for target, asm := range asmMap {
@@ -43,9 +43,9 @@ func WriteActivatedAsm(db ethdb.KeyValueWriter, targetName string, moduleHash co
 	switch targetName {
 	case TargetWavm:
 		prefix = activatedAsmWavmPrefix
-	case TargetArm:
+	case TargetArm64:
 		prefix = activatedAsmArmPrefix
-	case TargetX86:
+	case TargetAmd64:
 		prefix = activatedAsmX86Prefix
 	case TargetHost:
 		prefix = activatedAsmHostPrefix
@@ -63,9 +63,9 @@ func ReadActivatedAsm(db ethdb.KeyValueReader, targetName string, moduleHash com
 	switch targetName {
 	case TargetWavm:
 		prefix = activatedAsmWavmPrefix
-	case TargetArm:
+	case TargetArm64:
 		prefix = activatedAsmArmPrefix
-	case TargetX86:
+	case TargetAmd64:
 		prefix = activatedAsmX86Prefix
 	case TargetHost:
 		prefix = activatedAsmHostPrefix
