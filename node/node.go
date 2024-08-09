@@ -110,6 +110,10 @@ func New(conf *Config) (*Node, error) {
 	}
 	server := rpc.NewServer()
 	server.SetBatchLimits(conf.BatchRequestLimit, conf.BatchResponseMaxSize)
+	// If a custom http body limit is set, apply it to the server.
+	if conf.HTTPBodyLimit != 0 {
+		server.SetHTTPBodyLimit(conf.HTTPBodyLimit)
+	}
 	node := &Node{
 		config:        conf,
 		inprocHandler: server,
