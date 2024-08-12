@@ -110,10 +110,6 @@ func New(conf *Config) (*Node, error) {
 	}
 	server := rpc.NewServer()
 	server.SetBatchLimits(conf.BatchRequestLimit, conf.BatchResponseMaxSize)
-	// If a custom http body limit is set, apply it to the server.
-	if conf.HTTPBodyLimit != 0 {
-		server.SetHTTPBodyLimit(conf.HTTPBodyLimit)
-	}
 	node := &Node{
 		config:        conf,
 		inprocHandler: server,
@@ -473,6 +469,9 @@ func (n *Node) startRPC() error {
 			batchItemLimit:         engineAPIBatchItemLimit,
 			batchResponseSizeLimit: engineAPIBatchResponseSizeLimit,
 			httpBodyLimit:          engineAPIBodyLimit,
+		}
+		if n.config.HTTPBodyLimit != 0 {
+			sharedConfig.httpBodyLimit = n.config.HTTPBodyLimit
 		}
 		err := server.enableRPC(allAPIs, httpConfig{
 			CorsAllowedOrigins: DefaultAuthCors,
