@@ -423,6 +423,12 @@ func (n *Node) startRPC() error {
 		batchResponseSizeLimit: n.config.BatchResponseMaxSize,
 		apiFilter:              n.apiFilter,
 	}
+	if n.config.HTTPBodyLimit != 0 {
+		rpcConfig.httpBodyLimit = n.config.HTTPBodyLimit
+	}
+	if n.config.WSReadLimit != 0 {
+		rpcConfig.wsReadLimit = n.config.WSReadLimit
+	}
 
 	initHttp := func(server *httpServer, port int) error {
 		if err := server.setListenAddr(n.config.HTTPHost, port); err != nil {
@@ -469,6 +475,12 @@ func (n *Node) startRPC() error {
 			batchItemLimit:         engineAPIBatchItemLimit,
 			batchResponseSizeLimit: engineAPIBatchResponseSizeLimit,
 			httpBodyLimit:          engineAPIBodyLimit,
+		}
+		if n.config.HTTPBodyLimit != 0 {
+			sharedConfig.httpBodyLimit = n.config.HTTPBodyLimit
+		}
+		if n.config.WSReadLimit != 0 {
+			sharedConfig.wsReadLimit = n.config.WSReadLimit
 		}
 		err := server.enableRPC(allAPIs, httpConfig{
 			CorsAllowedOrigins: DefaultAuthCors,
