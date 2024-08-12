@@ -75,6 +75,7 @@ func WriteActivatedAsm(db ethdb.KeyValueWriter, target Target, moduleHash common
 	}
 }
 
+// Retrieves the activated asm for a given moduleHash and target
 func ReadActivatedAsm(db ethdb.KeyValueReader, target Target, moduleHash common.Hash) []byte {
 	prefix, err := target.keyPrefix()
 	if err != nil {
@@ -95,11 +96,7 @@ func WriteWasmSchemaVersion(db ethdb.KeyValueWriter) {
 	}
 }
 
-// Retrieves wasm schema version, if the corresponding key is not found returns version 0
-func ReadWasmSchemaVersion(db ethdb.KeyValueReader) []byte {
-	version, err := db.Get(wasmSchemaVersionKey)
-	if err != nil || len(version) == 0 {
-		return []byte{0}
-	}
-	return version
+// Retrieves wasm schema version
+func ReadWasmSchemaVersion(db ethdb.KeyValueReader) ([]byte, error) {
+	return db.Get(wasmSchemaVersionKey)
 }
