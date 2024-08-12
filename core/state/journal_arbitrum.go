@@ -2,6 +2,7 @@ package state
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
 type wasmActivation struct {
@@ -36,7 +37,7 @@ func (ch CacheWasm) dirtied() *common.Address {
 }
 
 type EvictWasm struct {
-	Arch       string
+	Target     rawdb.Target
 	ModuleHash common.Hash
 	Version    uint16
 	Tag        uint32
@@ -44,7 +45,7 @@ type EvictWasm struct {
 }
 
 func (ch EvictWasm) revert(s *StateDB) {
-	asm, err := s.TryGetActivatedAsm(ch.Arch, ch.ModuleHash) // only happens in native mode
+	asm, err := s.TryGetActivatedAsm(ch.Target, ch.ModuleHash) // only happens in native mode
 	if err == nil && len(asm) != 0 {
 		//if we failed to get it - it's not in the current rust cache
 		CacheWasmRust(asm, ch.ModuleHash, ch.Version, ch.Tag, ch.Debug)

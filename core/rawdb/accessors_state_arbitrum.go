@@ -31,18 +31,18 @@ const (
 	TargetHost  Target = "host"
 )
 
-var Targets = []string{TargetWavm, TargetArm64, TargetAmd64, TargetHost}
+var Targets = []Target{TargetWavm, TargetArm64, TargetAmd64, TargetHost}
 
-func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asmMap map[string][]byte) {
+func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asmMap map[Target][]byte) {
 	for target, asm := range asmMap {
 		WriteActivatedAsm(db, target, moduleHash, asm)
 	}
 }
 
-// Stores the activated asm for a given moduleHash and targetName
-func WriteActivatedAsm(db ethdb.KeyValueWriter, targetName string, moduleHash common.Hash, asm []byte) {
+// Stores the activated asm for a given moduleHash and target
+func WriteActivatedAsm(db ethdb.KeyValueWriter, target Target, moduleHash common.Hash, asm []byte) {
 	var prefix []byte
-	switch targetName {
+	switch target {
 	case TargetWavm:
 		prefix = activatedAsmWavmPrefix
 	case TargetArm64:
@@ -52,7 +52,7 @@ func WriteActivatedAsm(db ethdb.KeyValueWriter, targetName string, moduleHash co
 	case TargetHost:
 		prefix = activatedAsmHostPrefix
 	default:
-		log.Crit("Failed to store activated wasm asm, invalid targetName specified", "targetName", targetName)
+		log.Crit("Failed to store activated wasm asm, invalid target specified", "target", target)
 	}
 	key := activatedKey(prefix, moduleHash)
 	if err := db.Put(key[:], asm); err != nil {
@@ -60,9 +60,9 @@ func WriteActivatedAsm(db ethdb.KeyValueWriter, targetName string, moduleHash co
 	}
 }
 
-func ReadActivatedAsm(db ethdb.KeyValueReader, targetName string, moduleHash common.Hash) []byte {
+func ReadActivatedAsm(db ethdb.KeyValueReader, target Target, moduleHash common.Hash) []byte {
 	var prefix []byte
-	switch targetName {
+	switch target {
 	case TargetWavm:
 		prefix = activatedAsmWavmPrefix
 	case TargetArm64:
@@ -72,7 +72,7 @@ func ReadActivatedAsm(db ethdb.KeyValueReader, targetName string, moduleHash com
 	case TargetHost:
 		prefix = activatedAsmHostPrefix
 	default:
-		log.Crit("Failed to store activated wasm asm, invalid targetName specified", "targetName", targetName)
+		log.Crit("Failed to store activated wasm asm, invalid target specified", "target", target)
 	}
 	key := activatedKey(prefix, moduleHash)
 	asm, err := db.Get(key[:])

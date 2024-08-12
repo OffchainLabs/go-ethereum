@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -29,9 +30,9 @@ import (
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
 	// Arbitrum: manage Stylus wasms
-	ActivateWasm(moduleHash common.Hash, asm map[string][]byte)
-	TryGetActivatedAsm(targetName string, moduleHash common.Hash) (asm []byte, err error)
-	TryGetActivatedAsmMap(targetNames []string, moduleHash common.Hash) (asmMap map[string][]byte, err error)
+	ActivateWasm(moduleHash common.Hash, asm map[rawdb.Target][]byte)
+	TryGetActivatedAsm(target rawdb.Target, moduleHash common.Hash) (asm []byte, err error)
+	TryGetActivatedAsmMap(targets []rawdb.Target, moduleHash common.Hash) (asmMap map[rawdb.Target][]byte, err error)
 	RecordCacheWasm(wasm state.CacheWasm)
 	RecordEvictWasm(wasm state.EvictWasm)
 	GetRecentWasms() state.RecentWasms

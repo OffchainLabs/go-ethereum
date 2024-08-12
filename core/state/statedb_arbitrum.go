@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -49,7 +50,7 @@ var (
 	StylusDiscriminant = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersion}
 )
 
-type ActivatedWasm map[string][]byte
+type ActivatedWasm map[rawdb.Target][]byte
 
 // checks if a valid Stylus prefix is present
 func IsStylusProgram(b []byte) bool {
@@ -73,7 +74,7 @@ func NewStylusPrefix(dictionary byte) []byte {
 	return append(prefix, dictionary)
 }
 
-func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[string][]byte) {
+func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.Target][]byte) {
 	_, exists := s.arbExtraData.activatedWasms[moduleHash]
 	if exists {
 		return
@@ -84,20 +85,20 @@ func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[string][]byte)
 	})
 }
 
-func (s *StateDB) TryGetActivatedAsm(targetName string, moduleHash common.Hash) ([]byte, error) {
+func (s *StateDB) TryGetActivatedAsm(target rawdb.Target, moduleHash common.Hash) ([]byte, error) {
 	asmMap, exists := s.arbExtraData.activatedWasms[moduleHash]
 	if exists {
-		if asm, exists := asmMap[targetName]; exists {
+		if asm, exists := asmMap[target]; exists {
 			return asm, nil
 		}
 	}
-	return s.db.ActivatedAsm(targetName, moduleHash)
+	return s.db.ActivatedAsm(target, moduleHash)
 }
 
-func (s *StateDB) TryGetActivatedAsmMap(targetNames []string, moduleHash common.Hash) (map[string][]byte, error) {
+func (s *StateDB) TryGetActivatedAsmMap(targets []rawdb.Target, moduleHash common.Hash) (map[rawdb.Target][]byte, error) {
 	asmMap := s.arbExtraData.activatedWasms[moduleHash]
 	if asmMap != nil {
-		for _, target := range targetNames {
+		for _, target := range targets {
 			if _, exists := asmMap[target]; !exists {
 				return nil, fmt.Errorf("newly activated wasms for module %v exist, but they don't contain asm for target %v", moduleHash, target)
 			}
@@ -105,8 +106,8 @@ func (s *StateDB) TryGetActivatedAsmMap(targetNames []string, moduleHash common.
 		return asmMap, nil
 	}
 	var err error
-	asmMap = make(map[string][]byte, len(targetNames))
-	for _, target := range targetNames {
+	asmMap = make(map[rawdb.Target][]byte, len(targets))
+	for _, target := range targets {
 		asm, dbErr := s.db.ActivatedAsm(target, moduleHash)
 		if dbErr == nil {
 			asmMap[target] = asm
@@ -240,12 +241,12 @@ func (s *StateDB) StartRecording() {
 	s.arbExtraData.userWasms = make(UserWasms)
 }
 
-func (s *StateDB) RecordProgram(targetNames []string, moduleHash common.Hash) {
-	if len(targetNames) == 0 {
+func (s *StateDB) RecordProgram(targets []rawdb.Target, moduleHash common.Hash) {
+	if len(targets) == 0 {
 		// nothing to record
 		return
 	}
-	asmMap, err := s.TryGetActivatedAsmMap(targetNames, moduleHash)
+	asmMap, err := s.TryGetActivatedAsmMap(targets, moduleHash)
 	if err != nil {
 		log.Crit("can't find activated wasm while recording", "modulehash", moduleHash, "err", err)
 	}
