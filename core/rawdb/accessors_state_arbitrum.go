@@ -22,11 +22,13 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+type Target string
+
 const (
-	TargetWavm  = "wavm"
-	TargetArm64 = "arm64"
-	TargetAmd64 = "amd64"
-	TargetHost  = "host"
+	TargetWavm  Target = "wavm"
+	TargetArm64 Target = "arm64"
+	TargetAmd64 Target = "amd64"
+	TargetHost  Target = "host"
 )
 
 var Targets = []string{TargetWavm, TargetArm64, TargetAmd64, TargetHost}
