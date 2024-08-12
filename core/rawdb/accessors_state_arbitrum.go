@@ -17,6 +17,8 @@
 package rawdb
 
 import (
+	"errors"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -30,6 +32,20 @@ const (
 	TargetAmd64 Target = "amd64"
 	TargetHost  Target = "host"
 )
+
+func (t Target) ToString() string {
+	return string(t)
+}
+
+func TargetFromString(str string) (Target, error) {
+	target := Target(str)
+	switch target {
+	case TargetWavm, TargetArm64, TargetAmd64, TargetHost:
+		return target, nil
+	default:
+		return target, errors.New("unsupported target")
+	}
+}
 
 var Targets = []Target{TargetWavm, TargetArm64, TargetAmd64, TargetHost}
 
