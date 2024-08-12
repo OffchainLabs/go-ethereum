@@ -17,7 +17,7 @@
 package rawdb
 
 import (
-	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -37,14 +37,30 @@ func (t Target) ToString() string {
 	return string(t)
 }
 
-func TargetFromString(str string) (Target, error) {
-	target := Target(str)
-	switch target {
-	case TargetWavm, TargetArm64, TargetAmd64, TargetHost:
-		return target, nil
+func (t Target) keyPrefix() ([]byte, error) {
+	var prefix []byte
+	switch t {
+	case TargetWavm:
+		prefix = activatedAsmWavmPrefix
+	case TargetArm64:
+		prefix = activatedAsmArmPrefix
+	case TargetAmd64:
+		prefix = activatedAsmX86Prefix
+	case TargetHost:
+		prefix = activatedAsmHostPrefix
 	default:
-		return target, errors.New("unsupported target")
+		return nil, fmt.Errorf("invalid target: %v", t)
 	}
+	return prefix, nil
+}
+
+func (t Target) IsValid() bool {
+	_, err := t.keyPrefix()
+	return err == nil
+}
+
+func TargetFromString(str string) Target {
+	return Target(str)
 }
 
 var Targets = []Target{TargetWavm, TargetArm64, TargetAmd64, TargetHost}
@@ -57,18 +73,9 @@ func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asmMap map
 
 // Stores the activated asm for a given moduleHash and target
 func WriteActivatedAsm(db ethdb.KeyValueWriter, target Target, moduleHash common.Hash, asm []byte) {
-	var prefix []byte
-	switch target {
-	case TargetWavm:
-		prefix = activatedAsmWavmPrefix
-	case TargetArm64:
-		prefix = activatedAsmArmPrefix
-	case TargetAmd64:
-		prefix = activatedAsmX86Prefix
-	case TargetHost:
-		prefix = activatedAsmHostPrefix
-	default:
-		log.Crit("Failed to store activated wasm asm, invalid target specified", "target", target)
+	prefix, err := target.keyPrefix()
+	if err != nil {
+		log.Crit("Failed to store activated wasm asm", "err", err)
 	}
 	key := activatedKey(prefix, moduleHash)
 	if err := db.Put(key[:], asm); err != nil {
@@ -77,18 +84,9 @@ func WriteActivatedAsm(db ethdb.KeyValueWriter, target Target, moduleHash common
 }
 
 func ReadActivatedAsm(db ethdb.KeyValueReader, target Target, moduleHash common.Hash) []byte {
-	var prefix []byte
-	switch target {
-	case TargetWavm:
-		prefix = activatedAsmWavmPrefix
-	case TargetArm64:
-		prefix = activatedAsmArmPrefix
-	case TargetAmd64:
-		prefix = activatedAsmX86Prefix
-	case TargetHost:
-		prefix = activatedAsmHostPrefix
-	default:
-		log.Crit("Failed to store activated wasm asm, invalid target specified", "target", target)
+	prefix, err := target.keyPrefix()
+	if err != nil {
+		log.Crit("Failed to read activated wasm asm", "err", err)
 	}
 	key := activatedKey(prefix, moduleHash)
 	asm, err := db.Get(key[:])
