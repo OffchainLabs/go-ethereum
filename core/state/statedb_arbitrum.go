@@ -112,7 +112,7 @@ func (s *StateDB) TryGetActivatedAsmMap(targets []rawdb.Target, moduleHash commo
 		if dbErr == nil {
 			asmMap[target] = asm
 		} else {
-			err = errors.Join(fmt.Errorf("failed to read activated asm from database for target %v and module %v: %w", target, moduleHash, dbErr))
+			err = errors.Join(fmt.Errorf("failed to read activated asm from database for target %v and module %v: %w", target, moduleHash, dbErr), err)
 		}
 	}
 	return asmMap, err
