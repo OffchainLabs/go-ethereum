@@ -33,10 +33,6 @@ const (
 	TargetHost  Target = "host"
 )
 
-func (t Target) ToString() string {
-	return string(t)
-}
-
 func (t Target) keyPrefix() ([]byte, error) {
 	var prefix []byte
 	switch t {
@@ -57,10 +53,6 @@ func (t Target) keyPrefix() ([]byte, error) {
 func (t Target) IsValid() bool {
 	_, err := t.keyPrefix()
 	return err == nil
-}
-
-func TargetFromString(str string) Target {
-	return Target(str)
 }
 
 var Targets = []Target{TargetWavm, TargetArm64, TargetAmd64, TargetHost}
