@@ -34,6 +34,14 @@ var (
 	activatedAsmHostPrefix = []byte{0x00, 'w', 'h'} // (prefix, moduleHash) -> stylus asm for system other then ARM and x86
 )
 
+func DeprecatedKeysV0() (keyPrefixes [][]byte, keyLength int) {
+	return [][]byte{
+		// deprecated prefixes, used in version 0x00, purged in version 0x01
+		[]byte{0x00, 'w', 'a'}, // ActivatedAsmPrefix
+		[]byte{0x00, 'w', 'm'}, // ActivatedModulePrefix
+	}, 3 + 32
+}
+
 // WasmKeyLen = CompiledWasmCodePrefix + moduleHash
 const WasmKeyLen = 3 + common.HashLength
 
