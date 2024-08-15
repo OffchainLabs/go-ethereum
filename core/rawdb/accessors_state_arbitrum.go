@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -32,6 +33,18 @@ const (
 	TargetAmd64 Target = "amd64"
 	TargetHost  Target = "host"
 )
+
+func LocalTarget() Target {
+	if runtime.GOOS == "linux" {
+		switch runtime.GOARCH {
+		case "arm64":
+			return TargetArm64
+		case "amd64":
+			return TargetAmd64
+		}
+	}
+	return TargetHost
+}
 
 func (t Target) keyPrefix() ([]byte, error) {
 	var prefix []byte
