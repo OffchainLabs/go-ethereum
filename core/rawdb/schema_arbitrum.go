@@ -24,14 +24,22 @@ import (
 
 const WasmSchemaVersion byte = 0x01
 
+const WasmPrefixLen = 3
+
+// WasmKeyLen = CompiledWasmCodePrefix + moduleHash
+const WasmKeyLen = WasmPrefixLen + common.HashLength
+
+type WasmPrefix = [WasmPrefixLen]byte
+type WasmKey = [WasmKeyLen]byte
+
 var (
 	wasmSchemaVersionKey = []byte("WasmSchemaVersion")
 
 	// 0x00 prefix to avoid conflicts when wasmdb is not separate database
-	activatedAsmWavmPrefix = []byte{0x00, 'w', 'w'} // (prefix, moduleHash) -> stylus module (wavm)
-	activatedAsmArmPrefix  = []byte{0x00, 'w', 'r'} // (prefix, moduleHash) -> stylus asm for ARM system
-	activatedAsmX86Prefix  = []byte{0x00, 'w', 'x'} // (prefix, moduleHash) -> stylus asm for x86 system
-	activatedAsmHostPrefix = []byte{0x00, 'w', 'h'} // (prefix, moduleHash) -> stylus asm for system other then ARM and x86
+	activatedAsmWavmPrefix = WasmPrefix{0x00, 'w', 'w'} // (prefix, moduleHash) -> stylus module (wavm)
+	activatedAsmArmPrefix  = WasmPrefix{0x00, 'w', 'r'} // (prefix, moduleHash) -> stylus asm for ARM system
+	activatedAsmX86Prefix  = WasmPrefix{0x00, 'w', 'x'} // (prefix, moduleHash) -> stylus asm for x86 system
+	activatedAsmHostPrefix = WasmPrefix{0x00, 'w', 'h'} // (prefix, moduleHash) -> stylus asm for system other then ARM and x86
 )
 
 func DeprecatedPrefixesV0() (keyPrefixes [][]byte, keyLength int) {
@@ -42,15 +50,10 @@ func DeprecatedPrefixesV0() (keyPrefixes [][]byte, keyLength int) {
 	}, 3 + 32
 }
 
-// WasmKeyLen = CompiledWasmCodePrefix + moduleHash
-const WasmKeyLen = 3 + common.HashLength
-
-type WasmKey = [WasmKeyLen]byte
-
 // key = prefix + moduleHash
-func activatedKey(prefix []byte, moduleHash common.Hash) WasmKey {
+func activatedKey(prefix WasmPrefix, moduleHash common.Hash) WasmKey {
 	var key WasmKey
-	copy(key[:3], prefix)
-	copy(key[3:], moduleHash[:])
+	copy(key[:WasmPrefixLen], prefix[:])
+	copy(key[WasmPrefixLen:], moduleHash[:])
 	return key
 }

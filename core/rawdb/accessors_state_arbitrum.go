@@ -46,8 +46,8 @@ func LocalTarget() Target {
 	return TargetHost
 }
 
-func (t Target) keyPrefix() ([]byte, error) {
-	var prefix []byte
+func (t Target) keyPrefix() (WasmPrefix, error) {
+	var prefix WasmPrefix
 	switch t {
 	case TargetWavm:
 		prefix = activatedAsmWavmPrefix
@@ -58,7 +58,7 @@ func (t Target) keyPrefix() ([]byte, error) {
 	case TargetHost:
 		prefix = activatedAsmHostPrefix
 	default:
-		return nil, fmt.Errorf("invalid target: %v", t)
+		return WasmPrefix{}, fmt.Errorf("invalid target: %v", t)
 	}
 	return prefix, nil
 }
