@@ -53,8 +53,7 @@ const (
 // Database wraps access to tries and contract code.
 type Database interface {
 	// Arbitrum: Read activated Stylus contracts
-	ActivatedAsm(moduleHash common.Hash) (asm []byte, err error)
-	ActivatedModule(moduleHash common.Hash) (module []byte, err error)
+	ActivatedAsm(target rawdb.Target, moduleHash common.Hash) (asm []byte, err error)
 	WasmStore() ethdb.KeyValueStore
 	WasmCacheTag() uint32
 
@@ -164,9 +163,8 @@ func NewDatabaseWithConfig(db ethdb.Database, config *triedb.Config) Database {
 	wasmdb, wasmTag := db.WasmDataBase()
 	cdb := &cachingDB{
 		// Arbitrum only
-		activatedAsmCache:    lru.NewSizeConstrainedCache[common.Hash, []byte](activatedWasmCacheSize),
-		activatedModuleCache: lru.NewSizeConstrainedCache[common.Hash, []byte](activatedWasmCacheSize),
-		wasmTag:              wasmTag,
+		activatedAsmCache: lru.NewSizeConstrainedCache[activatedAsmCacheKey, []byte](activatedWasmCacheSize),
+		wasmTag:           wasmTag,
 
 		disk:          db,
 		wasmdb:        wasmdb,
@@ -182,9 +180,8 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *triedb.Database) Database 
 	wasmdb, wasmTag := db.WasmDataBase()
 	cdb := &cachingDB{
 		// Arbitrum only
-		activatedAsmCache:    lru.NewSizeConstrainedCache[common.Hash, []byte](activatedWasmCacheSize),
-		activatedModuleCache: lru.NewSizeConstrainedCache[common.Hash, []byte](activatedWasmCacheSize),
-		wasmTag:              wasmTag,
+		activatedAsmCache: lru.NewSizeConstrainedCache[activatedAsmCacheKey, []byte](activatedWasmCacheSize),
+		wasmTag:           wasmTag,
 
 		disk:          db,
 		wasmdb:        wasmdb,
@@ -195,11 +192,15 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *triedb.Database) Database 
 	return cdb
 }
 
+type activatedAsmCacheKey struct {
+	moduleHash common.Hash
+	target     rawdb.Target
+}
+
 type cachingDB struct {
 	// Arbitrum
-	activatedAsmCache    *lru.SizeConstrainedCache[common.Hash, []byte]
-	activatedModuleCache *lru.SizeConstrainedCache[common.Hash, []byte]
-	wasmTag              uint32
+	activatedAsmCache *lru.SizeConstrainedCache[activatedAsmCacheKey, []byte]
+	wasmTag           uint32
 
 	disk          ethdb.KeyValueStore
 	wasmdb        ethdb.KeyValueStore
