@@ -221,6 +221,12 @@ type Config struct {
 	EnablePersonal bool `toml:"-"`
 
 	DBEngine string `toml:",omitempty"`
+
+	// HTTPBodyLimit is the maximum number of bytes allowed in the HTTP request body.
+	HTTPBodyLimit int `toml:",omitempty"`
+
+	// WSReadLimit is the maximum number of bytes allowed in the websocket request body.
+	WSReadLimit int64 `toml:",omitempty"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into

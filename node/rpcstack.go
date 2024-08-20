@@ -59,6 +59,7 @@ type rpcEndpointConfig struct {
 	batchResponseSizeLimit int
 	apiFilter              map[string]bool
 	httpBodyLimit          int
+	wsReadLimit            int64
 }
 
 type rpcHandler struct {
@@ -363,7 +364,7 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	}
 	h.wsConfig = config
 	h.wsHandler.Store(&rpcHandler{
-		Handler: NewWSHandlerStack(srv.WebsocketHandler(config.Origins), config.jwtSecret),
+		Handler: NewWSHandlerStack(srv.WebsocketHandler(config.Origins, config.wsReadLimit), config.jwtSecret),
 		server:  srv,
 	})
 	return nil
