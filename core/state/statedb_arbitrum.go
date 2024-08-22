@@ -241,7 +241,8 @@ func (s *StateDB) StartRecording() {
 	s.arbExtraData.userWasms = make(UserWasms)
 }
 
-func (s *StateDB) RecordProgram(targets []ethdb.WasmTarget, moduleHash common.Hash) {
+func (s *StateDB) RecordProgram(moduleHash common.Hash) {
+	targets := s.db.WasmTargets()
 	if len(targets) == 0 {
 		// nothing to record
 		return
