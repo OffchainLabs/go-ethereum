@@ -672,6 +672,221 @@ func (bc *BlockChain) SetSafe(header *types.Header) {
 	}
 }
 
+// rewindHashHead implements the logic of rewindHead in the context of hash scheme.
+func (bc *BlockChain) rewindHashHead(head *types.Header, root common.Hash, rewindLimit uint64) (*types.Header, uint64, bool) {
+	var (
+		limit      uint64                             // The oldest block that will be searched for this rewinding
+		rootFound  = root == common.Hash{}            // Flag whether we're beyond the requested root (no root, always true)
+		pivot      = rawdb.ReadLastPivotNumber(bc.db) // Associated block number of pivot point state
+		rootNumber uint64                             // Associated block number of requested root
+
+		start  = time.Now() // Timestamp the rewinding is restarted
+		logged = time.Now() // Timestamp last progress log was printed
+	)
+	// The oldest block to be searched is determined by the pivot block or a constant
+	// searching threshold. The rationale behind this is as follows:
+	//
+	// - Snap sync is selected if the pivot block is available. The earliest available
+	//   state is the pivot block itself, so there is no sense in going further back.
+	//
+	// - Full sync is selected if the pivot block does not exist. The hash database
+	//   periodically flushes the state to disk, and the used searching threshold is
+	//   considered sufficient to find a persistent state, even for the testnet. It
+	//   might be not enough for a chain that is nearly empty. In the worst case,
+	//   the entire chain is reset to genesis, and snap sync is re-enabled on top,
+	//   which is still acceptable.
+	if pivot != nil {
+		limit = *pivot
+	} else if head.Number.Uint64() > params.FullImmutabilityThreshold {
+		limit = head.Number.Uint64() - params.FullImmutabilityThreshold
+	}
+	lastFullBlock := uint64(0)
+	lastFullBlockHash := common.Hash{}
+	gasRolledBack := uint64(0)
+	for {
+		logger := log.Trace
+		if time.Since(logged) > time.Second*8 {
+			logged = time.Now()
+			logger = log.Info
+		}
+		logger("Block state missing, rewinding further", "number", head.Number, "hash", head.Hash(), "elapsed", common.PrettyDuration(time.Since(start)))
+
+		if rewindLimit > 0 && lastFullBlock != 0 {
+			// Arbitrum: track the amount of gas rolled back and stop the rollback early if necessary
+			gasUsedInBlock := head.GasUsed
+			if bc.chainConfig.IsArbitrum() {
+				receipts := bc.GetReceiptsByHash(head.Hash())
+				for _, receipt := range receipts {
+					gasUsedInBlock -= receipt.GasUsedForL1
+				}
+			}
+			gasRolledBack += gasUsedInBlock
+			if gasRolledBack >= rewindLimit {
+				rootNumber = lastFullBlock
+				head = bc.GetHeader(lastFullBlockHash, lastFullBlock)
+				log.Debug("Rewound to block with state but not snapshot", "number", head.Number.Uint64(), "hash", head.Hash())
+				return head, rootNumber, rootFound
+			}
+		}
+		// If a root threshold was requested but not yet crossed, check
+		if !rootFound && head.Root == root {
+			rootFound, rootNumber = true, head.Number.Uint64()
+		}
+		// If search limit is reached, return the genesis block as the
+		// new chain head.
+		if head.Number.Uint64() < limit {
+			log.Info("Rewinding limit reached, resetting to genesis", "number", head.Number, "hash", head.Hash(), "limit", limit)
+			return bc.genesisBlock.Header(), rootNumber, rootFound
+		}
+		// If the associated state is not reachable, continue searching
+		// backwards until an available state is found.
+		if !bc.HasState(head.Root) {
+			// If the chain is gapped in the middle, return the genesis
+			// block as the new chain head.
+			parent := bc.GetHeader(head.ParentHash, head.Number.Uint64()-1)
+			if parent == nil {
+				log.Error("Missing block in the middle, resetting to genesis", "number", head.Number.Uint64()-1, "hash", head.ParentHash)
+				return bc.genesisBlock.Header(), rootNumber, rootFound
+			}
+			head = parent
+
+			// If the genesis block is reached, stop searching.
+			if head.Number.Uint64() == 0 {
+				log.Info("Genesis block reached", "number", head.Number, "hash", head.Hash())
+				return head, rootNumber, rootFound
+			}
+			continue // keep rewinding
+		}
+		// Once the available state is found, ensure that the requested root
+		// has already been crossed. If not, continue rewinding.
+		if rootFound || head.Number.Uint64() == 0 {
+			log.Info("Rewound to block with state", "number", head.Number, "hash", head.Hash())
+			return head, rootNumber, rootFound
+		}
+		if (bc.HasState(head.Root) || bc.stateRecoverable(head.Root)) && lastFullBlock == 0 {
+			lastFullBlock = head.Number.Uint64()
+			lastFullBlockHash = head.Hash()
+		}
+		log.Debug("Skipping block with threshold state", "number", head.Number, "hash", head.Hash(), "root", head.Root)
+		head = bc.GetHeader(head.ParentHash, head.Number.Uint64()-1) // Keep rewinding
+	}
+}
+
+// rewindPathHead implements the logic of rewindHead in the context of path scheme.
+func (bc *BlockChain) rewindPathHead(head *types.Header, root common.Hash, rewindLimit uint64) (*types.Header, uint64, bool) {
+	var (
+		pivot      = rawdb.ReadLastPivotNumber(bc.db) // Associated block number of pivot block
+		rootNumber uint64                             // Associated block number of requested root
+
+		// RootFound represents whether the requested root is already
+		// crossed. The flag value is set to true if the root is empty.
+		rootFound = root == common.Hash{}
+
+		// noState represents if the target state requested for search
+		// is unavailable and impossible to be recovered.
+		noState = !bc.HasState(root) && !bc.stateRecoverable(root)
+
+		start  = time.Now() // Timestamp the rewinding is restarted
+		logged = time.Now() // Timestamp last progress log was printed
+	)
+
+	lastFullBlock := uint64(0)
+	lastFullBlockHash := common.Hash{}
+	gasRolledBack := uint64(0)
+	// Rewind the head block tag until an available state is found.
+	for {
+		logger := log.Trace
+		if time.Since(logged) > time.Second*8 {
+			logged = time.Now()
+			logger = log.Info
+		}
+		logger("Block state missing, rewinding further", "number", head.Number, "hash", head.Hash(), "elapsed", common.PrettyDuration(time.Since(start)))
+
+		if rewindLimit > 0 && lastFullBlock != 0 {
+			// Arbitrum: track the amount of gas rolled back and stop the rollback early if necessary
+			gasUsedInBlock := head.GasUsed
+			if bc.chainConfig.IsArbitrum() {
+				receipts := bc.GetReceiptsByHash(head.Hash())
+				for _, receipt := range receipts {
+					gasUsedInBlock -= receipt.GasUsedForL1
+				}
+			}
+			gasRolledBack += gasUsedInBlock
+			if gasRolledBack >= rewindLimit {
+				rootNumber = lastFullBlock
+				head = bc.GetHeader(lastFullBlockHash, lastFullBlock)
+				log.Debug("Rewound to block with state but not snapshot", "number", head.Number.Uint64(), "hash", head.Hash())
+				break
+			}
+		}
+		// If a root threshold was requested but not yet crossed, check
+		if !rootFound && head.Root == root {
+			rootFound, rootNumber = true, head.Number.Uint64()
+		}
+		// If the root threshold hasn't been crossed but the available
+		// state is reached, quickly determine if the target state is
+		// possible to be reached or not.
+		if !rootFound && noState && bc.HasState(head.Root) {
+			rootFound = true
+			log.Info("Disable the search for unattainable state", "root", root)
+		}
+		// Check if the associated state is available or recoverable if
+		// the requested root has already been crossed.
+		if rootFound && (bc.HasState(head.Root) || bc.stateRecoverable(head.Root)) {
+			break
+		}
+		if (bc.HasState(head.Root) || bc.stateRecoverable(head.Root)) && lastFullBlock == 0 {
+			lastFullBlock = head.Number.Uint64()
+			lastFullBlockHash = head.Hash()
+		}
+		// If pivot block is reached, return the genesis block as the
+		// new chain head. Theoretically there must be a persistent
+		// state before or at the pivot block, prevent endless rewinding
+		// towards the genesis just in case.
+		if pivot != nil && *pivot >= head.Number.Uint64() {
+			log.Info("Pivot block reached, resetting to genesis", "number", head.Number, "hash", head.Hash())
+			return bc.genesisBlock.Header(), rootNumber, rootFound
+		}
+		// If the chain is gapped in the middle, return the genesis
+		// block as the new chain head
+		parent := bc.GetHeader(head.ParentHash, head.Number.Uint64()-1) // Keep rewinding
+		if parent == nil {
+			log.Error("Missing block in the middle, resetting to genesis", "number", head.Number.Uint64()-1, "hash", head.ParentHash)
+			return bc.genesisBlock.Header(), rootNumber, rootFound
+		}
+		head = parent
+
+		// If the genesis block is reached, stop searching.
+		if head.Number.Uint64() == 0 {
+			log.Info("Genesis block reached", "number", head.Number, "hash", head.Hash())
+			return head, rootNumber, rootFound
+		}
+	}
+	// Recover if the target state if it's not available yet.
+	if !bc.HasState(head.Root) {
+		if err := bc.triedb.Recover(head.Root); err != nil {
+			log.Crit("Failed to rollback state", "err", err)
+		}
+	}
+	log.Info("Rewound to block with state", "number", head.Number, "hash", head.Hash())
+	return head, rootNumber, rootFound
+}
+
+// rewindHead searches the available states in the database and returns the associated
+// block as the new head block.
+//
+// If the given root is not empty, then the rewind should attempt to pass the specified
+// state root and return the associated block number as well. If the root, typically
+// representing the state corresponding to snapshot disk layer, is deemed impassable,
+// then block number zero is returned, indicating that snapshot recovery is disabled
+// and the whole snapshot should be auto-generated in case of head mismatch.
+func (bc *BlockChain) rewindHead(head *types.Header, root common.Hash, rewindLimit uint64) (*types.Header, uint64, bool) {
+	if bc.triedb.Scheme() == rawdb.PathScheme {
+		return bc.rewindPathHead(head, root, rewindLimit)
+	}
+	return bc.rewindHashHead(head, root, rewindLimit)
+}
+
 // setHeadBeyondRoot rewinds the local chain to a new head with the extra condition
 // that the rewind must pass the specified state root. The extra condition is
 // ignored if it causes rolling back more than rewindLimit Gas (0 meaning infinte).
@@ -692,104 +907,37 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	}
 	defer bc.chainmu.Unlock()
 
-	// Track the block number of the requested root hash
-	var blockNumber uint64 // (no root == always 0)
-	var rootFound bool
-
-	// Retrieve the last pivot block to short circuit rollbacks beyond it
-	// and the current freezer limit to start nuking it's underflown.
-	pivot := rawdb.ReadLastPivotNumber(bc.db)
-
+	var (
+		// Track the block number of the requested root hash
+		blockNumber uint64 // (no root == always 0)
+		rootFound   bool
+		// Retrieve the last pivot block to short circuit rollbacks beyond it
+		// and the current freezer limit to start nuking it's underflown.
+		pivot = rawdb.ReadLastPivotNumber(bc.db)
+	)
 	updateFn := func(db ethdb.KeyValueWriter, header *types.Header) (*types.Header, bool) {
 		// Rewind the blockchain, ensuring we don't end up with a stateless head
 		// block. Note, depth equality is permitted to allow using SetHead as a
 		// chain reparation mechanism without deleting any data!
 		if currentBlock := bc.CurrentBlock(); currentBlock != nil && header.Number.Uint64() <= currentBlock.Number.Uint64() {
-			newHeadBlock := bc.GetBlock(header.Hash(), header.Number.Uint64())
-			if newHeadBlock == nil {
-				log.Error("Gap in the chain, rewinding to genesis", "number", header.Number, "hash", header.Hash())
-				newHeadBlock = bc.genesisBlock
-			} else {
-				// Block exists, keep rewinding until we find one with state,
-				// keeping rewinding until we exceed the optional threshold
-				// root hash
-				rootFound = (root == common.Hash{}) // Flag whether we're beyond the requested root (no root, always true)
-				lastFullBlock := uint64(0)
-				lastFullBlockHash := common.Hash{}
-				gasRolledBack := uint64(0)
-
-				for {
-					if rewindLimit > 0 && lastFullBlock != 0 {
-						// Arbitrum: track the amount of gas rolled back and stop the rollback early if necessary
-						gasUsedInBlock := newHeadBlock.GasUsed()
-						if bc.chainConfig.IsArbitrum() {
-							receipts := bc.GetReceiptsByHash(newHeadBlock.Hash())
-							for _, receipt := range receipts {
-								gasUsedInBlock -= receipt.GasUsedForL1
-							}
-						}
-						gasRolledBack += gasUsedInBlock
-						if gasRolledBack >= rewindLimit {
-							blockNumber = lastFullBlock
-							newHeadBlock = bc.GetBlock(lastFullBlockHash, lastFullBlock)
-							log.Debug("Rewound to block with state but not snapshot", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
-							break
-						}
-					}
-
-					// If a root threshold was requested but not yet crossed, check
-					if root != (common.Hash{}) && !rootFound && newHeadBlock.Root() == root {
-						rootFound, blockNumber = true, newHeadBlock.NumberU64()
-					}
-					if !bc.HasState(newHeadBlock.Root()) && !bc.stateRecoverable(newHeadBlock.Root()) {
-						log.Trace("Block state missing, rewinding further", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
-						if pivot == nil || newHeadBlock.NumberU64() > *pivot {
-							parent := bc.GetBlock(newHeadBlock.ParentHash(), newHeadBlock.NumberU64()-1)
-							if parent != nil {
-								newHeadBlock = parent
-								continue
-							}
-							log.Error("Missing block in the middle, aiming genesis", "number", newHeadBlock.NumberU64()-1, "hash", newHeadBlock.ParentHash())
-							newHeadBlock = bc.genesisBlock
-						} else {
-							log.Trace("Rewind passed pivot, aiming genesis", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash(), "pivot", *pivot)
-							newHeadBlock = bc.genesisBlock
-						}
-					} else if lastFullBlock == 0 {
-						lastFullBlock = newHeadBlock.NumberU64()
-						lastFullBlockHash = newHeadBlock.Hash()
-					}
-					if rootFound || newHeadBlock.NumberU64() <= bc.genesisBlock.NumberU64() {
-						if !bc.HasState(newHeadBlock.Root()) && bc.stateRecoverable(newHeadBlock.Root()) {
-							// Rewind to a block with recoverable state. If the state is
-							// missing, run the state recovery here.
-							if err := bc.triedb.Recover(newHeadBlock.Root()); err != nil {
-								log.Crit("Failed to rollback state", "err", err) // Shouldn't happen
-							}
-							log.Debug("Rewound to block with state", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
-						}
-						break
-					}
-					log.Debug("Skipping block with threshold state", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash(), "root", newHeadBlock.Root())
-					newHeadBlock = bc.GetBlock(newHeadBlock.ParentHash(), newHeadBlock.NumberU64()-1) // Keep rewinding
-				}
-			}
+			var newHeadBlock *types.Header
+			newHeadBlock, blockNumber, rootFound = bc.rewindHead(header, root, rewindLimit)
 			rawdb.WriteHeadBlockHash(db, newHeadBlock.Hash())
 
 			// Degrade the chain markers if they are explicitly reverted.
 			// In theory we should update all in-memory markers in the
 			// last step, however the direction of SetHead is from high
 			// to low, so it's safe to update in-memory markers directly.
-			bc.currentBlock.Store(newHeadBlock.Header())
-			headBlockGauge.Update(newHeadBlock.Number().Int64())
+			bc.currentBlock.Store(newHeadBlock)
+			headBlockGauge.Update(int64(newHeadBlock.Number.Uint64()))
 
 			// The head state is missing, which is only possible in the path-based
 			// scheme. This situation occurs when the chain head is rewound below
 			// the pivot point. In this scenario, there is no possible recovery
 			// approach except for rerunning a snap sync. Do nothing here until the
 			// state syncer picks it up.
-			if !bc.HasState(newHeadBlock.Root()) {
-				if newHeadBlock.Number().Uint64() != 0 {
+			if !bc.HasState(newHeadBlock.Root) {
+				if newHeadBlock.Number.Uint64() != 0 {
 					log.Crit("Chain is stateless at a non-genesis block")
 				}
 				log.Info("Chain is stateless, wait state sync", "number", newHeadBlock.Number, "hash", newHeadBlock.Hash())
@@ -1120,7 +1268,7 @@ func (bc *BlockChain) Stop() {
 	}
 	// Close the trie database, release all the held resources as the last step.
 	if err := bc.triedb.Close(); err != nil {
-		log.Error("Failed to close trie db", "err", err)
+		log.Error("Failed to close trie database", "err", err)
 	}
 	log.Info("Blockchain stopped")
 }
