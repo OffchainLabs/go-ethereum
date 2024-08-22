@@ -166,6 +166,7 @@ func NewDatabaseWithConfig(db ethdb.Database, config *triedb.Config) Database {
 		// Arbitrum only
 		activatedAsmCache: lru.NewSizeConstrainedCache[activatedAsmCacheKey, []byte](activatedWasmCacheSize),
 		wasmTag:           wasmTag,
+		wasmTargets:       db.WasmTargets(),
 
 		disk:          db,
 		wasmdb:        wasmdb,
