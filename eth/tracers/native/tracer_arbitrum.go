@@ -80,17 +80,31 @@ func (t *flatCallTracer) CaptureArbitrumTransfer(from, to *common.Address, value
 	}
 }
 
-func (*callTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}
-func (*fourByteTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {}
-func (*noopTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}
-func (*prestateTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {}
-func (*flatCallTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {}
+func (t *prestateTracer) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
+	t.captureArbitrumStorageOps(addr, key, mappedKey)
+}
 
-func (*callTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)     {}
-func (*fourByteTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
-func (*noopTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)     {}
-func (*prestateTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
-func (*flatCallTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
+func (t *prestateTracer) CaptureArbitrumStorageSet(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool) {
+	t.captureArbitrumStorageOps(addr, key, mappedKey)
+}
+
+func (*callTracer) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
+}
+func (*fourByteTracer) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
+}
+func (*noopTracer) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
+}
+func (*flatCallTracer) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
+}
+
+func (*callTracer) CaptureArbitrumStorageSet(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool) {
+}
+func (*fourByteTracer) CaptureArbitrumStorageSet(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool) {
+}
+func (*noopTracer) CaptureArbitrumStorageSet(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool) {
+}
+func (*flatCallTracer) CaptureArbitrumStorageSet(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool) {
+}
 
 func (*callTracer) CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64)     {}
 func (*fourByteTracer) CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64) {}

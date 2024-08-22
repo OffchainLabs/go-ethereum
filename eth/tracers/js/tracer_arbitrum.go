@@ -52,8 +52,10 @@ func (jst *jsTracer) CaptureArbitrumTransfer(
 	}
 }
 
-func (*jsTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)        {}
-func (*jsTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
+func (*jsTracer) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
+}
+func (*jsTracer) CaptureArbitrumStorageSet(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool) {
+}
 
 func (jst *jsTracer) CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64) {
 	hostio, ok := goja.AssertFunction(jst.obj.Get("hostio"))

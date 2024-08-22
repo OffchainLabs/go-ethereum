@@ -42,15 +42,18 @@ func init() {
 type stateMap = map[common.Address]*account
 
 type account struct {
-	Balance *big.Int                    `json:"balance,omitempty"`
-	Code    []byte                      `json:"code,omitempty"`
-	Nonce   uint64                      `json:"nonce,omitempty"`
-	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
-	empty   bool
+	Balance         *big.Int                    `json:"balance,omitempty"`
+	Code            []byte                      `json:"code,omitempty"`
+	Nonce           uint64                      `json:"nonce,omitempty"`
+	Storage         map[common.Hash]common.Hash `json:"storage,omitempty"`
+	ArbitrumStorage map[common.Hash]common.Hash `json:"arbitrumStorage,omitempty"`
+
+	empty            bool
+	arbStorageKeyMap map[common.Hash]common.Hash
 }
 
 func (a *account) exists() bool {
-	return a.Nonce > 0 || len(a.Code) > 0 || len(a.Storage) > 0 || (a.Balance != nil && a.Balance.Sign() != 0)
+	return a.Nonce > 0 || len(a.Code) > 0 || len(a.Storage) > 0 || (a.Balance != nil && a.Balance.Sign() != 0) || len(a.ArbitrumStorage) > 0
 }
 
 type accountMarshaling struct {
@@ -119,7 +122,7 @@ func (t *prestateTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scop
 	switch {
 	case stackLen >= 1 && (op == vm.SLOAD || op == vm.SSTORE):
 		slot := common.Hash(stackData[stackLen-1].Bytes32())
-		t.lookupStorage(caller, slot)
+		t.lookupStorage(caller, slot, common.Hash{}, false)
 	case stackLen >= 1 && (op == vm.EXTCODECOPY || op == vm.EXTCODEHASH || op == vm.EXTCODESIZE || op == vm.BALANCE || op == vm.SELFDESTRUCT):
 		addr := common.Address(stackData[stackLen-1].Bytes20())
 		t.lookupAccount(addr)
@@ -212,7 +215,10 @@ func (t *prestateTracer) processDiffState() {
 			continue
 		}
 		modified := false
-		postAccount := &account{Storage: make(map[common.Hash]common.Hash)}
+		postAccount := &account{
+			Storage:         make(map[common.Hash]common.Hash),
+			ArbitrumStorage: make(map[common.Hash]common.Hash),
+		}
 		newBalance := t.env.StateDB.GetBalance(addr).ToBig()
 		newNonce := t.env.StateDB.GetNonce(addr)
 		newCode := t.env.StateDB.GetCode(addr)
@@ -248,6 +254,24 @@ func (t *prestateTracer) processDiffState() {
 			}
 		}
 
+		for key, val := range state.ArbitrumStorage {
+			// don't include the empty slot
+			if val == (common.Hash{}) {
+				delete(t.pre[addr].ArbitrumStorage, key)
+			}
+
+			newVal := t.env.StateDB.GetState(types.ArbosStateAddress, state.arbStorageKeyMap[key])
+			if val == newVal {
+				// Omit unchanged slots
+				delete(t.pre[addr].ArbitrumStorage, key)
+			} else {
+				modified = true
+				if newVal != (common.Hash{}) {
+					postAccount.ArbitrumStorage[key] = newVal
+				}
+			}
+		}
+
 		if modified {
 			t.post[addr] = postAccount
 		} else {
@@ -265,10 +289,12 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 	}
 
 	acc := &account{
-		Balance: t.env.StateDB.GetBalance(addr).ToBig(),
-		Nonce:   t.env.StateDB.GetNonce(addr),
-		Code:    t.env.StateDB.GetCode(addr),
-		Storage: make(map[common.Hash]common.Hash),
+		Balance:          t.env.StateDB.GetBalance(addr).ToBig(),
+		Nonce:            t.env.StateDB.GetNonce(addr),
+		Code:             t.env.StateDB.GetCode(addr),
+		Storage:          make(map[common.Hash]common.Hash),
+		ArbitrumStorage:  make(map[common.Hash]common.Hash),
+		arbStorageKeyMap: make(map[common.Hash]common.Hash),
 	}
 	if !acc.exists() {
 		acc.empty = true
@@ -279,9 +305,22 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 // lookupStorage fetches the requested storage slot and adds
 // it to the prestate of the given contract. It assumes `lookupAccount`
 // has been performed on the contract before.
-func (t *prestateTracer) lookupStorage(addr common.Address, key common.Hash) {
+func (t *prestateTracer) lookupStorage(addr common.Address, key, mappedKey common.Hash, isArbitrumStorage bool) {
+	if isArbitrumStorage {
+		if _, ok := t.pre[addr].ArbitrumStorage[key]; ok {
+			return
+		}
+		t.pre[addr].ArbitrumStorage[key] = t.env.StateDB.GetState(types.ArbosStateAddress, mappedKey)
+		t.pre[addr].arbStorageKeyMap[key] = mappedKey
+		return
+	}
 	if _, ok := t.pre[addr].Storage[key]; ok {
 		return
 	}
 	t.pre[addr].Storage[key] = t.env.StateDB.GetState(addr, key)
+}
+
+func (t *prestateTracer) captureArbitrumStorageOps(addr common.Address, key, mappedKey common.Hash) {
+	t.lookupAccount(addr)
+	t.lookupStorage(addr, key, mappedKey, true)
 }
