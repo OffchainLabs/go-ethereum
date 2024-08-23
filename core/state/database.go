@@ -164,9 +164,9 @@ func NewDatabaseWithConfig(db ethdb.Database, config *triedb.Config) Database {
 	wasmdb, wasmTag := db.WasmDataBase()
 	cdb := &cachingDB{
 		// Arbitrum only
-		activatedAsmCache: lru.NewSizeConstrainedCache[activatedAsmCacheKey, []byte](activatedWasmCacheSize),
-		wasmTag:           wasmTag,
-		wasmTargets:       db.WasmTargets(),
+		activatedAsmCache:    lru.NewSizeConstrainedCache[activatedAsmCacheKey, []byte](activatedWasmCacheSize),
+		wasmTag:              wasmTag,
+		wasmTargetsRetriever: db,
 
 		disk:          db,
 		wasmdb:        wasmdb,
@@ -182,9 +182,9 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *triedb.Database) Database 
 	wasmdb, wasmTag := db.WasmDataBase()
 	cdb := &cachingDB{
 		// Arbitrum only
-		activatedAsmCache: lru.NewSizeConstrainedCache[activatedAsmCacheKey, []byte](activatedWasmCacheSize),
-		wasmTag:           wasmTag,
-		wasmTargets:       db.WasmTargets(),
+		activatedAsmCache:    lru.NewSizeConstrainedCache[activatedAsmCacheKey, []byte](activatedWasmCacheSize),
+		wasmTag:              wasmTag,
+		wasmTargetsRetriever: db,
 
 		disk:          db,
 		wasmdb:        wasmdb,
@@ -202,9 +202,9 @@ type activatedAsmCacheKey struct {
 
 type cachingDB struct {
 	// Arbitrum
-	activatedAsmCache *lru.SizeConstrainedCache[activatedAsmCacheKey, []byte]
-	wasmTag           uint32
-	wasmTargets       []ethdb.WasmTarget
+	activatedAsmCache    *lru.SizeConstrainedCache[activatedAsmCacheKey, []byte]
+	wasmTag              uint32
+	wasmTargetsRetriever ethdb.WasmTargetsRetriever
 
 	disk          ethdb.KeyValueStore
 	wasmdb        ethdb.KeyValueStore
@@ -222,7 +222,7 @@ func (db *cachingDB) WasmCacheTag() uint32 {
 }
 
 func (db *cachingDB) WasmTargets() []ethdb.WasmTarget {
-	return db.wasmTargets
+	return db.wasmTargetsRetriever.WasmTargets()
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
