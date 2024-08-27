@@ -106,7 +106,6 @@ func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fal
 	dbForAPICalls := backend.chainDb
 	wasmStore, tag := backend.chainDb.WasmDataBase()
 	if tag != 0 || len(backend.chainDb.WasmTargets()) > 1 {
-		// TODO do we want to pass all targets either way?
 		dbForAPICalls = rawdb.WrapDatabaseWithWasm(backend.chainDb, wasmStore, 0, []ethdb.WasmTarget{rawdb.LocalTarget()})
 	}
 	backend.apiBackend = &APIBackend{
