@@ -1,5 +1,5 @@
 language: go
-go_import_path: github.com/ethereum/go-ethereum
+go_import_path: github.com/harbour-tech/go-ethereum-arbitrum
 sudo: false
 jobs:
   allow_failures:
@@ -165,4 +165,3 @@ jobs:
       go: 1.21.x
       script:
         - travis_wait 30 go run build/ci.go test  -race $TEST_PACKAGES
-

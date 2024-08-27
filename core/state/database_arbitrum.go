@@ -3,8 +3,8 @@ package state
 import (
 	"errors"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/harbour-tech/go-ethereum-arbitrum/common"
+	"github.com/harbour-tech/go-ethereum-arbitrum/core/rawdb"
 )
 
 func (db *cachingDB) ActivatedAsm(target rawdb.Target, moduleHash common.Hash) ([]byte, error) {
