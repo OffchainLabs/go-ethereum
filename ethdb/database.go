@@ -178,12 +178,9 @@ type AncientStore interface {
 	io.Closer
 }
 
+type WasmTarget string
 type WasmDataBaseRetriever interface {
 	WasmDataBase() (KeyValueStore, uint32)
-}
-
-type WasmTarget string
-type WasmTargetsRetriever interface {
 	WasmTargets() []WasmTarget
 }
 
@@ -199,5 +196,4 @@ type Database interface {
 	Snapshotter
 	io.Closer
 	WasmDataBaseRetriever
-	WasmTargetsRetriever
 }
