@@ -105,8 +105,8 @@ func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fal
 	// discard stylus-tag on any call made from api database
 	dbForAPICalls := backend.chainDb
 	wasmStore, tag := backend.chainDb.WasmDataBase()
-	if tag != 0 {
-		dbForAPICalls = rawdb.WrapDatabaseWithWasm(backend.chainDb, wasmStore, 0)
+	if tag != 0 || len(backend.chainDb.WasmTargets()) > 1 {
+		dbForAPICalls = rawdb.WrapDatabaseWithWasm(backend.chainDb, wasmStore, 0, []ethdb.WasmTarget{rawdb.LocalTarget()})
 	}
 	backend.apiBackend = &APIBackend{
 		b:              backend,

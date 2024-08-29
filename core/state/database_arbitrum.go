@@ -5,9 +5,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-func (db *cachingDB) ActivatedAsm(target rawdb.Target, moduleHash common.Hash) ([]byte, error) {
+func (db *cachingDB) ActivatedAsm(target ethdb.WasmTarget, moduleHash common.Hash) ([]byte, error) {
 	cacheKey := activatedAsmCacheKey{moduleHash, target}
 	if asm, _ := db.activatedAsmCache.Get(cacheKey); len(asm) > 0 {
 		return asm, nil
