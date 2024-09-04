@@ -81,11 +81,13 @@ func (t *flatCallTracer) CaptureArbitrumTransfer(from, to *common.Address, value
 }
 
 func (t *prestateTracer) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
-	t.captureArbitrumStorageOps(addr, key, mappedKey)
+	t.lookupAccount(addr)
+	t.lookupArbitrumStorage(addr, key, mappedKey)
 }
 
 func (t *prestateTracer) CaptureArbitrumStorageSet(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool) {
-	t.captureArbitrumStorageOps(addr, key, mappedKey)
+	t.lookupAccount(addr)
+	t.lookupArbitrumStorage(addr, key, mappedKey)
 }
 
 func (*callTracer) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
