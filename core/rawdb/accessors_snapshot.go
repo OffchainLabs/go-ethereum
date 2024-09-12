@@ -18,14 +18,10 @@ package rawdb
 
 import (
 	"encoding/binary"
-	"errors"
 
-	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // ReadSnapshotDisabled retrieves if the snapshot maintenance is disabled.
@@ -74,17 +70,6 @@ func DeleteSnapshotRoot(db ethdb.KeyValueWriter) {
 	if err := db.Delete(SnapshotRootKey); err != nil {
 		log.Crit("Failed to remove snapshot root", "err", err)
 	}
-}
-
-func isDbErrNotFound(err error) bool {
-	return errors.Is(err, leveldb.ErrNotFound) || errors.Is(err, pebble.ErrNotFound) || errors.Is(err, memorydb.ErrMemorydbNotFound)
-}
-
-func ignoreNotFound(blob []byte, err error) ([]byte, error) {
-	if isDbErrNotFound(err) {
-		return nil, nil
-	}
-	return blob, err
 }
 
 // ReadAccountSnapshot retrieves the snapshot entry of an account trie leaf.
