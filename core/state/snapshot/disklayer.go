@@ -117,7 +117,10 @@ func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 		return blob, nil
 	}
 	// Cache doesn't contain account, pull from disk and cache for later
-	blob := rawdb.ReadAccountSnapshot(dl.diskdb, hash)
+	blob, err := rawdb.ReadAccountSnapshot(dl.diskdb, hash)
+	if err != nil {
+		return nil, err
+	}
 	dl.cache.Set(hash[:], blob)
 
 	snapshotCleanAccountMissMeter.Mark(1)
@@ -157,7 +160,10 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 		return blob, nil
 	}
 	// Cache doesn't contain storage slot, pull from disk and cache for later
-	blob := rawdb.ReadStorageSnapshot(dl.diskdb, accountHash, storageHash)
+	blob, err := rawdb.ReadStorageSnapshot(dl.diskdb, accountHash, storageHash)
+	if err != nil {
+		return nil, err
+	}
 	dl.cache.Set(key, blob)
 
 	snapshotCleanStorageMissMeter.Mark(1)
