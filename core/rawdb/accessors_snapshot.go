@@ -18,10 +18,14 @@ package rawdb
 
 import (
 	"encoding/binary"
+	"errors"
 
+	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // ReadSnapshotDisabled retrieves if the snapshot maintenance is disabled.
@@ -72,9 +76,20 @@ func DeleteSnapshotRoot(db ethdb.KeyValueWriter) {
 	}
 }
 
+func isDbErrNotFound(err error) bool {
+	return errors.Is(err, leveldb.ErrNotFound) || errors.Is(err, pebble.ErrNotFound) || errors.Is(err, memorydb.ErrMemorydbNotFound)
+}
+
+func ignoreNotFound(blob []byte, err error) ([]byte, error) {
+	if isDbErrNotFound(err) {
+		return nil, nil
+	}
+	return blob, err
+}
+
 // ReadAccountSnapshot retrieves the snapshot entry of an account trie leaf.
 func ReadAccountSnapshot(db ethdb.KeyValueReader, hash common.Hash) ([]byte, error) {
-	return db.Get(accountSnapshotKey(hash))
+	return ignoreNotFound(db.Get(accountSnapshotKey(hash)))
 }
 
 // WriteAccountSnapshot stores the snapshot entry of an account trie leaf.
@@ -93,7 +108,7 @@ func DeleteAccountSnapshot(db ethdb.KeyValueWriter, hash common.Hash) {
 
 // ReadStorageSnapshot retrieves the snapshot entry of an storage trie leaf.
 func ReadStorageSnapshot(db ethdb.KeyValueReader, accountHash, storageHash common.Hash) ([]byte, error) {
-	return db.Get(storageSnapshotKey(accountHash, storageHash))
+	return ignoreNotFound(db.Get(storageSnapshotKey(accountHash, storageHash)))
 }
 
 // WriteStorageSnapshot stores the snapshot entry of an storage trie leaf.
