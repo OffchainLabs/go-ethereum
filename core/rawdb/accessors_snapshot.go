@@ -73,9 +73,8 @@ func DeleteSnapshotRoot(db ethdb.KeyValueWriter) {
 }
 
 // ReadAccountSnapshot retrieves the snapshot entry of an account trie leaf.
-func ReadAccountSnapshot(db ethdb.KeyValueReader, hash common.Hash) []byte {
-	data, _ := db.Get(accountSnapshotKey(hash))
-	return data
+func ReadAccountSnapshot(db ethdb.KeyValueReader, hash common.Hash) ([]byte, error) {
+	return ignoreNotFound(db.Get(accountSnapshotKey(hash)))
 }
 
 // WriteAccountSnapshot stores the snapshot entry of an account trie leaf.
@@ -93,9 +92,8 @@ func DeleteAccountSnapshot(db ethdb.KeyValueWriter, hash common.Hash) {
 }
 
 // ReadStorageSnapshot retrieves the snapshot entry of an storage trie leaf.
-func ReadStorageSnapshot(db ethdb.KeyValueReader, accountHash, storageHash common.Hash) []byte {
-	data, _ := db.Get(storageSnapshotKey(accountHash, storageHash))
-	return data
+func ReadStorageSnapshot(db ethdb.KeyValueReader, accountHash, storageHash common.Hash) ([]byte, error) {
+	return ignoreNotFound(db.Get(storageSnapshotKey(accountHash, storageHash)))
 }
 
 // WriteStorageSnapshot stores the snapshot entry of an storage trie leaf.
