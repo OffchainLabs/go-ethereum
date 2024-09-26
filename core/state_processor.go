@@ -166,11 +166,11 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, error) {
-	return ApplyTransactionWithResultFilter(config, bc, author, gp, statedb, header, tx, usedGas, cfg, nil)
+	return ApplyTransactionWithResultFilter(config, bc, author, gp, statedb, header, tx, usedGas, cfg, MessageReplayMode, nil)
 }
 
-func ApplyTransactionWithResultFilter(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, resultFilter func(*ExecutionResult) error) (*types.Receipt, *ExecutionResult, error) {
-	msg, err := TransactionToMessage(tx, types.MakeSigner(config, header.Number, header.Time), header.BaseFee, MessageReplayMode)
+func ApplyTransactionWithResultFilter(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, runMode MessageRunMode, resultFilter func(*ExecutionResult) error) (*types.Receipt, *ExecutionResult, error) {
+	msg, err := TransactionToMessage(tx, types.MakeSigner(config, header.Number, header.Time), header.BaseFee, runMode)
 	if err != nil {
 		return nil, nil, err
 	}
