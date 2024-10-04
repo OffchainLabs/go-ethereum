@@ -61,7 +61,7 @@ func checkDanglingDiskStorage(chaindb ethdb.KeyValueStore) error {
 			log.Info("Iterating snap storage", "at", fmt.Sprintf("%#x", accKey), "elapsed", common.PrettyDuration(time.Since(start)))
 			lastReport = time.Now()
 		}
-		if data := rawdb.ReadAccountSnapshot(chaindb, common.BytesToHash(accKey)); len(data) == 0 {
+		if data, _ := rawdb.ReadAccountSnapshot(chaindb, common.BytesToHash(accKey)); len(data) == 0 {
 			log.Warn("Dangling storage - missing account", "account", fmt.Sprintf("%#x", accKey), "storagekey", fmt.Sprintf("%#x", k))
 			return fmt.Errorf("dangling snapshot storage account %#x", accKey)
 		}
@@ -97,7 +97,7 @@ func CheckJournalAccount(db ethdb.KeyValueStore, hash common.Hash) error {
 	// Look up the disk layer first
 	baseRoot := rawdb.ReadSnapshotRoot(db)
 	fmt.Printf("Disklayer: Root: %x\n", baseRoot)
-	if data := rawdb.ReadAccountSnapshot(db, hash); data != nil {
+	if data, _ := rawdb.ReadAccountSnapshot(db, hash); data != nil {
 		account, err := types.FullAccount(data)
 		if err != nil {
 			panic(err)
