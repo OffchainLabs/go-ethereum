@@ -178,8 +178,10 @@ type AncientStore interface {
 	io.Closer
 }
 
+type WasmTarget string
 type WasmDataBaseRetriever interface {
 	WasmDataBase() (KeyValueStore, uint32)
+	WasmTargets() []WasmTarget
 }
 
 // Database contains all the methods required by the high level database to not

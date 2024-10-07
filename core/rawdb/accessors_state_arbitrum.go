@@ -25,16 +25,14 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-type Target string
-
 const (
-	TargetWavm  Target = "wavm"
-	TargetArm64 Target = "arm64"
-	TargetAmd64 Target = "amd64"
-	TargetHost  Target = "host"
+	TargetWavm  ethdb.WasmTarget = "wavm"
+	TargetArm64 ethdb.WasmTarget = "arm64"
+	TargetAmd64 ethdb.WasmTarget = "amd64"
+	TargetHost  ethdb.WasmTarget = "host"
 )
 
-func LocalTarget() Target {
+func LocalTarget() ethdb.WasmTarget {
 	if runtime.GOOS == "linux" {
 		switch runtime.GOARCH {
 		case "arm64":
@@ -46,9 +44,9 @@ func LocalTarget() Target {
 	return TargetHost
 }
 
-func (t Target) keyPrefix() (WasmPrefix, error) {
+func activatedAsmKeyPrefix(target ethdb.WasmTarget) (WasmPrefix, error) {
 	var prefix WasmPrefix
-	switch t {
+	switch target {
 	case TargetWavm:
 		prefix = activatedAsmWavmPrefix
 	case TargetArm64:
@@ -58,27 +56,25 @@ func (t Target) keyPrefix() (WasmPrefix, error) {
 	case TargetHost:
 		prefix = activatedAsmHostPrefix
 	default:
-		return WasmPrefix{}, fmt.Errorf("invalid target: %v", t)
+		return WasmPrefix{}, fmt.Errorf("invalid target: %v", target)
 	}
 	return prefix, nil
 }
 
-func (t Target) IsValid() bool {
-	_, err := t.keyPrefix()
+func IsSupportedWasmTarget(target ethdb.WasmTarget) bool {
+	_, err := activatedAsmKeyPrefix(target)
 	return err == nil
 }
 
-var Targets = []Target{TargetWavm, TargetArm64, TargetAmd64, TargetHost}
-
-func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asmMap map[Target][]byte) {
+func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asmMap map[ethdb.WasmTarget][]byte) {
 	for target, asm := range asmMap {
 		WriteActivatedAsm(db, target, moduleHash, asm)
 	}
 }
 
 // Stores the activated asm for a given moduleHash and target
-func WriteActivatedAsm(db ethdb.KeyValueWriter, target Target, moduleHash common.Hash, asm []byte) {
-	prefix, err := target.keyPrefix()
+func WriteActivatedAsm(db ethdb.KeyValueWriter, target ethdb.WasmTarget, moduleHash common.Hash, asm []byte) {
+	prefix, err := activatedAsmKeyPrefix(target)
 	if err != nil {
 		log.Crit("Failed to store activated wasm asm", "err", err)
 	}
@@ -89,8 +85,8 @@ func WriteActivatedAsm(db ethdb.KeyValueWriter, target Target, moduleHash common
 }
 
 // Retrieves the activated asm for a given moduleHash and target
-func ReadActivatedAsm(db ethdb.KeyValueReader, target Target, moduleHash common.Hash) []byte {
-	prefix, err := target.keyPrefix()
+func ReadActivatedAsm(db ethdb.KeyValueReader, target ethdb.WasmTarget, moduleHash common.Hash) []byte {
+	prefix, err := activatedAsmKeyPrefix(target)
 	if err != nil {
 		log.Crit("Failed to read activated wasm asm", "err", err)
 	}
