@@ -19,48 +19,41 @@
 package rawdb
 
 import (
-	"bytes"
-
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var (
-	activatedAsmPrefix    = []byte{0x00, 'w', 'a'} // (prefix, moduleHash) -> stylus asm
-	activatedModulePrefix = []byte{0x00, 'w', 'm'} // (prefix, moduleHash) -> stylus module
-)
+const WasmSchemaVersion byte = 0x01
+
+const WasmPrefixLen = 3
 
 // WasmKeyLen = CompiledWasmCodePrefix + moduleHash
-const WasmKeyLen = 3 + 32
+const WasmKeyLen = WasmPrefixLen + common.HashLength
 
+type WasmPrefix = [WasmPrefixLen]byte
 type WasmKey = [WasmKeyLen]byte
 
-func ActivatedAsmKey(moduleHash common.Hash) WasmKey {
-	return newWasmKey(activatedAsmPrefix, moduleHash)
-}
+var (
+	wasmSchemaVersionKey = []byte("WasmSchemaVersion")
 
-func ActivatedModuleKey(moduleHash common.Hash) WasmKey {
-	return newWasmKey(activatedModulePrefix, moduleHash)
+	// 0x00 prefix to avoid conflicts when wasmdb is not separate database
+	activatedAsmWavmPrefix = WasmPrefix{0x00, 'w', 'w'} // (prefix, moduleHash) -> stylus module (wavm)
+	activatedAsmArmPrefix  = WasmPrefix{0x00, 'w', 'r'} // (prefix, moduleHash) -> stylus asm for ARM system
+	activatedAsmX86Prefix  = WasmPrefix{0x00, 'w', 'x'} // (prefix, moduleHash) -> stylus asm for x86 system
+	activatedAsmHostPrefix = WasmPrefix{0x00, 'w', 'h'} // (prefix, moduleHash) -> stylus asm for system other then ARM and x86
+)
+
+func DeprecatedPrefixesV0() (keyPrefixes [][]byte, keyLength int) {
+	return [][]byte{
+		// deprecated prefixes, used in version 0x00, purged in version 0x01
+		[]byte{0x00, 'w', 'a'}, // ActivatedAsmPrefix
+		[]byte{0x00, 'w', 'm'}, // ActivatedModulePrefix
+	}, 3 + 32
 }
 
 // key = prefix + moduleHash
-func newWasmKey(prefix []byte, moduleHash common.Hash) WasmKey {
+func activatedKey(prefix WasmPrefix, moduleHash common.Hash) WasmKey {
 	var key WasmKey
-	copy(key[:3], prefix)
-	copy(key[3:], moduleHash[:])
+	copy(key[:WasmPrefixLen], prefix[:])
+	copy(key[WasmPrefixLen:], moduleHash[:])
 	return key
-}
-
-func IsActivatedAsmKey(key []byte) (bool, common.Hash) {
-	return extractWasmKey(activatedAsmPrefix, key)
-}
-
-func IsActivatedModuleKey(key []byte) (bool, common.Hash) {
-	return extractWasmKey(activatedModulePrefix, key)
-}
-
-func extractWasmKey(prefix, key []byte) (bool, common.Hash) {
-	if !bytes.HasPrefix(key, prefix) || len(key) != WasmKeyLen {
-		return false, common.Hash{}
-	}
-	return true, common.BytesToHash(key[len(prefix):])
 }

@@ -586,7 +586,7 @@ func TestClientSubscriptionChannelClose(t *testing.T) {
 
 	var (
 		srv     = NewServer()
-		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
+		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil, 0))
 		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
 	)
 	defer srv.Stop()
@@ -747,7 +747,7 @@ func TestClientReconnect(t *testing.T) {
 		if err != nil {
 			t.Fatal("can't listen:", err)
 		}
-		go http.Serve(l, srv.WebsocketHandler([]string{"*"}))
+		go http.Serve(l, srv.WebsocketHandler([]string{"*"}, 0))
 		return srv, l
 	}
 
@@ -813,7 +813,7 @@ func httpTestClient(srv *Server, transport string, fl *flakeyListener) (*Client,
 	var hs *httptest.Server
 	switch transport {
 	case "ws":
-		hs = httptest.NewUnstartedServer(srv.WebsocketHandler([]string{"*"}))
+		hs = httptest.NewUnstartedServer(srv.WebsocketHandler([]string{"*"}, 0))
 	case "http":
 		hs = httptest.NewUnstartedServer(srv)
 	default:
