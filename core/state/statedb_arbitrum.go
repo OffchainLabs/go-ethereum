@@ -134,7 +134,7 @@ func (s *StateDB) AddStylusPagesEver(new uint16) {
 	s.arbExtraData.everWasmPages = common.SaturatingUAdd(s.arbExtraData.everWasmPages, new)
 }
 
-// Arbitrum: certain behavior created empty accounts in old geth versions.
+// Arbitrum: preserve empty account behavior from old geth and ArbOS versions.
 func (s *StateDB) CreateZombieIfDeleted(addr common.Address) {
 	if s.getStateObject(addr) == nil {
 		if _, destructed := s.stateObjectsDestruct[addr]; destructed {
