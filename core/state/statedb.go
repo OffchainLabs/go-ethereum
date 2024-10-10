@@ -436,12 +436,6 @@ func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, reason tr
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) {
-	// Arbitrum: this behavior created empty accounts in old geth versions.
-	if amount.IsZero() && s.getStateObject(addr) == nil {
-		if _, destructed := s.stateObjectsDestruct[addr]; destructed {
-			s.createZombie(addr)
-		}
-	}
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		s.arbExtraData.unexpectedBalanceDelta.Sub(s.arbExtraData.unexpectedBalanceDelta, amount.ToBig())
