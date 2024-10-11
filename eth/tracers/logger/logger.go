@@ -134,14 +134,10 @@ func NewStructLogger(cfg *Config) *StructLogger {
 
 func (l *StructLogger) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
-		OnTxStart:                 l.OnTxStart,
-		OnTxEnd:                   l.OnTxEnd,
-		OnExit:                    l.OnExit,
-		OnOpcode:                  l.OnOpcode,
-		CaptureArbitrumTransfer:   l.CaptureArbitrumTransfer,
-		CaptureArbitrumStorageGet: l.CaptureArbitrumStorageGet,
-		CaptureArbitrumStorageSet: l.CaptureArbitrumStorageSet,
-		CaptureStylusHostio:       l.CaptureStylusHostio,
+		OnTxStart: l.OnTxStart,
+		OnTxEnd:   l.OnTxEnd,
+		OnExit:    l.OnExit,
+		OnOpcode:  l.OnOpcode,
 	}
 }
 
@@ -349,15 +345,11 @@ func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 
 func (t *mdLogger) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
-		OnTxStart:                 t.OnTxStart,
-		OnEnter:                   t.OnEnter,
-		OnExit:                    t.OnExit,
-		OnOpcode:                  t.OnOpcode,
-		OnFault:                   t.OnFault,
-		CaptureArbitrumTransfer:   t.CaptureArbitrumTransfer,
-		CaptureArbitrumStorageGet: t.CaptureArbitrumStorageGet,
-		CaptureArbitrumStorageSet: t.CaptureArbitrumStorageSet,
-		CaptureStylusHostio:       t.CaptureStylusHostio,
+		OnTxStart: t.OnTxStart,
+		OnEnter:   t.OnEnter,
+		OnExit:    t.OnExit,
+		OnOpcode:  t.OnOpcode,
+		OnFault:   t.OnFault,
 	}
 }
 

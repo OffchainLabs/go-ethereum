@@ -68,14 +68,10 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
 		l.cfg = &Config{}
 	}
 	return &tracing.Hooks{
-		OnTxStart:                 l.OnTxStart,
-		OnExit:                    l.OnExit,
-		OnOpcode:                  l.OnOpcode,
-		OnFault:                   l.OnFault,
-		CaptureArbitrumTransfer:   l.CaptureArbitrumTransfer,
-		CaptureArbitrumStorageGet: l.CaptureArbitrumStorageGet,
-		CaptureArbitrumStorageSet: l.CaptureArbitrumStorageSet,
-		CaptureStylusHostio:       l.CaptureStylusHostio,
+		OnTxStart: l.OnTxStart,
+		OnExit:    l.OnExit,
+		OnOpcode:  l.OnOpcode,
+		OnFault:   l.OnFault,
 	}
 }
 
@@ -87,15 +83,11 @@ func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
 		l.cfg = &Config{}
 	}
 	return &tracing.Hooks{
-		OnTxStart:                 l.OnTxStart,
-		OnEnter:                   l.OnEnter,
-		OnExit:                    l.OnExit,
-		OnOpcode:                  l.OnOpcode,
-		OnFault:                   l.OnFault,
-		CaptureArbitrumTransfer:   l.CaptureArbitrumTransfer,
-		CaptureArbitrumStorageGet: l.CaptureArbitrumStorageGet,
-		CaptureArbitrumStorageSet: l.CaptureArbitrumStorageSet,
-		CaptureStylusHostio:       l.CaptureStylusHostio,
+		OnTxStart: l.OnTxStart,
+		OnEnter:   l.OnEnter,
+		OnExit:    l.OnExit,
+		OnOpcode:  l.OnOpcode,
+		OnFault:   l.OnFault,
 	}
 }
 

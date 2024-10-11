@@ -127,11 +127,7 @@ func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompi
 
 func (a *AccessListTracer) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
-		OnOpcode:                  a.OnOpcode,
-		CaptureArbitrumTransfer:   a.CaptureArbitrumTransfer,
-		CaptureArbitrumStorageGet: a.CaptureArbitrumStorageGet,
-		CaptureArbitrumStorageSet: a.CaptureArbitrumStorageSet,
-		CaptureStylusHostio:       a.CaptureStylusHostio,
+		OnOpcode: a.OnOpcode,
 	}
 }
 
