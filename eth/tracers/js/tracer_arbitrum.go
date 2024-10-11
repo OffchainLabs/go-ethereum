@@ -21,11 +21,10 @@ import (
 
 	"github.com/dop251/goja"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 func (jst *jsTracer) CaptureArbitrumTransfer(
-	env *vm.EVM, from, to *common.Address, value *big.Int, before bool, purpose string,
+	from, to *common.Address, value *big.Int, before bool, purpose string,
 ) {
 	traceTransfer, ok := goja.AssertFunction(jst.obj.Get("captureArbitrumTransfer"))
 	if !ok {
