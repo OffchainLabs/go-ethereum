@@ -69,7 +69,7 @@
         "purpose": "tip",
         "from": null,
         "to": "0x0000000000000000000000000000000000000000",
-        "value": "0x15bd3c0591000"
+        "value": "0x0"
       }
     ],
     "from": "0x3623191d4ccfbbdf09e8ebf6382a1f8257417bc1",
