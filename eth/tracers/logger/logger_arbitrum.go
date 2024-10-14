@@ -31,15 +31,23 @@ func (*StructLogger) CaptureArbitrumTransfer(from, to *common.Address, value *bi
 func (*mdLogger) CaptureArbitrumTransfer(from, to *common.Address, amount *big.Int, before bool, purpose string) {
 }
 
-func (*AccessListTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {}
-func (*jsonLogger) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)       {}
-func (*StructLogger) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)     {}
-func (*mdLogger) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool)         {}
+func (*AccessListTracer) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
+}
+func (*jsonLogger) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
+}
+func (*StructLogger) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
+}
+func (*mdLogger) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
+}
 
-func (*AccessListTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {}
-func (*jsonLogger) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)       {}
-func (*StructLogger) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)     {}
-func (*mdLogger) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool)         {}
+func (*AccessListTracer) CaptureArbitrumStorageSet(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool) {
+}
+func (*jsonLogger) CaptureArbitrumStorageSet(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool) {
+}
+func (*StructLogger) CaptureArbitrumStorageSet(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool) {
+}
+func (*mdLogger) CaptureArbitrumStorageSet(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool) {
+}
 
 func (*AccessListTracer) CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64) {
 }

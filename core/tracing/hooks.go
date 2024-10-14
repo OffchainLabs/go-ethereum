@@ -148,8 +148,8 @@ type (
 	LogHook = func(log *types.Log)
 
 	CaptureArbitrumTransferHook   = func(from, to *common.Address, value *big.Int, before bool, purpose string)
-	CaptureArbitrumStorageGetHook = func(key common.Hash, depth int, before bool)
-	CaptureArbitrumStorageSetHook = func(key, value common.Hash, depth int, before bool)
+	CaptureArbitrumStorageGetHook = func(addr common.Address, key, mappedKey common.Hash, depth int, before bool)
+	CaptureArbitrumStorageSetHook = func(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool)
 
 	CaptureStylusHostioHook = func(name string, args, outs []byte, startInk, endInk uint64)
 )
