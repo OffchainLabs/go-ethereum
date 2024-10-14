@@ -89,7 +89,8 @@ type Database struct {
 	commitWALRotation         atomic.Int64
 	commitWait                atomic.Int64
 
-	levelsGauge []metrics.Gauge // Gauge for tracking the number of tables in levels
+	level0SublevelsGauge metrics.Gauge
+	levelsGauge          []metrics.Gauge // Gauge for tracking the number of tables in levels
 
 	quitLock sync.RWMutex    // Mutex protecting the quit channel and the closed flag
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -319,6 +320,8 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	db.commitL0ReadAmpWriteStallMeter = metrics.GetOrRegisterMeter(namespace+"commit/duration/l0readampwritestall", nil)
 	db.commitWALRotationMeter = metrics.GetOrRegisterMeter(namespace+"commit/duration/walrotation", nil)
 	db.commitWaitMeter = metrics.GetOrRegisterMeter(namespace+"commit/duration/commitwait", nil)
+
+	db.level0SublevelsGauge = metrics.GetOrRegisterGauge(namespace+"tables/level0/sublevels", nil)
 
 	// Start up the metrics gathering and return
 	go db.meter(metricsGatheringInterval, namespace)
@@ -632,6 +635,9 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		d.compDebtGauge.Update(int64(stats.Compact.EstimatedDebt))
 		d.compInProgressGauge.Update(stats.Compact.NumInProgress)
 
+		if len(stats.Levels) > 0 {
+			d.level0SublevelsGauge.Update(int64(stats.Levels[0].Sublevels))
+		}
 		for i, level := range stats.Levels {
 			// Append metrics for additional layers
 			if i >= len(d.levelsGauge) {
