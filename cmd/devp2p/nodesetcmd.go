@@ -25,11 +25,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/harbour-tech/go-ethereum-arbitrum/core"
+	"github.com/harbour-tech/go-ethereum-arbitrum/core/forkid"
+	"github.com/harbour-tech/go-ethereum-arbitrum/p2p/enr"
+	"github.com/harbour-tech/go-ethereum-arbitrum/params"
+	"github.com/harbour-tech/go-ethereum-arbitrum/rlp"
 	"github.com/urfave/cli/v2"
 )
 

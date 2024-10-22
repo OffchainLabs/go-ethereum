@@ -19,10 +19,10 @@ package main
 import (
 	"os"
 
-	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v4test"
-	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/internal/utesting"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/harbour-tech/go-ethereum-arbitrum/cmd/devp2p/internal/v4test"
+	"github.com/harbour-tech/go-ethereum-arbitrum/internal/flags"
+	"github.com/harbour-tech/go-ethereum-arbitrum/internal/utesting"
+	"github.com/harbour-tech/go-ethereum-arbitrum/log"
 	"github.com/urfave/cli/v2"
 )
 

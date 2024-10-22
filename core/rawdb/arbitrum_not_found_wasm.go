@@ -22,7 +22,7 @@ package rawdb
 import (
 	"errors"
 
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/harbour-tech/go-ethereum-arbitrum/ethdb/memorydb"
 )
 
 func isDbErrNotFound(err error) bool {

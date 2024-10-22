@@ -25,12 +25,12 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/eth/protocols/snap"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/rlpx"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/harbour-tech/go-ethereum-arbitrum/crypto"
+	"github.com/harbour-tech/go-ethereum-arbitrum/eth/protocols/eth"
+	"github.com/harbour-tech/go-ethereum-arbitrum/eth/protocols/snap"
+	"github.com/harbour-tech/go-ethereum-arbitrum/p2p"
+	"github.com/harbour-tech/go-ethereum-arbitrum/p2p/rlpx"
+	"github.com/harbour-tech/go-ethereum-arbitrum/rlp"
 )
 
 var (
