@@ -21,12 +21,12 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	cmath "github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/harbour-tech/go-ethereum-arbitrum/common"
+	cmath "github.com/harbour-tech/go-ethereum-arbitrum/common/math"
+	"github.com/harbour-tech/go-ethereum-arbitrum/core/types"
+	"github.com/harbour-tech/go-ethereum-arbitrum/core/vm"
+	"github.com/harbour-tech/go-ethereum-arbitrum/crypto/kzg4844"
+	"github.com/harbour-tech/go-ethereum-arbitrum/params"
 	"github.com/holiman/uint256"
 )
 

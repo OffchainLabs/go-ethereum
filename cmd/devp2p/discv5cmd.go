@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v5test"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/harbour-tech/go-ethereum-arbitrum/cmd/devp2p/internal/v5test"
+	"github.com/harbour-tech/go-ethereum-arbitrum/common"
+	"github.com/harbour-tech/go-ethereum-arbitrum/internal/flags"
+	"github.com/harbour-tech/go-ethereum-arbitrum/p2p/discover"
 	"github.com/urfave/cli/v2"
 )
 

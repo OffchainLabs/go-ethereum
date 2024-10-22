@@ -24,14 +24,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/catalyst"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/internal/utesting"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/harbour-tech/go-ethereum-arbitrum/common"
+	"github.com/harbour-tech/go-ethereum-arbitrum/common/hexutil"
+	"github.com/harbour-tech/go-ethereum-arbitrum/eth"
+	"github.com/harbour-tech/go-ethereum-arbitrum/eth/catalyst"
+	"github.com/harbour-tech/go-ethereum-arbitrum/eth/ethconfig"
+	"github.com/harbour-tech/go-ethereum-arbitrum/internal/utesting"
+	"github.com/harbour-tech/go-ethereum-arbitrum/node"
+	"github.com/harbour-tech/go-ethereum-arbitrum/p2p"
 )
 
 func makeJWTSecret() (string, [32]byte, error) {

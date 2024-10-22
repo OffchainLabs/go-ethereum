@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/harbour-tech/go-ethereum-arbitrum/rlp"
 	"github.com/holiman/uint256"
 )
 

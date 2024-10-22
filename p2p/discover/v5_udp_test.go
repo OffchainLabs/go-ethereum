@@ -27,12 +27,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/internal/testlog"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/harbour-tech/go-ethereum-arbitrum/internal/testlog"
+	"github.com/harbour-tech/go-ethereum-arbitrum/log"
+	"github.com/harbour-tech/go-ethereum-arbitrum/p2p/discover/v5wire"
+	"github.com/harbour-tech/go-ethereum-arbitrum/p2p/enode"
+	"github.com/harbour-tech/go-ethereum-arbitrum/p2p/enr"
+	"github.com/harbour-tech/go-ethereum-arbitrum/rlp"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slices"
 )
