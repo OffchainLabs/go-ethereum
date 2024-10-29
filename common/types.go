@@ -475,3 +475,14 @@ func (d *Decimal) UnmarshalJSON(input []byte) error {
 		return err
 	}
 }
+
+type BlockMetadata []byte
+
+// IsTxTimeboosted given a tx's index in the block returns whether the tx was timeboosted or not
+func (b BlockMetadata) IsTxTimeboosted(txIndex int) bool {
+	maxTxCount := (len(b) - 1) * 8
+	if txIndex >= maxTxCount {
+		return false
+	}
+	return b[1+(txIndex/8)]&(1<<(txIndex%8)) != 0
+}

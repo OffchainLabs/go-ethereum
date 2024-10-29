@@ -95,6 +95,7 @@ type SyncProgressBackend interface {
 	SyncProgressMap() map[string]interface{}
 	SafeBlockNumber(ctx context.Context) (uint64, error)
 	FinalizedBlockNumber(ctx context.Context) (uint64, error)
+	BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error)
 }
 
 func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration) (*filters.FilterSystem, error) {
@@ -449,6 +450,10 @@ func (a *APIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 		return a.BlockByHash(ctx, hash)
 	}
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
+}
+
+func (a *APIBackend) BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error) {
+	return a.sync.BlockMetadataByNumber(blockNum)
 }
 
 func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *core.BlockChain, maxRecreateStateDepth int64, header *types.Header, err error) (*state.StateDB, *types.Header, error) {
