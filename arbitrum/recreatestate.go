@@ -21,7 +21,7 @@ type StateReleaseFunc tracers.StateReleaseFunc
 
 var NoopStateRelease StateReleaseFunc = func() {}
 
-type StateBuildingLogFunction func(targetHeader, header *types.Header, hasState bool)
+type StateBuildingLogFunction func(header *types.Header, hasState bool)
 type StateForHeaderFunction func(header *types.Header) (*state.StateDB, StateReleaseFunc, error)
 
 // finds last available state and header checking it first for targetHeader then looking backwards
@@ -56,7 +56,7 @@ func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor S
 			return nil, lastHeader, nil, err
 		}
 		if logFunc != nil {
-			logFunc(targetHeader, currentHeader, false)
+			logFunc(currentHeader, false)
 		}
 		if currentHeader.Number.Uint64() <= genesis {
 			return nil, lastHeader, nil, errors.Wrap(err, fmt.Sprintf("moved beyond genesis looking for state %d, genesis %d", targetHeader.Number.Uint64(), genesis))
@@ -69,7 +69,7 @@ func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor S
 	return state, currentHeader, release, ctx.Err()
 }
 
-func AdvanceStateByBlock(ctx context.Context, bc *core.BlockChain, state *state.StateDB, targetHeader *types.Header, blockToRecreate uint64, prevBlockHash common.Hash, logFunc StateBuildingLogFunction) (*state.StateDB, *types.Block, error) {
+func AdvanceStateByBlock(ctx context.Context, bc *core.BlockChain, state *state.StateDB, blockToRecreate uint64, prevBlockHash common.Hash, logFunc StateBuildingLogFunction) (*state.StateDB, *types.Block, error) {
 	block := bc.GetBlockByNumber(blockToRecreate)
 	if block == nil {
 		return nil, nil, fmt.Errorf("block not found while recreating: %d", blockToRecreate)
@@ -78,7 +78,7 @@ func AdvanceStateByBlock(ctx context.Context, bc *core.BlockChain, state *state.
 		return nil, nil, fmt.Errorf("reorg detected: number %d expectedPrev: %v foundPrev: %v", blockToRecreate, prevBlockHash, block.ParentHash())
 	}
 	if logFunc != nil {
-		logFunc(targetHeader, block.Header(), true)
+		logFunc(block.Header(), true)
 	}
 	_, _, _, err := bc.Processor().Process(block, state, vm.Config{})
 	if err != nil {
