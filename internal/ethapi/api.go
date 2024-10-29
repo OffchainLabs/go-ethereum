@@ -1963,6 +1963,14 @@ func marshalReceipt(ctx context.Context, receipt *types.Receipt, blockHash commo
 				fields["l1BlockNumber"] = hexutil.Uint64(arbTx.L1BlockNumber)
 			}
 		}
+
+		blockMetadata, err := backend.BlockMetadataByNumber(blockNumber)
+		if err != nil {
+			return nil, err
+		}
+		if blockMetadata != nil && blockMetadata.IsTxTimeboosted(txIndex) {
+			fields["timeboosted"] = true
+		}
 	}
 	return fields, nil
 }
