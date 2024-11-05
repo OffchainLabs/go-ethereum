@@ -174,10 +174,11 @@ func (miner *Miner) prepareWork(genParams *generateParams) (*environment, error)
 		log.Error("Failed to prepare header for sealing", "err", err)
 		return nil, err
 	}
+	prevArbosVersion := types.DeserializeHeaderExtraInformation(parent).ArbOSFormatVersion
 	// Apply EIP-4844, EIP-4788.
-	if miner.chainConfig.IsCancun(header.Number, header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {
+	if miner.chainConfig.IsCancun(header.Number, header.Time, prevArbosVersion) {
 		var excessBlobGas uint64
-		if miner.chainConfig.IsCancun(parent.Number, parent.Time, types.DeserializeHeaderExtraInformation(parent).ArbOSFormatVersion) {
+		if miner.chainConfig.IsCancun(parent.Number, parent.Time, prevArbosVersion) {
 			excessBlobGas = eip4844.CalcExcessBlobGas(*parent.ExcessBlobGas, *parent.BlobGasUsed)
 		} else {
 			// For the first post-fork block, both parent.data_gas_used and parent.excess_data_gas are evaluated as 0
