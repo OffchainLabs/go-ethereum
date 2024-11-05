@@ -857,8 +857,8 @@ func (bc *BlockChain) rewindPathHead(head *types.Header, root common.Hash) (*typ
 // and the whole snapshot should be auto-generated in case of head mismatch.
 func (bc *BlockChain) rewindHead(head *types.Header, root common.Hash, rewindLimit uint64) (*types.Header, uint64, bool) {
 	if bc.triedb.Scheme() == rawdb.PathScheme {
-		head, rootNumber := bc.rewindPathHead(head, root)
-		return head, rootNumber, head.Number.Uint64() != 0
+		newHead, rootNumber := bc.rewindPathHead(head, root)
+		return newHead, rootNumber, head.Number.Uint64() != 0
 	}
 	return bc.rewindHashHead(head, root, rewindLimit)
 }
