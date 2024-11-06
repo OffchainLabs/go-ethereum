@@ -76,6 +76,9 @@ type TransactionArgs struct {
 
 	// This configures whether blobs are allowed to be passed.
 	blobSidecarAllowed bool
+
+	// was gas originally set by user
+	gasNotSetByUser bool
 }
 
 // from retrieves the transaction sender address.
@@ -139,6 +142,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 	}
 
 	if args.Gas == nil {
+		args.gasNotSetByUser = true
 		if skipGasEstimation { // Skip gas usage estimation if a precise gas limit is not critical, e.g., in non-transaction calls.
 			gas := hexutil.Uint64(b.RPCGasCap())
 			if gas == 0 {
@@ -373,21 +377,9 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context) error {
 	return nil
 }
 
-// CallDefaults sanitizes the transaction arguments, often filling in zero values,
-// for the purpose of eth_call class of RPC methods.
-func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int, chainID *big.Int, gasLimitNotSetByUser bool) error {
-	// Reject invalid combinations of pre- and post-1559 fee styles
-	if args.GasPrice != nil && ((args.MaxFeePerGas != nil && args.MaxFeePerGas.ToInt().Cmp(common.Big0) != 0) || (args.MaxPriorityFeePerGas != nil && args.MaxPriorityFeePerGas.ToInt().Cmp(common.Big0) != 0)) {
-		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
-	}
-	if args.ChainID == nil {
-		args.ChainID = (*hexutil.Big)(chainID)
-	} else {
-		if have := (*big.Int)(args.ChainID); have.Cmp(chainID) != 0 {
-			return fmt.Errorf("chainId does not match node's (have=%v, want=%v)", have, chainID)
-		}
-	}
-	if gasLimitNotSetByUser {
+func (args *TransactionArgs) setGasUsingCap(globalGasCap uint64) {
+	args.gasNotSetByUser = args.gasNotSetByUser || (args.Gas == nil)
+	if args.gasNotSetByUser {
 		gas := globalGasCap
 		if gas == 0 {
 			gas = uint64(math.MaxUint64 / 2)
@@ -399,6 +391,23 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 			args.Gas = (*hexutil.Uint64)(&globalGasCap)
 		}
 	}
+}
+
+// CallDefaults sanitizes the transaction arguments, often filling in zero values,
+// for the purpose of eth_call class of RPC methods.
+func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int, chainID *big.Int) error {
+	// Reject invalid combinations of pre- and post-1559 fee styles
+	if args.GasPrice != nil && ((args.MaxFeePerGas != nil && args.MaxFeePerGas.ToInt().Cmp(common.Big0) != 0) || (args.MaxPriorityFeePerGas != nil && args.MaxPriorityFeePerGas.ToInt().Cmp(common.Big0) != 0)) {
+		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	}
+	if args.ChainID == nil {
+		args.ChainID = (*hexutil.Big)(chainID)
+	} else {
+		if have := (*big.Int)(args.ChainID); have.Cmp(chainID) != 0 {
+			return fmt.Errorf("chainId does not match node's (have=%v, want=%v)", have, chainID)
+		}
+	}
+	args.setGasUsingCap(globalGasCap)
 	if args.Nonce == nil {
 		args.Nonce = new(hexutil.Uint64)
 	}
@@ -427,7 +436,7 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 }
 
 // Assumes that fields are not nil, i.e. setDefaults or CallDefaults has been called.
-func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, header *types.Header, state *state.StateDB, runMode core.MessageRunMode, chainID *big.Int, gasLimitNotSetByUser bool) *core.Message {
+func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, header *types.Header, state *state.StateDB, runMode core.MessageRunMode) *core.Message {
 	var (
 		gasPrice  *big.Int
 		gasFeeCap *big.Int
@@ -480,26 +489,18 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, he
 		SkipL1Charging:    skipL1Charging,
 	}
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
-	if state != nil {
+	if state != nil && !skipL1Charging {
 		// ToMessage recurses once to allow ArbOS to intercept the result for all callers
 		// ArbOS uses this to modify globalGasCap so that the cap will ignore this tx's specific L1 data costs
-		core.InterceptRPCGasCap(&globalGasCap, msg, header, state)
-		err := args.CallDefaults(globalGasCap, baseFee, chainID, gasLimitNotSetByUser)
-		// If we fail to call defaults, we should panic because it's a programming error since we've already called it once
-		if err != nil {
-			panic(fmt.Sprintf("CallDefaults failed: %v", err))
+		postingGas, err := core.PostingGasHook(msg, header, state)
+		if err == nil {
+			args.setGasUsingCap(globalGasCap + postingGas)
+			msg.GasLimit = uint64(*args.Gas)
+		} else {
+			log.Error("error reading posting gas", "err", err)
 		}
-		return args.ToMessage(baseFee, globalGasCap, header, nil, runMode, chainID, gasLimitNotSetByUser) // we pass a nil to avoid another recursion
 	}
 	return msg
-}
-
-// Raises the vanilla gas cap by the tx's l1 data costs in l2 terms. This creates a new gas cap that after
-// data payments are made, equals the original vanilla cap for the remaining, L2-specific work the tx does.
-func (args *TransactionArgs) L2OnlyGasCap(baseFee *big.Int, gasCap uint64, header *types.Header, state *state.StateDB, runMode core.MessageRunMode, chainID *big.Int, gasLimitNotSetByUser bool) (uint64, error) {
-	msg := args.ToMessage(baseFee, gasCap, header, nil, runMode, chainID, gasLimitNotSetByUser)
-	core.InterceptRPCGasCap(&gasCap, msg, header, state)
-	return gasCap, nil
 }
 
 // ToTransaction converts the arguments to a transaction.

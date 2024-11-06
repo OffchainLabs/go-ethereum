@@ -46,7 +46,7 @@ var InterceptRPCMessage = func(
 var GetArbOSSpeedLimitPerSecond func(statedb *state.StateDB) (uint64, error)
 
 // Allows ArbOS to update the gas cap so that it ignores the message's specific L1 poster costs.
-var InterceptRPCGasCap = func(gascap *uint64, msg *Message, header *types.Header, statedb *state.StateDB) {}
+var PostingGasHook = func(msg *Message, header *types.Header, statedb *state.StateDB) (uint64, error) { return 0, nil }
 
 // Renders a solidity error in human-readable form
 var RenderRPCError func(data []byte) error
