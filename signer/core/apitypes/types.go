@@ -25,6 +25,7 @@ import (
 	"math/big"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -243,12 +244,12 @@ func (args *SendTxArgs) validateTxSidecar() error {
 		commitments := make([]kzg4844.Commitment, n)
 		proofs := make([]kzg4844.Proof, n)
 		for i, b := range args.Blobs {
-			c, err := kzg4844.BlobToCommitment(b)
+			c, err := kzg4844.BlobToCommitment(&b)
 			if err != nil {
 				return fmt.Errorf("blobs[%d]: error computing commitment: %v", i, err)
 			}
 			commitments[i] = c
-			p, err := kzg4844.ComputeBlobProof(b, c)
+			p, err := kzg4844.ComputeBlobProof(&b, c)
 			if err != nil {
 				return fmt.Errorf("blobs[%d]: error computing proof: %v", i, err)
 			}
@@ -258,7 +259,7 @@ func (args *SendTxArgs) validateTxSidecar() error {
 		args.Proofs = proofs
 	} else {
 		for i, b := range args.Blobs {
-			if err := kzg4844.VerifyBlobProof(b, args.Commitments[i], args.Proofs[i]); err != nil {
+			if err := kzg4844.VerifyBlobProof(&b, args.Commitments[i], args.Proofs[i]); err != nil {
 				return fmt.Errorf("failed to verify blob proof: %v", err)
 			}
 		}
@@ -386,16 +387,8 @@ func (typedData *TypedData) HashStruct(primaryType string, data TypedDataMessage
 // Dependencies returns an array of custom types ordered by their hierarchical reference tree
 func (typedData *TypedData) Dependencies(primaryType string, found []string) []string {
 	primaryType = strings.TrimSuffix(primaryType, "[]")
-	includes := func(arr []string, str string) bool {
-		for _, obj := range arr {
-			if obj == str {
-				return true
-			}
-		}
-		return false
-	}
 
-	if includes(found, primaryType) {
+	if slices.Contains(found, primaryType) {
 		return found
 	}
 	if typedData.Types[primaryType] == nil {
@@ -404,7 +397,7 @@ func (typedData *TypedData) Dependencies(primaryType string, found []string) []s
 	found = append(found, primaryType)
 	for _, field := range typedData.Types[primaryType] {
 		for _, dep := range typedData.Dependencies(field.Type, found) {
-			if !includes(found, dep) {
+			if !slices.Contains(found, dep) {
 				found = append(found, dep)
 			}
 		}
@@ -819,11 +812,11 @@ func formatPrimitiveValue(encType string, encValue interface{}) (string, error) 
 	return "", fmt.Errorf("unhandled type %v", encType)
 }
 
-// Validate checks if the types object is conformant to the specs
+// validate checks if the types object is conformant to the specs
 func (t Types) validate() error {
 	for typeKey, typeArr := range t {
 		if len(typeKey) == 0 {
-			return fmt.Errorf("empty type key")
+			return errors.New("empty type key")
 		}
 		for i, typeObj := range typeArr {
 			if len(typeObj.Type) == 0 {
