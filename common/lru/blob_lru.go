@@ -82,3 +82,17 @@ func (c *SizeConstrainedCache[K, V]) Get(key K) (V, bool) {
 
 	return c.lru.Get(key)
 }
+
+func (c *SizeConstrainedCache[K, V]) Remove(key K) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	c.lru.Remove(key)
+}
+
+func (c *SizeConstrainedCache[K, V]) Clear() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	c.lru.Purge()
+}
