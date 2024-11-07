@@ -1304,7 +1304,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	{
-		postingGas, err := core.PostingGasHook(call, header, state)
+		postingGas, err := core.RPCPostingGasHook(call, header, state)
 		if err != nil {
 			return 0, err
 		}
