@@ -151,14 +151,11 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Trac
 	ft := &flatCallTracer{tracer: t, ctx: ctx, config: config}
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart:                 ft.OnTxStart,
-			OnTxEnd:                   ft.OnTxEnd,
-			OnEnter:                   ft.OnEnter,
-			OnExit:                    ft.OnExit,
-			CaptureArbitrumTransfer:   ft.CaptureArbitrumTransfer,
-			CaptureArbitrumStorageGet: ft.CaptureArbitrumStorageGet,
-			CaptureArbitrumStorageSet: ft.CaptureArbitrumStorageSet,
-			CaptureStylusHostio:       ft.CaptureStylusHostio,
+			OnTxStart:               ft.OnTxStart,
+			OnTxEnd:                 ft.OnTxEnd,
+			OnEnter:                 ft.OnEnter,
+			OnExit:                  ft.OnExit,
+			CaptureArbitrumTransfer: ft.CaptureArbitrumTransfer,
 		},
 		Stop:      ft.Stop,
 		GetResult: ft.GetResult,
