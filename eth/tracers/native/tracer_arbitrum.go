@@ -84,30 +84,6 @@ func (t *prestateTracer) CaptureArbitrumStorageSet(addr common.Address, key, map
 	t.lookupArbitrumStorage(addr, key, mappedKey)
 }
 
-func (*callTracer) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
-}
-func (*fourByteTracer) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
-}
-func (*noopTracer) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
-}
-func (*flatCallTracer) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
-}
-
-func (*callTracer) CaptureArbitrumStorageSet(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool) {
-}
-func (*fourByteTracer) CaptureArbitrumStorageSet(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool) {
-}
-func (*noopTracer) CaptureArbitrumStorageSet(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool) {
-}
-func (*flatCallTracer) CaptureArbitrumStorageSet(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool) {
-}
-
-func (*callTracer) CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64)     {}
-func (*fourByteTracer) CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64) {}
-func (*noopTracer) CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64)     {}
-func (*prestateTracer) CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64) {}
-func (*flatCallTracer) CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64) {}
-
 func bigToHex(n *big.Int) string {
 	if n == nil {
 		return ""
