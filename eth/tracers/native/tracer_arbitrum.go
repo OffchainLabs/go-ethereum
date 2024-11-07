@@ -51,12 +51,6 @@ func (t *callTracer) CaptureArbitrumTransfer(
 	}
 }
 
-func (*fourByteTracer) CaptureArbitrumTransfer(from, to *common.Address, value *big.Int, before bool, purpose string) {
-}
-func (*noopTracer) CaptureArbitrumTransfer(from, to *common.Address, value *big.Int, before bool, purpose string) {
-}
-func (*prestateTracer) CaptureArbitrumTransfer(from, to *common.Address, value *big.Int, before bool, purpose string) {
-}
 func (t *flatCallTracer) CaptureArbitrumTransfer(from, to *common.Address, value *big.Int, before bool, purpose string) {
 	if t.interrupt.Load() {
 		return

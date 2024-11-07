@@ -62,12 +62,8 @@ func newFourByteTracer(ctx *tracers.Context, _ json.RawMessage) (*tracers.Tracer
 	}
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart:                 t.OnTxStart,
-			OnEnter:                   t.OnEnter,
-			CaptureArbitrumTransfer:   t.CaptureArbitrumTransfer,
-			CaptureArbitrumStorageGet: t.CaptureArbitrumStorageGet,
-			CaptureArbitrumStorageSet: t.CaptureArbitrumStorageSet,
-			CaptureStylusHostio:       t.CaptureStylusHostio,
+			OnTxStart: t.OnTxStart,
+			OnEnter:   t.OnEnter,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,

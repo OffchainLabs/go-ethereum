@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -357,6 +358,9 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		}
 		// Cache the items for preloading
 		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
+	}
+	if s.db.Deterministic() {
+		sort.Slice(deletions, func(i, j int) bool { return bytes.Compare(deletions[i][:], deletions[j][:]) < 0 })
 	}
 	for _, key := range deletions {
 		if err := tr.DeleteStorage(s.address, key[:]); err != nil {

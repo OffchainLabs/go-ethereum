@@ -94,13 +94,9 @@ func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Trac
 	}
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart:                 t.OnTxStart,
-			OnTxEnd:                   t.OnTxEnd,
-			OnOpcode:                  t.OnOpcode,
-			CaptureArbitrumTransfer:   t.CaptureArbitrumTransfer,
-			CaptureArbitrumStorageGet: t.CaptureArbitrumStorageGet,
-			CaptureArbitrumStorageSet: t.CaptureArbitrumStorageSet,
-			CaptureStylusHostio:       t.CaptureStylusHostio,
+			OnTxStart: t.OnTxStart,
+			OnTxEnd:   t.OnTxEnd,
+			OnOpcode:  t.OnOpcode,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,

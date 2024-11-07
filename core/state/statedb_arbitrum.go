@@ -27,8 +27,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -50,7 +50,7 @@ var (
 	StylusDiscriminant = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersion}
 )
 
-type ActivatedWasm map[rawdb.Target][]byte
+type ActivatedWasm map[ethdb.WasmTarget][]byte
 
 // checks if a valid Stylus prefix is present
 func IsStylusProgram(b []byte) bool {
@@ -74,7 +74,7 @@ func NewStylusPrefix(dictionary byte) []byte {
 	return append(prefix, dictionary)
 }
 
-func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.Target][]byte) {
+func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[ethdb.WasmTarget][]byte) {
 	_, exists := s.arbExtraData.activatedWasms[moduleHash]
 	if exists {
 		return
@@ -85,7 +85,7 @@ func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.Target][
 	})
 }
 
-func (s *StateDB) TryGetActivatedAsm(target rawdb.Target, moduleHash common.Hash) ([]byte, error) {
+func (s *StateDB) TryGetActivatedAsm(target ethdb.WasmTarget, moduleHash common.Hash) ([]byte, error) {
 	asmMap, exists := s.arbExtraData.activatedWasms[moduleHash]
 	if exists {
 		if asm, exists := asmMap[target]; exists {
@@ -95,7 +95,7 @@ func (s *StateDB) TryGetActivatedAsm(target rawdb.Target, moduleHash common.Hash
 	return s.db.ActivatedAsm(target, moduleHash)
 }
 
-func (s *StateDB) TryGetActivatedAsmMap(targets []rawdb.Target, moduleHash common.Hash) (map[rawdb.Target][]byte, error) {
+func (s *StateDB) TryGetActivatedAsmMap(targets []ethdb.WasmTarget, moduleHash common.Hash) (map[ethdb.WasmTarget][]byte, error) {
 	asmMap := s.arbExtraData.activatedWasms[moduleHash]
 	if asmMap != nil {
 		for _, target := range targets {
@@ -106,7 +106,7 @@ func (s *StateDB) TryGetActivatedAsmMap(targets []rawdb.Target, moduleHash commo
 		return asmMap, nil
 	}
 	var err error
-	asmMap = make(map[rawdb.Target][]byte, len(targets))
+	asmMap = make(map[ethdb.WasmTarget][]byte, len(targets))
 	for _, target := range targets {
 		asm, dbErr := s.db.ActivatedAsm(target, moduleHash)
 		if dbErr == nil {
@@ -241,7 +241,7 @@ func (s *StateDB) StartRecording() {
 	s.arbExtraData.userWasms = make(UserWasms)
 }
 
-func (s *StateDB) RecordProgram(targets []rawdb.Target, moduleHash common.Hash) {
+func (s *StateDB) RecordProgram(targets []ethdb.WasmTarget, moduleHash common.Hash) {
 	if len(targets) == 0 {
 		// nothing to record
 		return

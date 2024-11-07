@@ -179,25 +179,33 @@ func (t *muxTracer) OnLog(log *types.Log) {
 
 func (t *muxTracer) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
 	for _, t := range t.tracers {
-		t.CaptureArbitrumStorageGet(addr, key, mappedKey, depth, before)
+		if t.CaptureArbitrumStorageGet != nil {
+			t.CaptureArbitrumStorageGet(addr, key, mappedKey, depth, before)
+		}
 	}
 }
 
 func (t *muxTracer) CaptureArbitrumStorageSet(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool) {
 	for _, t := range t.tracers {
-		t.CaptureArbitrumStorageSet(addr, key, mappedKey, value, depth, before)
+		if t.CaptureArbitrumStorageSet != nil {
+			t.CaptureArbitrumStorageSet(addr, key, mappedKey, value, depth, before)
+		}
 	}
 }
 
 func (t *muxTracer) CaptureArbitrumTransfer(from, to *common.Address, value *big.Int, before bool, purpose string) {
 	for _, t := range t.tracers {
-		t.CaptureArbitrumTransfer(from, to, value, before, purpose)
+		if t.CaptureArbitrumTransfer != nil {
+			t.CaptureArbitrumTransfer(from, to, value, before, purpose)
+		}
 	}
 }
 
 func (t *muxTracer) CaptureStylusHostio(name string, args, outs []byte, startInk, endInk uint64) {
 	for _, t := range t.tracers {
-		t.CaptureStylusHostio(name, args, outs, startInk, endInk)
+		if t.CaptureStylusHostio != nil {
+			t.CaptureStylusHostio(name, args, outs, startInk, endInk)
+		}
 	}
 }
 
