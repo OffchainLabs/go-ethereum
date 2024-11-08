@@ -213,7 +213,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, errMsg})
 			continue
 		}
-		msg, err := core.TransactionToMessage(tx, signer, pre.Env.BaseFee, core.MessageCommitMode)
+		msg, err := core.TransactionToMessage(tx, signer, pre.Env.BaseFee, core.NewMessageCommitMode(nil)) // TODO: do we need to specify wasm targets here if chainConfig.IsArbitrum == false?
 		if err != nil {
 			log.Warn("rejected tx", "index", i, "hash", tx.Hash(), "error", err)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
