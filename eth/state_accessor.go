@@ -265,10 +265,10 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	}
 	// Recompute transactions up to the target index.
 	signer := types.MakeSigner(eth.blockchain.Config(), block.Number(), block.Time())
-	runMode := core.NewMessageReplayMode([]ethdb.WasmTarget{rawdb.LocalTarget()})
+	runCtx := core.NewMessageReplayContext([]ethdb.WasmTarget{rawdb.LocalTarget()})
 	for idx, tx := range block.Transactions() {
 		// Assemble the transaction call message and return if the requested offset
-		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee(), runMode)
+		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee(), runCtx)
 		txContext := core.NewEVMTxContext(msg)
 		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
 		if idx == txIndex {

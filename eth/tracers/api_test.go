@@ -174,9 +174,9 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 	}
 	// Recompute transactions up to the target index.
 	signer := types.MakeSigner(b.chainConfig, block.Number(), block.Time())
-	runMode := core.NewMessageReplayMode([]ethdb.WasmTarget{rawdb.LocalTarget()})
+	runCtx := core.NewMessageReplayMode([]ethdb.WasmTarget{rawdb.LocalTarget()})
 	for idx, tx := range block.Transactions() {
-		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee(), runMode)
+		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee(), runCtx)
 		txContext := core.NewEVMTxContext(msg)
 		context := core.NewEVMBlockContext(block.Header(), b.chain, nil)
 		if idx == txIndex {
