@@ -184,15 +184,10 @@ type dbWithWasmEntry struct {
 	ethdb.Database
 	wasmDb       ethdb.KeyValueStore
 	wasmCacheTag uint32
-	wasmTargets  []ethdb.WasmTarget
 }
 
 func (db *dbWithWasmEntry) WasmDataBase() (ethdb.KeyValueStore, uint32) {
 	return db.wasmDb, db.wasmCacheTag
-}
-
-func (db *dbWithWasmEntry) WasmTargets() []ethdb.WasmTarget {
-	return db.wasmTargets
 }
 
 func (db *dbWithWasmEntry) Close() error {
@@ -204,8 +199,8 @@ func (db *dbWithWasmEntry) Close() error {
 	return wasmErr
 }
 
-func WrapDatabaseWithWasm(db ethdb.Database, wasm ethdb.KeyValueStore, cacheTag uint32, targets []ethdb.WasmTarget) ethdb.Database {
-	return &dbWithWasmEntry{db, wasm, cacheTag, targets}
+func WrapDatabaseWithWasm(db ethdb.Database, wasm ethdb.KeyValueStore, cacheTag uint32) ethdb.Database {
+	return &dbWithWasmEntry{db, wasm, cacheTag}
 }
 
 // resolveChainFreezerDir is a helper function which resolves the absolute path

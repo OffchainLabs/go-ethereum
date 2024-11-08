@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/tests"
 )
 
@@ -104,7 +105,7 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			}
 
 			state.StateDB.SetLogger(tracer.Hooks)
-			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, core.MessageReplayMode)
+			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, core.NewMessageReplayMode([]ethdb.WasmTarget{rawdb.LocalTarget()}))
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}

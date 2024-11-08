@@ -56,7 +56,6 @@ type Database interface {
 	ActivatedAsm(target ethdb.WasmTarget, moduleHash common.Hash) (asm []byte, err error)
 	WasmStore() ethdb.KeyValueStore
 	WasmCacheTag() uint32
-	WasmTargets() []ethdb.WasmTarget
 
 	// OpenTrie opens the main account trie.
 	OpenTrie(root common.Hash) (Trie, error)
@@ -219,10 +218,6 @@ func (db *cachingDB) WasmStore() ethdb.KeyValueStore {
 
 func (db *cachingDB) WasmCacheTag() uint32 {
 	return db.wasmTag
-}
-
-func (db *cachingDB) WasmTargets() []ethdb.WasmTarget {
-	return db.wasmDatabaseRetriever.WasmTargets()
 }
 
 // OpenTrie opens the main account trie at a specific root hash.

@@ -23,10 +23,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -135,7 +137,7 @@ func toWordSize(size uint64) uint64 {
 // processing.
 type Message struct {
 	// Arbitrum-specific
-	TxRunMode MessageRunMode
+	TxRunMode *MessageRunMode
 	Tx        *types.Transaction
 
 	To            *common.Address
@@ -160,24 +162,79 @@ type Message struct {
 	SkipL1Charging bool
 }
 
-type MessageRunMode uint8
+type MessageRunMode struct {
+	chainTip        bool
+	call            bool // TODO: rename or refactor the bool flags
+	mutating        bool
+	executedOnChain bool
+	gasEstimation   bool // TODO: rename
+	wasmTargets     []ethdb.WasmTarget
+}
 
-const (
-	MessageCommitMode MessageRunMode = iota
-	MessageGasEstimationMode
-	MessageEthcallMode
-	MessageReplayMode
-)
+func NewMessageCommitMode(wasmTargets []ethdb.WasmTarget) *MessageRunMode {
+	return &MessageRunMode{
+		chainTip:        true,
+		mutating:        true,
+		executedOnChain: true,
+		wasmTargets:     wasmTargets,
+	}
+}
+
+func NewMessageReplayMode(wasmTargets []ethdb.WasmTarget) *MessageRunMode {
+	return &MessageRunMode{
+		mutating:        true,
+		executedOnChain: true,
+		wasmTargets:     wasmTargets,
+	}
+}
+
+func NewMessagePrefetchMode(wasmTargets []ethdb.WasmTarget) *MessageRunMode {
+	return NewMessageReplayMode(wasmTargets)
+}
+
+func NewMessageEthcallMode() *MessageRunMode {
+	return &MessageRunMode{
+		call:        true,
+		wasmTargets: []ethdb.WasmTarget{rawdb.LocalTarget()},
+	}
+}
+
+func NewMessageGasEstimationMode() *MessageRunMode {
+	return &MessageRunMode{
+		gasEstimation: true,
+		wasmTargets:   []ethdb.WasmTarget{rawdb.LocalTarget()},
+	}
+}
+
+func (m *MessageRunMode) IsChainTip() bool {
+	return m.chainTip
+}
 
 // these message modes are executed onchain so cannot make any gas shortcuts
-func (m MessageRunMode) ExecutedOnChain() bool {
-	return m == MessageCommitMode || m == MessageReplayMode
+func (m *MessageRunMode) ExecutedOnChain() bool {
+	return m.executedOnChain
+}
+
+func (m *MessageRunMode) IsGasEstimation() bool {
+	return m.gasEstimation
+}
+
+func (m *MessageRunMode) IsMutating() bool {
+	return m.mutating
+}
+
+func (m *MessageRunMode) IsCall() bool {
+	return m.call
+}
+
+func (m *MessageRunMode) WasmTargets() []ethdb.WasmTarget {
+	return m.wasmTargets
 }
 
 // TransactionToMessage converts a transaction into a Message.
-func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int, runmode MessageRunMode) (*Message, error) {
+func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int, runMode *MessageRunMode) (*Message, error) {
 	msg := &Message{
-		TxRunMode: runmode,
+		TxRunMode: runMode,
 
 		Tx: tx,
 
