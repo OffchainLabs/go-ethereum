@@ -43,7 +43,7 @@ import (
 )
 
 // TriesInMemory represents the number of layers that are kept in RAM.
-const TriesInMemory = 128
+const DefaultTriesInMemory = 128
 
 type revision struct {
 	id           int
@@ -1374,8 +1374,8 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 			// - head layer is paired with HEAD state
 			// - head-1 layer is paired with HEAD-1 state
 			// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
-			if err := s.snaps.Cap(root, TriesInMemory); err != nil {
-				log.Warn("Failed to cap snapshot tree", "root", root, "layers", TriesInMemory, "err", err)
+			if err := s.snaps.Cap(root, DefaultTriesInMemory); err != nil {
+				log.Warn("Failed to cap snapshot tree", "root", root, "layers", DefaultTriesInMemory, "err", err)
 			}
 		}
 		s.SnapshotCommits += time.Since(start)

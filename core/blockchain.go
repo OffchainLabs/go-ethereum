@@ -97,11 +97,10 @@ var (
 )
 
 const (
-	bodyCacheLimit       = 256
-	blockCacheLimit      = 256
-	receiptsCacheLimit   = 32
-	txLookupCacheLimit   = 1024
-	DefaultTriesInMemory = 128
+	bodyCacheLimit     = 256
+	blockCacheLimit    = 256
+	receiptsCacheLimit = 32
+	txLookupCacheLimit = 1024
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -186,7 +185,7 @@ func (c *CacheConfig) triedbConfig(isVerkle bool) *triedb.Config {
 var defaultCacheConfig = &CacheConfig{
 
 	// Arbitrum Config Options
-	TriesInMemory:                      DefaultTriesInMemory,
+	TriesInMemory:                      state.DefaultTriesInMemory,
 	TrieRetention:                      30 * time.Minute,
 	MaxNumberOfBlocksToSkipStateSaving: 0,
 	MaxAmountOfGasToSkipStateSaving:    0,
