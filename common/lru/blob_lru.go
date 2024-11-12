@@ -87,7 +87,10 @@ func (c *SizeConstrainedCache[K, V]) Remove(key K) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	c.lru.Remove(key)
+	if v, ok := c.lru.Peek(key); ok {
+		c.size -= uint64(len(v))
+		c.lru.Remove(key)
+	}
 }
 
 func (c *SizeConstrainedCache[K, V]) Clear() {
@@ -95,4 +98,5 @@ func (c *SizeConstrainedCache[K, V]) Clear() {
 	defer c.lock.Unlock()
 
 	c.lru.Purge()
+	c.size = 0
 }
