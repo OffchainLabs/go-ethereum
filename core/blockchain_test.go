@@ -1712,7 +1712,7 @@ func TestTrieForkGC(t *testing.T) {
 		Config:  params.TestChainConfig,
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
-	genDb, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2*state.TriesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+	genDb, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2*state.DefaultTriesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
 
 	// Generate a bunch of fork blocks, each side forking from the canonical chain
 	forks := make([]*types.Block, len(blocks))
@@ -1740,7 +1740,7 @@ func TestTrieForkGC(t *testing.T) {
 		}
 	}
 	// Dereference all the recent tries and ensure no past trie is left in
-	for i := 0; i < state.TriesInMemory; i++ {
+	for i := 0; i < state.DefaultTriesInMemory; i++ {
 		chain.TrieDB().Dereference(blocks[len(blocks)-1-i].Root())
 		chain.TrieDB().Dereference(forks[len(blocks)-1-i].Root())
 	}
@@ -1764,8 +1764,8 @@ func testLargeReorgTrieGC(t *testing.T, scheme string) {
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
 	genDb, shared, _ := GenerateChainWithGenesis(genesis, engine, 64, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
-	original, _ := GenerateChain(genesis.Config, shared[len(shared)-1], engine, genDb, 2*state.TriesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) })
-	competitor, _ := GenerateChain(genesis.Config, shared[len(shared)-1], engine, genDb, 2*state.TriesInMemory+1, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{3}) })
+	original, _ := GenerateChain(genesis.Config, shared[len(shared)-1], engine, genDb, 2*state.DefaultTriesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) })
+	competitor, _ := GenerateChain(genesis.Config, shared[len(shared)-1], engine, genDb, 2*state.DefaultTriesInMemory+1, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{3}) })
 
 	// Import the shared chain and the original canonical one
 	db, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false)
@@ -1804,7 +1804,7 @@ func testLargeReorgTrieGC(t *testing.T, scheme string) {
 	}
 	// In path-based trie database implementation, it will keep 128 diff + 1 disk
 	// layers, totally 129 latest states available. In hash-based it's 128.
-	states := state.TriesInMemory
+	states := state.DefaultTriesInMemory
 	if scheme == rawdb.PathScheme {
 		states = states + 1
 	}
@@ -1972,7 +1972,7 @@ func testLowDiffLongChain(t *testing.T, scheme string) {
 	}
 	// We must use a pretty long chain to ensure that the fork doesn't overtake us
 	// until after at least 128 blocks post tip
-	genDb, blocks, _ := GenerateChainWithGenesis(genesis, engine, 6*state.TriesInMemory, func(i int, b *BlockGen) {
+	genDb, blocks, _ := GenerateChainWithGenesis(genesis, engine, 6*state.DefaultTriesInMemory, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{1})
 		b.OffsetTime(-9)
 	})
@@ -1992,7 +1992,7 @@ func testLowDiffLongChain(t *testing.T, scheme string) {
 	}
 	// Generate fork chain, starting from an early block
 	parent := blocks[10]
-	fork, _ := GenerateChain(genesis.Config, parent, engine, genDb, 8*state.TriesInMemory, func(i int, b *BlockGen) {
+	fork, _ := GenerateChain(genesis.Config, parent, engine, genDb, 8*state.DefaultTriesInMemory, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{2})
 	})
 
@@ -2055,7 +2055,7 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 		// Set the terminal total difficulty in the config
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
 	}
-	genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 2*state.TriesInMemory, func(i int, gen *BlockGen) {
+	genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 2*state.DefaultTriesInMemory, func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(nonce, common.HexToAddress("deadbeef"), big.NewInt(100), 21000, big.NewInt(int64(i+1)*params.GWei), nil), signer, key)
 		if err != nil {
 			t.Fatalf("failed to create tx: %v", err)
@@ -2070,9 +2070,9 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 
-	lastPrunedIndex := len(blocks) - state.TriesInMemory - 1
+	lastPrunedIndex := len(blocks) - state.DefaultTriesInMemory - 1
 	lastPrunedBlock := blocks[lastPrunedIndex]
-	firstNonPrunedBlock := blocks[len(blocks)-state.TriesInMemory]
+	firstNonPrunedBlock := blocks[len(blocks)-state.DefaultTriesInMemory]
 
 	// Verify pruning of lastPrunedBlock
 	if chain.HasBlockAndState(lastPrunedBlock.Hash(), lastPrunedBlock.NumberU64()) {
@@ -2099,7 +2099,7 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 	// Generate fork chain, make it longer than canon
 	parentIndex := lastPrunedIndex + blocksBetweenCommonAncestorAndPruneblock
 	parent := blocks[parentIndex]
-	fork, _ := GenerateChain(gspec.Config, parent, engine, genDb, 2*state.TriesInMemory, func(i int, b *BlockGen) {
+	fork, _ := GenerateChain(gspec.Config, parent, engine, genDb, 2*state.DefaultTriesInMemory, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{2})
 		if int(b.header.Number.Uint64()) >= mergeBlock {
 			b.SetPoS()
@@ -2742,7 +2742,7 @@ func testSideImportPrunedBlocks(t *testing.T, scheme string) {
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
 	// Generate and import the canonical chain
-	_, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2*state.TriesInMemory, nil)
+	_, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2*state.DefaultTriesInMemory, nil)
 
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), DefaultCacheConfigWithScheme(scheme), nil, genesis, nil, engine, vm.Config{}, nil, nil)
 	if err != nil {
@@ -2755,9 +2755,9 @@ func testSideImportPrunedBlocks(t *testing.T, scheme string) {
 	}
 	// In path-based trie database implementation, it will keep 128 diff + 1 disk
 	// layers, totally 129 latest states available. In hash-based it's 128.
-	states := state.TriesInMemory
+	states := state.DefaultTriesInMemory
 	if scheme == rawdb.PathScheme {
-		states = state.TriesInMemory + 1
+		states = state.DefaultTriesInMemory + 1
 	}
 	lastPrunedIndex := len(blocks) - states - 1
 	lastPrunedBlock := blocks[lastPrunedIndex]
