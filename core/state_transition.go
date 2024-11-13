@@ -178,6 +178,7 @@ func NewMessageCommitContext(wasmTargets []ethdb.WasmTarget) *MessageRunContext 
 		chainTip:        true,
 		mutating:        true,
 		executedOnChain: true,
+		wasmCacheTag:    1,
 		wasmTargets:     wasmTargets,
 	}
 }
