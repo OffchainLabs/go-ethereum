@@ -195,7 +195,6 @@ type activatedAsmCacheKey struct {
 type cachingDB struct {
 	// Arbitrum
 	activatedAsmCache *lru.SizeConstrainedCache[activatedAsmCacheKey, []byte]
-	wasmTag           uint32
 
 	disk          ethdb.KeyValueStore
 	wasmdb        ethdb.KeyValueStore
