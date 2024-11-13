@@ -96,7 +96,7 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 	}
 
 	state.StateDB.SetLogger(tracer.Hooks)
-	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, core.NewMessageReplayMode([]ethdb.WasmTarget{rawdb.LocalTarget()}))
+	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, core.NewMessageReplayContext([]ethdb.WasmTarget{rawdb.LocalTarget()}))
 	if err != nil {
 		return fmt.Errorf("failed to prepare transaction for tracing: %v", err)
 	}
