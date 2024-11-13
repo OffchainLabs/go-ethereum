@@ -168,7 +168,9 @@ type MessageRunContext struct {
 	mutating        bool
 	executedOnChain bool
 	gasEstimation   bool // TODO: rename
-	wasmTargets     []ethdb.WasmTarget
+
+	wasmCacheTag uint32
+	wasmTargets  []ethdb.WasmTarget
 }
 
 func NewMessageCommitContext(wasmTargets []ethdb.WasmTarget) *MessageRunContext {
@@ -225,6 +227,10 @@ func (m *MessageRunContext) IsMutating() bool {
 
 func (m *MessageRunContext) IsCall() bool {
 	return m.call
+}
+
+func (m *MessageRunContext) WasmCacheTag() uint32 {
+	return m.wasmCacheTag
 }
 
 func (m *MessageRunContext) WasmTargets() []ethdb.WasmTarget {

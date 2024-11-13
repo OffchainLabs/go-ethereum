@@ -178,9 +178,9 @@ type AncientStore interface {
 	io.Closer
 }
 
-type WasmTarget string
+type WasmTarget string // TODO move to rawdb package
 type WasmDataBaseRetriever interface {
-	WasmDataBase() (KeyValueStore, uint32)
+	WasmDataBase() KeyValueStore
 }
 
 // Database contains all the methods required by the high level database to not
