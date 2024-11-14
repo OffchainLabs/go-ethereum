@@ -1968,8 +1968,8 @@ func marshalReceipt(ctx context.Context, receipt *types.Receipt, blockHash commo
 		if err != nil {
 			return nil, err
 		}
-		if blockMetadata != nil && blockMetadata.IsTxTimeboosted(txIndex) {
-			fields["timeboosted"] = true
+		if blockMetadata != nil {
+			fields["timeboosted"] = blockMetadata.IsTxTimeboosted(txIndex)
 		}
 	}
 	return fields, nil
