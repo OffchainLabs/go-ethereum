@@ -162,12 +162,17 @@ type Message struct {
 	SkipL1Charging bool
 }
 
+type messageRunMode uint8
+
+const (
+	messageCommitMode messageRunMode = iota
+	messageGasEstimationMode
+	messageEthcallMode
+	messageReplayMode
+)
+
 type MessageRunContext struct {
-	chainTip        bool
-	call            bool // TODO: rename or refactor the bool flags
-	mutating        bool
-	executedOnChain bool
-	gasEstimation   bool // TODO: rename
+	runMode messageRunMode
 
 	wasmCacheTag uint32
 	wasmTargets  []ethdb.WasmTarget
@@ -175,19 +180,16 @@ type MessageRunContext struct {
 
 func NewMessageCommitContext(wasmTargets []ethdb.WasmTarget) *MessageRunContext {
 	return &MessageRunContext{
-		chainTip:        true,
-		mutating:        true,
-		executedOnChain: true,
-		wasmCacheTag:    1,
-		wasmTargets:     wasmTargets,
+		runMode:      messageCommitMode,
+		wasmCacheTag: 1,
+		wasmTargets:  wasmTargets,
 	}
 }
 
 func NewMessageReplayContext(wasmTargets []ethdb.WasmTarget) *MessageRunContext {
 	return &MessageRunContext{
-		mutating:        true,
-		executedOnChain: true,
-		wasmTargets:     wasmTargets,
+		runMode:     messageReplayMode,
+		wasmTargets: wasmTargets,
 	}
 }
 
@@ -197,45 +199,45 @@ func NewMessagePrefetchContext(wasmTargets []ethdb.WasmTarget) *MessageRunContex
 
 func NewMessageEthcallContext() *MessageRunContext {
 	return &MessageRunContext{
-		call:        true,
+		runMode:     messageEthcallMode,
 		wasmTargets: []ethdb.WasmTarget{rawdb.LocalTarget()},
 	}
 }
 
 func NewMessageGasEstimationContext() *MessageRunContext {
 	return &MessageRunContext{
-		gasEstimation: true,
-		wasmTargets:   []ethdb.WasmTarget{rawdb.LocalTarget()},
+		runMode:     messageGasEstimationMode,
+		wasmTargets: []ethdb.WasmTarget{rawdb.LocalTarget()},
 	}
 }
 
-func (m *MessageRunContext) IsChainTip() bool {
-	return m.chainTip
+func (c *MessageRunContext) IsCommitMode() bool {
+	return c.runMode == messageCommitMode
 }
 
 // these message modes are executed onchain so cannot make any gas shortcuts
-func (m *MessageRunContext) ExecutedOnChain() bool {
-	return m.executedOnChain
+func (c *MessageRunContext) IsExecutedOnChain() bool {
+	return c.runMode == messageCommitMode || c.runMode == messageReplayMode
 }
 
-func (m *MessageRunContext) IsGasEstimation() bool {
-	return m.gasEstimation
+func (c *MessageRunContext) IsGasEstimation() bool {
+	return c.runMode == messageGasEstimationMode
 }
 
-func (m *MessageRunContext) IsMutating() bool {
-	return m.mutating
+func (c *MessageRunContext) IsNonMutating() bool {
+	return c.runMode == messageGasEstimationMode || c.runMode == messageEthcallMode
 }
 
-func (m *MessageRunContext) IsCall() bool {
-	return m.call
+func (c *MessageRunContext) IsEthcall() bool {
+	return c.runMode == messageEthcallMode
 }
 
-func (m *MessageRunContext) WasmCacheTag() uint32 {
-	return m.wasmCacheTag
+func (c *MessageRunContext) WasmCacheTag() uint32 {
+	return c.wasmCacheTag
 }
 
-func (m *MessageRunContext) WasmTargets() []ethdb.WasmTarget {
-	return m.wasmTargets
+func (c *MessageRunContext) WasmTargets() []ethdb.WasmTarget {
+	return c.wasmTargets
 }
 
 // TransactionToMessage converts a transaction into a Message.
