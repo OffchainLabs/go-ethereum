@@ -50,6 +50,7 @@ type callFrame struct {
 	// Arbitrum: we add these here due to the tracer returning the top frame
 	BeforeEVMTransfers *[]arbitrumTransfer `json:"beforeEVMTransfers,omitempty"`
 	AfterEVMTransfers  *[]arbitrumTransfer `json:"afterEVMTransfers,omitempty"`
+	BalanceChanges     *[]balanceChange    `json:"balanceChanges,omitempty"`
 
 	Type         vm.OpCode       `json:"-"`
 	From         common.Address  `json:"from"`
@@ -114,6 +115,9 @@ type callTracer struct {
 	beforeEVMTransfers []arbitrumTransfer
 	afterEVMTransfers  []arbitrumTransfer
 
+	// Arbitrum: capture balance changes
+	balanceChanges []balanceChange
+
 	callstack []callFrame
 	config    callTracerConfig
 	gasLimit  uint64
@@ -141,6 +145,7 @@ func newCallTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, 
 			OnEnter:                 t.OnEnter,
 			OnExit:                  t.OnExit,
 			OnLog:                   t.OnLog,
+			OnBalanceChange:         t.OnBalanceChange,
 			CaptureArbitrumTransfer: t.CaptureArbitrumTransfer,
 		},
 		GetResult: t.GetResult,
@@ -160,6 +165,7 @@ func newCallTracerObject(ctx *tracers.Context, cfg json.RawMessage) (*callTracer
 	return &callTracer{
 		beforeEVMTransfers: []arbitrumTransfer{},
 		afterEVMTransfers:  []arbitrumTransfer{},
+		balanceChanges:     []balanceChange{},
 		callstack:          make([]callFrame, 0, 1),
 		config:             config,
 	}, nil
@@ -275,6 +281,7 @@ func (t *callTracer) GetResult() (json.RawMessage, error) {
 	call := t.callstack[0]
 	call.BeforeEVMTransfers = &t.beforeEVMTransfers
 	call.AfterEVMTransfers = &t.afterEVMTransfers
+	call.BalanceChanges = &t.balanceChanges
 
 	res, err := json.Marshal(call)
 	if err != nil {

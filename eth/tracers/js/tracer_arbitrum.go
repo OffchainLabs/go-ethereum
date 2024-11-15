@@ -21,6 +21,7 @@ import (
 
 	"github.com/dop251/goja"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 )
 
 func (jst *jsTracer) CaptureArbitrumTransfer(
@@ -67,5 +68,22 @@ func (jst *jsTracer) CaptureStylusHostio(name string, args, outs []byte, startIn
 
 	if _, err := hostio(jst.obj, info); err != nil {
 		jst.err = wrapError("hostio", err)
+	}
+}
+
+func (jst *jsTracer) OnBalanceChange(addr common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
+	traceBalanceChange, ok := goja.AssertFunction(jst.obj.Get("onBalanceChange"))
+	if !ok {
+		return
+	}
+
+	balanceChange := jst.vm.NewObject()
+	balanceChange.Set("addr", addr.String())
+	balanceChange.Set("prev", prev)
+	balanceChange.Set("new", new)
+	balanceChange.Set("reason", reason.String(prev, new))
+
+	if _, err := traceBalanceChange(jst.obj, balanceChange); err != nil {
+		jst.err = wrapError("onBalanceChange", err)
 	}
 }

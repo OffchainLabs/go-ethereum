@@ -232,7 +232,101 @@ const (
 	// account within the same tx (captured at end of tx).
 	// Note it doesn't account for a self-destruct which appoints itself as recipient.
 	BalanceDecreaseSelfdestructBurn BalanceChangeReason = 14
+
+	// Arbitrum specific
+	BalanceIncreaseDeposit           BalanceChangeReason = 15
+	BalanceDecreaseWithdrawToL1      BalanceChangeReason = 16
+	BalanceIncreaseL1PosterFee       BalanceChangeReason = 17
+	BalanceIncreaseInfraFee          BalanceChangeReason = 18
+	BalanceIncreaseNetworkFee        BalanceChangeReason = 19
+	BalanceIncreaseRetryTxPrepaid    BalanceChangeReason = 20
+	BalanceDecreaseRetryTxUndoRefund BalanceChangeReason = 21
+
+	BalanceChangeTransferRetryTxToEscrow   BalanceChangeReason = 22
+	BalanceChangeTransferRetryTxFromEscrow BalanceChangeReason = 23
+
+	BalanceChangeTransferRetryableToFeeRefundAddr BalanceChangeReason = 24
+	BalanceChangeTransferRetryableToEscrow        BalanceChangeReason = 25
+
+	BalanceChangeTransferRetryableToInfra     BalanceChangeReason = 26
+	BalanceChangeTransferRetryableFromInfra   BalanceChangeReason = 27
+	BalanceChangeTransferRetryableToNetwork   BalanceChangeReason = 28
+	BalanceChangeTransferRetryableFromNetwork BalanceChangeReason = 29
+
+	BalanceChangeTransferBatchposterReward BalanceChangeReason = 30
+	BalanceChangeTransferBatchposterRefund BalanceChangeReason = 31
+
+	// Stylus
+	BalanceChangeTransferActivationFee       BalanceChangeReason = 32
+	BalanceChangeTransferActivationReimburse BalanceChangeReason = 33
 )
+
+func (b BalanceChangeReason) String(prev, new *big.Int) string {
+	var reason string
+
+	prependString := func() string {
+		if prev == nil || new == nil {
+			return ""
+		}
+		if new.Cmp(prev) == 1 {
+			return "balance increase due to a "
+		} else if new.Cmp(prev) == -1 {
+			return "balance decrease due to a "
+		}
+		return ""
+	}
+
+	switch b {
+	case BalanceChangeTransfer:
+		reason = prependString() + "transfer via a call"
+	case BalanceIncreaseDeposit:
+		reason = "balance increase via a deposit"
+	case BalanceDecreaseWithdrawToL1:
+		reason = "balance decrease via a withdrawal to L1"
+	case BalanceIncreaseL1PosterFee:
+		reason = "balance increase via a fee collection for L1 posting"
+	case BalanceIncreaseInfraFee:
+		reason = "balance increase via a fee collection by infrastructure fee account"
+	case BalanceIncreaseNetworkFee:
+		reason = "balance increase via a fee collection by network fee account"
+	// ArbitrumRetryTx
+	case BalanceIncreaseRetryTxPrepaid:
+		reason = "balance increase by prepaid value for a tx of ArbitrumRetryTx type"
+	case BalanceDecreaseRetryTxUndoRefund:
+		reason = "balance decrease by undoing Geth's refund for a tx of ArbitrumRetryTx type"
+	case BalanceChangeTransferRetryTxToEscrow:
+		reason = prependString() + "transfer to escrow in a tx of ArbitrumRetryTx type"
+	case BalanceChangeTransferRetryTxFromEscrow:
+		reason = prependString() + "transfer from escrow in a tx of ArbitrumRetryTx type"
+	// ArbitrumSubmitRetryableTx
+	case BalanceChangeTransferRetryableToFeeRefundAddr:
+		reason = prependString() + "transfer to FeeRefundAddr in a tx of ArbitrumSubmitRetryableTx type"
+	case BalanceChangeTransferRetryableToEscrow:
+		reason = prependString() + "transfer to escrow in a tx of ArbitrumSubmitRetryableTx type"
+	case BalanceChangeTransferRetryableToInfra:
+		reason = prependString() + "transfer to infrastructure fee account in a tx of ArbitrumSubmitRetryableTx type"
+	case BalanceChangeTransferRetryableFromInfra:
+		reason = prependString() + "transfer from infrastructure fee account in a tx of ArbitrumSubmitRetryableTx type"
+	case BalanceChangeTransferRetryableToNetwork:
+		reason = prependString() + "transfer to network fee account in a tx of ArbitrumSubmitRetryableTx type"
+	case BalanceChangeTransferRetryableFromNetwork:
+		reason = prependString() + "transfer from network fee account in a tx of ArbitrumSubmitRetryableTx type"
+	// Batchposter
+	case BalanceChangeTransferBatchposterReward:
+		reason = prependString() + "transfer from L1PricerFundsPoolAddress as batchPosterReward"
+	case BalanceChangeTransferBatchposterRefund:
+		reason = prependString() + "transfer from L1PricerFundsPoolAddress as batchPosterRefund"
+	// Stylus
+	case BalanceChangeTransferActivationFee:
+		reason = prependString() + "transfer of activation fee to network fee account"
+	case BalanceChangeTransferActivationReimburse:
+		reason = prependString() + "transfer of reimburse amount after charging the activation fee"
+	default:
+		reason = "unspecified"
+	}
+
+	return reason
+}
 
 // GasChangeReason is used to indicate the reason for a gas change, useful
 // for tracing and reporting.

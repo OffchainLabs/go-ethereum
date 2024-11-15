@@ -72,22 +72,44 @@
         "value": "0x216e3433f7200"
       }
     ],
-	"type": "CALL",
+    "balanceChanges": [
+      {
+        "addr": "0x66fdfd05e46126A07465aD24e40cc0597BC1ef31",
+        "prev": "0x229ebbb36c3e0f20",
+        "new": "0x229589d6991e3d20",
+        "reason": "unspecified"
+      },
+      {
+        "addr": "0x66fdfd05e46126A07465aD24e40cc0597BC1ef31",
+        "prev": "0x229589d6991e3d20",
+        "new": "0x229ca4d028fe9d20",
+        "reason": "unspecified"
+      },
+      {
+        "addr": "0xc822ef32e6d26E170B70Cf761e204c1806265914",
+        "prev": "0x0",
+        "new": "0x216e3433f7200",
+        "reason": "unspecified"
+      }
+    ],
+    "type": "CALL",
     "from": "0x66fdfd05e46126a07465ad24e40cc0597bc1ef31",
     "to": "0x6c06b16512b332e6cd8293a2974872674716ce18",
     "value": "0x0",
     "gas": "0x1f97e",
     "gasUsed": "0x72de",
     "input": "0x2e1a7d4d00000000000000000000000000000000000000000000000014d1120d7b160000",
-    "calls": [{
-      "from":"0x6c06b16512b332e6cd8293a2974872674716ce18",
-      "gas":"0x8fc",
-      "gasUsed":"0x0",
-      "to":"0x66fdfd05e46126a07465ad24e40cc0597bc1ef31",
-      "input":"0x",
-      "error":"insufficient balance for transfer",
-      "value":"0x14d1120d7b160000",
-      "type":"CALL"
-    }]
+    "calls": [
+      {
+        "from": "0x6c06b16512b332e6cd8293a2974872674716ce18",
+        "gas": "0x8fc",
+        "gasUsed": "0x0",
+        "to": "0x66fdfd05e46126a07465ad24e40cc0597bc1ef31",
+        "input": "0x",
+        "error": "insufficient balance for transfer",
+        "value": "0x14d1120d7b160000",
+        "type": "CALL"
+      }
+    ]
   }
 }

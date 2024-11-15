@@ -79,6 +79,38 @@
         "value": "0x420eed1bd6c00"
       }
     ],
+    "balanceChanges": [
+      {
+        "addr": "0xb436ba50D378D4BBC8660d312A13dF6af6E89dFB",
+        "prev": "0x1780d77678137ac1b775",
+        "new": "0x1780d76ce070bddcf775",
+        "reason": "unspecified"
+      },
+      {
+        "addr": "0x3b873A919aA0512D5A0F09E6dCCEaA4a6727faFE",
+        "prev": "0x4d87094125a369d9bd5",
+        "new": "0x4d869a3b70062eb9bd5",
+        "reason": "balance decrease due to a transfer via a call"
+      },
+      {
+        "addr": "0x0024F658a46FBB89d8Ac105e98D7ac7cbBaF27C5",
+        "prev": "0x0",
+        "new": "0x6f05b59d3b20000",
+        "reason": "balance increase due to a transfer via a call"
+      },
+      {
+        "addr": "0xb436ba50D378D4BBC8660d312A13dF6af6E89dFB",
+        "prev": "0x1780d76ce070bddcf775",
+        "new": "0x1780d7725724a9044b75",
+        "reason": "unspecified"
+      },
+      {
+        "addr": "0x1585936b53834b021f68CC13eEeFdEc2EfC8e724",
+        "prev": "0x0",
+        "new": "0x420eed1bd6c00",
+        "reason": "unspecified"
+      }
+    ],
     "calls": [
       {
         "from": "0x3b873a919aa0512d5a0f09e6dcceaa4a6727fafe",

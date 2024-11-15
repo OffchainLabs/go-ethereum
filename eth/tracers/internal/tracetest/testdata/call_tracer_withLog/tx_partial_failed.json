@@ -96,6 +96,26 @@
         "value": "0xbcd242cec0800"
       }
     ],
+    "balanceChanges": [
+      {
+        "addr": "0x01115b41bD2731353dd3e6Abf44818FDc035aAf1",
+        "prev": "0x16d99e16e809000",
+        "new": "0x15f63e6db669000",
+        "reason": "unspecified"
+      },
+      {
+        "addr": "0x01115b41bD2731353dd3e6Abf44818FDc035aAf1",
+        "prev": "0x15f63e6db669000",
+        "new": "0x161ccbd41948800",
+        "reason": "unspecified"
+      },
+      {
+        "addr": "0x61C808D82A3Ac53231750daDc13c777b59310bD9",
+        "prev": "0x6a636960e34bd696f4",
+        "new": "0x6a63752e0778c29ef4",
+        "reason": "unspecified"
+      }
+    ],
     "from": "0x01115b41bd2731353dd3e6abf44818fdc035aaf1",
     "gas": "0x30d40",
     "gasUsed": "0x288c9",

@@ -79,7 +79,39 @@
         "value": "0x25ed5d81941000"
       }
     ],
-	"calls": [
+    "balanceChanges": [
+      {
+        "addr": "0xd4FCAb9f0a6DC0493Af47C864f6f17A8a5e2E826",
+        "prev": "0x2a2dd979a35cf000",
+        "new": "0x2a075a1372644400",
+        "reason": "unspecified"
+      },
+      {
+        "addr": "0xd4FCAb9f0a6DC0493Af47C864f6f17A8a5e2E826",
+        "prev": "0x2a075a1372644400",
+        "new": "0x1b7500a39c3b4400",
+        "reason": "balance decrease due to a transfer via a call"
+      },
+      {
+        "addr": "0x33056b5DcaC09a9b4BeCad0E1dcf92c19Bd0AF76",
+        "prev": "0x0",
+        "new": "0xe92596fd6290000",
+        "reason": "balance increase due to a transfer via a call"
+      },
+      {
+        "addr": "0xd4FCAb9f0a6DC0493Af47C864f6f17A8a5e2E826",
+        "prev": "0x2a075a1372644400",
+        "new": "0x2a07ec1c21c8e000",
+        "reason": "unspecified"
+      },
+      {
+        "addr": "0x00d8Ae40D9a06d0E7a2877B62E32eB959Afbe16D",
+        "prev": "0x0",
+        "new": "0x25ed5d81941000",
+        "reason": "unspecified"
+      }
+    ],
+    "calls": [
       {
         "error": "invalid opcode: INVALID",
         "from": "0x33056b5dcac09a9b4becad0e1dcf92c19bd0af76",

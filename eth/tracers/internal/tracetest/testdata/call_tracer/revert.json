@@ -68,7 +68,27 @@
         "value": "0x2954557199e00"
       }
     ],
-	"error": "execution reverted",
+    "balanceChanges": [
+      {
+        "addr": "0x0f6cEF2b7FbB504782e35AA82a2207e816a2B7a9",
+        "prev": "0x2a3fc32bcc019283",
+        "new": "0x29354f1185da1283",
+        "reason": "unspecified"
+      },
+      {
+        "addr": "0x0f6cEF2b7FbB504782e35AA82a2207e816a2B7a9",
+        "prev": "0x29354f1185da1283",
+        "new": "0x2a3d2de674e7f483",
+        "reason": "unspecified"
+      },
+      {
+        "addr": "0xF4D8e706CfB25c0DECBbDd4D2E2Cc10C66376a3F",
+        "prev": "0x0",
+        "new": "0x2954557199e00",
+        "reason": "unspecified"
+      }
+    ],
+    "error": "execution reverted",
     "from": "0x0f6cef2b7fbb504782e35aa82a2207e816a2b7a9",
     "gas": "0x2dc6c0",
     "gasUsed": "0x719b",

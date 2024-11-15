@@ -63,6 +63,7 @@ type flatCallFrame struct {
 	// Arbitrum: we add these here due to the tracer returning the top frame
 	BeforeEVMTransfers *[]arbitrumTransfer `json:"beforeEVMTransfers,omitempty"`
 	AfterEVMTransfers  *[]arbitrumTransfer `json:"afterEVMTransfers,omitempty"`
+	BalanceChanges     *[]balanceChange    `json:"balanceChanges,omitempty"`
 
 	Action              flatCallAction  `json:"action"`
 	BlockHash           *common.Hash    `json:"blockHash"`
@@ -120,6 +121,9 @@ type flatCallTracer struct {
 	beforeEVMTransfers []arbitrumTransfer
 	afterEVMTransfers  []arbitrumTransfer
 
+	// Arbitrum: capture balance changes
+	balanceChanges []balanceChange
+
 	tracer            *callTracer
 	config            flatCallTracerConfig
 	ctx               *tracers.Context // Holds tracer context data
@@ -155,6 +159,7 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Trac
 			OnTxEnd:                 ft.OnTxEnd,
 			OnEnter:                 ft.OnEnter,
 			OnExit:                  ft.OnExit,
+			OnBalanceChange:         ft.OnBalanceChange,
 			CaptureArbitrumTransfer: ft.CaptureArbitrumTransfer,
 		},
 		Stop:      ft.Stop,
@@ -224,6 +229,7 @@ func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
 	call := t.tracer.callstack[0]
 	call.BeforeEVMTransfers = &t.beforeEVMTransfers
 	call.AfterEVMTransfers = &t.afterEVMTransfers
+	call.BalanceChanges = &t.balanceChanges
 
 	flat, err := flatFromNested(&call, []int{}, t.config.ConvertParityErrors, t.ctx)
 	if err != nil {
@@ -263,6 +269,7 @@ func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx 
 
 	frame.BeforeEVMTransfers = input.BeforeEVMTransfers
 	frame.AfterEVMTransfers = input.AfterEVMTransfers
+	frame.BalanceChanges = input.BalanceChanges
 	frame.TraceAddress = traceAddress
 	frame.Error = input.Error
 	frame.Subtraces = len(input.Calls)

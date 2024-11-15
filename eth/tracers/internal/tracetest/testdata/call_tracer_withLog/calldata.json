@@ -98,6 +98,38 @@
         "value": "0x119b54eb98e126"
       }
     ],
+    "balanceChanges": [
+      {
+        "addr": "0x4F5777744b500616697CB655DCb02ee6CD51DeB5",
+        "prev": "0xb0983f1b83eec290",
+        "new": "0xb0767db57cd070aa",
+        "reason": "unspecified"
+      },
+      {
+        "addr": "0x4F5777744b500616697CB655DCb02ee6CD51DeB5",
+        "prev": "0xb0767db57cd070aa",
+        "new": "0x25af5ab0f2e870aa",
+        "reason": "balance decrease due to a transfer via a call"
+      },
+      {
+        "addr": "0x200Edd17F30485A8735878661960Cd7a9A95733F",
+        "prev": "0x0",
+        "new": "0x8ac7230489e80000",
+        "reason": "balance increase due to a transfer via a call"
+      },
+      {
+        "addr": "0x4F5777744b500616697CB655DCb02ee6CD51DeB5",
+        "prev": "0x25af5ab0f2e870aa",
+        "new": "0x25bf80c20e6de16a",
+        "reason": "unspecified"
+      },
+      {
+        "addr": "0xf8b483DbA2c3B7176a3Da549ad41A48BB3121069",
+        "prev": "0x16969a0ba2c2d384d07",
+        "new": "0x16969b2558118d12e2d",
+        "reason": "unspecified"
+      }
+    ],
     "from": "0x4f5777744b500616697cb655dcb02ee6cd51deb5",
     "gas": "0x33085",
     "gasUsed": "0x1a9e5",
