@@ -53,7 +53,7 @@ const (
 // Database wraps access to tries and contract code.
 type Database interface {
 	// Arbitrum: Read activated Stylus contracts
-	ActivatedAsm(target ethdb.WasmTarget, moduleHash common.Hash) (asm []byte, err error)
+	ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) (asm []byte, err error)
 	WasmStore() ethdb.KeyValueStore
 
 	// OpenTrie opens the main account trie.
@@ -189,7 +189,7 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *triedb.Database) Database 
 
 type activatedAsmCacheKey struct {
 	moduleHash common.Hash
-	target     ethdb.WasmTarget
+	target     rawdb.WasmTarget
 }
 
 type cachingDB struct {

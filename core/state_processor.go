@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -81,7 +80,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
-	runCtx := NewMessageReplayContext([]ethdb.WasmTarget{rawdb.LocalTarget()})
+	runCtx := NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()})
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee, runCtx)
@@ -182,7 +181,7 @@ func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPo
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, error) {
-	return ApplyTransactionWithResultFilter(config, bc, author, gp, statedb, header, tx, usedGas, cfg, NewMessageReplayContext([]ethdb.WasmTarget{rawdb.LocalTarget()}), nil)
+	return ApplyTransactionWithResultFilter(config, bc, author, gp, statedb, header, tx, usedGas, cfg, NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()}), nil)
 }
 
 func ApplyTransactionWithResultFilter(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, runCtx *MessageRunContext, resultFilter func(*ExecutionResult) error) (*types.Receipt, *ExecutionResult, error) {

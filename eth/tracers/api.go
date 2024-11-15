@@ -263,7 +263,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 		tracker = newStateTracker(maximumPendingTraceStates, start.NumberU64())
 	)
 
-	runCtx := core.NewMessageReplayContext([]ethdb.WasmTarget{rawdb.LocalTarget()})
+	runCtx := core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()})
 
 	for th := 0; th < threads; th++ {
 		pend.Add(1)
@@ -542,7 +542,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		vmenv := vm.NewEVM(vmctx, vm.TxContext{}, statedb, chainConfig, vm.Config{})
 		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
-	runCtx := core.NewMessageReplayContext([]ethdb.WasmTarget{rawdb.LocalTarget()})
+	runCtx := core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()})
 	for i, tx := range block.Transactions() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -622,7 +622,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		vmenv := vm.NewEVM(blockCtx, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
 		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
-	runCtx := core.NewMessageReplayContext([]ethdb.WasmTarget{rawdb.LocalTarget()})
+	runCtx := core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()})
 	for i, tx := range txs {
 		// Generate the next state snapshot fast without tracing
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee(), runCtx)
@@ -653,7 +653,7 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 		results   = make([]*txTraceResult, len(txs))
 		pend      sync.WaitGroup
 	)
-	runCtx := core.NewMessageReplayContext([]ethdb.WasmTarget{rawdb.LocalTarget()})
+	runCtx := core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()})
 	threads := runtime.NumCPU()
 	if threads > len(txs) {
 		threads = len(txs)
@@ -783,7 +783,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
 
-	runCtx := core.NewMessageReplayContext([]ethdb.WasmTarget{rawdb.LocalTarget()})
+	runCtx := core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()})
 	for i, tx := range block.Transactions() {
 		// Prepare the transaction for un-traced execution
 		var (
@@ -881,7 +881,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		return nil, err
 	}
 	defer release()
-	msg, err := core.TransactionToMessage(tx, types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time()), block.BaseFee(), core.NewMessageReplayContext([]ethdb.WasmTarget{rawdb.LocalTarget()}))
+	msg, err := core.TransactionToMessage(tx, types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time()), block.BaseFee(), core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()}))
 	if err != nil {
 		return nil, err
 	}

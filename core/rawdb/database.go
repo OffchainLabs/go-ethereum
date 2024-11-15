@@ -45,7 +45,7 @@ func (frdb *freezerdb) WasmDataBase() ethdb.KeyValueStore {
 	return frdb
 }
 
-func (frdb *freezerdb) WasmTargets() []ethdb.WasmTarget {
+func (frdb *freezerdb) WasmTargets() []WasmTarget {
 	return nil
 }
 
@@ -170,7 +170,7 @@ func (db *nofreezedb) WasmDataBase() ethdb.KeyValueStore {
 	return db
 }
 
-func (db *nofreezedb) WasmTargets() []ethdb.WasmTarget {
+func (db *nofreezedb) WasmTargets() []WasmTarget {
 	return nil
 }
 

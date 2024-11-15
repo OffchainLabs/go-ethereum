@@ -178,7 +178,6 @@ type AncientStore interface {
 	io.Closer
 }
 
-type WasmTarget string // TODO move to rawdb package
 type WasmDataBaseRetriever interface {
 	WasmDataBase() KeyValueStore
 }

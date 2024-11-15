@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -175,10 +174,10 @@ type MessageRunContext struct {
 	runMode messageRunMode
 
 	wasmCacheTag uint32
-	wasmTargets  []ethdb.WasmTarget
+	wasmTargets  []rawdb.WasmTarget
 }
 
-func NewMessageCommitContext(wasmTargets []ethdb.WasmTarget) *MessageRunContext {
+func NewMessageCommitContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
 	return &MessageRunContext{
 		runMode:      messageCommitMode,
 		wasmCacheTag: 1,
@@ -186,28 +185,28 @@ func NewMessageCommitContext(wasmTargets []ethdb.WasmTarget) *MessageRunContext 
 	}
 }
 
-func NewMessageReplayContext(wasmTargets []ethdb.WasmTarget) *MessageRunContext {
+func NewMessageReplayContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
 	return &MessageRunContext{
 		runMode:     messageReplayMode,
 		wasmTargets: wasmTargets,
 	}
 }
 
-func NewMessagePrefetchContext(wasmTargets []ethdb.WasmTarget) *MessageRunContext {
+func NewMessagePrefetchContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
 	return NewMessageReplayContext(wasmTargets)
 }
 
 func NewMessageEthcallContext() *MessageRunContext {
 	return &MessageRunContext{
 		runMode:     messageEthcallMode,
-		wasmTargets: []ethdb.WasmTarget{rawdb.LocalTarget()},
+		wasmTargets: []rawdb.WasmTarget{rawdb.LocalTarget()},
 	}
 }
 
 func NewMessageGasEstimationContext() *MessageRunContext {
 	return &MessageRunContext{
 		runMode:     messageGasEstimationMode,
-		wasmTargets: []ethdb.WasmTarget{rawdb.LocalTarget()},
+		wasmTargets: []rawdb.WasmTarget{rawdb.LocalTarget()},
 	}
 }
 
@@ -236,7 +235,7 @@ func (c *MessageRunContext) WasmCacheTag() uint32 {
 	return c.wasmCacheTag
 }
 
-func (c *MessageRunContext) WasmTargets() []ethdb.WasmTarget {
+func (c *MessageRunContext) WasmTargets() []rawdb.WasmTarget {
 	return c.wasmTargets
 }
 
