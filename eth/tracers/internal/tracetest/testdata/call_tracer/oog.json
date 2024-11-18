@@ -50,7 +50,7 @@
   "result": {
     "beforeEVMTransfers": [
       {
-        "purpose": "feePayment",
+        "purpose": "purchase of gas for execution of a transaction",
         "from": "0x94194BC2aaF494501D7880B61274A169f6502A54",
         "to": null,
         "value": "0x49874422212000"
@@ -58,13 +58,13 @@
     ],
     "afterEVMTransfers": [
       {
-        "purpose": "gasRefund",
+        "purpose": "refund for unused gas at the end of execution",
         "from": null,
         "to": "0x94194BC2aaF494501D7880B61274A169f6502A54",
         "value": "0x0"
       },
       {
-        "purpose": "tip",
+        "purpose": "payment of transaction tip",
         "from": null,
         "to": "0xD049bfd667cB46Aa3Ef5Df0dA3e57DB3Be39E511",
         "value": "0x49874422212000"
@@ -75,13 +75,13 @@
         "addr": "0x94194BC2aaF494501D7880B61274A169f6502A54",
         "prev": "0xea8c39a876d19888d",
         "new": "0xea87a13434af8688d",
-        "reason": "unspecified"
+        "reason": "balance decrease due to purchase of gas for execution of a transaction"
       },
       {
         "addr": "0xD049bfd667cB46Aa3Ef5Df0dA3e57DB3Be39E511",
         "prev": "0x0",
         "new": "0x49874422212000",
-        "reason": "unspecified"
+        "reason": "balance increase due to payment of transaction tip"
       }
     ],
     "error": "out of gas",

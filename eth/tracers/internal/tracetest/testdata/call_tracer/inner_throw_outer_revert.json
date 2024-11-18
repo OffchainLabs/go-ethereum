@@ -59,7 +59,7 @@
   "result": {
     "beforeEVMTransfers": [
       {
-        "purpose": "feePayment",
+        "purpose": "purchase of gas for execution of a transaction",
         "from": "0xd4FCAb9f0a6DC0493Af47C864f6f17A8a5e2E826",
         "to": null,
         "value": "0x267f6630f8ac00"
@@ -67,13 +67,13 @@
     ],
     "afterEVMTransfers": [
       {
-        "purpose": "gasRefund",
+        "purpose": "refund for unused gas at the end of execution",
         "from": null,
         "to": "0xd4FCAb9f0a6DC0493Af47C864f6f17A8a5e2E826",
         "value": "0x9208af649c00"
       },
       {
-        "purpose": "tip",
+        "purpose": "payment of transaction tip",
         "from": null,
         "to": "0x00d8Ae40D9a06d0E7a2877B62E32eB959Afbe16D",
         "value": "0x25ed5d81941000"
@@ -84,31 +84,31 @@
         "addr": "0xd4FCAb9f0a6DC0493Af47C864f6f17A8a5e2E826",
         "prev": "0x2a2dd979a35cf000",
         "new": "0x2a075a1372644400",
-        "reason": "unspecified"
+        "reason": "balance decrease due to purchase of gas for execution of a transaction"
       },
       {
         "addr": "0xd4FCAb9f0a6DC0493Af47C864f6f17A8a5e2E826",
         "prev": "0x2a075a1372644400",
         "new": "0x1b7500a39c3b4400",
-        "reason": "balance decrease due to a transfer via a call"
+        "reason": "balance decrease due to transfer via a call"
       },
       {
         "addr": "0x33056b5DcaC09a9b4BeCad0E1dcf92c19Bd0AF76",
         "prev": "0x0",
         "new": "0xe92596fd6290000",
-        "reason": "balance increase due to a transfer via a call"
+        "reason": "balance increase due to transfer via a call"
       },
       {
         "addr": "0xd4FCAb9f0a6DC0493Af47C864f6f17A8a5e2E826",
         "prev": "0x2a075a1372644400",
         "new": "0x2a07ec1c21c8e000",
-        "reason": "unspecified"
+        "reason": "balance increase due to refund for unused gas at the end of execution"
       },
       {
         "addr": "0x00d8Ae40D9a06d0E7a2877B62E32eB959Afbe16D",
         "prev": "0x0",
         "new": "0x25ed5d81941000",
-        "reason": "unspecified"
+        "reason": "balance increase due to payment of transaction tip"
       }
     ],
     "calls": [

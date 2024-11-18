@@ -147,7 +147,7 @@ type (
 	// LogHook is called when a log is emitted.
 	LogHook = func(log *types.Log)
 
-	CaptureArbitrumTransferHook   = func(from, to *common.Address, value *big.Int, before bool, purpose string)
+	CaptureArbitrumTransferHook   = func(from, to *common.Address, value *big.Int, before bool, reason BalanceChangeReason)
 	CaptureArbitrumStorageGetHook = func(key common.Hash, depth int, before bool)
 	CaptureArbitrumStorageSetHook = func(key, value common.Hash, depth int, before bool)
 
@@ -262,67 +262,78 @@ const (
 )
 
 func (b BalanceChangeReason) String(prev, new *big.Int) string {
+	// When both prev and new are nil, we only return the main reason without specifying if the balance incrased or decreased
+	// useful for CaptureArbitrumTransfer
 	var reason string
 
-	prependString := func() string {
-		if prev == nil || new == nil {
-			return ""
-		}
+	if prev != nil && new != nil {
 		if new.Cmp(prev) == 1 {
-			return "balance increase due to a "
+			reason = "balance increase due to "
 		} else if new.Cmp(prev) == -1 {
-			return "balance decrease due to a "
+			reason = "balance decrease due to "
 		}
-		return ""
+	} else if new != nil {
+		reason = "balance increase due to "
+	} else if prev != nil {
+		reason = "balance decrease due to "
 	}
 
+	// Append main reason for the balance change
 	switch b {
+	case BalanceIncreaseRewardTransactionFee:
+		reason += "payment of transaction tip"
+	case BalanceDecreaseGasBuy:
+		reason += "purchase of gas for execution of a transaction"
+	case BalanceIncreaseGasReturn:
+		reason += "refund for unused gas at the end of execution"
 	case BalanceChangeTransfer:
-		reason = prependString() + "transfer via a call"
+		reason += "transfer via a call"
+	case BalanceDecreaseSelfdestruct:
+		reason += "selfDestruct"
 	case BalanceIncreaseDeposit:
-		reason = "balance increase via a deposit"
+		reason += "deposit"
 	case BalanceDecreaseWithdrawToL1:
-		reason = "balance decrease via a withdrawal to L1"
+		reason += "withdrawal to L1"
 	case BalanceIncreaseL1PosterFee:
-		reason = "balance increase via a fee collection for L1 posting"
+		reason += "fee collection for L1 posting"
 	case BalanceIncreaseInfraFee:
-		reason = "balance increase via a fee collection by infrastructure fee account"
+		reason += "fee collection by infrastructure fee account"
 	case BalanceIncreaseNetworkFee:
-		reason = "balance increase via a fee collection by network fee account"
+		reason += "fee collection by network fee account"
 	// ArbitrumRetryTx
 	case BalanceIncreaseRetryTxPrepaid:
-		reason = "balance increase by prepaid value for a tx of ArbitrumRetryTx type"
+		reason += "deposit of prepaid value in a tx of ArbitrumRetryTx type"
 	case BalanceDecreaseRetryTxUndoRefund:
-		reason = "balance decrease by undoing Geth's refund for a tx of ArbitrumRetryTx type"
+		reason += "undoing of Geth's refund for a tx of ArbitrumRetryTx type"
 	case BalanceChangeTransferRetryTxToEscrow:
-		reason = prependString() + "transfer to escrow in a tx of ArbitrumRetryTx type"
+		reason += "transfer to escrow in a tx of ArbitrumRetryTx type"
 	case BalanceChangeTransferRetryTxFromEscrow:
-		reason = prependString() + "transfer from escrow in a tx of ArbitrumRetryTx type"
+		reason += "transfer from escrow in a tx of ArbitrumRetryTx type"
 	// ArbitrumSubmitRetryableTx
 	case BalanceChangeTransferRetryableToFeeRefundAddr:
-		reason = prependString() + "transfer to FeeRefundAddr in a tx of ArbitrumSubmitRetryableTx type"
+		reason += "transfer to FeeRefundAddr in a tx of ArbitrumSubmitRetryableTx type"
 	case BalanceChangeTransferRetryableToEscrow:
-		reason = prependString() + "transfer to escrow in a tx of ArbitrumSubmitRetryableTx type"
+		reason += "transfer to escrow in a tx of ArbitrumSubmitRetryableTx type"
 	case BalanceChangeTransferRetryableToInfra:
-		reason = prependString() + "transfer to infrastructure fee account in a tx of ArbitrumSubmitRetryableTx type"
+		reason += "transfer to infrastructure fee account in a tx of ArbitrumSubmitRetryableTx type"
 	case BalanceChangeTransferRetryableFromInfra:
-		reason = prependString() + "transfer from infrastructure fee account in a tx of ArbitrumSubmitRetryableTx type"
+		reason += "transfer from infrastructure fee account in a tx of ArbitrumSubmitRetryableTx type"
 	case BalanceChangeTransferRetryableToNetwork:
-		reason = prependString() + "transfer to network fee account in a tx of ArbitrumSubmitRetryableTx type"
+		reason += "transfer to network fee account in a tx of ArbitrumSubmitRetryableTx type"
 	case BalanceChangeTransferRetryableFromNetwork:
-		reason = prependString() + "transfer from network fee account in a tx of ArbitrumSubmitRetryableTx type"
+		reason += "transfer from network fee account in a tx of ArbitrumSubmitRetryableTx type"
 	// Batchposter
 	case BalanceChangeTransferBatchposterReward:
-		reason = prependString() + "transfer from L1PricerFundsPoolAddress as batchPosterReward"
+		reason += "transfer from L1PricerFundsPoolAddress as batchPosterReward"
 	case BalanceChangeTransferBatchposterRefund:
-		reason = prependString() + "transfer from L1PricerFundsPoolAddress as batchPosterRefund"
+		reason += "transfer from L1PricerFundsPoolAddress as batchPosterRefund"
 	// Stylus
 	case BalanceChangeTransferActivationFee:
-		reason = prependString() + "transfer of activation fee to network fee account"
+		reason += "transfer of activation fee to network fee account"
 	case BalanceChangeTransferActivationReimburse:
-		reason = prependString() + "transfer of reimburse amount after charging the activation fee"
+		reason += "transfer of reimburse amount after charging the activation fee"
 	default:
-		reason = "unspecified"
+		return "unspecified"
 	}
 
 	return reason

@@ -48,7 +48,7 @@
   "result": {
     "beforeEVMTransfers": [
       {
-        "purpose": "feePayment",
+        "purpose": "purchase of gas for execution of a transaction",
         "from": "0x0f6cEF2b7FbB504782e35AA82a2207e816a2B7a9",
         "to": null,
         "value": "0x10a741a46278000"
@@ -56,13 +56,13 @@
     ],
     "afterEVMTransfers": [
       {
-        "purpose": "gasRefund",
+        "purpose": "refund for unused gas at the end of execution",
         "from": null,
         "to": "0x0f6cEF2b7FbB504782e35AA82a2207e816a2B7a9",
         "value": "0x107ded4ef0de200"
       },
       {
-        "purpose": "tip",
+        "purpose": "payment of transaction tip",
         "from": null,
         "to": "0xF4D8e706CfB25c0DECBbDd4D2E2Cc10C66376a3F",
         "value": "0x2954557199e00"
@@ -73,19 +73,19 @@
         "addr": "0x0f6cEF2b7FbB504782e35AA82a2207e816a2B7a9",
         "prev": "0x2a3fc32bcc019283",
         "new": "0x29354f1185da1283",
-        "reason": "unspecified"
+        "reason": "balance decrease due to purchase of gas for execution of a transaction"
       },
       {
         "addr": "0x0f6cEF2b7FbB504782e35AA82a2207e816a2B7a9",
         "prev": "0x29354f1185da1283",
         "new": "0x2a3d2de674e7f483",
-        "reason": "unspecified"
+        "reason": "balance increase due to refund for unused gas at the end of execution"
       },
       {
         "addr": "0xF4D8e706CfB25c0DECBbDd4D2E2Cc10C66376a3F",
         "prev": "0x0",
         "new": "0x2954557199e00",
-        "reason": "unspecified"
+        "reason": "balance increase due to payment of transaction tip"
       }
     ],
     "error": "execution reverted",

@@ -25,7 +25,7 @@ import (
 )
 
 func (jst *jsTracer) CaptureArbitrumTransfer(
-	from, to *common.Address, value *big.Int, before bool, purpose string,
+	from, to *common.Address, value *big.Int, before bool, reason tracing.BalanceChangeReason,
 ) {
 	traceTransfer, ok := goja.AssertFunction(jst.obj.Get("captureArbitrumTransfer"))
 	if !ok {
@@ -46,7 +46,7 @@ func (jst *jsTracer) CaptureArbitrumTransfer(
 
 	transfer.Set("value", value)
 	transfer.Set("before", before)
-	transfer.Set("purpose", purpose)
+	transfer.Set("purpose", reason.String(nil, nil))
 
 	if _, err := traceTransfer(transfer); err != nil {
 		jst.err = wrapError("captureArbitrumTransfer", err)
