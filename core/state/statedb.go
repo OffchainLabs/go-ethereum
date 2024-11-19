@@ -1342,11 +1342,14 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		s.arbExtraData.activatedWasms = make(map[common.Hash]ActivatedWasm)
 	}
 
-	if wasmCodeWriter.ValueSize() > 0 {
-		if err := wasmCodeWriter.Write(); err != nil {
-			log.Crit("Failed to commit dirty stylus codes", "error", err)
+	workers.Go(func() error {
+		if wasmCodeWriter.ValueSize() > 0 {
+			if err := wasmCodeWriter.Write(); err != nil {
+				log.Crit("Failed to commit dirty stylus codes", "error", err)
+			}
 		}
-	}
+		return nil
+	})
 	// Wait for everything to finish and update the metrics
 	if err := workers.Wait(); err != nil {
 		return common.Hash{}, err
