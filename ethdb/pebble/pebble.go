@@ -234,7 +234,6 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	if memTableSize >= maxMemTableSize {
 		memTableSize = maxMemTableSize - 1
 	}
-
 	db := &Database{
 		fn:           file,
 		log:          logger,
