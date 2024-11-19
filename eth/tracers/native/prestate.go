@@ -48,8 +48,7 @@ type account struct {
 	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
 	empty   bool
 
-	ArbitrumStorage map[common.Hash]common.Hash `json:"arbitrumStorage,omitempty"`
-
+	ArbitrumStorage  map[common.Hash]common.Hash `json:"arbitrumStorage,omitempty"`
 	arbStorageKeyMap map[common.Hash]common.Hash
 }
 
