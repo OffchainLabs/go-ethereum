@@ -232,33 +232,30 @@ const (
 	// account within the same tx (captured at end of tx).
 	// Note it doesn't account for a self-destruct which appoints itself as recipient.
 	BalanceDecreaseSelfdestructBurn BalanceChangeReason = 14
+)
 
-	// Arbitrum specific
-	BalanceIncreaseDeposit           BalanceChangeReason = 15
-	BalanceDecreaseWithdrawToL1      BalanceChangeReason = 16
-	BalanceIncreaseL1PosterFee       BalanceChangeReason = 17
-	BalanceIncreaseInfraFee          BalanceChangeReason = 18
-	BalanceIncreaseNetworkFee        BalanceChangeReason = 19
-	BalanceIncreaseRetryTxPrepaid    BalanceChangeReason = 20
-	BalanceDecreaseRetryTxUndoRefund BalanceChangeReason = 21
-
-	BalanceChangeTransferRetryTxToEscrow   BalanceChangeReason = 22
-	BalanceChangeTransferRetryTxFromEscrow BalanceChangeReason = 23
-
-	BalanceChangeTransferRetryableToFeeRefundAddr BalanceChangeReason = 24
-	BalanceChangeTransferRetryableToEscrow        BalanceChangeReason = 25
-
-	BalanceChangeTransferRetryableToInfra     BalanceChangeReason = 26
-	BalanceChangeTransferRetryableFromInfra   BalanceChangeReason = 27
-	BalanceChangeTransferRetryableToNetwork   BalanceChangeReason = 28
-	BalanceChangeTransferRetryableFromNetwork BalanceChangeReason = 29
-
-	BalanceChangeTransferBatchposterReward BalanceChangeReason = 30
-	BalanceChangeTransferBatchposterRefund BalanceChangeReason = 31
-
+// Arbitrum specific
+const (
+	BalanceIncreaseDeposit BalanceChangeReason = 128 + iota
+	BalanceDecreaseWithdrawToL1
+	BalanceIncreaseL1PosterFee
+	BalanceIncreaseInfraFee
+	BalanceIncreaseNetworkFee
+	BalanceIncreaseRetryTxPrepaid
+	BalanceDecreaseRetryTxUndoRefund
+	BalanceChangeTransferRetryTxToEscrow
+	BalanceChangeTransferRetryTxFromEscrow
+	BalanceChangeTransferRetryableToFeeRefundAddr
+	BalanceChangeTransferRetryableToEscrow
+	BalanceChangeTransferRetryableToInfra
+	BalanceChangeTransferRetryableFromInfra
+	BalanceChangeTransferRetryableToNetwork
+	BalanceChangeTransferRetryableFromNetwork
+	BalanceChangeTransferBatchposterReward
+	BalanceChangeTransferBatchposterRefund
 	// Stylus
-	BalanceChangeTransferActivationFee       BalanceChangeReason = 32
-	BalanceChangeTransferActivationReimburse BalanceChangeReason = 33
+	BalanceChangeTransferActivationFee
+	BalanceChangeTransferActivationReimburse
 )
 
 func (b BalanceChangeReason) String(prev, new *big.Int) string {
