@@ -32,7 +32,7 @@ type arbitrumTransfer struct {
 
 func (t *callTracer) CaptureArbitrumTransfer(from, to *common.Address, value *big.Int, before bool, reason tracing.BalanceChangeReason) {
 	transfer := arbitrumTransfer{
-		Purpose: reason.String(nil, nil),
+		Purpose: reason.String(),
 		Value:   bigToHex(value),
 	}
 	if from != nil {
@@ -55,7 +55,7 @@ func (t *flatCallTracer) CaptureArbitrumTransfer(from, to *common.Address, value
 		return
 	}
 	transfer := arbitrumTransfer{
-		Purpose: reason.String(nil, nil),
+		Purpose: reason.String(),
 		Value:   bigToHex(value),
 	}
 	if from != nil {
@@ -71,34 +71,6 @@ func (t *flatCallTracer) CaptureArbitrumTransfer(from, to *common.Address, value
 	} else {
 		t.afterEVMTransfers = append(t.afterEVMTransfers, transfer)
 	}
-}
-
-type balanceChange struct {
-	Addr   string `json:"addr"`
-	Prev   string `json:"prev"`
-	New    string `json:"new"`
-	Reason string `json:"reason"`
-}
-
-func (t *callTracer) OnBalanceChange(addr common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
-	t.balanceChanges = append(t.balanceChanges, balanceChange{
-		Addr:   addr.String(),
-		Prev:   bigToHex(prev),
-		New:    bigToHex(new),
-		Reason: reason.String(prev, new),
-	})
-}
-
-func (t *flatCallTracer) OnBalanceChange(addr common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
-	if t.interrupt.Load() {
-		return
-	}
-	t.balanceChanges = append(t.balanceChanges, balanceChange{
-		Addr:   addr.String(),
-		Prev:   bigToHex(prev),
-		New:    bigToHex(new),
-		Reason: reason.String(prev, new),
-	})
 }
 
 func bigToHex(n *big.Int) string {

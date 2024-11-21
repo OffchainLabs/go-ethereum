@@ -52,7 +52,7 @@
   "result": {
     "beforeEVMTransfers": [
       {
-        "purpose": "purchase of gas for execution of a transaction",
+        "purpose": "feePayment",
         "from": "0x70C9217D814985faEF62B124420F8dFbdDD96433",
         "to": null,
         "value": "0x11c37937e08000"
@@ -60,32 +60,18 @@
     ],
     "afterEVMTransfers": [
       {
-        "purpose": "refund for unused gas at the end of execution",
+        "purpose": "gasRefund",
         "from": null,
         "to": "0x70C9217D814985faEF62B124420F8dFbdDD96433",
         "value": "0x0"
       },
       {
-        "purpose": "payment of transaction tip",
+        "purpose": "tip",
         "from": null,
         "to": "0x294e5d6c39A36Ce38aF1DCA70c1060f78Dee8070",
         "value": "0x11c37937e08000"
       }
-    ],
-    "balanceChanges": [
-      {
-        "addr": "0x70C9217D814985faEF62B124420F8dFbdDD96433",
-        "prev": "0x4ecd70668f5d854a",
-        "new": "0x4ebbaced577d054a",
-        "reason": "balance decrease due to purchase of gas for execution of a transaction"
-      },
-      {
-        "addr": "0x294e5d6c39A36Ce38aF1DCA70c1060f78Dee8070",
-        "prev": "0x0",
-        "new": "0x11c37937e08000",
-        "reason": "balance increase due to payment of transaction tip"
-      }
-    ],
+    ],		
     "error": "invalid jump destination",
     "from": "0x70c9217d814985faef62b124420f8dfbddd96433",
     "gas": "0x3d090",

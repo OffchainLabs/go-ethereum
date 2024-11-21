@@ -236,21 +236,17 @@ const (
 
 // Arbitrum specific
 const (
-	BalanceIncreaseDeposit BalanceChangeReason = 128 + iota
+	BalanceChangeDuringEVMExecution BalanceChangeReason = 128 + iota
+	BalanceIncreaseDeposit
 	BalanceDecreaseWithdrawToL1
 	BalanceIncreaseL1PosterFee
 	BalanceIncreaseInfraFee
 	BalanceIncreaseNetworkFee
-	BalanceIncreaseRetryTxPrepaid
-	BalanceDecreaseRetryTxUndoRefund
-	BalanceChangeTransferRetryTxToEscrow
-	BalanceChangeTransferRetryTxFromEscrow
-	BalanceChangeTransferRetryableToFeeRefundAddr
-	BalanceChangeTransferRetryableToEscrow
-	BalanceChangeTransferRetryableToInfra
-	BalanceChangeTransferRetryableFromInfra
-	BalanceChangeTransferRetryableToNetwork
-	BalanceChangeTransferRetryableFromNetwork
+	BalanceChangeTransferInfraRefund
+	BalanceChangeTransferNetworkRefund
+	BalanceIncreasePrepaid
+	BalanceDecreaseUndoRefund
+	BalanceChangeEscrowTransfer
 	BalanceChangeTransferBatchposterReward
 	BalanceChangeTransferBatchposterRefund
 	// Stylus
@@ -258,82 +254,47 @@ const (
 	BalanceChangeTransferActivationReimburse
 )
 
-func (b BalanceChangeReason) String(prev, new *big.Int) string {
-	// When both prev and new are nil, we only return the main reason without specifying if the balance incrased or decreased
-	// useful for CaptureArbitrumTransfer
-	var reason string
-
-	if prev != nil && new != nil {
-		if new.Cmp(prev) == 1 {
-			reason = "balance increase due to "
-		} else if new.Cmp(prev) == -1 {
-			reason = "balance decrease due to "
-		}
-	} else if new != nil {
-		reason = "balance increase due to "
-	} else if prev != nil {
-		reason = "balance decrease due to "
-	}
-
-	// Append main reason for the balance change
+func (b BalanceChangeReason) String() string {
 	switch b {
 	case BalanceIncreaseRewardTransactionFee:
-		reason += "payment of transaction tip"
+		return "tip"
 	case BalanceDecreaseGasBuy:
-		reason += "purchase of gas for execution of a transaction"
+		return "feePayment"
 	case BalanceIncreaseGasReturn:
-		reason += "refund for unused gas at the end of execution"
+		return "gasRefund"
 	case BalanceChangeTransfer:
-		reason += "transfer via a call"
+		return "transfer via a call"
 	case BalanceDecreaseSelfdestruct:
-		reason += "selfDestruct"
+		return "selfDestruct"
+	case BalanceChangeDuringEVMExecution:
+		return "during evm execution"
 	case BalanceIncreaseDeposit:
-		reason += "deposit"
+		return "deposit"
 	case BalanceDecreaseWithdrawToL1:
-		reason += "withdrawal to L1"
-	case BalanceIncreaseL1PosterFee:
-		reason += "fee collection for L1 posting"
-	case BalanceIncreaseInfraFee:
-		reason += "fee collection by infrastructure fee account"
-	case BalanceIncreaseNetworkFee:
-		reason += "fee collection by network fee account"
-	// ArbitrumRetryTx
-	case BalanceIncreaseRetryTxPrepaid:
-		reason += "deposit of prepaid value in a tx of ArbitrumRetryTx type"
-	case BalanceDecreaseRetryTxUndoRefund:
-		reason += "undoing of Geth's refund for a tx of ArbitrumRetryTx type"
-	case BalanceChangeTransferRetryTxToEscrow:
-		reason += "transfer to escrow in a tx of ArbitrumRetryTx type"
-	case BalanceChangeTransferRetryTxFromEscrow:
-		reason += "transfer from escrow in a tx of ArbitrumRetryTx type"
-	// ArbitrumSubmitRetryableTx
-	case BalanceChangeTransferRetryableToFeeRefundAddr:
-		reason += "transfer to FeeRefundAddr in a tx of ArbitrumSubmitRetryableTx type"
-	case BalanceChangeTransferRetryableToEscrow:
-		reason += "transfer to escrow in a tx of ArbitrumSubmitRetryableTx type"
-	case BalanceChangeTransferRetryableToInfra:
-		reason += "transfer to infrastructure fee account in a tx of ArbitrumSubmitRetryableTx type"
-	case BalanceChangeTransferRetryableFromInfra:
-		reason += "transfer from infrastructure fee account in a tx of ArbitrumSubmitRetryableTx type"
-	case BalanceChangeTransferRetryableToNetwork:
-		reason += "transfer to network fee account in a tx of ArbitrumSubmitRetryableTx type"
-	case BalanceChangeTransferRetryableFromNetwork:
-		reason += "transfer from network fee account in a tx of ArbitrumSubmitRetryableTx type"
+		return "withdraw"
+	case BalanceIncreaseL1PosterFee, BalanceIncreaseInfraFee, BalanceIncreaseNetworkFee:
+		return "feeCollection"
+	case BalanceIncreasePrepaid:
+		return "prepaid"
+	case BalanceDecreaseUndoRefund:
+		return "undoRefund"
+	case BalanceChangeEscrowTransfer:
+		return "escrow"
+	case BalanceChangeTransferInfraRefund, BalanceChangeTransferNetworkRefund:
+		return "refund"
 	// Batchposter
 	case BalanceChangeTransferBatchposterReward:
-		reason += "transfer from L1PricerFundsPoolAddress as batchPosterReward"
+		return "batchPosterReward"
 	case BalanceChangeTransferBatchposterRefund:
-		reason += "transfer from L1PricerFundsPoolAddress as batchPosterRefund"
+		return "batchPosterRefund"
 	// Stylus
 	case BalanceChangeTransferActivationFee:
-		reason += "transfer of activation fee to network fee account"
+		return "activate"
 	case BalanceChangeTransferActivationReimburse:
-		reason += "transfer of reimburse amount after charging the activation fee"
+		return "reimburse"
 	default:
 		return "unspecified"
 	}
-
-	return reason
 }
 
 // GasChangeReason is used to indicate the reason for a gas change, useful

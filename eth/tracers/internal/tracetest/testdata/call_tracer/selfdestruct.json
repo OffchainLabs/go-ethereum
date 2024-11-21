@@ -54,7 +54,7 @@
   "result": {
     "beforeEVMTransfers": [
       {
-        "purpose": "purchase of gas for execution of a transaction",
+        "purpose": "feePayment",
         "from": "0xb436ba50D378D4BBC8660d312A13dF6af6E89dFB",
         "to": null,
         "value": "0x997a2bce4c000"
@@ -62,13 +62,13 @@
     ],
     "afterEVMTransfers": [
       {
-        "purpose": "refund for unused gas at the end of execution",
+        "purpose": "gasRefund",
         "from": null,
         "to": "0xb436ba50D378D4BBC8660d312A13dF6af6E89dFB",
         "value": "0x68ac555075c00"
       },
       {
-        "purpose": "payment of transaction tip",
+        "purpose": "tip",
         "from": null,
         "to": "0x1585936b53834b021f68CC13eEeFdEc2EfC8e724",
         "value": "0x30cdd67dd6400"
@@ -80,39 +80,7 @@
         "value": "0x0"
       }
     ],
-    "balanceChanges": [
-      {
-        "addr": "0xb436ba50D378D4BBC8660d312A13dF6af6E89dFB",
-        "prev": "0x1780d77678137ac1b775",
-        "new": "0x1780d76ce070bddcf775",
-        "reason": "balance decrease due to purchase of gas for execution of a transaction"
-      },
-      {
-        "addr": "0x000000000000000000000000000000000000dEaD",
-        "prev": "0x0",
-        "new": "0x4d87094125a369d9bd5",
-        "reason": "unspecified"
-      },
-      {
-        "addr": "0x3b873A919aA0512D5A0F09E6dCCEaA4a6727faFE",
-        "prev": "0x4d87094125a369d9bd5",
-        "new": "0x0",
-        "reason": "balance decrease due to selfDestruct"
-      },
-      {
-        "addr": "0xb436ba50D378D4BBC8660d312A13dF6af6E89dFB",
-        "prev": "0x1780d76ce070bddcf775",
-        "new": "0x1780d7736b3612e45375",
-        "reason": "balance increase due to refund for unused gas at the end of execution"
-      },
-      {
-        "addr": "0x1585936b53834b021f68CC13eEeFdEc2EfC8e724",
-        "prev": "0x0",
-        "new": "0x30cdd67dd6400",
-        "reason": "balance increase due to payment of transaction tip"
-      }
-    ],
-    "calls": [
+	"calls": [
       {
         "from": "0x3b873a919aa0512d5a0f09e6dcceaa4a6727fafe",
         "gas": "0x0",

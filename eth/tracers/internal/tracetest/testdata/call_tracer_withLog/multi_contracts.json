@@ -300,7 +300,7 @@
   "result": {
     "beforeEVMTransfers": [
       {
-        "purpose": "purchase of gas for execution of a transaction",
+        "purpose": "feePayment",
         "from": "0xBe3aE5Cb97c253DdA67181C6E34E43F5C275E08b",
         "to": null,
         "value": "0x136dcc951d8c000"
@@ -308,72 +308,16 @@
     ],
     "afterEVMTransfers": [
       {
-        "purpose": "refund for unused gas at the end of execution",
+        "purpose": "gasRefund",
         "from": null,
         "to": "0xBe3aE5Cb97c253DdA67181C6E34E43F5C275E08b",
         "value": "0x5489446b9e1a00"
       },
       {
-        "purpose": "payment of transaction tip",
+        "purpose": "tip",
         "from": null,
         "to": "0xEA674fdDe714fd979de3EdF0F56AA9716B898ec8",
         "value": "0xe25384e63aa600"
-      }
-    ],
-    "balanceChanges": [
-      {
-        "addr": "0xBe3aE5Cb97c253DdA67181C6E34E43F5C275E08b",
-        "prev": "0x167d285b38143c04f",
-        "new": "0x1669ba8ea2f6b004f",
-        "reason": "balance decrease due to purchase of gas for execution of a transaction"
-      },
-      {
-        "addr": "0x6e715Ab4F598eACF0016b9b35Ef33e4141844CcC",
-        "prev": "0x4563918244f400000",
-        "new": "0x0",
-        "reason": "balance decrease due to transfer via a call"
-      },
-      {
-        "addr": "0xAD3Ecf23c0c8983B07163708be6d763b5F056193",
-        "prev": "0x0",
-        "new": "0x4563918244f400000",
-        "reason": "balance increase due to transfer via a call"
-      },
-      {
-        "addr": "0xAD3Ecf23c0c8983B07163708be6d763b5F056193",
-        "prev": "0x4563918244f400000",
-        "new": "0x22b1c8c1227a00001",
-        "reason": "balance decrease due to transfer via a call"
-      },
-      {
-        "addr": "0x6e715Ab4F598eACF0016b9b35Ef33e4141844CcC",
-        "prev": "0x0",
-        "new": "0x22b1c8c12279fffff",
-        "reason": "balance increase due to transfer via a call"
-      },
-      {
-        "addr": "0xAD3Ecf23c0c8983B07163708be6d763b5F056193",
-        "prev": "0x22b1c8c1227a00001",
-        "new": "0x2",
-        "reason": "balance decrease due to transfer via a call"
-      },
-      {
-        "addr": "0x6e715Ab4F598eACF0016b9b35Ef33e4141844CcC",
-        "prev": "0x22b1c8c12279fffff",
-        "new": "0x4563918244f3ffffe",
-        "reason": "balance increase due to transfer via a call"
-      },
-      {
-        "addr": "0xBe3aE5Cb97c253DdA67181C6E34E43F5C275E08b",
-        "prev": "0x1669ba8ea2f6b004f",
-        "new": "0x166f0322e9b091a4f",
-        "reason": "balance increase due to refund for unused gas at the end of execution"
-      },
-      {
-        "addr": "0xEA674fdDe714fd979de3EdF0F56AA9716B898ec8",
-        "prev": "0x4ab3566739e7b24371",
-        "new": "0x4ab438babecdece971",
-        "reason": "balance increase due to payment of transaction tip"
       }
     ],
     "from": "0xbe3ae5cb97c253dda67181c6e34e43f5c275e08b",

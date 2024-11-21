@@ -18,7 +18,6 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 	type callFrame0 struct {
 		BeforeEVMTransfers *[]arbitrumTransfer `json:"beforeEVMTransfers,omitempty"`
 		AfterEVMTransfers  *[]arbitrumTransfer `json:"afterEVMTransfers,omitempty"`
-		BalanceChanges     *[]balanceChange    `json:"balanceChanges,omitempty"`
 		Type               vm.OpCode           `json:"-"`
 		From               common.Address      `json:"from"`
 		Gas                hexutil.Uint64      `json:"gas"`
@@ -36,7 +35,6 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 	var enc callFrame0
 	enc.BeforeEVMTransfers = c.BeforeEVMTransfers
 	enc.AfterEVMTransfers = c.AfterEVMTransfers
-	enc.BalanceChanges = c.BalanceChanges
 	enc.Type = c.Type
 	enc.From = c.From
 	enc.Gas = hexutil.Uint64(c.Gas)
@@ -58,7 +56,6 @@ func (c *callFrame) UnmarshalJSON(input []byte) error {
 	type callFrame0 struct {
 		BeforeEVMTransfers *[]arbitrumTransfer `json:"beforeEVMTransfers,omitempty"`
 		AfterEVMTransfers  *[]arbitrumTransfer `json:"afterEVMTransfers,omitempty"`
-		BalanceChanges     *[]balanceChange    `json:"balanceChanges,omitempty"`
 		Type               *vm.OpCode          `json:"-"`
 		From               *common.Address     `json:"from"`
 		Gas                *hexutil.Uint64     `json:"gas"`
@@ -81,9 +78,6 @@ func (c *callFrame) UnmarshalJSON(input []byte) error {
 	}
 	if dec.AfterEVMTransfers != nil {
 		c.AfterEVMTransfers = dec.AfterEVMTransfers
-	}
-	if dec.BalanceChanges != nil {
-		c.BalanceChanges = dec.BalanceChanges
 	}
 	if dec.Type != nil {
 		c.Type = *dec.Type
