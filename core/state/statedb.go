@@ -230,7 +230,7 @@ func (s *StateDB) FilterTx(withBlock bool) {
 	}
 }
 
-func (s *StateDB) IsTxValid() bool {
+func (s *StateDB) IsTxInvalid() bool {
 	return s.arbTxFilter == 1
 }
 
