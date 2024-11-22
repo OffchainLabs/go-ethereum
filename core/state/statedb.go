@@ -19,6 +19,7 @@ package state
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"maps"
 	"math/big"
@@ -86,6 +87,7 @@ func (m *mutation) isDelete() bool {
 // commit states.
 type StateDB struct {
 	arbExtraData *ArbitrumExtraData // must be a pointer - can't be a part of StateDB allocation, otherwise its finalizer might not get called
+	arbTxFilter  int
 
 	db         Database
 	prefetcher *triePrefetcher
@@ -217,6 +219,19 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		sdb.snap = sdb.snaps.Snapshot(root)
 	}
 	return sdb, nil
+}
+
+func (s *StateDB) FilterTx(withBlock bool) {
+	if s.arbTxFilter == 0 {
+		s.arbTxFilter = 1
+		if withBlock {
+			s.arbTxFilter = 2
+		}
+	}
+}
+
+func (s *StateDB) IsTxValid() bool {
+	return s.arbTxFilter == 1
 }
 
 // SetLogger sets the logger for account update hooks.
@@ -835,6 +850,9 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	revision := s.validRevisions[idx]
 	snapshot := revision.journalIndex
 	s.arbExtraData.unexpectedBalanceDelta = new(big.Int).Set(revision.unexpectedBalanceDelta)
+	if s.arbTxFilter == 1 {
+		s.arbTxFilter = 0
+	}
 
 	// Replay the journal to undo changes and remove invalidated snapshots
 	s.journal.revert(s, snapshot)
@@ -1220,6 +1238,9 @@ func (s *StateDB) GetTrie() Trie {
 // The associated block number of the state transition is also provided
 // for more chain context.
 func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, error) {
+	if s.arbTxFilter == 2 {
+		return common.Hash{}, errors.New("internal error")
+	}
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
