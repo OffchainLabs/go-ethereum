@@ -537,15 +537,11 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 
 	// Create storage and warning log tracer for write delay.
 	var (
-		compTimes        [2]int64
-		writeDelayTimes  [2]int64
-		writeDelayCounts [2]int64
-		compWrites       [2]int64
-		compReads        [2]int64
+		compTimes  [2]int64
+		compWrites [2]int64
+		compReads  [2]int64
 
 		nWrites [2]int64
-
-		lastWriteStallReport time.Time
 
 		commitCounts               [2]int64
 		commitTotalDurations       [2]int64
@@ -554,6 +550,9 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		commitL0ReadAmpWriteStalls [2]int64
 		commitWALRotations         [2]int64
 		commitWaits                [2]int64
+		writeDelayTimes            [2]int64
+		writeDelayCounts           [2]int64
+		lastWriteStallReport       time.Time
 	)
 
 	// Iterate ad infinitum and collect the stats
