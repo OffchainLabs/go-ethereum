@@ -77,7 +77,8 @@ func (m *mutation) isDelete() bool {
 type arbFiltered int
 
 const (
-	txFiltered arbFiltered = 1 + iota
+	unFiltered arbFiltered = iota
+	txFiltered
 	blockFiltered
 )
 
@@ -231,7 +232,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 }
 
 func (s *StateDB) FilterTx(withBlock bool) {
-	if s.arbTxFilter == 0 {
+	if s.arbTxFilter == unFiltered {
 		s.arbTxFilter = txFiltered
 		if withBlock {
 			s.arbTxFilter = blockFiltered
@@ -860,7 +861,7 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	snapshot := revision.journalIndex
 	s.arbExtraData.unexpectedBalanceDelta = new(big.Int).Set(revision.unexpectedBalanceDelta)
 	if s.arbTxFilter == txFiltered {
-		s.arbTxFilter = 0
+		s.arbTxFilter = unFiltered
 	}
 
 	// Replay the journal to undo changes and remove invalidated snapshots
