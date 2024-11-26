@@ -73,7 +73,7 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool, isHomestead, isEIP2028, isEIP3860 bool) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation && isHomestead {
@@ -467,6 +467,13 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	if rules.IsEIP4762 {
+		st.evm.AccessEvents.AddTxOrigin(msg.From)
+
+		if targetAddr := msg.To; targetAddr != nil {
+			st.evm.AccessEvents.AddTxDestination(*targetAddr, msg.Value.Sign() != 0)
+		}
+	}
 
 	// Check clause 6
 	value, overflow := uint256.FromBig(msg.Value)
@@ -525,6 +532,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		fee.Mul(fee, effectiveTipU256)
 		st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
 		tipAmount = fee.ToBig()
+		// add the coinbase to the witness iff the fee is greater than 0
+		if rules.IsEIP4762 && fee.Sign() != 0 {
+			st.evm.AccessEvents.BalanceGas(st.evm.Context.Coinbase, true)
+		}
 	}
 
 	// Arbitrum: record the tip
