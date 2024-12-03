@@ -199,6 +199,16 @@ type dbWithWasmEntry struct {
 	wasmTargets  []ethdb.WasmTarget
 }
 
+func (db *dbWithWasmEntry) CreateDBSnapshot(dir string) error {
+	if err := db.Database.CreateDBSnapshot(dir); err != nil {
+		return err
+	}
+	if err := db.wasmDb.CreateDBSnapshot(dir); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (db *dbWithWasmEntry) WasmDataBase() (ethdb.KeyValueStore, uint32) {
 	return db.wasmDb, db.wasmCacheTag
 }
