@@ -17,6 +17,7 @@
 package rawdb
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -90,6 +91,10 @@ func (f *resettableFreezer) Reset() error {
 	}
 	f.freezer = freezer
 	return nil
+}
+
+func (f *resettableFreezer) CreateDBSnapshot(dir string) error {
+	return errors.New("createDBSnapshot method is not supported by resettableFreezer")
 }
 
 // Close terminates the chain freezer, unmapping all the data files.

@@ -19,6 +19,7 @@ package rawdb
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -73,6 +74,9 @@ type Freezer struct {
 	tables       map[string]*freezerTable // Data tables for storing everything
 	instanceLock FileLock                 // File-system lock to prevent double opens
 	closeOnce    sync.Once
+
+	datadir             string
+	createSnapshotMutex sync.Mutex
 }
 
 // NewFreezer creates a freezer instance for maintaining immutable ordered
@@ -115,6 +119,7 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 		readonly:     readonly,
 		tables:       make(map[string]*freezerTable),
 		instanceLock: lock,
+		datadir:      datadir,
 	}
 
 	// Create the tables.
@@ -316,6 +321,8 @@ func (f *Freezer) TruncateTail(tail uint64) (uint64, error) {
 
 // Sync flushes all data tables to disk.
 func (f *Freezer) Sync() error {
+	f.createSnapshotMutex.Lock()
+	defer f.createSnapshotMutex.Unlock()
 	var errs []error
 	for _, table := range f.tables {
 		if err := table.Sync(); err != nil {
@@ -324,6 +331,63 @@ func (f *Freezer) Sync() error {
 	}
 	if errs != nil {
 		return fmt.Errorf("%v", errs)
+	}
+	return nil
+}
+
+func (f *Freezer) CreateDBSnapshot(dir string) error {
+	f.createSnapshotMutex.Lock()
+	defer f.createSnapshotMutex.Unlock()
+	snapshotDir := filepath.Join(dir, "l2chaindata", "ancient", "chain") // Format currently used
+	if err := os.MkdirAll(snapshotDir, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create snapshot of ancient directory: %w", err)
+	}
+	// Manually copy contents of ancient to the snapshotDir, createSnapshotMutex makes sure ancient is not updated while copying contents
+	err := filepath.Walk(f.datadir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return fmt.Errorf("error accessing path %s: %w", path, err)
+		}
+		relPath, err := filepath.Rel(f.datadir, path)
+		if err != nil {
+			return fmt.Errorf("error calculating relative path: %w", err)
+		}
+		destPath := filepath.Join(snapshotDir, relPath)
+		if info.IsDir() {
+			if err := os.MkdirAll(destPath, info.Mode()); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", destPath, err)
+			}
+		} else {
+			if err := copyFile(path, destPath); err != nil {
+				return fmt.Errorf("failed to copy file %s: %w", path, err)
+			}
+		}
+		return nil
+	})
+	return err
+}
+
+func copyFile(src, dest string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("failed to open source file: %w", err)
+	}
+	defer srcFile.Close()
+	destFile, err := os.Create(dest)
+	if err != nil {
+		return fmt.Errorf("failed to create destination file: %w", err)
+	}
+	defer destFile.Close()
+	_, err = io.Copy(destFile, srcFile)
+	if err != nil {
+		return fmt.Errorf("failed to copy contents: %w", err)
+	}
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return fmt.Errorf("failed to stat source file: %w", err)
+	}
+	err = os.Chmod(dest, srcInfo.Mode())
+	if err != nil {
+		return fmt.Errorf("failed to set permissions: %w", err)
 	}
 	return nil
 }

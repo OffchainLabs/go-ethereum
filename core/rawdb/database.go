@@ -86,6 +86,16 @@ func (frdb *freezerdb) Freeze() error {
 	return nil
 }
 
+func (db *freezerdb) CreateDBSnapshot(dir string) error {
+	if err := db.KeyValueStore.CreateDBSnapshot(dir); err != nil {
+		return err
+	}
+	if err := db.AncientStore.CreateDBSnapshot(dir); err != nil {
+		return err
+	}
+	return nil
+}
+
 // nofreezedb is a database wrapper that disables freezer data retrievals.
 type nofreezedb struct {
 	ethdb.KeyValueStore

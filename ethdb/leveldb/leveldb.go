@@ -166,6 +166,10 @@ func configureOptions(customizeFn func(*opt.Options)) *opt.Options {
 	return options
 }
 
+func (db *Database) CreateDBSnapshot(dir string) error {
+	return errors.New("createDBSnapshot method is not supported by leveldb")
+}
+
 // Close stops the metrics collection, flushes any pending data to disk and closes
 // all io accesses to the underlying key-value store.
 func (db *Database) Close() error {

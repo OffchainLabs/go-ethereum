@@ -180,6 +180,7 @@ type AncientStore interface {
 	AncientReader
 	AncientWriter
 	io.Closer
+	CreateDBSnapshot(dir string) error
 }
 
 type WasmTarget string

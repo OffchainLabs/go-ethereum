@@ -230,6 +230,10 @@ func NewMemoryFreezer(readonly bool, tableName map[string]bool) *MemoryFreezer {
 	}
 }
 
+func (f *MemoryFreezer) CreateDBSnapshot(dir string) error {
+	return errors.New("createDBSnapshot method is not supported by MemoryFreezer")
+}
+
 // HasAncient returns an indicator whether the specified data exists.
 func (f *MemoryFreezer) HasAncient(kind string, number uint64) (bool, error) {
 	f.lock.RLock()
