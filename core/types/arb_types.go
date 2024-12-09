@@ -453,7 +453,7 @@ func (d *ArbitrumDepositTx) setSignatureValues(chainID, v, r, s *big.Int) {
 
 }
 
-func (tx *ArbitrumDepositTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+func (d *ArbitrumDepositTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
 	return dst.Set(bigZero)
 }
 
@@ -490,15 +490,15 @@ func (t *ArbitrumInternalTx) decode(input []byte) error {
 	return rlp.DecodeBytes(input, t)
 }
 
-func (d *ArbitrumInternalTx) rawSignatureValues() (v, r, s *big.Int) {
+func (t *ArbitrumInternalTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero
 }
 
-func (d *ArbitrumInternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
+func (t *ArbitrumInternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
 
 }
 
-func (tx *ArbitrumInternalTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+func (t *ArbitrumInternalTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
 	return dst.Set(bigZero)
 }
 
