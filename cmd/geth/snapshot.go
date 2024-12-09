@@ -548,7 +548,7 @@ func dumpState(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	conf, root, err := parseDumpConfig(ctx, stack, db)
+	conf, root, err := parseDumpConfig(ctx, db)
 	if err != nil {
 		return err
 	}
