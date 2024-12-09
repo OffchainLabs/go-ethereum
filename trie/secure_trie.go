@@ -214,6 +214,11 @@ func (t *StateTrie) GetKey(shaKey []byte) []byte {
 	return t.db.Preimage(common.BytesToHash(shaKey))
 }
 
+// Witness returns a set containing all trie nodes that have been accessed.
+func (t *StateTrie) Witness() map[string]struct{} {
+	return t.trie.Witness()
+}
+
 // Commit collects all dirty nodes in the trie and replaces them with the
 // corresponding node hash. All collected nodes (including dirty leaves if
 // collectLeaf is true) will be encapsulated into a nodeset for return.
@@ -221,10 +226,10 @@ func (t *StateTrie) GetKey(shaKey []byte) []byte {
 // All cached preimages will be also flushed if preimages recording is enabled.
 // Once the trie is committed, it's not usable anymore. A new trie must
 // be created with new root and updated trie database for following usage
-func (t *StateTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
+func (t *StateTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 	// Write all the pre-images to the actual disk database
 	if len(t.getSecKeyCache()) > 0 {
-		preimages := make(map[common.Hash][]byte)
+		preimages := make(map[common.Hash][]byte, len(t.secKeyCache))
 		for hk, key := range t.secKeyCache {
 			preimages[common.BytesToHash([]byte(hk))] = key
 		}
