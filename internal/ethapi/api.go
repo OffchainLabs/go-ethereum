@@ -1445,7 +1445,7 @@ func (api *BlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.He
 	return fields
 }
 
-func (s *BlockChainAPI) arbClassicL1BlockNumber(ctx context.Context, block *types.Block) (hexutil.Uint64, error) {
+func (api *BlockChainAPI) arbClassicL1BlockNumber(ctx context.Context, block *types.Block) (hexutil.Uint64, error) {
 	startBlockNum := block.Number().Int64()
 	blockNum := startBlockNum
 	i := int64(0)
@@ -1467,7 +1467,7 @@ func (s *BlockChainAPI) arbClassicL1BlockNumber(ctx context.Context, block *type
 			return 0, fmt.Errorf("couldn't find block with transactions. Reached %d", blockNum)
 		}
 		var err error
-		block, err = s.b.BlockByNumber(ctx, rpc.BlockNumber(blockNum))
+		block, err = api.b.BlockByNumber(ctx, rpc.BlockNumber(blockNum))
 		if err != nil {
 			return 0, err
 		}
