@@ -19,6 +19,7 @@ package state
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"maps"
 	"math/big"
@@ -73,6 +74,16 @@ func (m *mutation) isDelete() bool {
 	return m.typ == deletion
 }
 
+type arbFiltered int
+
+const (
+	notFiltered arbFiltered = iota
+	txFiltered
+	blockFiltered
+)
+
+var ErrArbTxFilter error = errors.New("internal error")
+
 // StateDB structs within the ethereum protocol are used to store anything
 // within the merkle trie. StateDBs take care of caching and storing
 // nested states. It's the general query interface to retrieve:
@@ -86,6 +97,7 @@ func (m *mutation) isDelete() bool {
 // commit states.
 type StateDB struct {
 	arbExtraData *ArbitrumExtraData // must be a pointer - can't be a part of StateDB allocation, otherwise its finalizer might not get called
+	arbTxFilter  arbFiltered
 
 	db         Database
 	prefetcher *triePrefetcher
@@ -217,6 +229,19 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		sdb.snap = sdb.snaps.Snapshot(root)
 	}
 	return sdb, nil
+}
+
+func (s *StateDB) FilterTx(withBlock bool) {
+	if s.arbTxFilter == notFiltered {
+		s.arbTxFilter = txFiltered
+		if withBlock {
+			s.arbTxFilter = blockFiltered
+		}
+	}
+}
+
+func (s *StateDB) IsTxFiltered() bool {
+	return s.arbTxFilter == txFiltered
 }
 
 // SetLogger sets the logger for account update hooks.
@@ -835,6 +860,9 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	revision := s.validRevisions[idx]
 	snapshot := revision.journalIndex
 	s.arbExtraData.unexpectedBalanceDelta = new(big.Int).Set(revision.unexpectedBalanceDelta)
+	if s.arbTxFilter == txFiltered {
+		s.arbTxFilter = notFiltered
+	}
 
 	// Replay the journal to undo changes and remove invalidated snapshots
 	s.journal.revert(s, snapshot)
@@ -1220,6 +1248,9 @@ func (s *StateDB) GetTrie() Trie {
 // The associated block number of the state transition is also provided
 // for more chain context.
 func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, error) {
+	if s.arbTxFilter == blockFiltered || s.arbTxFilter == txFiltered {
+		return common.Hash{}, ErrArbTxFilter
+	}
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
