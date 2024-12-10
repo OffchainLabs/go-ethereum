@@ -842,9 +842,6 @@ func (s *StateDB) Copy() *StateDB {
 
 // Snapshot returns an identifier for the current revision of the state.
 func (s *StateDB) Snapshot() int {
-	if s.arbTxFilter == txFiltered {
-		panic("trying to create a new snapshot when the previous transaction applied to this state was filtered. RevertToSnapshot should be called before moving on to the next transaction")
-	}
 	id := s.nextRevisionId
 	s.nextRevisionId++
 	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length(), new(big.Int).Set(s.arbExtraData.unexpectedBalanceDelta)})
