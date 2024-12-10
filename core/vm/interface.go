@@ -50,7 +50,7 @@ type StateDB interface {
 
 	// Arbitrum
 	FilterTx(bool)
-	IsTxInvalid() bool
+	IsTxFiltered() bool
 
 	Deterministic() bool
 	Database() state.Database
