@@ -52,6 +52,7 @@ type revision struct {
 
 	// Arbitrum: track the total balance change across all accounts
 	unexpectedBalanceDelta *big.Int
+	arbTxFilter            bool
 }
 
 type mutationType int
@@ -74,14 +75,6 @@ func (m *mutation) isDelete() bool {
 	return m.typ == deletion
 }
 
-type arbFiltered int
-
-const (
-	notFiltered arbFiltered = iota
-	txFiltered
-	blockFiltered
-)
-
 var ErrArbTxFilter error = errors.New("internal error")
 
 // StateDB structs within the ethereum protocol are used to store anything
@@ -97,7 +90,7 @@ var ErrArbTxFilter error = errors.New("internal error")
 // commit states.
 type StateDB struct {
 	arbExtraData *ArbitrumExtraData // must be a pointer - can't be a part of StateDB allocation, otherwise its finalizer might not get called
-	arbTxFilter  arbFiltered
+	arbTxFilter  bool
 
 	db         Database
 	prefetcher *triePrefetcher
@@ -231,17 +224,14 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	return sdb, nil
 }
 
-func (s *StateDB) FilterTx(withBlock bool) {
-	if s.arbTxFilter == notFiltered {
-		s.arbTxFilter = txFiltered
-		if withBlock {
-			s.arbTxFilter = blockFiltered
-		}
+func (s *StateDB) FilterTx() {
+	if !s.arbTxFilter {
+		s.arbTxFilter = true
 	}
 }
 
 func (s *StateDB) IsTxFiltered() bool {
-	return s.arbTxFilter == txFiltered
+	return s.arbTxFilter
 }
 
 // SetLogger sets the logger for account update hooks.
@@ -844,7 +834,7 @@ func (s *StateDB) Copy() *StateDB {
 func (s *StateDB) Snapshot() int {
 	id := s.nextRevisionId
 	s.nextRevisionId++
-	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length(), new(big.Int).Set(s.arbExtraData.unexpectedBalanceDelta)})
+	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length(), new(big.Int).Set(s.arbExtraData.unexpectedBalanceDelta), s.arbTxFilter})
 	return id
 }
 
@@ -860,9 +850,7 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	revision := s.validRevisions[idx]
 	snapshot := revision.journalIndex
 	s.arbExtraData.unexpectedBalanceDelta = new(big.Int).Set(revision.unexpectedBalanceDelta)
-	if s.arbTxFilter == txFiltered {
-		s.arbTxFilter = notFiltered
-	}
+	s.arbTxFilter = revision.arbTxFilter
 
 	// Replay the journal to undo changes and remove invalidated snapshots
 	s.journal.revert(s, snapshot)
@@ -1248,7 +1236,7 @@ func (s *StateDB) GetTrie() Trie {
 // The associated block number of the state transition is also provided
 // for more chain context.
 func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, error) {
-	if s.arbTxFilter == blockFiltered || s.arbTxFilter == txFiltered {
+	if s.arbTxFilter {
 		return common.Hash{}, ErrArbTxFilter
 	}
 	// Short circuit in case any database failure occurred earlier.

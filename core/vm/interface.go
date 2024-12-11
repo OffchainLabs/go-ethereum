@@ -49,7 +49,7 @@ type StateDB interface {
 	CreateZombieIfDeleted(common.Address)
 
 	// Arbitrum
-	FilterTx(bool)
+	FilterTx()
 	IsTxFiltered() bool
 
 	Deterministic() bool
