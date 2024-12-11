@@ -19,7 +19,6 @@ package state
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"maps"
 	"math/big"
@@ -75,8 +74,6 @@ func (m *mutation) isDelete() bool {
 	return m.typ == deletion
 }
 
-var ErrArbTxFilter error = errors.New("internal error")
-
 // StateDB structs within the ethereum protocol are used to store anything
 // within the merkle trie. StateDBs take care of caching and storing
 // nested states. It's the general query interface to retrieve:
@@ -90,7 +87,6 @@ var ErrArbTxFilter error = errors.New("internal error")
 // commit states.
 type StateDB struct {
 	arbExtraData *ArbitrumExtraData // must be a pointer - can't be a part of StateDB allocation, otherwise its finalizer might not get called
-	arbTxFilter  bool
 
 	db         Database
 	prefetcher *triePrefetcher
@@ -225,13 +221,11 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 }
 
 func (s *StateDB) FilterTx() {
-	if !s.arbTxFilter {
-		s.arbTxFilter = true
-	}
+	s.arbExtraData.arbTxFilter = true
 }
 
 func (s *StateDB) IsTxFiltered() bool {
-	return s.arbTxFilter
+	return s.arbExtraData.arbTxFilter
 }
 
 // SetLogger sets the logger for account update hooks.
@@ -751,6 +745,7 @@ func (s *StateDB) Copy() *StateDB {
 			recentWasms:            s.arbExtraData.recentWasms.Copy(),
 			openWasmPages:          s.arbExtraData.openWasmPages,
 			everWasmPages:          s.arbExtraData.everWasmPages,
+			arbTxFilter:            s.arbExtraData.arbTxFilter,
 		},
 
 		db:                   s.db,
@@ -834,7 +829,7 @@ func (s *StateDB) Copy() *StateDB {
 func (s *StateDB) Snapshot() int {
 	id := s.nextRevisionId
 	s.nextRevisionId++
-	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length(), new(big.Int).Set(s.arbExtraData.unexpectedBalanceDelta), s.arbTxFilter})
+	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length(), new(big.Int).Set(s.arbExtraData.unexpectedBalanceDelta), s.arbExtraData.arbTxFilter})
 	return id
 }
 
@@ -850,7 +845,7 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	revision := s.validRevisions[idx]
 	snapshot := revision.journalIndex
 	s.arbExtraData.unexpectedBalanceDelta = new(big.Int).Set(revision.unexpectedBalanceDelta)
-	s.arbTxFilter = revision.arbTxFilter
+	s.arbExtraData.arbTxFilter = revision.arbTxFilter
 
 	// Replay the journal to undo changes and remove invalidated snapshots
 	s.journal.revert(s, snapshot)
@@ -1236,7 +1231,7 @@ func (s *StateDB) GetTrie() Trie {
 // The associated block number of the state transition is also provided
 // for more chain context.
 func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, error) {
-	if s.arbTxFilter {
+	if s.arbExtraData.arbTxFilter {
 		return common.Hash{}, ErrArbTxFilter
 	}
 	// Short circuit in case any database failure occurred earlier.
