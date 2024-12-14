@@ -138,7 +138,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			}
 
 			state.StateDB.SetLogger(tracer.Hooks)
-			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, core.MessageReplayMode)
+			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()}))
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
@@ -230,7 +230,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		Difficulty:  (*big.Int)(test.Context.Difficulty),
 		GasLimit:    uint64(test.Context.GasLimit),
 	}
-	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, core.MessageReplayMode)
+	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()}))
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
 	}
@@ -387,7 +387,7 @@ func TestInternals(t *testing.T) {
 				GasPrice: tx.GasPrice(),
 			}
 			evm := vm.NewEVM(context, txContext, state.StateDB, config, vm.Config{Tracer: tc.tracer.Hooks})
-			msg, err := core.TransactionToMessage(tx, signer, big.NewInt(0), core.MessageReplayMode)
+			msg, err := core.TransactionToMessage(tx, signer, big.NewInt(0), core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()}))
 			if err != nil {
 				t.Fatalf("test %v: failed to create message: %v", tc.name, err)
 			}
