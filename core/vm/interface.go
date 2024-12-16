@@ -45,10 +45,14 @@ type StateDB interface {
 	AddStylusPages(new uint16) (uint16, uint16)
 	AddStylusPagesEver(new uint16)
 
+	// Arbitrum: preserve old empty account behavior
+	CreateZombieIfDeleted(common.Address)
+
 	Deterministic() bool
 	Database() state.Database
 
 	CreateAccount(common.Address)
+	CreateContract(common.Address)
 
 	SubBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason)
 	AddBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason)
