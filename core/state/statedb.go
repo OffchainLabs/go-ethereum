@@ -1196,10 +1196,9 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 		storageTrieNodesUpdated int
 		storageTrieNodesDeleted int
 
-		lock           sync.Mutex                                               // protect two maps below
-		nodes          = trienode.NewMergedNodeSet()                            // aggregated trie nodes
-		updates        = make(map[common.Hash]*accountUpdate, len(s.mutations)) // aggregated account updates
-		wasmCodeWriter = s.db.WasmStore().NewBatch()
+		lock    sync.Mutex                                               // protect two maps below
+		nodes   = trienode.NewMergedNodeSet()                            // aggregated trie nodes
+		updates = make(map[common.Hash]*accountUpdate, len(s.mutations)) // aggregated account updates
 
 		// merge aggregates the dirty trie nodes into the global set.
 		//
@@ -1305,13 +1304,6 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 			return nil
 		})
 	}
-	// Arbitrum: write Stylus programs to disk
-	for moduleHash, asmMap := range s.arbExtraData.activatedWasms {
-		rawdb.WriteActivation(wasmCodeWriter, moduleHash, asmMap)
-	}
-	if len(s.arbExtraData.activatedWasms) > 0 {
-		s.arbExtraData.activatedWasms = make(map[common.Hash]ActivatedWasm)
-	}
 	// Wait for everything to finish and update the metrics
 	if err := workers.Wait(); err != nil {
 		return nil, err
@@ -1354,6 +1346,19 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool) (*stateU
 			return nil, err
 		}
 	}
+
+	if db := s.db.WasmStore(); db != nil && len(s.arbExtraData.activatedWasms) > 0 {
+		batch := db.NewBatch()
+		// Arbitrum: write Stylus programs to disk
+		for moduleHash, asmMap := range s.arbExtraData.activatedWasms {
+			rawdb.WriteActivation(batch, moduleHash, asmMap)
+		}
+		s.arbExtraData.activatedWasms = make(map[common.Hash]ActivatedWasm)
+		if err := batch.Write(); err != nil {
+			return nil, err
+		}
+	}
+
 	if !ret.empty() {
 		// If snapshotting is enabled, update the snapshot tree with this new version
 		if s.snap != nil {
