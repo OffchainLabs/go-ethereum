@@ -1326,7 +1326,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 
 	origin := s.originalRoot
 	s.originalRoot = root
-	return newStateUpdate(origin, root, deletes, updates, nodes), nil
+	return newStateUpdate(origin, root, deletes, updates, nodes, s.arbExtraData.activatedWasms), nil
 }
 
 // commitAndFlush is a wrapper of commit which also commits the state mutations
@@ -1347,10 +1347,10 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool) (*stateU
 		}
 	}
 
-	if db := s.db.WasmStore(); db != nil && len(s.arbExtraData.activatedWasms) > 0 {
+	if db := s.db.WasmStore(); db != nil && len(ret.activatedWasms) > 0 {
 		batch := db.NewBatch()
 		// Arbitrum: write Stylus programs to disk
-		for moduleHash, asmMap := range s.arbExtraData.activatedWasms {
+		for moduleHash, asmMap := range ret.activatedWasms {
 			rawdb.WriteActivation(batch, moduleHash, asmMap)
 		}
 		s.arbExtraData.activatedWasms = make(map[common.Hash]ActivatedWasm)

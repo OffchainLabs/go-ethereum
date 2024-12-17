@@ -57,6 +57,7 @@ type stateUpdate struct {
 	storages       map[common.Hash]map[common.Hash][]byte    // storages stores mutated slots in 'prefix-zero-trimmed' RLP format
 	storagesOrigin map[common.Address]map[common.Hash][]byte // storagesOrigin stores the original values of mutated slots in 'prefix-zero-trimmed' RLP format
 	codes          map[common.Address]contractCode           // codes contains the set of dirty codes
+	activatedWasms map[common.Hash]ActivatedWasm             // newly activated WASMs
 	nodes          *trienode.MergedNodeSet                   // Aggregated dirty nodes caused by state changes
 }
 
@@ -68,7 +69,7 @@ func (sc *stateUpdate) empty() bool {
 // newStateUpdate constructs a state update object, representing the differences
 // between two states by performing state execution. It aggregates the given
 // account deletions and account updates to form a comprehensive state update.
-func newStateUpdate(originRoot common.Hash, root common.Hash, deletes map[common.Hash]*accountDelete, updates map[common.Hash]*accountUpdate, nodes *trienode.MergedNodeSet) *stateUpdate {
+func newStateUpdate(originRoot common.Hash, root common.Hash, deletes map[common.Hash]*accountDelete, updates map[common.Hash]*accountUpdate, nodes *trienode.MergedNodeSet, activatedWasms map[common.Hash]ActivatedWasm) *stateUpdate {
 	var (
 		destructs      = make(map[common.Hash]struct{})
 		accounts       = make(map[common.Hash][]byte)
@@ -128,6 +129,7 @@ func newStateUpdate(originRoot common.Hash, root common.Hash, deletes map[common
 		storages:       storages,
 		storagesOrigin: storagesOrigin,
 		codes:          codes,
+		activatedWasms: activatedWasms,
 		nodes:          nodes,
 	}
 }
