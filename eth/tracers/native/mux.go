@@ -177,18 +177,18 @@ func (t *muxTracer) OnLog(log *types.Log) {
 	}
 }
 
-func (t *muxTracer) CaptureArbitrumStorageGet(addr common.Address, key, mappedKey common.Hash, depth int, before bool) {
+func (t *muxTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {
 	for _, t := range t.tracers {
 		if t.CaptureArbitrumStorageGet != nil {
-			t.CaptureArbitrumStorageGet(addr, key, mappedKey, depth, before)
+			t.CaptureArbitrumStorageGet(key, depth, before)
 		}
 	}
 }
 
-func (t *muxTracer) CaptureArbitrumStorageSet(addr common.Address, key, mappedKey, value common.Hash, depth int, before bool) {
+func (t *muxTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {
 	for _, t := range t.tracers {
 		if t.CaptureArbitrumStorageSet != nil {
-			t.CaptureArbitrumStorageSet(addr, key, mappedKey, value, depth, before)
+			t.CaptureArbitrumStorageSet(key, value, depth, before)
 		}
 	}
 }

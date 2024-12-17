@@ -47,13 +47,10 @@ type account struct {
 	Nonce   uint64                      `json:"nonce,omitempty"`
 	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
 	empty   bool
-
-	ArbitrumStorage  map[common.Hash]common.Hash `json:"arbitrumStorage,omitempty"`
-	arbStorageKeyMap map[common.Hash]common.Hash
 }
 
 func (a *account) exists() bool {
-	return a.Nonce > 0 || len(a.Code) > 0 || len(a.Storage) > 0 || (a.Balance != nil && a.Balance.Sign() != 0) || len(a.ArbitrumStorage) > 0
+	return a.Nonce > 0 || len(a.Code) > 0 || len(a.Storage) > 0 || (a.Balance != nil && a.Balance.Sign() != 0)
 }
 
 type accountMarshaling struct {
@@ -214,7 +211,6 @@ func (t *prestateTracer) processDiffState() {
 		}
 		modified := false
 		postAccount := &account{Storage: make(map[common.Hash]common.Hash)}
-		postAccount.ArbitrumStorage = make(map[common.Hash]common.Hash)
 		newBalance := t.env.StateDB.GetBalance(addr).ToBig()
 		newNonce := t.env.StateDB.GetNonce(addr)
 		newCode := t.env.StateDB.GetCode(addr)
@@ -250,24 +246,6 @@ func (t *prestateTracer) processDiffState() {
 			}
 		}
 
-		for key, val := range state.ArbitrumStorage {
-			// don't include the empty slot
-			if val == (common.Hash{}) {
-				delete(t.pre[addr].ArbitrumStorage, key)
-			}
-
-			newVal := t.env.StateDB.GetState(types.ArbosStateAddress, state.arbStorageKeyMap[key])
-			if val == newVal {
-				// Omit unchanged slots
-				delete(t.pre[addr].ArbitrumStorage, key)
-			} else {
-				modified = true
-				if newVal != (common.Hash{}) {
-					postAccount.ArbitrumStorage[key] = newVal
-				}
-			}
-		}
-
 		if modified {
 			t.post[addr] = postAccount
 		} else {
@@ -285,12 +263,10 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 	}
 
 	acc := &account{
-		Balance:          t.env.StateDB.GetBalance(addr).ToBig(),
-		Nonce:            t.env.StateDB.GetNonce(addr),
-		Code:             t.env.StateDB.GetCode(addr),
-		Storage:          make(map[common.Hash]common.Hash),
-		ArbitrumStorage:  make(map[common.Hash]common.Hash),
-		arbStorageKeyMap: make(map[common.Hash]common.Hash),
+		Balance: t.env.StateDB.GetBalance(addr).ToBig(),
+		Nonce:   t.env.StateDB.GetNonce(addr),
+		Code:    t.env.StateDB.GetCode(addr),
+		Storage: make(map[common.Hash]common.Hash),
 	}
 	if !acc.exists() {
 		acc.empty = true
@@ -306,12 +282,4 @@ func (t *prestateTracer) lookupStorage(addr common.Address, key common.Hash) {
 		return
 	}
 	t.pre[addr].Storage[key] = t.env.StateDB.GetState(addr, key)
-}
-
-func (t *prestateTracer) lookupArbitrumStorage(addr common.Address, key, mappedKey common.Hash) {
-	if _, ok := t.pre[addr].ArbitrumStorage[key]; ok {
-		return
-	}
-	t.pre[addr].ArbitrumStorage[key] = t.env.StateDB.GetState(types.ArbosStateAddress, mappedKey)
-	t.pre[addr].arbStorageKeyMap[key] = mappedKey
 }
