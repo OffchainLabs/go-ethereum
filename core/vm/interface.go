@@ -50,6 +50,7 @@ type StateDB interface {
 
 	// Arbitrum
 	FilterTx()
+	ClearTxFilter()
 	IsTxFiltered() bool
 
 	Deterministic() bool

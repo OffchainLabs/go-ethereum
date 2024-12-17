@@ -51,7 +51,6 @@ type revision struct {
 
 	// Arbitrum: track the total balance change across all accounts
 	unexpectedBalanceDelta *big.Int
-	arbTxFilter            bool
 }
 
 type mutationType int
@@ -222,6 +221,10 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 
 func (s *StateDB) FilterTx() {
 	s.arbExtraData.arbTxFilter = true
+}
+
+func (s *StateDB) ClearTxFilter() {
+	s.arbExtraData.arbTxFilter = false
 }
 
 func (s *StateDB) IsTxFiltered() bool {
@@ -829,7 +832,7 @@ func (s *StateDB) Copy() *StateDB {
 func (s *StateDB) Snapshot() int {
 	id := s.nextRevisionId
 	s.nextRevisionId++
-	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length(), new(big.Int).Set(s.arbExtraData.unexpectedBalanceDelta), s.arbExtraData.arbTxFilter})
+	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length(), new(big.Int).Set(s.arbExtraData.unexpectedBalanceDelta)})
 	return id
 }
 
@@ -845,7 +848,6 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	revision := s.validRevisions[idx]
 	snapshot := revision.journalIndex
 	s.arbExtraData.unexpectedBalanceDelta = new(big.Int).Set(revision.unexpectedBalanceDelta)
-	s.arbExtraData.arbTxFilter = revision.arbTxFilter
 
 	// Replay the journal to undo changes and remove invalidated snapshots
 	s.journal.revert(s, snapshot)
