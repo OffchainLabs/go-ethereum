@@ -144,6 +144,8 @@ var PrecompiledContractsPrague = map[common.Address]PrecompiledContract{
 
 var PrecompiledContractsBLS = PrecompiledContractsPrague
 
+var PrecompiledContractsVerkle = PrecompiledContractsPrague
+
 var (
 	PrecompiledAddressesPrague    []common.Address
 	PrecompiledAddressesCancun    []common.Address
