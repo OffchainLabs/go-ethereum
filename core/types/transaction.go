@@ -107,7 +107,7 @@ func (tx *Transaction) SetCachedCalldataUnits(compressionLevel uint64, calldataU
 	// Ensure the compressionLevel and calldataUnits will fit.
 	// Otherwise, just clear the cache.
 	if compressionLevel < 1<<8 && calldataUnits < 1<<56 {
-		repr = uint64(compressionLevel)<<56 | calldataUnits
+		repr = compressionLevel<<56 | calldataUnits
 	}
 	tx.calldataUnitsForBrotliCompressionLevel.Store(repr)
 }
