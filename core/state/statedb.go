@@ -18,7 +18,6 @@
 package state
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"maps"
@@ -898,32 +897,15 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		// later time.
 		workers.SetLimit(1)
 	}
-	if s.deterministic {
-		addressesToUpdate := make([]common.Address, 0, len(s.mutations))
-		for addr := range s.mutations {
-			addressesToUpdate = append(addressesToUpdate, addr)
+	for addr, op := range s.mutations {
+		if op.applied || op.isDelete() {
+			continue
 		}
-		sort.Slice(addressesToUpdate, func(i, j int) bool { return bytes.Compare(addressesToUpdate[i][:], addressesToUpdate[j][:]) < 0 })
-		for _, addr := range addressesToUpdate {
-			if obj := s.mutations[addr]; !obj.applied && !obj.isDelete() {
-				obj := s.stateObjects[addr] // closure for the task runner below
-				workers.Go(func() error {
-					obj.updateRoot()
-					return nil
-				})
-			}
-		}
-	} else {
-		for addr, op := range s.mutations {
-			if op.applied || op.isDelete() {
-				continue
-			}
-			obj := s.stateObjects[addr] // closure for the task runner below
-			workers.Go(func() error {
-				obj.updateRoot()
-				return nil
-			})
-		}
+		obj := s.stateObjects[addr] // closure for the task runner below
+		workers.Go(func() error {
+			obj.updateRoot()
+			return nil
+		})
 	}
 	workers.Wait()
 	s.StorageUpdates += time.Since(start)
@@ -967,6 +949,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			s.AccountUpdated += 1
 		}
 		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
+	}
+	if s.deterministic {
+		sort.Slice(deletedAddrs, func(i, j int) bool { return deletedAddrs[i].Cmp(deletedAddrs[j]) < 0 })
 	}
 	for _, deletedAddr := range deletedAddrs {
 		s.deleteStateObject(deletedAddr)
