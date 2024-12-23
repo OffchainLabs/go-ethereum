@@ -174,7 +174,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		extraOptions.MemTableStopWritesThreshold = 2
 	}
 	if extraOptions.MaxConcurrentCompactions == nil {
-		extraOptions.MaxConcurrentCompactions = func() int { return runtime.NumCPU() }
+		extraOptions.MaxConcurrentCompactions = runtime.NumCPU
 	}
 	var levels []pebble.LevelOptions
 	if len(extraOptions.Levels) == 0 {
@@ -690,7 +690,7 @@ func (b *batch) Put(key, value []byte) error {
 	return nil
 }
 
-// Delete inserts the a key removal into the batch for later committing.
+// Delete inserts the key removal into the batch for later committing.
 func (b *batch) Delete(key []byte) error {
 	b.b.Delete(key, nil)
 	b.size += len(key)
