@@ -20,9 +20,10 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -30,9 +31,9 @@ import (
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
 	// Arbitrum: manage Stylus wasms
-	ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.Target][]byte)
-	TryGetActivatedAsm(target rawdb.Target, moduleHash common.Hash) (asm []byte, err error)
-	TryGetActivatedAsmMap(targets []rawdb.Target, moduleHash common.Hash) (asmMap map[rawdb.Target][]byte, err error)
+	ActivateWasm(moduleHash common.Hash, asmMap map[ethdb.WasmTarget][]byte)
+	TryGetActivatedAsm(target ethdb.WasmTarget, moduleHash common.Hash) (asm []byte, err error)
+	TryGetActivatedAsmMap(targets []ethdb.WasmTarget, moduleHash common.Hash) (asmMap map[ethdb.WasmTarget][]byte, err error)
 	RecordCacheWasm(wasm state.CacheWasm)
 	RecordEvictWasm(wasm state.EvictWasm)
 	GetRecentWasms() state.RecentWasms
@@ -44,13 +45,17 @@ type StateDB interface {
 	AddStylusPages(new uint16) (uint16, uint16)
 	AddStylusPagesEver(new uint16)
 
+	// Arbitrum: preserve old empty account behavior
+	CreateZombieIfDeleted(common.Address)
+
 	Deterministic() bool
 	Database() state.Database
 
 	CreateAccount(common.Address)
+	CreateContract(common.Address)
 
-	SubBalance(common.Address, *uint256.Int)
-	AddBalance(common.Address, *uint256.Int)
+	SubBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason)
+	AddBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason)
 	GetBalance(common.Address) *uint256.Int
 	ExpectBalanceBurn(*big.Int)
 
@@ -69,6 +74,7 @@ type StateDB interface {
 	GetCommittedState(common.Address, common.Hash) common.Hash
 	GetState(common.Address, common.Hash) common.Hash
 	SetState(common.Address, common.Hash, common.Hash)
+	GetStorageRoot(addr common.Address) common.Hash
 
 	GetTransientState(addr common.Address, key common.Hash) common.Hash
 	SetTransientState(addr common.Address, key, value common.Hash)

@@ -47,6 +47,10 @@ const (
 	// metricsGatheringInterval specifies the interval to retrieve pebble database
 	// compaction, io and pause stats to report to the user.
 	metricsGatheringInterval = 3 * time.Second
+
+	// degradationWarnInterval specifies how often warning should be printed if the
+	// leveldb database cannot keep up with requested writes.
+	degradationWarnInterval = time.Minute
 )
 
 // Database is a persistent key-value store based on the pebble storage engine.
@@ -89,7 +93,8 @@ type Database struct {
 	commitWALRotation         atomic.Int64
 	commitWait                atomic.Int64
 
-	levelsGauge []metrics.Gauge // Gauge for tracking the number of tables in levels
+	level0SublevelsGauge metrics.Gauge
+	levelsGauge          []metrics.Gauge // Gauge for tracking the number of tables in levels
 
 	quitLock sync.RWMutex    // Mutex protecting the quit channel and the closed flag
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -97,14 +102,16 @@ type Database struct {
 
 	log log.Logger // Contextual logger tracking the database path
 
-	activeComp          int           // Current number of active compactions
-	compStartTime       time.Time     // The start time of the earliest currently-active compaction
-	compTime            atomic.Int64  // Total time spent in compaction in ns
-	level0Comp          atomic.Uint32 // Total number of level-zero compactions
-	nonLevel0Comp       atomic.Uint32 // Total number of non level-zero compactions
-	writeDelayStartTime time.Time     // The start time of the latest write stall
-	writeDelayCount     atomic.Int64  // Total number of write stall counts
-	writeDelayTime      atomic.Int64  // Total time spent in write stalls
+	activeComp    int           // Current number of active compactions
+	compStartTime time.Time     // The start time of the earliest currently-active compaction
+	compTime      atomic.Int64  // Total time spent in compaction in ns
+	level0Comp    atomic.Uint32 // Total number of level-zero compactions
+	nonLevel0Comp atomic.Uint32 // Total number of non level-zero compactions
+
+	writeStalled        atomic.Bool  // Flag whether the write is stalled
+	writeDelayStartTime time.Time    // The start time of the latest write stall
+	writeDelayCount     atomic.Int64 // Total number of write stall counts
+	writeDelayTime      atomic.Int64 // Total time spent in write stalls
 
 	writeOptions *pebble.WriteOptions
 }
@@ -133,10 +140,13 @@ func (d *Database) onCompactionEnd(info pebble.CompactionInfo) {
 
 func (d *Database) onWriteStallBegin(b pebble.WriteStallBeginInfo) {
 	d.writeDelayStartTime = time.Now()
+	d.writeDelayCount.Add(1)
+	d.writeStalled.Store(true)
 }
 
 func (d *Database) onWriteStallEnd() {
 	d.writeDelayTime.Add(int64(time.Since(d.writeDelayStartTime)))
+	d.writeStalled.Store(false)
 }
 
 // panicLogger is just a noop logger to disable Pebble's internal logger.
@@ -228,7 +238,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		fn:           file,
 		log:          logger,
 		quitChan:     make(chan chan error),
-		writeOptions: &pebble.WriteOptions{Sync: !ephemeral},
+		writeOptions: &pebble.WriteOptions{Sync: !ephemeral && extraOptions.SyncMode},
 	}
 	opt := &pebble.Options{
 		// Pebble has a single combined cache area and the write
@@ -319,6 +329,8 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	db.commitL0ReadAmpWriteStallMeter = metrics.GetOrRegisterMeter(namespace+"commit/duration/l0readampwritestall", nil)
 	db.commitWALRotationMeter = metrics.GetOrRegisterMeter(namespace+"commit/duration/walrotation", nil)
 	db.commitWaitMeter = metrics.GetOrRegisterMeter(namespace+"commit/duration/commitwait", nil)
+
+	db.level0SublevelsGauge = metrics.GetOrRegisterGauge(namespace+"tables/level0/sublevels", nil)
 
 	// Start up the metrics gathering and return
 	go db.meter(metricsGatheringInterval, namespace)
@@ -525,11 +537,9 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 
 	// Create storage and warning log tracer for write delay.
 	var (
-		compTimes        [2]int64
-		writeDelayTimes  [2]int64
-		writeDelayCounts [2]int64
-		compWrites       [2]int64
-		compReads        [2]int64
+		compTimes  [2]int64
+		compWrites [2]int64
+		compReads  [2]int64
 
 		nWrites [2]int64
 
@@ -540,6 +550,9 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		commitL0ReadAmpWriteStalls [2]int64
 		commitWALRotations         [2]int64
 		commitWaits                [2]int64
+		writeDelayTimes            [2]int64
+		writeDelayCounts           [2]int64
+		lastWriteStallReport       time.Time
 	)
 
 	// Iterate ad infinitum and collect the stats
@@ -587,6 +600,13 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		if d.writeDelayMeter != nil {
 			d.writeDelayMeter.Mark(writeDelayTimes[i%2] - writeDelayTimes[(i-1)%2])
 		}
+		// Print a warning log if writing has been stalled for a while. The log will
+		// be printed per minute to avoid overwhelming users.
+		if d.writeStalled.Load() && writeDelayCounts[i%2] == writeDelayCounts[(i-1)%2] &&
+			time.Now().After(lastWriteStallReport.Add(degradationWarnInterval)) {
+			d.log.Warn("Database compacting, degraded performance")
+			lastWriteStallReport = time.Now()
+		}
 		if d.compTimeMeter != nil {
 			d.compTimeMeter.Mark(compTimes[i%2] - compTimes[(i-1)%2])
 		}
@@ -632,6 +652,9 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		d.compDebtGauge.Update(int64(stats.Compact.EstimatedDebt))
 		d.compInProgressGauge.Update(stats.Compact.NumInProgress)
 
+		if len(stats.Levels) > 0 {
+			d.level0SublevelsGauge.Update(int64(stats.Levels[0].Sublevels))
+		}
 		for i, level := range stats.Levels {
 			// Append metrics for additional layers
 			if i >= len(d.levelsGauge) {
@@ -712,8 +735,8 @@ func (b *batch) Reset() {
 func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 	reader := b.b.Reader()
 	for {
-		kind, k, v, ok := reader.Next()
-		if !ok {
+		kind, k, v, ok, err := reader.Next()
+		if !ok || err != nil {
 			break
 		}
 		// The (k,v) slices might be overwritten if the batch is reset/reused,

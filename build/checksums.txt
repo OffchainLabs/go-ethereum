@@ -5,22 +5,48 @@
 # https://github.com/ethereum/execution-spec-tests/releases/download/v2.1.0/
 ca89c76851b0900bfcc3cbb9a26cbece1f3d7c64a3bed38723e914713290df6c  fixtures_develop.tar.gz
 
-# version:golang 1.21.6
+# version:golang 1.22.3
 # https://go.dev/dl/
-124926a62e45f78daabbaedb9c011d97633186a33c238ffc1e25320c02046248  go1.21.6.src.tar.gz
-31d6ecca09010ab351e51343a5af81d678902061fee871f912bdd5ef4d778850  go1.21.6.darwin-amd64.tar.gz
-0ff541fb37c38e5e5c5bcecc8f4f43c5ffd5e3a6c33a5d3e4003ded66fcfb331  go1.21.6.darwin-arm64.tar.gz
-a1d1a149b34bf0f53965a237682c6da1140acabb131bf0e597240e4a140b0e5e  go1.21.6.freebsd-386.tar.gz
-de59e1217e4398b1522eed8dddabab2fa1b97aecbdca3af08e34832b4f0e3f81  go1.21.6.freebsd-amd64.tar.gz
-05d09041b5a1193c14e4b2db3f7fcc649b236c567f5eb93305c537851b72dd95  go1.21.6.linux-386.tar.gz
-3f934f40ac360b9c01f616a9aa1796d227d8b0328bf64cb045c7b8c4ee9caea4  go1.21.6.linux-amd64.tar.gz
-e2e8aa88e1b5170a0d495d7d9c766af2b2b6c6925a8f8956d834ad6b4cacbd9a  go1.21.6.linux-arm64.tar.gz
-6a8eda6cc6a799ff25e74ce0c13fdc1a76c0983a0bb07c789a2a3454bf6ec9b2  go1.21.6.linux-armv6l.tar.gz
-e872b1e9a3f2f08fd4554615a32ca9123a4ba877ab6d19d36abc3424f86bc07f  go1.21.6.linux-ppc64le.tar.gz
-92894d0f732d3379bc414ffdd617eaadad47e1d72610e10d69a1156db03fc052  go1.21.6.linux-s390x.tar.gz
-65b38857135cf45c80e1d267e0ce4f80fe149326c68835217da4f2da9b7943fe  go1.21.6.windows-386.zip
-27ac9dd6e66fb3fd0acfa6792ff053c86e7d2c055b022f4b5d53bfddec9e3301  go1.21.6.windows-amd64.zip
-b93aff8f3c882c764c66a39b7a1483b0460e051e9992bf3435479129e5051bcd  go1.21.6.windows-arm64.zip
+80648ef34f903193d72a59c0dff019f5f98ae0c9aa13ade0b0ecbff991a76f68  go1.22.3.src.tar.gz
+adc9f5fee89cd53d907eb542d3b269d9d8a08a66bf1ab42175450ffbb58733fb  go1.22.3.aix-ppc64.tar.gz
+610e48c1df4d2f852de8bc2e7fd2dc1521aac216f0c0026625db12f67f192024  go1.22.3.darwin-amd64.tar.gz
+02abeab3f4b8981232237ebd88f0a9bad933bc9621791cd7720a9ca29eacbe9d  go1.22.3.darwin-arm64.tar.gz
+a5b3d54905f17af2ceaf7fcfe92edee67a5bd4eccd962dd89df719ace3e0894d  go1.22.3.dragonfly-amd64.tar.gz
+b9989ca87695ae93bacde6f3aa7b13cde5f3825515eb9ed9bbef014273739889  go1.22.3.freebsd-386.tar.gz
+7483961fae29d7d768afd5c9c0f229354ca3263ab7119c20bc182761f87cbc74  go1.22.3.freebsd-amd64.tar.gz
+edf1f0b8ecf68b14faeedb4f5d868a58c4777a0282bd85e5115c39c010cd0130  go1.22.3.freebsd-arm.tar.gz
+572eb70e5e835fbff7d53ebf473f611d7eb458c428f8dbd98a49196883c3309e  go1.22.3.freebsd-arm64.tar.gz
+ef94eb2b74402e436dce970584222c4e454eb3093908591149bd2ded6862b8af  go1.22.3.freebsd-riscv64.tar.gz
+3c3f498c68334cbd11f72aadfb6bcb507eb8436cebc50f437a0523cd4c5e03d1  go1.22.3.illumos-amd64.tar.gz
+fefba30bb0d3dd1909823ee38c9f1930c3dc5337a2ac4701c2277a329a386b57  go1.22.3.linux-386.tar.gz
+8920ea521bad8f6b7bc377b4824982e011c19af27df88a815e3586ea895f1b36  go1.22.3.linux-amd64.tar.gz
+6c33e52a5b26e7aa021b94475587fce80043a727a54ceb0eee2f9fc160646434  go1.22.3.linux-arm64.tar.gz
+f2bacad20cd2b96f23a86d4826525d42b229fd431cc6d0dec61ff3bc448ef46e  go1.22.3.linux-armv6l.tar.gz
+41e9328340544893482b2928ae18a9a88ba18b2fdd29ac77f4d33cf1815bbdc2  go1.22.3.linux-loong64.tar.gz
+cf4d5faff52e642492729eaf396968f43af179518be769075b90bc1bf650abf6  go1.22.3.linux-mips.tar.gz
+3bd009fe2e3d2bfd52433a11cb210d1dfa50b11b4c347a293951efd9e36de945  go1.22.3.linux-mips64.tar.gz
+5913b82a042188ef698f7f2dfd0cd0c71f0508a4739de9e41fceff3f4dc769b4  go1.22.3.linux-mips64le.tar.gz
+441afebca555be5313867b4577f237c7b5c0fff4386e22e47875b9f805abbec5  go1.22.3.linux-mipsle.tar.gz
+f3b53190a76f4a35283501ba6d94cbb72093be0c62ff735c6f9e586a1c983381  go1.22.3.linux-ppc64.tar.gz
+04b7b05283de30dd2da20bf3114b2e22cc727938aed3148babaf35cc951051ac  go1.22.3.linux-ppc64le.tar.gz
+d4992d4a85696e3f1de06cefbfc2fd840c9c6695d77a0f35cfdc4e28b2121c20  go1.22.3.linux-riscv64.tar.gz
+2aba796417a69be5f3ed489076bac79c1c02b36e29422712f9f3bf51da9cf2d4  go1.22.3.linux-s390x.tar.gz
+d6e6113542dd9f23db899e177fe23772bac114a5ea5e8ee436b9da68628335a8  go1.22.3.netbsd-386.tar.gz
+c33cee3075bd18ceefddd75bafa8efb51fbdc17b5ee74275122e7a927a237a4c  go1.22.3.netbsd-amd64.tar.gz
+1ab251df3c85f3b391a09565ca52fb6e1306527d72852d553e9ab74eabb4ecf8  go1.22.3.netbsd-arm.tar.gz
+1d194fe53f5d82f9a612f848950d8af8cab7cb40ccc03f10c4eb1c9808ff1a0c  go1.22.3.netbsd-arm64.tar.gz
+91d6601727f08506e938640885d3ded784925045e3a4444fd9b4b936efe1b1e0  go1.22.3.openbsd-386.tar.gz
+09d0c91ae35a4eea92615426992062ca236cc2f66444fb0b0a24cd3b13bd5297  go1.22.3.openbsd-amd64.tar.gz
+338da30cc2c97b9458e0b4caa2509f67bba55d3de16fb7d31775baca82d2e3dc  go1.22.3.openbsd-arm.tar.gz
+53eadfabd2b7dd09a64941421afee2a2888e2a4f94f353b27919b1dad1171a21  go1.22.3.openbsd-arm64.tar.gz
+8a1a2842ae8dcf2374bb05dff58074b368bb698dc9c211c794c1ff119cd9fdc7  go1.22.3.plan9-386.tar.gz
+f9816d3dd9e730cad55085ea08c1f0c925720728f9c945fff59cd24d2ac2db7b  go1.22.3.plan9-amd64.tar.gz
+f4d3d7b17c9e1b1635fcb287b5b5ab5b60acc9db3ba6a27f2b2f5d6537a2ef95  go1.22.3.plan9-arm.tar.gz
+46b7999ee94d91b21ad6940b5a3131ff6fe53ef97be9a34e582e2a3ad7263e95  go1.22.3.solaris-amd64.tar.gz
+f60f63b8a0885e0d924f39fd284aee5438fe87d8c3d8545a312adf43e0d9edac  go1.22.3.windows-386.zip
+cab2af6951a6e2115824263f6df13ff069c47270f5788714fa1d776f7f60cb39  go1.22.3.windows-amd64.zip
+40b37f4b068fc759f3a0dd61176a0f7570a4ba48bed8561c31d3967a3583981a  go1.22.3.windows-arm.zip
+59b76ee22b9b1c3afbf7f50e3cb4edb954d6c0d25e5e029ab5483a6804d61e71  go1.22.3.windows-arm64.zip
 
 # version:golangci 1.55.2
 # https://github.com/golangci/golangci-lint/releases/
@@ -56,10 +82,12 @@ a5e68ae73d38748b5269fad36ac7575e3c162a5dc63ef58abdea03cc5da4522a  golangci-lint-
 # This is the builder on PPA that will build Go itself (inception-y), don't modify!
 #
 # This version is fine to be old and full of security holes, we just use it
-# to build the latest Go. Don't change it. If it ever becomes insufficient,
-# we need to switch over to a recursive builder to jump across supported
-# versions.
+# to build the latest Go. Don't change it.
 #
-# version:ppa-builder 1.19.6
+# version:ppa-builder-1 1.19.6
 # https://go.dev/dl/
 d7f0013f82e6d7f862cc6cb5c8cdb48eef5f2e239b35baa97e2f1a7466043767  go1.19.6.src.tar.gz
+
+# version:ppa-builder-2 1.21.9
+# https://go.dev/dl/
+58f0c5ced45a0012bce2ff7a9df03e128abcc8818ebabe5027bb92bafe20e421  go1.21.9.src.tar.gz
