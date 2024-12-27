@@ -476,6 +476,17 @@ func (d *Decimal) UnmarshalJSON(input []byte) error {
 	}
 }
 
+type PrettyBytes []byte
+
+// TerminalString implements log.TerminalStringer, formatting a string for console
+// output during logging.
+func (b PrettyBytes) TerminalString() string {
+	if len(b) < 7 {
+		return fmt.Sprintf("%x", b)
+	}
+	return fmt.Sprintf("%#x...%x (%dB)", b[:3], b[len(b)-3:], len(b))
+}
+
 type BlockMetadata []byte
 
 // IsTxTimeboosted given a tx's index in the block returns whether the tx was timeboosted or not

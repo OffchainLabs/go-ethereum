@@ -628,14 +628,8 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 func (db *Database) Close() error {
 	if db.cleans != nil {
 		db.cleans.Reset()
-		db.cleans = nil
 	}
 	return nil
-}
-
-// Scheme returns the node scheme used in the database.
-func (db *Database) Scheme() string {
-	return rawdb.HashScheme
 }
 
 // Reader retrieves a node reader belonging to the given state root.

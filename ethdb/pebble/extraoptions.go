@@ -3,6 +3,7 @@ package pebble
 import "time"
 
 type ExtraOptions struct {
+	SyncMode                    bool
 	BytesPerSync                int
 	L0CompactionFileThreshold   int
 	L0CompactionThreshold       int

@@ -73,9 +73,8 @@ func DeleteSnapshotRoot(db ethdb.KeyValueWriter) {
 }
 
 // ReadAccountSnapshot retrieves the snapshot entry of an account trie leaf.
-func ReadAccountSnapshot(db ethdb.KeyValueReader, hash common.Hash) []byte {
-	data, _ := db.Get(accountSnapshotKey(hash))
-	return data
+func ReadAccountSnapshot(db ethdb.KeyValueReader, hash common.Hash) ([]byte, error) {
+	return ignoreNotFound(db.Get(accountSnapshotKey(hash)))
 }
 
 // WriteAccountSnapshot stores the snapshot entry of an account trie leaf.
@@ -92,20 +91,19 @@ func DeleteAccountSnapshot(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
-// ReadStorageSnapshot retrieves the snapshot entry of an storage trie leaf.
-func ReadStorageSnapshot(db ethdb.KeyValueReader, accountHash, storageHash common.Hash) []byte {
-	data, _ := db.Get(storageSnapshotKey(accountHash, storageHash))
-	return data
+// ReadStorageSnapshot retrieves the snapshot entry of a storage trie leaf.
+func ReadStorageSnapshot(db ethdb.KeyValueReader, accountHash, storageHash common.Hash) ([]byte, error) {
+	return ignoreNotFound(db.Get(storageSnapshotKey(accountHash, storageHash)))
 }
 
-// WriteStorageSnapshot stores the snapshot entry of an storage trie leaf.
+// WriteStorageSnapshot stores the snapshot entry of a storage trie leaf.
 func WriteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash common.Hash, entry []byte) {
 	if err := db.Put(storageSnapshotKey(accountHash, storageHash), entry); err != nil {
 		log.Crit("Failed to store storage snapshot", "err", err)
 	}
 }
 
-// DeleteStorageSnapshot removes the snapshot entry of an storage trie leaf.
+// DeleteStorageSnapshot removes the snapshot entry of a storage trie leaf.
 func DeleteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash common.Hash) {
 	if err := db.Delete(storageSnapshotKey(accountHash, storageHash)); err != nil {
 		log.Crit("Failed to delete storage snapshot", "err", err)
