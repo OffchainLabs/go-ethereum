@@ -415,34 +415,85 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 				go func() {
 					threadsRunning.Add(1)
 					defer threadsRunning.Add(-1)
+					// Limit the number of pruning threads per account to 32
+					numThreadsPerAccount := 32
+					// Keeps track of the number of pruning threads running for this account
+					var accountGroup sync.WaitGroup
+					accountGroup.Add(numThreadsPerAccount)
 					var err error
 					defer func() {
+						// Wait of all pruning threads associated with this account to finish
+						accountGroup.Wait()
 						results <- err
 					}()
 					threadStartedAt := time.Now()
 					threadLastLog := time.Now()
 
-					storageIt, err := storageTr.NodeIterator(nil)
+					var storageIt trie.NodeIterator
+					storageIt, err = storageTr.NodeIterator(nil)
 					if err != nil {
 						return
 					}
 					var processedNodes uint64
-					for storageIt.Next(true) {
-						storageTrieHash := storageIt.Hash()
-						if storageTrieHash != (common.Hash{}) {
-							// The inner bloomfilter library has a mutex so concurrency is fine here
-							err = output.Put(storageTrieHash.Bytes(), nil)
-							if err != nil {
-								return
+					// Create a channel for each thread to send the hash of the storage trie nodes to be pruned
+					storageTrieHashChans := make([]chan common.Hash, numThreadsPerAccount)
+					for i := 0; i < numThreadsPerAccount; i++ {
+						storageTrieHashChans[i] = make(chan common.Hash)
+					}
+					// Start a goroutine for each thread to process the storage trie nodes
+					for i := 0; i < numThreadsPerAccount; i++ {
+						go func(pid int) {
+							defer accountGroup.Done()
+							// Iterate over the channel associated with this thread to get the storage trie nodes to be pruned
+							for storageTrieHash := range storageTrieHashChans[pid] {
+								if storageTrieHash != (common.Hash{}) {
+									// The inner bloomfilter library has a mutex so concurrency is fine here
+									err = output.Put(storageTrieHash.Bytes(), nil)
+									if err != nil {
+										return
+									}
+								}
+								processedNodes++
+								if time.Since(threadLastLog) > 5*time.Minute {
+									elapsedTotal := time.Since(startedAt)
+									elapsedThread := time.Since(threadStartedAt)
+									log.Info("traversing trie database - traversing storage trie taking long", "key", key, "elapsedTotal", elapsedTotal, "elapsedThread", elapsedThread, "processedNodes", processedNodes, "threadsRunning", threadsRunning.Load())
+									threadLastLog = time.Now()
+								}
 							}
-						}
-						processedNodes++
-						if time.Since(threadLastLog) > 5*time.Minute {
-							elapsedTotal := time.Since(startedAt)
-							elapsedThread := time.Since(threadStartedAt)
-							log.Info("traversing trie database - traversing storage trie taking long", "key", key, "elapsedTotal", elapsedTotal, "elapsedThread", elapsedThread, "processedNodes", processedNodes, "threadsRunning", threadsRunning.Load())
-							threadLastLog = time.Now()
-						}
+						}(i)
+					}
+					var lock sync.Mutex
+					// Keep track of the number of distribution threads running for this account
+					var hashDistributionGroup sync.WaitGroup
+					hashDistributionGroup.Add(numThreadsPerAccount)
+					// Multiple threads to distribute the storage trie nodes to the pruning threads so that distribution
+					// doesn't get blocked by some slow pruning threads.
+					for d := 0; d < numThreadsPerAccount; d++ {
+						go func() {
+							defer hashDistributionGroup.Done()
+							// Iterate over the storage trie nodes and distribute them to the threads
+							isNext := true
+							for isNext {
+								var storageTrieHash common.Hash
+								lock.Lock()
+								isNext = storageIt.Next(true)
+								if isNext {
+									storageTrieHash = storageIt.Hash()
+								}
+								lock.Unlock()
+								if isNext {
+									idx := int(storageTrieHash[0]) % numThreadsPerAccount
+									storageTrieHashChans[idx] <- storageTrieHash
+								}
+							}
+						}()
+					}
+					// Wait for all distribution threads to finish
+					hashDistributionGroup.Wait()
+					// Close the channels to signal the pruning threads to finish
+					for _, ch := range storageTrieHashChans {
+						close(ch)
 					}
 					err = storageIt.Error()
 					if err != nil {
