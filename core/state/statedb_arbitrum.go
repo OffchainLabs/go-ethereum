@@ -164,6 +164,8 @@ func (s *StateDB) Deterministic() bool {
 	return s.deterministic
 }
 
+var ErrArbTxFilter error = errors.New("internal error")
+
 type ArbitrumExtraData struct {
 	unexpectedBalanceDelta *big.Int                      // total balance change across all accounts
 	userWasms              UserWasms                     // user wasms encountered during execution
@@ -171,6 +173,7 @@ type ArbitrumExtraData struct {
 	everWasmPages          uint16                        // largest number of pages ever allocated during this tx's execution
 	activatedWasms         map[common.Hash]ActivatedWasm // newly activated WASMs
 	recentWasms            RecentWasms
+	arbTxFilter            bool
 }
 
 func (s *StateDB) SetArbFinalizer(f func(*ArbitrumExtraData)) {

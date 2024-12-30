@@ -219,6 +219,18 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	return sdb, nil
 }
 
+func (s *StateDB) FilterTx() {
+	s.arbExtraData.arbTxFilter = true
+}
+
+func (s *StateDB) ClearTxFilter() {
+	s.arbExtraData.arbTxFilter = false
+}
+
+func (s *StateDB) IsTxFiltered() bool {
+	return s.arbExtraData.arbTxFilter
+}
+
 // SetLogger sets the logger for account update hooks.
 func (s *StateDB) SetLogger(l *tracing.Hooks) {
 	s.logger = l
@@ -736,6 +748,7 @@ func (s *StateDB) Copy() *StateDB {
 			recentWasms:            s.arbExtraData.recentWasms.Copy(),
 			openWasmPages:          s.arbExtraData.openWasmPages,
 			everWasmPages:          s.arbExtraData.everWasmPages,
+			arbTxFilter:            s.arbExtraData.arbTxFilter,
 		},
 
 		db:                   s.db,
@@ -1220,6 +1233,9 @@ func (s *StateDB) GetTrie() Trie {
 // The associated block number of the state transition is also provided
 // for more chain context.
 func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, error) {
+	if s.arbExtraData.arbTxFilter {
+		return common.Hash{}, ErrArbTxFilter
+	}
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
