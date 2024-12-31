@@ -86,6 +86,16 @@ func (frdb *freezerdb) Freeze() error {
 	return nil
 }
 
+func (db *freezerdb) CreateDBSnapshot(dir string) error {
+	if err := db.KeyValueStore.CreateDBSnapshot(dir); err != nil {
+		return err
+	}
+	if err := db.AncientStore.CreateDBSnapshot(dir); err != nil {
+		return err
+	}
+	return nil
+}
+
 // nofreezedb is a database wrapper that disables freezer data retrievals.
 type nofreezedb struct {
 	ethdb.KeyValueStore
@@ -187,6 +197,16 @@ type dbWithWasmEntry struct {
 	wasmDb       ethdb.KeyValueStore
 	wasmCacheTag uint32
 	wasmTargets  []ethdb.WasmTarget
+}
+
+func (db *dbWithWasmEntry) CreateDBSnapshot(dir string) error {
+	if err := db.Database.CreateDBSnapshot(dir); err != nil {
+		return err
+	}
+	if err := db.wasmDb.CreateDBSnapshot(dir); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (db *dbWithWasmEntry) WasmDataBase() (ethdb.KeyValueStore, uint32) {
