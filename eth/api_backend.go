@@ -182,6 +182,10 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
+func (b *EthAPIBackend) BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error) {
+	return nil, nil
+}
+
 func (b *EthAPIBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
 	return b.eth.miner.Pending()
 }
