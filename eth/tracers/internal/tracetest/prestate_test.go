@@ -104,7 +104,7 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			}
 
 			state.StateDB.SetLogger(tracer.Hooks)
-			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, core.MessageReplayMode)
+			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()}))
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
