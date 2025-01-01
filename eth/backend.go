@@ -446,7 +446,7 @@ func (s *Ethereum) SyncMode() downloader.SyncMode {
 	// the head state, forcefully rerun the snap sync. Note it doesn't mean the
 	// persistent state is corrupted, just mismatch with the head block.
 	if !s.blockchain.HasState(head.Root) {
-		log.Info("Reenabled snap sync as chain is stateless")
+		log.Info("Re-enabled snap sync as chain is stateless")
 		return downloader.SnapSync
 	}
 	// Nope, we're really full syncing
