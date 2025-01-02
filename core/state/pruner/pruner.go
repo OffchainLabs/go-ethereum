@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"os"
 	"path/filepath"
 	"sync"
@@ -422,54 +423,57 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 					threadStartedAt := time.Now()
 					threadLastLog := time.Now()
 
-					storageIt, err := storageTr.NodeIterator(nil)
+					var processedNodes uint64
+					var startStorageIt trie.NodeIterator
+					startStorageIt, err = storageTr.NodeIterator(nil)
 					if err != nil {
 						return
 					}
-					var processedNodes uint64
-					isNext := true
-					storageTrieHashes := make(chan common.Hash, threads)
-					go func() {
-						for isNext {
-							err = <-results
+					for i := int64(1); i <= 32; i++ {
+						// Split the storage trie into 32 parts to parallelize the traversal
+						var nextStorageIt trie.NodeIterator
+						// For the last iteration, we don't need to create a new iterator, as it will be till the end, so just let it be nil
+						if i != 32 {
+							nextStorageIt, err = storageTr.NodeIterator(big.NewInt((i) << 3).Bytes())
 							if err != nil {
 								return
 							}
-							go func() {
-								threadsRunning.Add(1)
-								defer threadsRunning.Add(-1)
-								var err error
-								defer func() {
-									results <- err
-								}()
-								for storageTrieHash := range storageTrieHashes {
-									if storageTrieHash != (common.Hash{}) {
-										// The inner bloomfilter library has a mutex so concurrency is fine here
-										err = output.Put(storageTrieHash.Bytes(), nil)
-										if err != nil {
-											return
-										}
-									}
-									processedNodes++
-									if time.Since(threadLastLog) > 5*time.Minute {
-										elapsedTotal := time.Since(startedAt)
-										elapsedThread := time.Since(threadStartedAt)
-										log.Info("traversing trie database - traversing storage trie taking long", "key", key, "elapsedTotal", elapsedTotal, "elapsedThread", elapsedThread, "processedNodes", processedNodes, "threadsRunning", threadsRunning.Load())
-										threadLastLog = time.Now()
+						}
+						err = <-results
+						if err != nil {
+							return
+						}
+						go func(startIt, endIt trie.NodeIterator) {
+							threadsRunning.Add(1)
+							defer threadsRunning.Add(-1)
+							var err error
+							defer func() {
+								results <- err
+							}()
+							// Traverse the storage trie, and stop if we reach the end of the trie or the end of the current part
+							for startIt.Next(true) && (endIt == nil || startIt.Hash() == endIt.Hash()) {
+								storageTrieHash := startIt.Hash()
+								if storageTrieHash != (common.Hash{}) {
+									// The inner bloomfilter library has a mutex so concurrency is fine here
+									err = output.Put(storageTrieHash.Bytes(), nil)
+									if err != nil {
+										return
 									}
 								}
-							}()
-						}
-					}()
-					for isNext {
-						isNext = storageIt.Next(true)
-						storageTrieHash := storageIt.Hash()
-						storageTrieHashes <- storageTrieHash
-					}
-					close(storageTrieHashes)
-					err = storageIt.Error()
-					if err != nil {
-						return
+								processedNodes++
+								if time.Since(threadLastLog) > 5*time.Minute {
+									elapsedTotal := time.Since(startedAt)
+									elapsedThread := time.Since(threadStartedAt)
+									log.Info("traversing trie database - traversing storage trie taking long", "key", key, "elapsedTotal", elapsedTotal, "elapsedThread", elapsedThread, "processedNodes", processedNodes, "threadsRunning", threadsRunning.Load())
+									threadLastLog = time.Now()
+								}
+							}
+							err = startIt.Error()
+							if err != nil {
+								return
+							}
+						}(startStorageIt, nextStorageIt)
+						startStorageIt = nextStorageIt
 					}
 				}()
 			}
