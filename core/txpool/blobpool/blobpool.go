@@ -798,7 +798,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	p.state = statedb
 
 	// Run the reorg between the old and new head and figure out which accounts
-	// need to be rechecked and which transactions need to be readded
+	// need to be rechecked and which transactions need to be re-added
 	if reinject, inclusions := p.reorg(oldHead, newHead); reinject != nil {
 		var adds []*types.Transaction
 		for addr, txs := range reinject {
