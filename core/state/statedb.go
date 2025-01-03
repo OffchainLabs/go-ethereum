@@ -18,7 +18,6 @@
 package state
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"maps"
@@ -206,6 +205,18 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		sdb.snap = sdb.snaps.Snapshot(root)
 	}
 	return sdb, nil
+}
+
+func (s *StateDB) FilterTx() {
+	s.arbExtraData.arbTxFilter = true
+}
+
+func (s *StateDB) ClearTxFilter() {
+	s.arbExtraData.arbTxFilter = false
+}
+
+func (s *StateDB) IsTxFiltered() bool {
+	return s.arbExtraData.arbTxFilter
 }
 
 // SetLogger sets the logger for account update hooks.
@@ -718,6 +729,7 @@ func (s *StateDB) Copy() *StateDB {
 			recentWasms:            s.arbExtraData.recentWasms.Copy(),
 			openWasmPages:          s.arbExtraData.openWasmPages,
 			everWasmPages:          s.arbExtraData.everWasmPages,
+			arbTxFilter:            s.arbExtraData.arbTxFilter,
 		},
 
 		db:                   s.db,
@@ -898,32 +910,15 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		// later time.
 		workers.SetLimit(1)
 	}
-	if s.deterministic {
-		addressesToUpdate := make([]common.Address, 0, len(s.mutations))
-		for addr := range s.mutations {
-			addressesToUpdate = append(addressesToUpdate, addr)
+	for addr, op := range s.mutations {
+		if op.applied || op.isDelete() {
+			continue
 		}
-		sort.Slice(addressesToUpdate, func(i, j int) bool { return bytes.Compare(addressesToUpdate[i][:], addressesToUpdate[j][:]) < 0 })
-		for _, addr := range addressesToUpdate {
-			if obj := s.mutations[addr]; !obj.applied && !obj.isDelete() {
-				obj := s.stateObjects[addr] // closure for the task runner below
-				workers.Go(func() error {
-					obj.updateRoot()
-					return nil
-				})
-			}
-		}
-	} else {
-		for addr, op := range s.mutations {
-			if op.applied || op.isDelete() {
-				continue
-			}
-			obj := s.stateObjects[addr] // closure for the task runner below
-			workers.Go(func() error {
-				obj.updateRoot()
-				return nil
-			})
-		}
+		obj := s.stateObjects[addr] // closure for the task runner below
+		workers.Go(func() error {
+			obj.updateRoot()
+			return nil
+		})
 	}
 	workers.Wait()
 	s.StorageUpdates += time.Since(start)
@@ -967,6 +962,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			s.AccountUpdated += 1
 		}
 		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
+	}
+	if s.deterministic {
+		sort.Slice(deletedAddrs, func(i, j int) bool { return deletedAddrs[i].Cmp(deletedAddrs[j]) < 0 })
 	}
 	for _, deletedAddr := range deletedAddrs {
 		s.deleteStateObject(deletedAddr)
@@ -1182,6 +1180,9 @@ func (s *StateDB) GetTrie() Trie {
 // commit gathers the state mutations accumulated along with the associated
 // trie changes, resetting all internal flags with the new state as the base.
 func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
+	if s.arbExtraData.arbTxFilter {
+		return nil, ErrArbTxFilter
+	}
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1326,7 +1327,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 
 	origin := s.originalRoot
 	s.originalRoot = root
-	return newStateUpdate(origin, root, deletes, updates, nodes), nil
+	return newStateUpdate(origin, root, deletes, updates, nodes, s.arbExtraData.activatedWasms), nil
 }
 
 // commitAndFlush is a wrapper of commit which also commits the state mutations
@@ -1347,10 +1348,10 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool) (*stateU
 		}
 	}
 
-	if db := s.db.WasmStore(); db != nil && len(s.arbExtraData.activatedWasms) > 0 {
+	if db := s.db.WasmStore(); db != nil && len(ret.activatedWasms) > 0 {
 		batch := db.NewBatch()
 		// Arbitrum: write Stylus programs to disk
-		for moduleHash, asmMap := range s.arbExtraData.activatedWasms {
+		for moduleHash, asmMap := range ret.activatedWasms {
 			rawdb.WriteActivation(batch, moduleHash, asmMap)
 		}
 		s.arbExtraData.activatedWasms = make(map[common.Hash]ActivatedWasm)

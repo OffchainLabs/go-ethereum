@@ -574,7 +574,7 @@ func (c *ChainConfig) IsTerminalPoWBlock(parentTotalDiff *big.Int, totalDiff *bi
 // IsShanghai returns whether time is either equal to the Shanghai fork time or greater.
 func (c *ChainConfig) IsShanghai(num *big.Int, time uint64, currentArbosVersion uint64) bool {
 	if c.IsArbitrum() {
-		return currentArbosVersion >= 11
+		return currentArbosVersion >= ArbosVersion_11
 	}
 	return c.IsLondon(num) && isTimestampForked(c.ShanghaiTime, time)
 }
@@ -582,7 +582,7 @@ func (c *ChainConfig) IsShanghai(num *big.Int, time uint64, currentArbosVersion 
 // IsCancun returns whether num is either equal to the Cancun fork time or greater.
 func (c *ChainConfig) IsCancun(num *big.Int, time uint64, currentArbosVersion uint64) bool {
 	if c.IsArbitrum() {
-		return currentArbosVersion >= 20
+		return currentArbosVersion >= ArbosVersion_20
 	}
 	return c.IsLondon(num) && isTimestampForked(c.CancunTime, time)
 }
