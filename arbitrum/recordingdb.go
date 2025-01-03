@@ -32,17 +32,19 @@ type RecordingKV struct {
 	inner         *triedb.Database
 	diskDb        ethdb.KeyValueStore
 	readDbEntries map[common.Hash][]byte
+	mutex         sync.Mutex
 	enableBypass  bool
 }
 
 func newRecordingKV(inner *triedb.Database, diskDb ethdb.KeyValueStore) *RecordingKV {
-	return &RecordingKV{inner, diskDb, make(map[common.Hash][]byte), false}
+	return &RecordingKV{inner, diskDb, make(map[common.Hash][]byte), sync.Mutex{}, false}
 }
 
 func (db *RecordingKV) Has(key []byte) (bool, error) {
 	return false, errors.New("recording KV doesn't support Has")
 }
 
+// Get may be called concurrently with other Get calls
 func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 	var hash common.Hash
 	var res []byte
@@ -66,6 +68,8 @@ func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 	if crypto.Keccak256Hash(res) != hash {
 		return nil, fmt.Errorf("recording KV attempted to access non-hash key %v", hash)
 	}
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
 	db.readDbEntries[hash] = res
 	return res, nil
 }
