@@ -49,6 +49,11 @@ type StateDB interface {
 	// Arbitrum: preserve old empty account behavior
 	CreateZombieIfDeleted(common.Address)
 
+	// Arbitrum
+	FilterTx()
+	ClearTxFilter()
+	IsTxFiltered() bool
+
 	Deterministic() bool
 	Database() state.Database
 
