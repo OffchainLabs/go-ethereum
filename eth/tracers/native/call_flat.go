@@ -195,7 +195,7 @@ func (t *flatCallTracer) OnExit(depth int, output []byte, gasUsed uint64, err er
 	if t.config.IncludePrecompiles {
 		return
 	}
-	if len(t.tracer.callstack[len(t.tracer.callstack)-1].Calls) > 0 {
+	if len(t.tracer.callstack[len(t.tracer.callstack)-1].Calls) == 0 {
 		return
 	}
 	var (
