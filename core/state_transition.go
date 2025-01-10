@@ -239,6 +239,21 @@ func (c *MessageRunContext) WasmTargets() []rawdb.WasmTarget {
 	return c.wasmTargets
 }
 
+func (c *MessageRunContext) RunModeMetricName() string {
+	switch c.runMode {
+	case messageCommitMode:
+		return "commit_runmode"
+	case messageGasEstimationMode:
+		return "gas_estimation_runmode"
+	case messageEthcallMode:
+		return "eth_call_runmode"
+	case messageReplayMode:
+		return "replay_runmode"
+	default:
+		return "unknown_runmode"
+	}
+}
+
 // TransactionToMessage converts a transaction into a Message.
 func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int, runCtx *MessageRunContext) (*Message, error) {
 	msg := &Message{
