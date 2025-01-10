@@ -178,6 +178,9 @@ type MessageRunContext struct {
 }
 
 func NewMessageCommitContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
+	if len(wasmTargets) == 0 {
+		wasmTargets = []rawdb.WasmTarget{rawdb.LocalTarget()}
+	}
 	return &MessageRunContext{
 		runMode:      messageCommitMode,
 		wasmCacheTag: 1,
@@ -186,6 +189,9 @@ func NewMessageCommitContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext 
 }
 
 func NewMessageReplayContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
+	if len(wasmTargets) == 0 {
+		wasmTargets = []rawdb.WasmTarget{rawdb.LocalTarget()}
+	}
 	return &MessageRunContext{
 		runMode:     messageReplayMode,
 		wasmTargets: wasmTargets,
@@ -193,6 +199,9 @@ func NewMessageReplayContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext 
 }
 
 func NewMessagePrefetchContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
+	if len(wasmTargets) == 0 {
+		wasmTargets = []rawdb.WasmTarget{rawdb.LocalTarget()}
+	}
 	return NewMessageReplayContext(wasmTargets)
 }
 
