@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,37 +14,28 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package vm
+package rawdb
 
 import (
-	"math/big"
+	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb/ancienttest"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-// adaptation of opBlockHash that doesn't require an EVM stack
-func BlockHashOp(evm *EVM, block *big.Int) common.Hash {
-	if !block.IsUint64() {
-		return common.Hash{}
-	}
-	num64 := block.Uint64()
-	upper, err := evm.ProcessingHook.L1BlockNumber(evm.Context)
-	if err != nil {
-		return common.Hash{}
-	}
-
-	var lower uint64
-	if upper < 257 {
-		lower = 0
-	} else {
-		lower = upper - 256
-	}
-	if num64 >= lower && num64 < upper {
-		hash, err := evm.ProcessingHook.L1BlockHash(evm.Context, num64)
-		if err != nil {
-			return common.Hash{}
+func TestMemoryFreezer(t *testing.T) {
+	ancienttest.TestAncientSuite(t, func(kinds []string) ethdb.AncientStore {
+		tables := make(map[string]bool)
+		for _, kind := range kinds {
+			tables[kind] = true
 		}
-		return hash
-	}
-	return common.Hash{}
+		return NewMemoryFreezer(false, tables)
+	})
+	ancienttest.TestResettableAncientSuite(t, func(kinds []string) ethdb.ResettableAncientStore {
+		tables := make(map[string]bool)
+		for _, kind := range kinds {
+			tables[kind] = true
+		}
+		return NewMemoryFreezer(false, tables)
+	})
 }
