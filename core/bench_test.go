@@ -21,15 +21,15 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common/math"
+	"github.com/paxosglobal/go-ethereum-arbitrum/consensus/ethash"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core/rawdb"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core/vm"
+	"github.com/paxosglobal/go-ethereum-arbitrum/crypto"
+	"github.com/paxosglobal/go-ethereum-arbitrum/ethdb"
+	"github.com/paxosglobal/go-ethereum-arbitrum/params"
 )
 
 func BenchmarkInsertChain_empty_memdb(b *testing.B) {

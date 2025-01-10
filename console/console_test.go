@@ -25,14 +25,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/internal/jsre"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/node"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common"
+	"github.com/paxosglobal/go-ethereum-arbitrum/console/prompt"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core"
+	"github.com/paxosglobal/go-ethereum-arbitrum/eth"
+	"github.com/paxosglobal/go-ethereum-arbitrum/eth/ethconfig"
+	"github.com/paxosglobal/go-ethereum-arbitrum/internal/jsre"
+	"github.com/paxosglobal/go-ethereum-arbitrum/miner"
+	"github.com/paxosglobal/go-ethereum-arbitrum/node"
 )
 
 const (

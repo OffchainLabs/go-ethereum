@@ -35,6 +35,15 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	fuzz "github.com/google/gofuzz"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common"
+	"github.com/paxosglobal/go-ethereum-arbitrum/consensus/ethash"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core/rawdb"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core/vm"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p/enode"
+	"github.com/paxosglobal/go-ethereum-arbitrum/params"
+	"github.com/paxosglobal/go-ethereum-arbitrum/rlp"
 )
 
 func FuzzARange(f *testing.F) {

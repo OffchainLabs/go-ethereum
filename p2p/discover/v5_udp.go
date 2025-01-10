@@ -29,12 +29,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common/mclock"
+	"github.com/paxosglobal/go-ethereum-arbitrum/log"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p/discover/v5wire"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p/enode"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p/enr"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p/netutil"
 )
 
 const (

@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common"
+	"github.com/paxosglobal/go-ethereum-arbitrum/params"
 )
 
 var activators = map[int]func(*JumpTable){

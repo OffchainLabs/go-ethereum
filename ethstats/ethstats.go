@@ -43,6 +43,19 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
+	"github.com/paxosglobal/go-ethereum-arbitrum"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common/mclock"
+	"github.com/paxosglobal/go-ethereum-arbitrum/consensus"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
+	ethproto "github.com/paxosglobal/go-ethereum-arbitrum/eth/protocols/eth"
+	"github.com/paxosglobal/go-ethereum-arbitrum/event"
+	"github.com/paxosglobal/go-ethereum-arbitrum/log"
+	"github.com/paxosglobal/go-ethereum-arbitrum/miner"
+	"github.com/paxosglobal/go-ethereum-arbitrum/node"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p"
+	"github.com/paxosglobal/go-ethereum-arbitrum/rpc"
 )
 
 const (

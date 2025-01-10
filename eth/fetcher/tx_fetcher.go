@@ -25,13 +25,13 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/lru"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/core/txpool"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common/lru"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common/mclock"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core/txpool"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
+	"github.com/paxosglobal/go-ethereum-arbitrum/log"
+	"github.com/paxosglobal/go-ethereum-arbitrum/metrics"
 )
 
 const (

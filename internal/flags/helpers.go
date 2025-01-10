@@ -23,10 +23,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/internal/version"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/mattn/go-isatty"
+	"github.com/paxosglobal/go-ethereum-arbitrum/internal/version"
+	"github.com/paxosglobal/go-ethereum-arbitrum/log"
+	"github.com/paxosglobal/go-ethereum-arbitrum/params"
 	"github.com/urfave/cli/v2"
 )
 

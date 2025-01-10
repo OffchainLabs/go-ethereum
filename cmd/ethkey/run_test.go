@@ -21,8 +21,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/internal/cmdtest"
-	"github.com/ethereum/go-ethereum/internal/reexec"
+	"github.com/paxosglobal/go-ethereum-arbitrum/internal/cmdtest"
+	"github.com/paxosglobal/go-ethereum-arbitrum/internal/reexec"
 )
 
 type testEthkey struct {

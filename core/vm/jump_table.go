@@ -19,7 +19,7 @@ package vm
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/paxosglobal/go-ethereum-arbitrum/params"
 )
 
 type (

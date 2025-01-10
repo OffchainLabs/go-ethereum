@@ -29,11 +29,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/paxosglobal/go-ethereum-arbitrum/crypto"
+	"github.com/paxosglobal/go-ethereum-arbitrum/log"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p/discover/v4wire"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p/enode"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p/netutil"
 )
 
 // Errors

@@ -29,6 +29,11 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/database"
 	"github.com/gballet/go-verkle"
 	"github.com/holiman/uint256"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
+	"github.com/paxosglobal/go-ethereum-arbitrum/ethdb"
+	"github.com/paxosglobal/go-ethereum-arbitrum/trie/trienode"
+	"github.com/paxosglobal/go-ethereum-arbitrum/trie/utils"
 )
 
 var (

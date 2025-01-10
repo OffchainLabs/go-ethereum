@@ -30,14 +30,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/holiman/uint256"
+	"github.com/paxosglobal/go-ethereum-arbitrum/accounts"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common/hexutil"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common/math"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
+	"github.com/paxosglobal/go-ethereum-arbitrum/crypto"
+	"github.com/paxosglobal/go-ethereum-arbitrum/crypto/kzg4844"
 )
 
 var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Za-z](\w*)(\[\])?$`)
@@ -95,7 +95,7 @@ type SendTxArgs struct {
 
 	// We accept "data" and "input" for backwards-compatibility reasons.
 	// "input" is the newer name and should be preferred by clients.
-	// Issue detail: https://github.com/ethereum/go-ethereum/issues/15628
+	// Issue detail: https://github.com/paxosglobal/go-ethereum-arbitrum/issues/15628
 	Data  *hexutil.Bytes `json:"data,omitempty"`
 	Input *hexutil.Bytes `json:"input,omitempty"`
 

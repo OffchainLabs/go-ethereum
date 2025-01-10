@@ -12,8 +12,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 
 	// Force-load native and js packages, to trigger registration
-	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
-	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
+	_ "github.com/paxosglobal/go-ethereum-arbitrum/eth/tracers/js"
+	_ "github.com/paxosglobal/go-ethereum-arbitrum/eth/tracers/native"
 )
 
 // camel converts a snake cased input string into a camel cased output.

@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/eth/protocols/snap"
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common"
+	"github.com/paxosglobal/go-ethereum-arbitrum/eth/protocols/eth"
+	"github.com/paxosglobal/go-ethereum-arbitrum/eth/protocols/snap"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p"
 )
 
 var (

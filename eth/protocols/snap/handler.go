@@ -21,16 +21,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
+	"github.com/paxosglobal/go-ethereum-arbitrum/log"
+	"github.com/paxosglobal/go-ethereum-arbitrum/metrics"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p/enode"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p/enr"
+	"github.com/paxosglobal/go-ethereum-arbitrum/trie"
+	"github.com/paxosglobal/go-ethereum-arbitrum/trie/trienode"
 )
 
 const (

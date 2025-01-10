@@ -30,7 +30,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/internal/reexec"
+	"github.com/paxosglobal/go-ethereum-arbitrum/internal/reexec"
 )
 
 func runSelf(args ...string) ([]byte, error) {

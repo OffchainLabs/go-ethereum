@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/paxosglobal/go-ethereum-arbitrum/crypto"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p/enode"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p/enr"
 	"github.com/urfave/cli/v2"
 )
 

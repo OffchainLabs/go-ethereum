@@ -1,4 +1,4 @@
-module github.com/ethereum/go-ethereum
+module github.com/paxosglobal/go-ethereum-arbitrum
 
 go 1.21
 

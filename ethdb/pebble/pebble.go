@@ -29,10 +29,10 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/bloom"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common"
+	"github.com/paxosglobal/go-ethereum-arbitrum/ethdb"
+	"github.com/paxosglobal/go-ethereum-arbitrum/log"
+	"github.com/paxosglobal/go-ethereum-arbitrum/metrics"
 )
 
 const (
@@ -285,7 +285,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		WALMinSyncInterval:          extraOptions.WALMinSyncInterval,
 		TargetByteDeletionRate:      extraOptions.TargetByteDeletionRate,
 	}
-	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
+	// Disable seek compaction explicitly. Check https://github.com/paxosglobal/go-ethereum-arbitrum/pull/20130
 	// for more details.
 	opt.Experimental.ReadSamplingMultiplier = -1
 

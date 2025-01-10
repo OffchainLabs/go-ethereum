@@ -3,7 +3,7 @@ package types
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 )
 
 var ArbosAddress = common.HexToAddress("0xa4b05")

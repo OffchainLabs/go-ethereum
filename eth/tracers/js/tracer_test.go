@@ -31,6 +31,11 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core/state"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core/vm"
+	"github.com/paxosglobal/go-ethereum-arbitrum/eth/tracers"
+	"github.com/paxosglobal/go-ethereum-arbitrum/params"
 )
 
 type account struct{}

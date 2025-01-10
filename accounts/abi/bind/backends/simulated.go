@@ -25,7 +25,7 @@ import (
 )
 
 // SimulatedBackend is a simulated blockchain.
-// Deprecated: use package github.com/ethereum/go-ethereum/ethclient/simulated instead.
+// Deprecated: use package github.com/paxosglobal/go-ethereum-arbitrum/ethclient/simulated instead.
 type SimulatedBackend struct {
 	*simulated.Backend
 	simulated.Client

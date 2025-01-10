@@ -25,11 +25,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/paxosglobal/go-ethereum-arbitrum/accounts/keystore"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common"
+	"github.com/paxosglobal/go-ethereum-arbitrum/console/prompt"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p/dnsdisc"
+	"github.com/paxosglobal/go-ethereum-arbitrum/p2p/enode"
 	"github.com/urfave/cli/v2"
 )
 

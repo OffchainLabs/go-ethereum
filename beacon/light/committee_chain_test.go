@@ -21,10 +21,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/beacon/params"
-	"github.com/ethereum/go-ethereum/beacon/types"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/paxosglobal/go-ethereum-arbitrum/beacon/params"
+	"github.com/paxosglobal/go-ethereum-arbitrum/beacon/types"
+	"github.com/paxosglobal/go-ethereum-arbitrum/common/mclock"
+	"github.com/paxosglobal/go-ethereum-arbitrum/ethdb/memorydb"
 )
 
 var (
