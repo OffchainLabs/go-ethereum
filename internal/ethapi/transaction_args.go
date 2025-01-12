@@ -490,9 +490,11 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, he
 	}
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	if state != nil && !skipL1Charging {
-		// ToMessage recurses once to allow ArbOS to intercept the result for all callers
-		// ArbOS uses this to modify globalGasCap so that the cap will ignore this tx's specific L1 data costs
-		postingGas, err := core.RPCPostingGasHook(msg, header, state)
+		var postingGas uint64
+		var err error
+		if globalGasCap != 0 {
+			postingGas, err = core.RPCPostingGasHook(msg, header, state)
+		}
 		if err == nil {
 			args.setGasUsingCap(globalGasCap + postingGas)
 			msg.GasLimit = uint64(*args.Gas)
