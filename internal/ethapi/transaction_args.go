@@ -493,6 +493,7 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, he
 		var postingGas uint64
 		var err error
 		if globalGasCap != 0 {
+			// Modify globalGasCap to ignore this tx's specific L1 data costs
 			postingGas, err = core.RPCPostingGasHook(msg, header, state)
 		}
 		if err == nil {
