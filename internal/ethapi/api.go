@@ -1167,7 +1167,7 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 	}
 
 	// Arbitrum: a tx can schedule another (see retryables)
-	result, err = runScheduledTxes(ctx, b, state, header, blockCtx, core.NewMessageGasEstimationContext(), result) // TODO: why do we use GasEstimationMode here?
+	result, err = runScheduledTxes(ctx, b, state, header, blockCtx, runCtx, result)
 	if err != nil {
 		return nil, err
 	}
