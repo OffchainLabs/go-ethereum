@@ -34,11 +34,13 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
-// freezerdb is a database wrapper that enables freezer data retrievals.
+// freezerdb is a database wrapper that enables ancient chain segment freezing.
 type freezerdb struct {
-	ancientRoot string
 	ethdb.KeyValueStore
-	ethdb.AncientStore
+	*chainFreezer
+
+	readOnly    bool
+	ancientRoot string
 }
 
 func (frdb *freezerdb) WasmDataBase() (ethdb.KeyValueStore, uint32) {
@@ -58,7 +60,7 @@ func (frdb *freezerdb) AncientDatadir() (string, error) {
 // the slow ancient tables.
 func (frdb *freezerdb) Close() error {
 	var errs []error
-	if err := frdb.AncientStore.Close(); err != nil {
+	if err := frdb.chainFreezer.Close(); err != nil {
 		errs = append(errs, err)
 	}
 	if err := frdb.KeyValueStore.Close(); err != nil {
@@ -74,12 +76,12 @@ func (frdb *freezerdb) Close() error {
 // a freeze cycle completes, without having to sleep for a minute to trigger the
 // automatic background run.
 func (frdb *freezerdb) Freeze() error {
-	if frdb.AncientStore.(*chainFreezer).readonly {
+	if frdb.readOnly {
 		return errReadOnly
 	}
 	// Trigger a freeze cycle and block until it's done
 	trigger := make(chan struct{}, 1)
-	frdb.AncientStore.(*chainFreezer).trigger <- trigger
+	frdb.chainFreezer.trigger <- trigger
 	<-trigger
 	return nil
 }
@@ -236,8 +238,14 @@ func resolveChainFreezerDir(ancient string) string {
 // storage. The passed ancient indicates the path of root ancient directory
 // where the chain freezer can be opened.
 func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
-	// Create the idle freezer instance
-	frdb, err := newChainFreezer(resolveChainFreezerDir(ancient), namespace, readonly)
+	// Create the idle freezer instance. If the given ancient directory is empty,
+	// in-memory chain freezer is used (e.g. dev mode); otherwise the regular
+	// file-based freezer is created.
+	chainFreezerDir := ancient
+	if chainFreezerDir != "" {
+		chainFreezerDir = resolveChainFreezerDir(chainFreezerDir)
+	}
+	frdb, err := newChainFreezer(chainFreezerDir, namespace, readonly)
 	if err != nil {
 		printChainMetadata(db)
 		return nil, err
@@ -321,7 +329,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 		}
 	}
 	// Freezer is consistent with the key-value database, permit combining the two
-	if !frdb.readonly {
+	if !readonly {
 		frdb.wg.Add(1)
 		go func() {
 			frdb.freeze(db)
@@ -331,7 +339,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	return &freezerdb{
 		ancientRoot:   ancient,
 		KeyValueStore: db,
-		AncientStore:  frdb,
+		chainFreezer:  frdb,
 	}, nil
 }
 
