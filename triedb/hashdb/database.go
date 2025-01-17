@@ -57,6 +57,9 @@ var (
 	memcacheCommitTimeTimer  = metrics.NewRegisteredResettingTimer("hashdb/memcache/commit/time", nil)
 	memcacheCommitNodesMeter = metrics.NewRegisteredMeter("hashdb/memcache/commit/nodes", nil)
 	memcacheCommitBytesMeter = metrics.NewRegisteredMeter("hashdb/memcache/commit/bytes", nil)
+
+	arbMemcacheFlushTimer  = metrics.NewRegisteredTimer("arb/hashdb/memcache/flush/time", nil)
+	arbMemcacheCommitTimer = metrics.NewRegisteredTimer("arb/hashdb/memcache/commit/time", nil)
 )
 
 // ChildResolver defines the required method to decode the provided
@@ -401,6 +404,8 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	memcacheFlushBytesMeter.Mark(int64(storage - db.dirtiesSize))
 	memcacheFlushNodesMeter.Mark(int64(nodes - len(db.dirties)))
 
+	arbMemcacheFlushTimer.Update(time.Since(start))
+
 	log.Info("Persisted nodes from memory database", "nodes", nodes-len(db.dirties), "size", storage-db.dirtiesSize, "time", time.Since(start),
 		"flushnodes", db.flushnodes, "flushsize", db.flushsize, "flushtime", db.flushtime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
 
@@ -448,6 +453,8 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	memcacheCommitTimeTimer.Update(time.Since(start))
 	memcacheCommitBytesMeter.Mark(int64(storage - db.dirtiesSize))
 	memcacheCommitNodesMeter.Mark(int64(nodes - len(db.dirties)))
+
+	arbMemcacheCommitTimer.Update(time.Since(start))
 
 	logger := log.Info
 	if !report {
