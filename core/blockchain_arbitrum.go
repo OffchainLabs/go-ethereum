@@ -19,13 +19,31 @@ package core
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
+
+func (bc *BlockChain) FlushTrieDB(advanceBlockChainMutex *sync.Mutex, capLimit common.StorageSize) error {
+	advanceBlockChainMutex.Lock()
+	defer advanceBlockChainMutex.Unlock()
+
+	err := bc.triedb.Cap(capLimit)
+	if err != nil {
+		return err
+	}
+
+	bc.gcproc = 0
+	// bc.lastWrite = prevNum
+	err = bc.triedb.Commit(bc.CurrentBlock().Root, true)
+
+	return err
+}
 
 // WriteBlockAndSetHeadWithTime also counts processTime, which will cause intermittent TrieDirty cache writes
 func (bc *BlockChain) WriteBlockAndSetHeadWithTime(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool, processTime time.Duration) (status WriteStatus, err error) {
