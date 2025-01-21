@@ -38,11 +38,15 @@ func (bc *BlockChain) FlushTrieDB(advanceBlockChainMutex *sync.Mutex, capLimit c
 		return err
 	}
 
-	bc.gcproc = 0
-	// bc.lastWrite = prevNum
 	err = bc.triedb.Commit(bc.CurrentBlock().Root, true)
+	if err != nil {
+		return err
+	}
 
-	return err
+	bc.gcproc = 0
+	bc.lastWrite = bc.CurrentBlock().Number.Uint64()
+
+	return nil
 }
 
 // WriteBlockAndSetHeadWithTime also counts processTime, which will cause intermittent TrieDirty cache writes
