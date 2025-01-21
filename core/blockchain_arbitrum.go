@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -33,12 +34,14 @@ func (bc *BlockChain) FlushTrieDB(advanceBlockChainMutex *sync.Mutex, capLimit c
 	advanceBlockChainMutex.Lock()
 	defer advanceBlockChainMutex.Unlock()
 
-	err := bc.triedb.Cap(capLimit)
-	if err != nil {
-		return err
+	if bc.triedb.Scheme() == rawdb.HashScheme {
+		err := bc.triedb.Cap(capLimit)
+		if err != nil {
+			return err
+		}
 	}
 
-	err = bc.triedb.Commit(bc.CurrentBlock().Root, true)
+	err := bc.triedb.Commit(bc.CurrentBlock().Root, true)
 	if err != nil {
 		return err
 	}
