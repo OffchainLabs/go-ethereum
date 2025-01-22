@@ -46,7 +46,7 @@ var (
 	memcacheDirtyReadMeter  = metrics.NewRegisteredMeter("hashdb/memcache/dirty/read", nil)
 	memcacheDirtyWriteMeter = metrics.NewRegisteredMeter("hashdb/memcache/dirty/write", nil)
 
-	memcacheFlushTimeTimer  = metrics.NewRegisteredResettingTimer("hashdb/memcache/flush/time", nil)
+	memcacheFlushTimeTimer  = metrics.NewRegisteredTimer("hashdb/memcache/flush/time", nil)
 	memcacheFlushNodesMeter = metrics.NewRegisteredMeter("hashdb/memcache/flush/nodes", nil)
 	memcacheFlushBytesMeter = metrics.NewRegisteredMeter("hashdb/memcache/flush/bytes", nil)
 
@@ -54,12 +54,9 @@ var (
 	memcacheGCNodesMeter = metrics.NewRegisteredMeter("hashdb/memcache/gc/nodes", nil)
 	memcacheGCBytesMeter = metrics.NewRegisteredMeter("hashdb/memcache/gc/bytes", nil)
 
-	memcacheCommitTimeTimer  = metrics.NewRegisteredResettingTimer("hashdb/memcache/commit/time", nil)
+	memcacheCommitTimeTimer  = metrics.NewRegisteredTimer("hashdb/memcache/commit/time", nil)
 	memcacheCommitNodesMeter = metrics.NewRegisteredMeter("hashdb/memcache/commit/nodes", nil)
 	memcacheCommitBytesMeter = metrics.NewRegisteredMeter("hashdb/memcache/commit/bytes", nil)
-
-	memcacheFlushStandardTimer  = metrics.NewRegisteredTimer("hashdb/memcache/flush/standardtime", nil)
-	memcacheCommitStandardTimer = metrics.NewRegisteredTimer("hashdb/memcache/commit/standardtime", nil)
 )
 
 // ChildResolver defines the required method to decode the provided
@@ -404,8 +401,6 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	memcacheFlushBytesMeter.Mark(int64(storage - db.dirtiesSize))
 	memcacheFlushNodesMeter.Mark(int64(nodes - len(db.dirties)))
 
-	memcacheFlushStandardTimer.Update(time.Since(start))
-
 	log.Info("Persisted nodes from memory database", "nodes", nodes-len(db.dirties), "size", storage-db.dirtiesSize, "time", time.Since(start),
 		"flushnodes", db.flushnodes, "flushsize", db.flushsize, "flushtime", db.flushtime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
 
@@ -453,8 +448,6 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	memcacheCommitTimeTimer.Update(time.Since(start))
 	memcacheCommitBytesMeter.Mark(int64(storage - db.dirtiesSize))
 	memcacheCommitNodesMeter.Mark(int64(nodes - len(db.dirties)))
-
-	memcacheCommitStandardTimer.Update(time.Since(start))
 
 	logger := log.Info
 	if !report {
