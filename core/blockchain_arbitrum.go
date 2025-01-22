@@ -31,6 +31,10 @@ import (
 )
 
 func (bc *BlockChain) FlushTrieDB(advanceBlockChainMutex *sync.Mutex, capLimit common.StorageSize) error {
+	if bc.triedb.Scheme() == rawdb.PathScheme {
+		return nil
+	}
+
 	advanceBlockChainMutex.Lock()
 	defer advanceBlockChainMutex.Unlock()
 
@@ -39,11 +43,9 @@ func (bc *BlockChain) FlushTrieDB(advanceBlockChainMutex *sync.Mutex, capLimit c
 		return err
 	}
 
-	if bc.triedb.Scheme() == rawdb.HashScheme {
-		err = bc.triedb.Cap(capLimit)
-		if err != nil {
-			return err
-		}
+	err = bc.triedb.Cap(capLimit)
+	if err != nil {
+		return err
 	}
 
 	bc.gcproc = 0
