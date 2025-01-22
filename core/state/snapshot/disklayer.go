@@ -85,10 +85,8 @@ func (dl *diskLayer) account(hash common.Hash, ignoreStale bool) (*types.SlimAcc
 		return nil, nil
 	}
 	account := new(types.SlimAccount)
-	if err := rlp.DecodeBytes(data, account); err != nil {
-		panic(err)
-	}
-	return account, nil
+	err = rlp.DecodeBytes(data, account)
+	return account, err
 }
 
 // AccountRLP directly retrieves the account RLP associated with a particular
