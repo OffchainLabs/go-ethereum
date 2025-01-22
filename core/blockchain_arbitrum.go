@@ -34,16 +34,16 @@ func (bc *BlockChain) FlushTrieDB(advanceBlockChainMutex *sync.Mutex, capLimit c
 	advanceBlockChainMutex.Lock()
 	defer advanceBlockChainMutex.Unlock()
 
-	if bc.triedb.Scheme() == rawdb.HashScheme {
-		err := bc.triedb.Cap(capLimit)
-		if err != nil {
-			return err
-		}
-	}
-
 	err := bc.triedb.Commit(bc.CurrentBlock().Root, true)
 	if err != nil {
 		return err
+	}
+
+	if bc.triedb.Scheme() == rawdb.HashScheme {
+		err = bc.triedb.Cap(capLimit)
+		if err != nil {
+			return err
+		}
 	}
 
 	bc.gcproc = 0
