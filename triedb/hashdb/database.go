@@ -401,7 +401,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	memcacheFlushBytesMeter.Mark(int64(storage - db.dirtiesSize))
 	memcacheFlushNodesMeter.Mark(int64(nodes - len(db.dirties)))
 
-	log.Info("Persisted nodes from memory database", "nodes", nodes, "dirtiesnodes", len(db.dirties), "storagesize", storage, "dirtiessize", db.dirtiesSize, "time", time.Since(start),
+	log.Info("Persisted nodes from memory database", "nodes", nodes-len(db.dirties), "size", storage-db.dirtiesSize, "time", time.Since(start),
 		"flushnodes", db.flushnodes, "flushsize", db.flushsize, "flushtime", db.flushtime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
 
 	return nil
