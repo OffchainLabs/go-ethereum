@@ -38,18 +38,28 @@ func (bc *BlockChain) FlushTrieDB(advanceBlockChainMutex *sync.Mutex, capLimit c
 	advanceBlockChainMutex.Lock()
 	defer advanceBlockChainMutex.Unlock()
 
-	err := bc.triedb.Commit(bc.CurrentBlock().Root, true)
+	if !bc.triegc.Empty() {
+		_, triegcBlockNumber := bc.triegc.Peek()
+		blockNumber := uint64(-triegcBlockNumber)
+
+		header := bc.GetHeaderByNumber(blockNumber)
+		if header == nil {
+			log.Warn("Reorg in progress, trie commit postponed")
+		} else {
+			err := bc.triedb.Commit(header.Root, true)
+			if err != nil {
+				return err
+			}
+
+			bc.gcproc = 0
+			bc.lastWrite = blockNumber
+		}
+	}
+
+	err := bc.triedb.Cap(capLimit)
 	if err != nil {
 		return err
 	}
-
-	err = bc.triedb.Cap(capLimit)
-	if err != nil {
-		return err
-	}
-
-	bc.gcproc = 0
-	bc.lastWrite = bc.CurrentBlock().Number.Uint64()
 
 	return nil
 }
