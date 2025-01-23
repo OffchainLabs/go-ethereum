@@ -565,12 +565,13 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			continue
 		}
 
+		oldAccount, err := base.account(hash, true)
+
 		// Delete the account snapshot
 		rawdb.DeleteAccountSnapshot(batch, hash)
 		base.cache.Set(hash[:], nil)
 
 		// Try to check if there's any associated storage to delete from the snapshot
-		oldAccount, err := base.account(hash, true)
 		if err != nil {
 			log.Warn("Failed to get destructed account from snapshot", "err", err)
 			// Fall through to deleting storage in case this account has any
