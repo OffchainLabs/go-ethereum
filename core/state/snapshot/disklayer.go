@@ -76,8 +76,8 @@ func (dl *diskLayer) Stale() bool {
 
 // Account directly retrieves the account associated with a particular hash in
 // the snapshot slim data format.
-func (dl *diskLayer) account(hash common.Hash, ignoreStale bool) (*types.SlimAccount, error) {
-	data, err := dl.accountRLP(hash, ignoreStale)
+func (dl *diskLayer) account(hash common.Hash, evenIfStale bool) (*types.SlimAccount, error) {
+	data, err := dl.accountRLP(hash, evenIfStale)
 	if err != nil {
 		return nil, err
 	}
@@ -91,13 +91,13 @@ func (dl *diskLayer) account(hash common.Hash, ignoreStale bool) (*types.SlimAcc
 
 // AccountRLP directly retrieves the account RLP associated with a particular
 // hash in the snapshot slim data format.
-func (dl *diskLayer) accountRLP(hash common.Hash, ignoreStale bool) ([]byte, error) {
+func (dl *diskLayer) accountRLP(hash common.Hash, evenIfStale bool) ([]byte, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	// If the layer was flattened into, consider it invalid (any live reference to
 	// the original should be marked as unusable).
-	if dl.stale && !ignoreStale {
+	if dl.stale && !evenIfStale {
 		return nil, ErrSnapshotStale
 	}
 	// If the layer is being generated, ensure the requested hash has already been
