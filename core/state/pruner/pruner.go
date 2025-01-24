@@ -434,18 +434,18 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 						if err != nil {
 							return
 						}
-						go func(iteration int64) {
+						var startIterator trie.NodeIterator
+						startIterator, err = storageTr.NodeIterator(big.NewInt((i - 1) << 3).Bytes())
+						if err != nil {
+							return
+						}
+						go func(startIt trie.NodeIterator, iteration int64) {
 							threadsRunning.Add(1)
 							defer threadsRunning.Add(-1)
 							var err error
 							defer func() {
 								resultsPerAccount <- err
 							}()
-							var startIt trie.NodeIterator
-							startIt, err = storageTr.NodeIterator(big.NewInt((iteration - 1) << 3).Bytes())
-							if err != nil {
-								return
-							}
 
 							// Traverse the storage trie, and stop if we reach the end of the trie or the end of the current part
 							var startItPath, endItPath []byte
@@ -481,7 +481,7 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 								return
 							}
 							log.Trace("Finished traversing storage trie", "key", key, "startPath", startItPath, "endPath", endItPath)
-						}(i)
+						}(startIterator, i)
 					}
 				}()
 			}
