@@ -19,7 +19,6 @@ package core
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -30,13 +29,15 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-func (bc *BlockChain) FlushTrieDB(advanceBlockChainMutex *sync.Mutex, capLimit common.StorageSize) error {
+func (bc *BlockChain) FlushTrieDB(capLimit common.StorageSize) error {
 	if bc.triedb.Scheme() == rawdb.PathScheme {
 		return nil
 	}
 
-	advanceBlockChainMutex.Lock()
-	defer advanceBlockChainMutex.Unlock()
+	if !bc.chainmu.TryLock() {
+		return errChainStopped
+	}
+	defer bc.chainmu.Unlock()
 
 	if !bc.triegc.Empty() {
 		_, triegcBlockNumber := bc.triegc.Peek()
