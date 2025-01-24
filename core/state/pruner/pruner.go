@@ -371,6 +371,11 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 	for i := 0; i < threads; i++ {
 		results <- nil
 	}
+	// We also create a semaphore for the storage trie traversal, to limit the number of goroutines
+	resultsPerAccount := make(chan error, threads)
+	for i := 0; i < threads; i++ {
+		resultsPerAccount <- nil
+	}
 	var threadsRunning atomic.Int32
 
 	for accountIt.Next(true) {
@@ -424,38 +429,33 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 					threadLastLog := time.Now()
 
 					var processedNodes uint64
-					var startStorageIt trie.NodeIterator
-					startStorageIt, err = storageTr.NodeIterator(nil)
-					if err != nil {
-						return
-					}
 					for i := int64(1); i <= 32; i++ {
-						// Split the storage trie into 32 parts to parallelize the traversal
-						var nextStorageIt trie.NodeIterator
-						var nextStorageItHash common.Hash
-						// For the last iteration, we don't need to create a new iterator, as it will be till the end, so just let it be nil
-						if i != 32 {
-							nextStorageIt, err = storageTr.NodeIterator(big.NewInt((i) << 3).Bytes())
-							nextStorageItHash = nextStorageIt.Hash()
-							if err != nil {
-								return
-							}
-						}
-						err = <-results
+						err = <-resultsPerAccount
 						if err != nil {
 							return
 						}
-						go func(startIt trie.NodeIterator, endHash common.Hash) {
+						go func(iteration int64) {
 							threadsRunning.Add(1)
 							defer threadsRunning.Add(-1)
 							var err error
 							defer func() {
-								results <- err
+								resultsPerAccount <- err
 							}()
+							var startIt trie.NodeIterator
+							startIt, err = storageTr.NodeIterator(big.NewInt((i - 1) << 3).Bytes())
+							if err != nil {
+								return
+							}
+
 							// Traverse the storage trie, and stop if we reach the end of the trie or the end of the current part
 							var startItPath, endItPath []byte
 
-							for startIt.Next(true) && (endHash == common.Hash{} || endHash.Cmp(startIt.Hash()) != 0) {
+							key := keybytesToHex(big.NewInt((iteration) << 3).Bytes())
+							key = key[:len(key)-1]
+							for startIt.Next(true) {
+								if iteration != 32 && bytes.Compare(startIt.Path(), key) >= 0 {
+									break
+								}
 								if startItPath == nil {
 									startItPath = startIt.Path()
 								}
@@ -481,8 +481,7 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 								return
 							}
 							log.Trace("Finished traversing storage trie", "key", key, "startPath", startItPath, "endPath", endItPath)
-						}(startStorageIt, nextStorageItHash)
-						startStorageIt = nextStorageIt
+						}(i)
 					}
 				}()
 			}
@@ -497,7 +496,24 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 			return err
 		}
 	}
+	for i := 0; i < threads; i++ {
+		err = <-resultsPerAccount
+		if err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func keybytesToHex(str []byte) []byte {
+	l := len(str)*2 + 1
+	var nibbles = make([]byte, l)
+	for i, b := range str {
+		nibbles[i*2] = b / 16
+		nibbles[i*2+1] = b % 16
+	}
+	nibbles[l-1] = 16
+	return nibbles
 }
 
 // Prune deletes all historical state nodes except the nodes belong to the
