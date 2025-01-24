@@ -432,9 +432,11 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 					for i := int64(1); i <= 32; i++ {
 						// Split the storage trie into 32 parts to parallelize the traversal
 						var nextStorageIt trie.NodeIterator
+						var nextStorageItHash common.Hash
 						// For the last iteration, we don't need to create a new iterator, as it will be till the end, so just let it be nil
 						if i != 32 {
 							nextStorageIt, err = storageTr.NodeIterator(big.NewInt((i) << 3).Bytes())
+							nextStorageItHash = nextStorageIt.Hash()
 							if err != nil {
 								return
 							}
@@ -443,7 +445,7 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 						if err != nil {
 							return
 						}
-						go func(startIt, endIt trie.NodeIterator) {
+						go func(startIt trie.NodeIterator, endHash common.Hash) {
 							threadsRunning.Add(1)
 							defer threadsRunning.Add(-1)
 							var err error
@@ -451,7 +453,8 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 								results <- err
 							}()
 							// Traverse the storage trie, and stop if we reach the end of the trie or the end of the current part
-							for startIt.Next(true) && (endIt == nil || startIt.Hash() == endIt.Hash()) {
+							startItPath := startIt.Path()
+							for startIt.Next(true) && (endHash == common.Hash{} || endHash.Cmp(startIt.Hash()) != 0) {
 								storageTrieHash := startIt.Hash()
 								if storageTrieHash != (common.Hash{}) {
 									// The inner bloomfilter library has a mutex so concurrency is fine here
@@ -472,7 +475,8 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 							if err != nil {
 								return
 							}
-						}(startStorageIt, nextStorageIt)
+							log.Trace("Finished traversing storage trie", "key", key, "startPath", startItPath, "endPath", startIt.Path())
+						}(startStorageIt, nextStorageItHash)
 						startStorageIt = nextStorageIt
 					}
 				}()
