@@ -442,7 +442,7 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 								resultsPerAccount <- err
 							}()
 							var startIt trie.NodeIterator
-							startIt, err = storageTr.NodeIterator(big.NewInt((i - 1) << 3).Bytes())
+							startIt, err = storageTr.NodeIterator(big.NewInt((iteration - 1) << 3).Bytes())
 							if err != nil {
 								return
 							}
