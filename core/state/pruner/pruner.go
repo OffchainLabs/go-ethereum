@@ -453,8 +453,13 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 								results <- err
 							}()
 							// Traverse the storage trie, and stop if we reach the end of the trie or the end of the current part
-							startItPath := startIt.Path()
+							var startItPath, endItPath []byte
+
 							for startIt.Next(true) && (endHash == common.Hash{} || endHash.Cmp(startIt.Hash()) != 0) {
+								if startItPath == nil {
+									startItPath = startIt.Path()
+								}
+								endItPath = startIt.Path()
 								storageTrieHash := startIt.Hash()
 								if storageTrieHash != (common.Hash{}) {
 									// The inner bloomfilter library has a mutex so concurrency is fine here
@@ -475,7 +480,7 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 							if err != nil {
 								return
 							}
-							log.Trace("Finished traversing storage trie", "key", key, "startPath", startItPath, "endPath", startIt.Path())
+							log.Trace("Finished traversing storage trie", "key", key, "startPath", startItPath, "endPath", endItPath)
 						}(startStorageIt, nextStorageItHash)
 						startStorageIt = nextStorageIt
 					}
