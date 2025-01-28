@@ -170,6 +170,7 @@ type StateDB struct {
 	StorageDeleted atomic.Int64
 
 	deterministic bool
+	recording     bool
 }
 
 // New creates a new state from a given trie.
@@ -949,6 +950,21 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		usedAddrs    [][]byte
 		deletedAddrs []common.Address
 	)
+	// When recording, it's important to handle deletions before other mutations
+	// to ensure that access the most state possible in the database. If, instead,
+	// the updates were applied before the deletions, it might be possible to
+	// record an update for an address that would then be subsequently deleted.
+	if s.recording {
+		for addr, op := range s.mutations {
+			if op.applied {
+				continue
+			}
+			if op.isDelete() {
+				op.applied = true
+				s.deleteStateObject(addr)
+			}
+		}
+	}
 	for addr, op := range s.mutations {
 		if op.applied {
 			continue
