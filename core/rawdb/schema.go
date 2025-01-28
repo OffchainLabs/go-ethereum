@@ -167,6 +167,10 @@ func headerKey(number uint64, hash common.Hash) []byte {
 	return append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
+func HeaderKey(number uint64, hash common.Hash) []byte {
+	return headerKey(number, hash)
+}
+
 // headerTDKey = headerPrefix + num (uint64 big endian) + hash + headerTDSuffix
 func headerTDKey(number uint64, hash common.Hash) []byte {
 	return append(headerKey(number, hash), headerTDSuffix...)
@@ -187,9 +191,17 @@ func blockBodyKey(number uint64, hash common.Hash) []byte {
 	return append(append(blockBodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
+func BlockBodyKey(number uint64, hash common.Hash) []byte {
+	return blockBodyKey(number, hash)
+}
+
 // blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
 func blockReceiptsKey(number uint64, hash common.Hash) []byte {
 	return append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+}
+
+func BlockReceiptsKey(number uint64, hash common.Hash) []byte {
+	return blockReceiptsKey(number, hash)
 }
 
 // txLookupKey = txLookupPrefix + hash
