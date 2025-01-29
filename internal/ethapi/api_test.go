@@ -527,6 +527,9 @@ func (b testBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 	}
 	panic("unknown type rpc.BlockNumberOrHash")
 }
+func (b testBackend) BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error) {
+	return nil, nil
+}
 func (b testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
 	return b.chain.GetBlock(hash, uint64(number.Int64())).Body(), nil
 }
