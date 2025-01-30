@@ -64,7 +64,7 @@ type Config struct {
 	Threads        int    // The maximum number of threads spawned in dumpRawTrieDescendants and removeOtherRoots
 	CleanCacheSize int    // The Megabytes of clean cache size used in dumpRawTrieDescendants
 
-	ParallelPrune bool // Whether to prune in parallel per account
+	ParallelStorageTraversal bool // Whether to prune in parallel per account
 }
 
 // Pruner is an offline tool to prune the stale state with the
@@ -404,34 +404,53 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 				output.Put(data.CodeHash, nil)
 			}
 			if data.Root != (common.Hash{}) {
-				if !config.ParallelPrune {
+				numParallelIteration := int64(1)
+				if config.ParallelStorageTraversal {
+					numParallelIteration = int64(32)
+				}
+				for i := int64(1); i <= numParallelIteration; i++ {
 					err = <-results
 					if err != nil {
 						return err
 					}
-					go func() {
+					go func(iteration int64) {
 						threadsRunning.Add(1)
 						defer threadsRunning.Add(-1)
+						var processedNodes uint64
+						threadStartedAt := time.Now()
+						threadLastLog := time.Now()
 						var err error
 						defer func() {
 							results <- err
 						}()
-						threadStartedAt := time.Now()
-						threadLastLog := time.Now()
 						// note: we are passing data.Root as stateRoot here, to skip the check for stateRoot existence in trie.newTrieReader,
 						// we already check that when opening state trie and reading the account node
+						// Need to create a new trie for each iteration, to avoid race conditions.
 						trieID := trie.StorageTrieID(data.Root, key, data.Root)
-						storageTr, err := trie.NewStateTrie(trieID, sdb.TrieDB())
+						var storageTr *trie.StateTrie
+						storageTr, err = trie.NewStateTrie(trieID, sdb.TrieDB())
 						if err != nil {
 							return
 						}
-						storageIt, err := storageTr.NodeIterator(nil)
+						var startIt trie.NodeIterator
+						startIt, err = storageTr.NodeIterator(big.NewInt((iteration - 1) << 3).Bytes())
 						if err != nil {
 							return
 						}
-						var processedNodes uint64
-						for storageIt.Next(true) {
-							storageTrieHash := storageIt.Hash()
+						// Traverse the storage trie, and stop if we reach the end of the trie or the end of the current part
+						var startItPath, endItPath []byte
+
+						key := trie.KeybytesToHex(big.NewInt((iteration) << 3).Bytes())
+						key = key[:len(key)-1]
+						for startIt.Next(true) {
+							if iteration != numParallelIteration && bytes.Compare(startIt.Path(), key) > 0 {
+								break
+							}
+							if startItPath == nil {
+								startItPath = startIt.Path()
+							}
+							endItPath = startIt.Path()
+							storageTrieHash := startIt.Hash()
 							if storageTrieHash != (common.Hash{}) {
 								// The inner bloomfilter library has a mutex so concurrency is fine here
 								err = output.Put(storageTrieHash.Bytes(), nil)
@@ -447,77 +466,12 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 								threadLastLog = time.Now()
 							}
 						}
-						err = storageIt.Error()
+						err = startIt.Error()
 						if err != nil {
 							return
 						}
-					}()
-				} else {
-					for i := int64(1); i <= 32; i++ {
-						err = <-results
-						if err != nil {
-							return err
-						}
-						go func(iteration int64) {
-							threadsRunning.Add(1)
-							defer threadsRunning.Add(-1)
-							var processedNodes uint64
-							threadStartedAt := time.Now()
-							threadLastLog := time.Now()
-							var err error
-							defer func() {
-								results <- err
-							}()
-							// note: we are passing data.Root as stateRoot here, to skip the check for stateRoot existence in trie.newTrieReader,
-							// we already check that when opening state trie and reading the account node
-							// Need to create a new trie for each iteration, to avoid race conditions.
-							trieID := trie.StorageTrieID(data.Root, key, data.Root)
-							var storageTr *trie.StateTrie
-							storageTr, err = trie.NewStateTrie(trieID, sdb.TrieDB())
-							if err != nil {
-								return
-							}
-							var startIt trie.NodeIterator
-							startIt, err = storageTr.NodeIterator(big.NewInt((iteration - 1) << 3).Bytes())
-							if err != nil {
-								return
-							}
-							// Traverse the storage trie, and stop if we reach the end of the trie or the end of the current part
-							var startItPath, endItPath []byte
-
-							key := keybytesToHex(big.NewInt((iteration) << 3).Bytes())
-							key = key[:len(key)-1]
-							for startIt.Next(true) {
-								if iteration != 32 && bytes.Compare(startIt.Path(), key) >= 0 {
-									break
-								}
-								if startItPath == nil {
-									startItPath = startIt.Path()
-								}
-								endItPath = startIt.Path()
-								storageTrieHash := startIt.Hash()
-								if storageTrieHash != (common.Hash{}) {
-									// The inner bloomfilter library has a mutex so concurrency is fine here
-									err = output.Put(storageTrieHash.Bytes(), nil)
-									if err != nil {
-										return
-									}
-								}
-								processedNodes++
-								if time.Since(threadLastLog) > 5*time.Minute {
-									elapsedTotal := time.Since(startedAt)
-									elapsedThread := time.Since(threadStartedAt)
-									log.Info("traversing trie database - traversing storage trie taking long", "key", key, "elapsedTotal", elapsedTotal, "elapsedThread", elapsedThread, "processedNodes", processedNodes, "threadsRunning", threadsRunning.Load())
-									threadLastLog = time.Now()
-								}
-							}
-							err = startIt.Error()
-							if err != nil {
-								return
-							}
-							log.Trace("Finished traversing storage trie", "key", key, "startPath", startItPath, "endPath", endItPath)
-						}(i)
-					}
+						log.Trace("Finished traversing storage trie", "key", key, "startPath", startItPath, "endPath", endItPath)
+					}(i)
 				}
 			}
 		}
@@ -532,17 +486,6 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 		}
 	}
 	return nil
-}
-
-func keybytesToHex(str []byte) []byte {
-	l := len(str)*2 + 1
-	var nibbles = make([]byte, l)
-	for i, b := range str {
-		nibbles[i*2] = b / 16
-		nibbles[i*2+1] = b % 16
-	}
-	nibbles[l-1] = 16
-	return nibbles
 }
 
 // Prune deletes all historical state nodes except the nodes belong to the
