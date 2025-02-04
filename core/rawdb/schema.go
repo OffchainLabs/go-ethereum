@@ -271,6 +271,10 @@ func configKey(hash common.Hash) []byte {
 	return append(configPrefix, hash.Bytes()...)
 }
 
+func ConfigKey(hash common.Hash) []byte {
+	return configKey(hash)
+}
+
 // genesisStateSpecKey = genesisPrefix + hash
 func genesisStateSpecKey(hash common.Hash) []byte {
 	return append(genesisPrefix, hash.Bytes()...)
