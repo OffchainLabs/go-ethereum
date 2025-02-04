@@ -86,6 +86,22 @@ func (f *chainFreezer) Close() error {
 	return f.AncientStore.Close()
 }
 
+// readHeadNumber returns the number of chain head block. 0 is returned if the
+// block is unknown or not available yet.
+func (f *chainFreezer) readHeadNumber(db ethdb.KeyValueReader) uint64 {
+	hash := ReadHeadBlockHash(db)
+	if hash == (common.Hash{}) {
+		log.Error("Head block is not reachable")
+		return 0
+	}
+	number := ReadHeaderNumber(db, hash)
+	if number == nil {
+		log.Error("Number of head block is missing")
+		return 0
+	}
+	return *number
+}
+
 // readFinalizedNumber returns the number of finalized block. 0 is returned
 // if the block is unknown or not available yet.
 func (f *chainFreezer) readFinalizedNumber(db ethdb.KeyValueReader) uint64 {
@@ -103,10 +119,20 @@ func (f *chainFreezer) readFinalizedNumber(db ethdb.KeyValueReader) uint64 {
 
 // freezeThreshold returns the threshold for chain freezing.
 func (f *chainFreezer) freezeThreshold(db ethdb.KeyValueReader) (uint64, error) {
-	final := f.readFinalizedNumber(db)
-	if final == 0 {
+	var (
+		head  = f.readHeadNumber(db)
+		final = f.readFinalizedNumber(db)
+	)
+
+	if final == 0 || (head == final && final == 1) {
 		return 0, errors.New("freezing threshold is not available")
 	}
+
+	// avoids freezing the head of the chain, since freezing removes the block from the active database
+	if head == final {
+		final--
+	}
+
 	return final, nil
 }
 
