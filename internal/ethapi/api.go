@@ -1303,7 +1303,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	call := args.ToMessage(header.BaseFee, gasCap, header, state, core.MessageGasEstimationMode)
 
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
-	{
+	if gasCap > 0 {
 		postingGas, err := core.RPCPostingGasHook(call, header, state)
 		if err != nil {
 			return 0, err
