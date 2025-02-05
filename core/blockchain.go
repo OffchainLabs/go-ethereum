@@ -78,6 +78,9 @@ var (
 
 	triedbCommitTimer = metrics.NewRegisteredResettingTimer("chain/triedb/commits", nil)
 
+	triedbSizeGauge   = metrics.NewRegisteredGauge("chain/triedb/size", nil)
+	triedbGCProcGauge = metrics.NewRegisteredGauge("chain/triedb/gcproc", nil)
+
 	blockInsertTimer     = metrics.NewRegisteredResettingTimer("chain/inserts", nil)
 	blockValidationTimer = metrics.NewRegisteredResettingTimer("chain/validation", nil)
 	blockExecutionTimer  = metrics.NewRegisteredResettingTimer("chain/execution", nil)
@@ -1654,6 +1657,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			bc.triedb.Dereference(prevEntry.Root)
 		}
 	}
+
+	_, dirtyNodesBufferedSize, _ := bc.triedb.Size()
+	triedbSizeGauge.Update(int64(dirtyNodesBufferedSize))
+	triedbGCProcGauge.Update(int64(bc.gcproc))
+
 	return nil
 }
 

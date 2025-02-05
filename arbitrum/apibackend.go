@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -51,6 +52,22 @@ type APIBackend struct {
 	sync           SyncProgressBackend
 }
 
+type errorFilteredFallbackClient struct {
+	impl types.FallbackClient
+	url  string
+}
+
+func (c *errorFilteredFallbackClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	err := c.impl.CallContext(ctx, result, method, args...)
+	if err != nil && strings.Contains(err.Error(), c.url) {
+		// avoids leaking the URL in the error message.
+		// URL can contain sensitive information such as API keys.
+		log.Warn("fallback client error", "error", err)
+		return errors.New("Failed to call fallback API")
+	}
+	return err
+}
+
 type timeoutFallbackClient struct {
 	impl    types.FallbackClient
 	timeout time.Duration
@@ -77,12 +94,22 @@ func CreateFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.D
 		types.SetFallbackError(strings.Join(fields, ":"), int(errNumber))
 		return nil, nil
 	}
+
 	var fallbackClient types.FallbackClient
 	var err error
 	fallbackClient, err = rpc.Dial(fallbackClientUrl)
 	if err != nil {
 		return nil, fmt.Errorf("failed creating fallback connection: %w", err)
 	}
+	url, err := url.Parse(fallbackClientUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed parsing fallback URL: %w", err)
+	}
+	fallbackClient = &errorFilteredFallbackClient{
+		impl: fallbackClient,
+		url:  url.String(),
+	}
+
 	if fallbackClientTimeout != 0 {
 		fallbackClient = &timeoutFallbackClient{
 			impl:    fallbackClient,
@@ -96,6 +123,7 @@ type SyncProgressBackend interface {
 	SyncProgressMap() map[string]interface{}
 	SafeBlockNumber(ctx context.Context) (uint64, error)
 	FinalizedBlockNumber(ctx context.Context) (uint64, error)
+	BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error)
 }
 
 func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration) (*filters.FilterSystem, error) {
@@ -458,6 +486,10 @@ func (a *APIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 		return a.BlockByHash(ctx, hash)
 	}
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
+}
+
+func (a *APIBackend) BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error) {
+	return a.sync.BlockMetadataByNumber(blockNum)
 }
 
 func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *core.BlockChain, maxRecreateStateDepth int64, header *types.Header, err error) (*state.StateDB, *types.Header, error) {
