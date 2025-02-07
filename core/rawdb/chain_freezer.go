@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 const (
@@ -118,24 +117,23 @@ func (f *chainFreezer) readFinalizedNumber(db ethdb.KeyValueReader) uint64 {
 	return *number
 }
 
-// freezeThreshold returns the threshold for chain freezing. It's determined
-// by formula: max(finality, HEAD-params.FullImmutabilityThreshold).
+// freezeThreshold returns the threshold for chain freezing.
 func (f *chainFreezer) freezeThreshold(db ethdb.KeyValueReader) (uint64, error) {
 	var (
-		head      = f.readHeadNumber(db)
-		final     = f.readFinalizedNumber(db)
-		headLimit uint64
+		head  = f.readHeadNumber(db)
+		final = f.readFinalizedNumber(db)
 	)
-	if head > params.FullImmutabilityThreshold {
-		headLimit = head - params.FullImmutabilityThreshold
-	}
-	if final == 0 && headLimit == 0 {
+
+	if final == 0 || (head == final && final == 1) {
 		return 0, errors.New("freezing threshold is not available")
 	}
-	if final > headLimit {
-		return final, nil
+
+	// avoids freezing the head of the chain, since freezing removes the block from the active database
+	if head == final {
+		final--
 	}
-	return headLimit, nil
+
+	return final, nil
 }
 
 // freeze is a background thread that periodically checks the blockchain for any
