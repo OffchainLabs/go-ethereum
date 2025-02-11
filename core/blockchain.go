@@ -78,6 +78,9 @@ var (
 
 	triedbCommitTimer = metrics.NewRegisteredResettingTimer("chain/triedb/commits", nil)
 
+	triedbSizeGauge   = metrics.NewRegisteredGauge("chain/triedb/size", nil)
+	triedbGCProcGauge = metrics.NewRegisteredGauge("chain/triedb/gcproc", nil)
+
 	blockInsertTimer     = metrics.NewRegisteredResettingTimer("chain/inserts", nil)
 	blockValidationTimer = metrics.NewRegisteredResettingTimer("chain/validation", nil)
 	blockExecutionTimer  = metrics.NewRegisteredResettingTimer("chain/execution", nil)
@@ -1654,6 +1657,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			bc.triedb.Dereference(prevEntry.Root)
 		}
 	}
+
+	_, dirtyNodesBufferedSize, _ := bc.triedb.Size()
+	triedbSizeGauge.Update(int64(dirtyNodesBufferedSize))
+	triedbGCProcGauge.Update(int64(bc.gcproc))
+
 	return nil
 }
 
@@ -1925,8 +1933,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		}
 		statedb.SetLogger(bc.logger)
 
-		// Enable prefetching to pull in trie node paths while processing transactions
-		statedb.StartPrefetcher("chain")
+		// If we are past Byzantium, enable prefetching to pull in trie node paths
+		// while processing transactions. Before Byzantium the prefetcher is mostly
+		// useless due to the intermediate root hashing after each transaction.
+		if bc.chainConfig.IsByzantium(block.Number()) {
+			statedb.StartPrefetcher("chain")
+		}
 		activeState = statedb
 
 		// If we have a followup block, run that against the current state to pre-cache

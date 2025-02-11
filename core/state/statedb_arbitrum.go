@@ -160,6 +160,16 @@ func NewDeterministic(root common.Hash, db Database) (*StateDB, error) {
 	return sdb, nil
 }
 
+func NewRecording(root common.Hash, db Database) (*StateDB, error) {
+	sdb, err := New(root, db, nil)
+	if err != nil {
+		return nil, err
+	}
+	sdb.deterministic = true
+	sdb.recording = true
+	return sdb, nil
+}
+
 func (s *StateDB) Deterministic() bool {
 	return s.deterministic
 }
