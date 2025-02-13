@@ -972,7 +972,7 @@ func (s *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.
 // of a message call.
 // Note, state and stateDiff can't be specified at the same time. If state is
 // set, message execution will only use the data in the given state. Otherwise
-// if statDiff is set, all diff will be applied first and then execute the call
+// if stateDiff is set, all diff will be applied first and then execute the call
 // message.
 type OverrideAccount struct {
 	Nonce     *hexutil.Uint64              `json:"nonce"`
@@ -1295,15 +1295,20 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		ErrorRatio:       gasestimator.EstimateGasErrorRatio,
 		RunScheduledTxes: runScheduledTxes,
 	}
+	// Set any required transaction default, but make sure the gas cap itself is not messed with
+	// if it was not specified in the original argument list.
+	if args.Gas == nil {
+		args.Gas = new(hexutil.Uint64)
+	}
 	if err := args.CallDefaults(gasCap, header.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return 0, err
 	}
-	// Run the gas estimation andwrap any revertals into a custom return
+	// Run the gas estimation and wrap any revertals into a custom return
 	// Arbitrum: this also appropriately recursively calls another args.ToMessage with increased gasCap by posterCostInL2Gas amount
 	call := args.ToMessage(header.BaseFee, gasCap, header, state, core.MessageGasEstimationMode)
 
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
-	{
+	if gasCap > 0 {
 		postingGas, err := core.RPCPostingGasHook(call, header, state)
 		if err != nil {
 			return 0, err
