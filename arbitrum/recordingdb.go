@@ -194,7 +194,7 @@ func (r *RecordingDatabase) StateFor(header *types.Header) (*state.StateDB, erro
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	sdb, err := state.NewDeterministic(header.Root, r.db)
+	sdb, err := state.NewRecording(header.Root, r.db)
 	if err == nil {
 		r.referenceRootLockHeld(header.Root)
 	}
@@ -267,7 +267,7 @@ func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeade
 	if lastBlockHeader != nil {
 		prevRoot = lastBlockHeader.Root
 	}
-	recordingStateDb, err := state.NewDeterministic(prevRoot, recordingStateDatabase)
+	recordingStateDb, err := state.NewRecording(prevRoot, recordingStateDatabase)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create recordingStateDb: %w", err)
 	}

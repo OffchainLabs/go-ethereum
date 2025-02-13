@@ -21,11 +21,49 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
+
+func (bc *BlockChain) FlushTrieDB(capLimit common.StorageSize) error {
+	if bc.triedb.Scheme() == rawdb.PathScheme {
+		return nil
+	}
+
+	if !bc.chainmu.TryLock() {
+		return errChainStopped
+	}
+	defer bc.chainmu.Unlock()
+
+	if !bc.triegc.Empty() {
+		_, triegcBlockNumber := bc.triegc.Peek()
+		blockNumber := uint64(-triegcBlockNumber)
+
+		header := bc.GetHeaderByNumber(blockNumber)
+		if header == nil {
+			log.Warn("Reorg in progress, trie commit postponed")
+		} else {
+			err := bc.triedb.Commit(header.Root, true)
+			if err != nil {
+				return err
+			}
+
+			bc.gcproc = 0
+			bc.lastWrite = blockNumber
+		}
+	}
+
+	err := bc.triedb.Cap(capLimit)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 
 // WriteBlockAndSetHeadWithTime also counts processTime, which will cause intermittent TrieDirty cache writes
 func (bc *BlockChain) WriteBlockAndSetHeadWithTime(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool, processTime time.Duration) (status WriteStatus, err error) {
