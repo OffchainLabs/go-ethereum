@@ -49,10 +49,8 @@ const (
 // Database wraps access to tries and contract code.
 type Database interface {
 	// Arbitrum: Read activated Stylus contracts
-	ActivatedAsm(target ethdb.WasmTarget, moduleHash common.Hash) (asm []byte, err error)
+	ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) (asm []byte, err error)
 	WasmStore() ethdb.KeyValueStore
-	WasmCacheTag() uint32
-	WasmTargets() []ethdb.WasmTarget
 
 	// OpenTrie opens the main account trie.
 	OpenTrie(root common.Hash) (Trie, error)
@@ -163,15 +161,12 @@ func NewDatabase(db ethdb.Database) Database {
 // is safe for concurrent use and retains a lot of collapsed RLP trie nodes in a
 // large memory cache.
 func NewDatabaseWithConfig(db ethdb.Database, config *triedb.Config) Database {
-	wasmdb, wasmTag := db.WasmDataBase()
 	cdb := &cachingDB{
 		// Arbitrum only
-		activatedAsmCache:     lru.NewSizeConstrainedCache[activatedAsmCacheKey, []byte](activatedWasmCacheSize),
-		wasmTag:               wasmTag,
-		wasmDatabaseRetriever: db,
+		activatedAsmCache: lru.NewSizeConstrainedCache[activatedAsmCacheKey, []byte](activatedWasmCacheSize),
 
 		disk:          db,
-		wasmdb:        wasmdb,
+		wasmdb:        db.WasmDataBase(),
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		triedb:        triedb.NewDatabase(db, config),
@@ -182,15 +177,12 @@ func NewDatabaseWithConfig(db ethdb.Database, config *triedb.Config) Database {
 
 // NewDatabaseWithNodeDB creates a state database with an already initialized node database.
 func NewDatabaseWithNodeDB(db ethdb.Database, triedb *triedb.Database) Database {
-	wasmdb, wasmTag := db.WasmDataBase()
 	cdb := &cachingDB{
 		// Arbitrum only
-		activatedAsmCache:     lru.NewSizeConstrainedCache[activatedAsmCacheKey, []byte](activatedWasmCacheSize),
-		wasmTag:               wasmTag,
-		wasmDatabaseRetriever: db,
+		activatedAsmCache: lru.NewSizeConstrainedCache[activatedAsmCacheKey, []byte](activatedWasmCacheSize),
 
 		disk:          db,
-		wasmdb:        wasmdb,
+		wasmdb:        db.WasmDataBase(),
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		triedb:        triedb,
@@ -201,14 +193,12 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *triedb.Database) Database 
 
 type activatedAsmCacheKey struct {
 	moduleHash common.Hash
-	target     ethdb.WasmTarget
+	target     rawdb.WasmTarget
 }
 
 type cachingDB struct {
 	// Arbitrum
-	activatedAsmCache     *lru.SizeConstrainedCache[activatedAsmCacheKey, []byte]
-	wasmTag               uint32
-	wasmDatabaseRetriever ethdb.WasmDataBaseRetriever
+	activatedAsmCache *lru.SizeConstrainedCache[activatedAsmCacheKey, []byte]
 
 	disk          ethdb.KeyValueStore
 	wasmdb        ethdb.KeyValueStore
@@ -220,14 +210,6 @@ type cachingDB struct {
 
 func (db *cachingDB) WasmStore() ethdb.KeyValueStore {
 	return db.wasmdb
-}
-
-func (db *cachingDB) WasmCacheTag() uint32 {
-	return db.wasmTag
-}
-
-func (db *cachingDB) WasmTargets() []ethdb.WasmTarget {
-	return db.wasmDatabaseRetriever.WasmTargets()
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
