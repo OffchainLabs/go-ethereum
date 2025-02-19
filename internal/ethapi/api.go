@@ -1307,7 +1307,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	call := args.ToMessage(header.BaseFee, gasCap, header, state, core.MessageGasEstimationMode)
 
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
-	{
+	if gasCap > 0 {
 		postingGas, err := core.RPCPostingGasHook(call, header, state)
 		if err != nil {
 			return 0, err
@@ -1985,6 +1985,17 @@ func marshalReceipt(ctx context.Context, receipt *types.Receipt, blockHash commo
 			} else {
 				fields["effectiveGasPrice"] = hexutil.Uint64(arbTx.EffectiveGasPrice)
 				fields["l1BlockNumber"] = hexutil.Uint64(arbTx.L1BlockNumber)
+			}
+		}
+
+		blockMetadata, err := backend.BlockMetadataByNumber(blockNumber)
+		if err != nil {
+			return nil, err
+		}
+		if blockMetadata != nil {
+			fields["timeboosted"], err = blockMetadata.IsTxTimeboosted(txIndex)
+			if err != nil {
+				log.Error("Error checking if a tx was timeboosted", "txIndex", txIndex, "txHash", tx.Hash(), "err", err)
 			}
 		}
 	}

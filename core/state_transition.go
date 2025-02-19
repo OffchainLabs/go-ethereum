@@ -530,7 +530,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 		fee := new(uint256.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTipU256)
-		st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
+		st.state.AddBalance(tipReceipient, fee, tracing.BalanceIncreaseRewardTransactionFee)
 		tipAmount = fee.ToBig()
 		// add the coinbase to the witness iff the fee is greater than 0
 		if rules.IsEIP4762 && fee.Sign() != 0 {
