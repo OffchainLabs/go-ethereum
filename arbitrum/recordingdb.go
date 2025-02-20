@@ -111,7 +111,7 @@ func (db *RecordingKV) NewSnapshot() (ethdb.Snapshot, error) {
 	return db, nil
 }
 
-func (db *RecordingKV) Stat(property string) (string, error) {
+func (db *RecordingKV) Stat() (string, error) {
 	return "", errors.New("recording KV doesn't support Stat")
 }
 

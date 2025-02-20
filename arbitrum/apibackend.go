@@ -735,10 +735,10 @@ func (a *APIBackend) Engine() consensus.Engine {
 	return a.b.Engine()
 }
 
-func (b *APIBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
+func (a *APIBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
 	return nil, nil, nil
 }
 
-func (b *APIBackend) FallbackClient() types.FallbackClient {
-	return b.fallbackClient
+func (a *APIBackend) FallbackClient() types.FallbackClient {
+	return a.fallbackClient
 }

@@ -45,8 +45,8 @@ func (e *E) IsOne() bool {
 }
 
 // Equal returns true if given two element is equal, otherwise returns false
-func (g *E) Equal(g2 *E) bool {
-	return g.equal(g2)
+func (e *E) Equal(g2 *E) bool {
+	return e.equal(g2)
 }
 
 // NewGT constructs new target group instance.
