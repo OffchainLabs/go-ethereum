@@ -39,11 +39,11 @@ func (db *Database) Has(key []byte) (bool, error) {
 	return true, nil
 }
 
-func (t *Database) WasmDataBase() (ethdb.KeyValueStore, uint32) {
-	return t, 0
+func (db *Database) WasmDataBase() (ethdb.KeyValueStore, uint32) {
+	return db, 0
 }
 
-func (t *Database) WasmTargets() []ethdb.WasmTarget {
+func (db *Database) WasmTargets() []ethdb.WasmTarget {
 	return nil
 }
 
@@ -134,8 +134,8 @@ func (db *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 	panic("not supported")
 }
 
-func (db *Database) Stat(property string) (string, error) {
-	panic("not supported")
+func (db *Database) Stat() (string, error) {
+	return "", nil
 }
 
 func (db *Database) AncientDatadir() (string, error) {
