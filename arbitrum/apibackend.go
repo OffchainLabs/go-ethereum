@@ -121,8 +121,6 @@ func CreateFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.D
 
 type SyncProgressBackend interface {
 	SyncProgressMap() map[string]interface{}
-	SafeBlockNumber(ctx context.Context) (uint64, error)
-	FinalizedBlockNumber(ctx context.Context) (uint64, error)
 	BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error)
 }
 
@@ -407,13 +405,23 @@ func (a *APIBackend) blockNumberToUint(ctx context.Context, number rpc.BlockNumb
 		if a.sync == nil {
 			return 0, errors.New("block number not supported: object not set")
 		}
-		return a.sync.SafeBlockNumber(ctx)
+
+		currentSafeBlock := a.BlockChain().CurrentSafeBlock()
+		if currentSafeBlock == nil {
+			return 0, errors.New("safe block not found")
+		}
+		return currentSafeBlock.Number.Uint64(), nil
 	}
 	if number == rpc.FinalizedBlockNumber {
 		if a.sync == nil {
 			return 0, errors.New("block number not supported: object not set")
 		}
-		return a.sync.FinalizedBlockNumber(ctx)
+
+		currentFinalizedBlock := a.BlockChain().CurrentFinalBlock()
+		if currentFinalizedBlock == nil {
+			return 0, errors.New("finalized block not found")
+		}
+		return currentFinalizedBlock.Number.Uint64(), nil
 	}
 	if number < 0 {
 		return 0, errors.New("block number not supported")
