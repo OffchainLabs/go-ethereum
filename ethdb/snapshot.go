@@ -38,4 +38,7 @@ type Snapshotter interface {
 	// Note don't forget to release the snapshot once it's used up, otherwise
 	// the stale data will never be cleaned up by the underlying compactor.
 	NewSnapshot() (Snapshot, error)
+
+	// CreateDBSnapshot creates a copy of underlying database inside dir
+	CreateDBSnapshot(dir string) error
 }
