@@ -174,7 +174,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		extraOptions.MemTableStopWritesThreshold = 2
 	}
 	if extraOptions.MaxConcurrentCompactions == nil {
-		extraOptions.MaxConcurrentCompactions = func() int { return runtime.NumCPU() }
+		extraOptions.MaxConcurrentCompactions = runtime.NumCPU
 	}
 	var levels []pebble.LevelOptions
 	if len(extraOptions.Levels) == 0 {
@@ -238,7 +238,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		fn:           file,
 		log:          logger,
 		quitChan:     make(chan chan error),
-		writeOptions: &pebble.WriteOptions{Sync: !ephemeral},
+		writeOptions: &pebble.WriteOptions{Sync: !ephemeral && extraOptions.SyncMode},
 	}
 	opt := &pebble.Options{
 		// Pebble has a single combined cache area and the write
@@ -494,10 +494,8 @@ func upperBound(prefix []byte) (limit []byte) {
 }
 
 // Stat returns the internal metrics of Pebble in a text format. It's a developer
-// method to read everything there is to read independent of Pebble version.
-//
-// The property is unused in Pebble as there's only one thing to retrieve.
-func (d *Database) Stat(property string) (string, error) {
+// method to read everything there is to read, independent of Pebble version.
+func (d *Database) Stat() (string, error) {
 	return d.db.Metrics().String(), nil
 }
 
@@ -537,15 +535,11 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 
 	// Create storage and warning log tracer for write delay.
 	var (
-		compTimes        [2]int64
-		writeDelayTimes  [2]int64
-		writeDelayCounts [2]int64
-		compWrites       [2]int64
-		compReads        [2]int64
+		compTimes  [2]int64
+		compWrites [2]int64
+		compReads  [2]int64
 
 		nWrites [2]int64
-
-		lastWriteStallReport time.Time
 
 		commitCounts               [2]int64
 		commitTotalDurations       [2]int64
@@ -554,6 +548,9 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		commitL0ReadAmpWriteStalls [2]int64
 		commitWALRotations         [2]int64
 		commitWaits                [2]int64
+		writeDelayTimes            [2]int64
+		writeDelayCounts           [2]int64
+		lastWriteStallReport       time.Time
 	)
 
 	// Iterate ad infinitum and collect the stats
@@ -691,7 +688,7 @@ func (b *batch) Put(key, value []byte) error {
 	return nil
 }
 
-// Delete inserts the a key removal into the batch for later committing.
+// Delete inserts the key removal into the batch for later committing.
 func (b *batch) Delete(key []byte) error {
 	b.b.Delete(key, nil)
 	b.size += len(key)

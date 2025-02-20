@@ -32,17 +32,19 @@ type RecordingKV struct {
 	inner         *triedb.Database
 	diskDb        ethdb.KeyValueStore
 	readDbEntries map[common.Hash][]byte
+	mutex         sync.Mutex
 	enableBypass  bool
 }
 
 func newRecordingKV(inner *triedb.Database, diskDb ethdb.KeyValueStore) *RecordingKV {
-	return &RecordingKV{inner, diskDb, make(map[common.Hash][]byte), false}
+	return &RecordingKV{inner, diskDb, make(map[common.Hash][]byte), sync.Mutex{}, false}
 }
 
 func (db *RecordingKV) Has(key []byte) (bool, error) {
 	return false, errors.New("recording KV doesn't support Has")
 }
 
+// Get may be called concurrently with other Get calls
 func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 	var hash common.Hash
 	var res []byte
@@ -66,6 +68,8 @@ func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 	if crypto.Keccak256Hash(res) != hash {
 		return nil, fmt.Errorf("recording KV attempted to access non-hash key %v", hash)
 	}
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
 	db.readDbEntries[hash] = res
 	return res, nil
 }
@@ -107,7 +111,7 @@ func (db *RecordingKV) NewSnapshot() (ethdb.Snapshot, error) {
 	return db, nil
 }
 
-func (db *RecordingKV) Stat(property string) (string, error) {
+func (db *RecordingKV) Stat() (string, error) {
 	return "", errors.New("recording KV doesn't support Stat")
 }
 
@@ -190,7 +194,7 @@ func (r *RecordingDatabase) StateFor(header *types.Header) (*state.StateDB, erro
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	sdb, err := state.NewDeterministic(header.Root, r.db)
+	sdb, err := state.NewRecording(header.Root, r.db)
 	if err == nil {
 		r.referenceRootLockHeld(header.Root)
 	}
@@ -263,7 +267,7 @@ func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeade
 	if lastBlockHeader != nil {
 		prevRoot = lastBlockHeader.Root
 	}
-	recordingStateDb, err := state.NewDeterministic(prevRoot, recordingStateDatabase)
+	recordingStateDb, err := state.NewRecording(prevRoot, recordingStateDatabase)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create recordingStateDb: %w", err)
 	}

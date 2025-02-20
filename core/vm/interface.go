@@ -21,10 +21,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
 
@@ -45,10 +47,19 @@ type StateDB interface {
 	AddStylusPages(new uint16) (uint16, uint16)
 	AddStylusPagesEver(new uint16)
 
+	// Arbitrum: preserve old empty account behavior
+	CreateZombieIfDeleted(common.Address)
+
+	// Arbitrum
+	FilterTx()
+	ClearTxFilter()
+	IsTxFiltered() bool
+
 	Deterministic() bool
 	Database() state.Database
 
 	CreateAccount(common.Address)
+	CreateContract(common.Address)
 
 	SubBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason)
 	AddBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason)
@@ -96,6 +107,10 @@ type StateDB interface {
 	// AddSlotToAccessList adds the given (address,slot) to the access list. This operation is safe to perform
 	// even if the feature/fork is not active yet
 	AddSlotToAccessList(addr common.Address, slot common.Hash)
+
+	// PointCache returns the point cache used in computations
+	PointCache() *utils.PointCache
+
 	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
 
 	RevertToSnapshot(int)
@@ -105,6 +120,8 @@ type StateDB interface {
 	AddPreimage(common.Hash, []byte)
 
 	GetCurrentTxLogs() []*types.Log
+
+	Witness() *stateless.Witness
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM

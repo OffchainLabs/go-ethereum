@@ -142,6 +142,15 @@ func (s *StateDB) AddStylusPagesEver(new uint16) {
 	s.arbExtraData.everWasmPages = common.SaturatingUAdd(s.arbExtraData.everWasmPages, new)
 }
 
+// Arbitrum: preserve empty account behavior from old geth and ArbOS versions.
+func (s *StateDB) CreateZombieIfDeleted(addr common.Address) {
+	if s.getStateObject(addr) == nil {
+		if _, destructed := s.stateObjectsDestruct[addr]; destructed {
+			s.createZombie(addr)
+		}
+	}
+}
+
 func NewDeterministic(root common.Hash, db Database) (*StateDB, error) {
 	sdb, err := New(root, db, nil)
 	if err != nil {
@@ -151,9 +160,21 @@ func NewDeterministic(root common.Hash, db Database) (*StateDB, error) {
 	return sdb, nil
 }
 
+func NewRecording(root common.Hash, db Database) (*StateDB, error) {
+	sdb, err := New(root, db, nil)
+	if err != nil {
+		return nil, err
+	}
+	sdb.deterministic = true
+	sdb.recording = true
+	return sdb, nil
+}
+
 func (s *StateDB) Deterministic() bool {
 	return s.deterministic
 }
+
+var ErrArbTxFilter error = errors.New("internal error")
 
 type ArbitrumExtraData struct {
 	unexpectedBalanceDelta *big.Int                      // total balance change across all accounts
@@ -162,6 +183,7 @@ type ArbitrumExtraData struct {
 	everWasmPages          uint16                        // largest number of pages ever allocated during this tx's execution
 	activatedWasms         map[common.Hash]ActivatedWasm // newly activated WASMs
 	recentWasms            RecentWasms
+	arbTxFilter            bool
 }
 
 func (s *StateDB) SetArbFinalizer(f func(*ArbitrumExtraData)) {

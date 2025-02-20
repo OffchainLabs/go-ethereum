@@ -468,7 +468,7 @@ func (d *Decimal) UnmarshalJSON(input []byte) error {
 	if !isString(input) {
 		return &json.UnmarshalTypeError{Value: "non-string", Type: reflect.TypeOf(uint64(0))}
 	}
-	if i, err := strconv.ParseInt(string(input[1:len(input)-1]), 10, 64); err == nil {
+	if i, err := strconv.ParseUint(string(input[1:len(input)-1]), 10, 64); err == nil {
 		*d = Decimal(i)
 		return nil
 	} else {
@@ -485,4 +485,25 @@ func (b PrettyBytes) TerminalString() string {
 		return fmt.Sprintf("%x", b)
 	}
 	return fmt.Sprintf("%#x...%x (%dB)", b[:3], b[len(b)-3:], len(b))
+}
+
+type BlockMetadata []byte
+
+// IsTxTimeboosted given a tx's index in the block returns whether the tx was timeboosted
+// or not. The first byte of blockMetadata byte array is reserved to indicate the version,
+// starting from the second byte, (N)th bit would represent if (N)th tx is timeboosted or not, 1 means yes and 0 means no
+// blockMetadata[index / 8 + 1] & (1 << (index % 8)) != 0; where index = (N - 1), implies whether (N)th tx in a block is timeboosted
+// note that number of txs in a block will always lag behind (len(blockMetadata) - 1) * 8 but it wont lag more than a value of 7
+func (b BlockMetadata) IsTxTimeboosted(txIndex int) (bool, error) {
+	if len(b) == 0 {
+		return false, errors.New("blockMetadata is not set")
+	}
+	if txIndex < 0 {
+		return false, fmt.Errorf("invalid transaction index- %d, should be positive", txIndex)
+	}
+	maxTxCount := (len(b) - 1) * 8
+	if txIndex >= maxTxCount {
+		return false, nil
+	}
+	return b[1+(txIndex/8)]&(1<<(txIndex%8)) != 0, nil
 }

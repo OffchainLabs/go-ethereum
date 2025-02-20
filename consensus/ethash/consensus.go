@@ -521,7 +521,7 @@ func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 	// Header seems complete, assemble into a block and return
-	return types.NewBlock(header, body.Transactions, body.Uncles, receipts, trie.NewStackTrie(nil)), nil
+	return types.NewBlock(header, &types.Body{Transactions: body.Transactions, Uncles: body.Uncles}, receipts, trie.NewStackTrie(nil)), nil
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
@@ -563,12 +563,6 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
-// Some weird constants to avoid constant memory allocs for them.
-var (
-	u256_8  = uint256.NewInt(8)
-	u256_32 = uint256.NewInt(32)
-)
-
 // accumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
@@ -590,10 +584,10 @@ func accumulateRewards(config *params.ChainConfig, stateDB *state.StateDB, heade
 		r.AddUint64(uNum, 8)
 		r.Sub(r, hNum)
 		r.Mul(r, blockReward)
-		r.Div(r, u256_8)
+		r.Rsh(r, 3)
 		stateDB.AddBalance(uncle.Coinbase, r, tracing.BalanceIncreaseRewardMineUncle)
 
-		r.Div(blockReward, u256_32)
+		r.Rsh(blockReward, 5)
 		reward.Add(reward, r)
 	}
 	stateDB.AddBalance(header.Coinbase, reward, tracing.BalanceIncreaseRewardMineBlock)

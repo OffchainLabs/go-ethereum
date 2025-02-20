@@ -164,6 +164,9 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Trac
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *flatCallTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.OnEnter(depth, typ, from, to, input, gas, value)
 
 	if depth == 0 {
@@ -179,6 +182,9 @@ func (t *flatCallTracer) OnEnter(depth int, typ byte, from common.Address, to co
 // OnExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
 func (t *flatCallTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.OnExit(depth, output, gasUsed, err, reverted)
 
 	if depth == 0 {
@@ -187,6 +193,9 @@ func (t *flatCallTracer) OnExit(depth int, output []byte, gasUsed uint64, err er
 	// Parity traces don't include CALL/STATICCALLs to precompiles.
 	// By default we remove them from the callstack.
 	if t.config.IncludePrecompiles {
+		return
+	}
+	if len(t.tracer.callstack[len(t.tracer.callstack)-1].Calls) == 0 {
 		return
 	}
 	var (
@@ -204,6 +213,9 @@ func (t *flatCallTracer) OnExit(depth int, output []byte, gasUsed uint64, err er
 }
 
 func (t *flatCallTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.OnTxStart(env, tx, from)
 	// Update list of precompiles based on current block
 	rules := env.ChainConfig.Rules(env.BlockNumber, env.Random != nil, env.Time, env.ArbOSVersion)
@@ -211,6 +223,9 @@ func (t *flatCallTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction
 }
 
 func (t *flatCallTracer) OnTxEnd(receipt *types.Receipt, err error) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.OnTxEnd(receipt, err)
 }
 
@@ -278,16 +293,14 @@ func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx 
 	}
 
 	output = append(output, *frame)
-	if len(input.Calls) > 0 {
-		for i, childCall := range input.Calls {
-			childAddr := childTraceAddress(traceAddress, i)
-			childCallCopy := childCall
-			flat, err := flatFromNested(&childCallCopy, childAddr, convertErrs, ctx)
-			if err != nil {
-				return nil, err
-			}
-			output = append(output, flat...)
+	for i, childCall := range input.Calls {
+		childAddr := childTraceAddress(traceAddress, i)
+		childCallCopy := childCall
+		flat, err := flatFromNested(&childCallCopy, childAddr, convertErrs, ctx)
+		if err != nil {
+			return nil, err
 		}
+		output = append(output, flat...)
 	}
 
 	return output, nil

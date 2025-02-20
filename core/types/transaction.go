@@ -64,13 +64,52 @@ type Transaction struct {
 	inner TxData    // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)
 
-	// Arbitrum cache: must be atomically accessed
-	CalldataUnits uint64
+	// Arbitrum cache of the calldata units at a brotli compression level.
+	// The top 8 bits are the brotli compression level last used to compute this,
+	// and the remaining 56 bits are the calldata units at that compression level.
+	calldataUnitsForBrotliCompressionLevel atomic.Uint64
 
 	// caches
 	hash atomic.Pointer[common.Hash]
 	size atomic.Uint64
 	from atomic.Pointer[sigCache]
+}
+
+// GetRawCachedCalldataUnits returns the cached brotli compression level and corresponding calldata units,
+// or (0, 0) if the cache is empty.
+func (tx *Transaction) GetRawCachedCalldataUnits() (uint64, uint64) {
+	repr := tx.calldataUnitsForBrotliCompressionLevel.Load()
+	cachedCompressionLevel := repr >> 56
+	calldataUnits := repr & ((1 << 56) - 1)
+	return cachedCompressionLevel, calldataUnits
+}
+
+// GetCachedCalldataUnits returns the cached calldata units for a given brotli compression level,
+// returning nil if no cache is present or the cache is for a different compression level.
+func (tx *Transaction) GetCachedCalldataUnits(requestedCompressionLevel uint64) *uint64 {
+	cachedCompressionLevel, cachedUnits := tx.GetRawCachedCalldataUnits()
+	if cachedUnits == 0 {
+		// empty cache
+		return nil
+	}
+	if cachedCompressionLevel != requestedCompressionLevel {
+		// wrong compression level
+		return nil
+	}
+	return &cachedUnits
+}
+
+// SetCachedCalldataUnits sets the cached brotli compression level and corresponding calldata units,
+// or clears the cache if the values are too large to fit (at least 2**8 and 2**56 respectively).
+// Note that a zero calldataUnits is also treated as an empty cache.
+func (tx *Transaction) SetCachedCalldataUnits(compressionLevel uint64, calldataUnits uint64) {
+	var repr uint64
+	// Ensure the compressionLevel and calldataUnits will fit.
+	// Otherwise, just clear the cache.
+	if compressionLevel < 1<<8 && calldataUnits < 1<<56 {
+		repr = compressionLevel<<56 | calldataUnits
+	}
+	tx.calldataUnitsForBrotliCompressionLevel.Store(repr)
 }
 
 // NewTx creates a new transaction.
@@ -600,7 +639,7 @@ func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 	}
 }
 
-// TxDifference returns a new set which is the difference between a and b.
+// TxDifference returns a new set of transactions that are present in a but not in b.
 func TxDifference(a, b Transactions) Transactions {
 	keep := make(Transactions, 0, len(a))
 
@@ -618,7 +657,7 @@ func TxDifference(a, b Transactions) Transactions {
 	return keep
 }
 
-// HashDifference returns a new set which is the difference between a and b.
+// HashDifference returns a new set of hashes that are present in a but not in b.
 func HashDifference(a, b []common.Hash) []common.Hash {
 	keep := make([]common.Hash, 0, len(a))
 
