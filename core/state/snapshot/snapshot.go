@@ -564,10 +564,23 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		if base.genMarker != nil && bytes.Compare(hash[:], base.genMarker) > 0 {
 			continue
 		}
-		// Remove all storage slots
+
+		oldAccount, err := base.account(hash, true)
+
+		// Delete the account snapshot
 		rawdb.DeleteAccountSnapshot(batch, hash)
 		base.cache.Set(hash[:], nil)
 
+		// Try to check if there's any associated storage to delete from the snapshot
+		if err != nil {
+			log.Warn("Failed to get destructed account from snapshot", "err", err)
+			// Fall through to deleting storage in case this account has any
+		} else if oldAccount == nil || oldAccount.Root == nil {
+			// There's no storage associated with this account to delete
+			continue
+		}
+
+		// Remove all storage slots
 		it := rawdb.IterateStorageSnapshots(base.diskdb, hash)
 		for it.Next() {
 			key := it.Key()

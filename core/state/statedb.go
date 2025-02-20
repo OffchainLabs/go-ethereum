@@ -175,6 +175,7 @@ type StateDB struct {
 	StorageDeleted atomic.Int64
 
 	deterministic bool
+	recording     bool
 }
 
 // New creates a new state from a given trie.
@@ -210,6 +211,18 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		sdb.snap = sdb.snaps.Snapshot(root)
 	}
 	return sdb, nil
+}
+
+func (s *StateDB) FilterTx() {
+	s.arbExtraData.arbTxFilter = true
+}
+
+func (s *StateDB) ClearTxFilter() {
+	s.arbExtraData.arbTxFilter = false
+}
+
+func (s *StateDB) IsTxFiltered() bool {
+	return s.arbExtraData.arbTxFilter
 }
 
 // SetLogger sets the logger for account update hooks.
@@ -734,6 +747,7 @@ func (s *StateDB) Copy() *StateDB {
 			recentWasms:            s.arbExtraData.recentWasms.Copy(),
 			openWasmPages:          s.arbExtraData.openWasmPages,
 			everWasmPages:          s.arbExtraData.everWasmPages,
+			arbTxFilter:            s.arbExtraData.arbTxFilter,
 		},
 
 		db:                   s.db,
@@ -1018,6 +1032,21 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		usedAddrs    [][]byte
 		deletedAddrs []common.Address
 	)
+	// When recording, it's important to handle deletions before other mutations
+	// to ensure that access the most state possible in the database. If, instead,
+	// the updates were applied before the deletions, it might be possible to
+	// record an update for an address that would then be subsequently deleted.
+	if s.recording {
+		for addr, op := range s.mutations {
+			if op.applied {
+				continue
+			}
+			if op.isDelete() {
+				op.applied = true
+				s.deleteStateObject(addr)
+			}
+		}
+	}
 	for addr, op := range s.mutations {
 		if op.applied {
 			continue
@@ -1031,6 +1060,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			s.AccountUpdated += 1
 		}
 		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
+	}
+	if s.deterministic {
+		sort.Slice(deletedAddrs, func(i, j int) bool { return deletedAddrs[i].Cmp(deletedAddrs[j]) < 0 })
 	}
 	for _, deletedAddr := range deletedAddrs {
 		s.deleteStateObject(deletedAddr)
@@ -1254,6 +1286,9 @@ func (s *StateDB) GetTrie() Trie {
 // commit gathers the state mutations accumulated along with the associated
 // trie changes, resetting all internal flags with the new state as the base.
 func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
+	if s.arbExtraData.arbTxFilter {
+		return nil, ErrArbTxFilter
+	}
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1395,7 +1430,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 
 	origin := s.originalRoot
 	s.originalRoot = root
-	return newStateUpdate(origin, root, deletes, updates, nodes), nil
+	return newStateUpdate(origin, root, deletes, updates, nodes, s.arbExtraData.activatedWasms), nil
 }
 
 // commitAndFlush is a wrapper of commit which also commits the state mutations
@@ -1416,10 +1451,10 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool) (*stateU
 		}
 	}
 
-	if db := s.db.WasmStore(); db != nil && len(s.arbExtraData.activatedWasms) > 0 {
+	if db := s.db.WasmStore(); db != nil && len(ret.activatedWasms) > 0 {
 		batch := db.NewBatch()
 		// Arbitrum: write Stylus programs to disk
-		for moduleHash, asmMap := range s.arbExtraData.activatedWasms {
+		for moduleHash, asmMap := range ret.activatedWasms {
 			rawdb.WriteActivation(batch, moduleHash, asmMap)
 		}
 		s.arbExtraData.activatedWasms = make(map[common.Hash]ActivatedWasm)
