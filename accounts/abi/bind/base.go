@@ -60,12 +60,13 @@ type TransactOpts struct {
 	Nonce  *big.Int       // Nonce to use for the transaction execution (nil = use pending state)
 	Signer SignerFn       // Method to use for signing the transaction (mandatory)
 
-	Value     *big.Int // Funds to transfer along the transaction (nil = 0 = no funds)
-	GasPrice  *big.Int // Gas price to use for the transaction execution (nil = gas price oracle)
-	GasFeeCap *big.Int // Gas fee cap to use for the 1559 transaction execution (nil = gas price oracle)
-	GasTipCap *big.Int // Gas priority fee cap to use for the 1559 transaction execution (nil = gas price oracle)
-	GasLimit  uint64   // Gas limit to set for the transaction execution (0 = estimate)
-	GasMargin uint64   // Arbitrum: adjusts gas estimate by this many basis points (0 = no adjustment)
+	Value      *big.Int         // Funds to transfer along the transaction (nil = 0 = no funds)
+	GasPrice   *big.Int         // Gas price to use for the transaction execution (nil = gas price oracle)
+	GasFeeCap  *big.Int         // Gas fee cap to use for the 1559 transaction execution (nil = gas price oracle)
+	GasTipCap  *big.Int         // Gas priority fee cap to use for the 1559 transaction execution (nil = gas price oracle)
+	GasLimit   uint64           // Gas limit to set for the transaction execution (0 = estimate)
+	AccessList types.AccessList // Access list to set for the transaction execution (nil = no access list)
+	GasMargin  uint64           // Arbitrum: adjusts gas estimate by this many basis points (0 = no adjustment)
 
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 
@@ -344,20 +345,21 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 		return nil, err
 	}
 	baseTx := &types.DynamicFeeTx{
-		To:        contract,
-		Nonce:     nonce,
-		GasFeeCap: gasFeeCap,
-		GasTipCap: gasTipCap,
-		Gas:       gasLimit,
-		Value:     value,
-		Data:      input,
+		To:         contract,
+		Nonce:      nonce,
+		GasFeeCap:  gasFeeCap,
+		GasTipCap:  gasTipCap,
+		Gas:        gasLimit,
+		Value:      value,
+		Data:       input,
+		AccessList: opts.AccessList,
 	}
 	return types.NewTx(baseTx), nil
 }
 
 func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Address, input []byte) (*types.Transaction, error) {
-	if opts.GasFeeCap != nil || opts.GasTipCap != nil {
-		return nil, errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
+	if opts.GasFeeCap != nil || opts.GasTipCap != nil || opts.AccessList != nil {
+		return nil, errors.New("maxFeePerGas or maxPriorityFeePerGas or accessList specified but london is not active yet")
 	}
 	// Normalize value
 	value := opts.Value
