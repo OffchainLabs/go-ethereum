@@ -55,6 +55,7 @@ type StateDB interface {
 	ClearTxFilter()
 	IsTxFiltered() bool
 
+	Recording() bool
 	Deterministic() bool
 	Database() state.Database
 
