@@ -174,6 +174,10 @@ func (s *StateDB) Deterministic() bool {
 	return s.deterministic
 }
 
+func (s *StateDB) Recording() bool {
+	return s.recording
+}
+
 var ErrArbTxFilter error = errors.New("internal error")
 
 type ArbitrumExtraData struct {
