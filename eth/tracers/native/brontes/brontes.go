@@ -1,4 +1,4 @@
-package native
+package brontes
 
 import (
 	"encoding/json"
@@ -15,10 +15,21 @@ func init() {
 }
 
 type brontesTracer struct {
+	ctx       *tracers.Context
+	inspector *BrontesInspector
 }
 
-func newBrontesTracer(ctx *tracers.Context, _ json.RawMessage) (*tracers.Tracer, error) {
-	t := &brontesTracer{}
+func newBrontesTracerObject(ctx *tracers.Context, _ json.RawMessage) (*brontesTracer, error) {
+	return &brontesTracer{
+		ctx: ctx,
+	}, nil
+}
+
+func newBrontesTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, error) {
+	t, err := newBrontesTracerObject(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
 			OnTxStart:       t.OnTxStart,
@@ -53,7 +64,10 @@ func (t *brontesTracer) OnEnter(depth int, typ byte, from common.Address, to com
 func (t *brontesTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 }
 
-func (*brontesTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (t *brontesTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	// Initialize the BrontesInspector
+	config := DefaultTracingInspectorConfig
+	t.inspector = NewBrontesInspector(config, env, tx, from)
 }
 
 func (*brontesTracer) OnTxEnd(receipt *types.Receipt, err error) {}
@@ -68,7 +82,9 @@ func (*brontesTracer) OnCodeChange(a common.Address, prevCodeHash common.Hash, p
 
 func (*brontesTracer) OnStorageChange(a common.Address, k, prev, new common.Hash) {}
 
-func (*brontesTracer) OnLog(log *types.Log) {}
+func (*brontesTracer) OnLog(log *types.Log) {
+
+}
 
 // GetResult returns an empty json object.
 func (t *brontesTracer) GetResult() (json.RawMessage, error) {
