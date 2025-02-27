@@ -46,10 +46,7 @@ func newSimulatedBeaconAPI(sim *SimulatedBeacon) *simulatedBeaconAPI {
 // transaction is received.
 func (a *simulatedBeaconAPI) loop() {
 	var (
-		// Arbitrum: we need to make newTxs a buffered channel because by the current design of simulated beacon
-		// it would deadlock with this cycle a.sim.Commit() -> txpool.Sync() -> subpools reset -> update feeds (newTxs is one of the receivers)
-		// Note: capacity of this channel should be the worst-case estimate of number of transactions all arriving simultaneously to the pool
-		newTxs    = make(chan core.NewTxsEvent, 15)
+		newTxs    = make(chan core.NewTxsEvent)
 		newWxs    = make(chan newWithdrawalsEvent)
 		newTxsSub = a.sim.eth.TxPool().SubscribeTransactions(newTxs, true)
 		newWxsSub = a.sim.withdrawals.subscribe(newWxs)
