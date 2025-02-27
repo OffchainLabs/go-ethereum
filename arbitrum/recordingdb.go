@@ -106,11 +106,6 @@ func (db *RecordingKV) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 	return nil
 }
 
-func (db *RecordingKV) NewSnapshot() (ethdb.Snapshot, error) {
-	// This is fine as RecordingKV doesn't support mutation
-	return db, nil
-}
-
 func (db *RecordingKV) Stat() (string, error) {
 	return "", errors.New("recording KV doesn't support Stat")
 }
