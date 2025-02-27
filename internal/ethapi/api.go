@@ -1208,8 +1208,19 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 	if err := args.CallDefaults(gp.Gas(), blockContext.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return nil, err
 	}
-	msg := args.ToMessage(header.BaseFee, gp.Gas(), header, state, runMode, skipChecks, skipChecks)
+	msg := args.ToMessage(blockContext.BaseFee, gp.Gas(), header, state, runMode, skipChecks, skipChecks)
 
+	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
+	if gp.Gas() > 0 {
+		postingGas, err := core.RPCPostingGasHook(msg, header, state)
+		if err != nil {
+			return nil, err
+		}
+		gp.AddGas(postingGas)
+	}
+	if msg.GasLimit > gp.Gas() {
+		gp.SetGas(msg.GasLimit)
+	}
 	// Arbitrum: support NodeInterface.sol by swapping out the message if needed
 	var res *core.ExecutionResult
 	var err error
