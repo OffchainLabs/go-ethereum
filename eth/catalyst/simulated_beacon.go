@@ -159,8 +159,11 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 
 	// Reset to CurrentBlock in case of the chain was rewound
 	if header := c.eth.BlockChain().CurrentBlock(); c.curForkchoiceState.HeadBlockHash != header.Hash() {
-		finalizedHash := c.finalizedBlockHash(header.Number.Uint64())
-		c.setCurrentState(header.Hash(), *finalizedHash)
+		if fh := c.finalizedBlockHash(header.Number.Uint64()); fh == nil {
+			return errors.New("error calculating finalized block hash")
+		} else {
+			c.setCurrentState(header.Hash(), *fh)
+		}
 	}
 
 	// Because transaction insertion, block insertion, and block production will
