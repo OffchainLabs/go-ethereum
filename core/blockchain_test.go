@@ -4302,7 +4302,7 @@ func TestPragueRequests(t *testing.T) {
 	}
 
 	// Insert block to check validation.
-	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{}, nil)
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, nil, gspec, nil, engine, vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
