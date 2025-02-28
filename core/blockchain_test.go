@@ -2751,7 +2751,7 @@ func testSideImportPrunedBlocks(t *testing.T, scheme string) {
 	}
 	defer db.Close()
 
-	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), DefaultCacheConfigWithScheme(scheme), nil, genesis, nil, engine, vm.Config{}, nil)
+	chain, err := NewBlockChain(db, DefaultCacheConfigWithScheme(scheme), nil, genesis, nil, engine, vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
