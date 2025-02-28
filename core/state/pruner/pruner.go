@@ -351,7 +351,8 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 		Preimages: false,
 		HashDB:    &hashConfig,
 	}
-	sdb := state.NewDatabaseWithConfig(db, trieConfig)
+
+	sdb := state.NewDatabase(triedb.NewDatabase(db, trieConfig), nil)
 	defer sdb.TrieDB().Close()
 	tr, err := sdb.OpenTrie(root)
 	if err != nil {
@@ -525,11 +526,10 @@ func (p *Pruner) Prune(inputRoots []common.Hash) error {
 			if !snapshotTarget {
 				return fmt.Errorf("associated state[%x] is not present", root)
 			}
-			// The special case is for clique based networks(rinkeby, goerli
-			// and some other private networks), it's possible that two
-			// consecutive blocks will have same root. In this case snapshot
-			// difflayer won't be created. So HEAD-127 may not paired with
-			// head-127 layer. Instead the paired layer is higher than the
+			// The special case is for clique based networks, it's possible
+			// that two consecutive blocks will have same root. In this case
+			// snapshot difflayer won't be created. So HEAD-127 may not paired
+			// with head-127 layer. Instead the paired layer is higher than the
 			// bottom-most diff layer. Try to find the bottom-most snapshot
 			// layer with state available.
 			var found bool

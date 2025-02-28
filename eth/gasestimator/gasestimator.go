@@ -223,9 +223,19 @@ func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit ui
 func run(ctx context.Context, call *core.Message, opts *Options) (*core.ExecutionResult, error) {
 	// Assemble the call and the call context
 	var (
+		msgContext = core.NewEVMTxContext(call)
 		evmContext = core.NewEVMBlockContext(opts.Header, opts.Chain, nil)
 		dirtyState = opts.State.Copy()
 	)
+	// Lower the basefee to 0 to avoid breaking EVM
+	// invariants (basefee < feecap).
+	if msgContext.GasPrice.Sign() == 0 {
+		evmContext.BaseFeeInBlock = new(big.Int).Set(evmContext.BaseFee)
+		evmContext.BaseFee = new(big.Int)
+	}
+	if msgContext.BlobFeeCap != nil && msgContext.BlobFeeCap.BitLen() == 0 {
+		evmContext.BlobBaseFee = new(big.Int)
+	}
 	// Monitor the outer context and interrupt the EVM upon cancellation. To avoid
 	// a dangling goroutine until the outer estimation finishes, create an internal
 	// context for the lifetime of this method call.
