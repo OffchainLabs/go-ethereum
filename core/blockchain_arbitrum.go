@@ -104,6 +104,6 @@ func (bc *BlockChain) RecoverState(block *types.Block) error {
 		return nil
 	}
 	log.Warn("recovering block state", "num", block.Number(), "hash", block.Hash(), "root", block.Root())
-	_, err := bc.recoverAncestors(block)
+	_, err := bc.recoverAncestors(block, false)
 	return err
 }
