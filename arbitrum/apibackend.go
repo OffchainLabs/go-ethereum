@@ -120,7 +120,7 @@ func CreateFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.D
 }
 
 type SyncProgressBackend interface {
-	SyncProgressMap() map[string]interface{}
+	SyncProgressMap(ctx context.Context) map[string]interface{}
 	BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error)
 }
 
@@ -205,17 +205,17 @@ func (a *APIBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.B
 }
 
 // General Ethereum API
-func (a *APIBackend) SyncProgressMap() map[string]interface{} {
+func (a *APIBackend) SyncProgressMap(ctx context.Context) map[string]interface{} {
 	if a.sync == nil {
 		res := make(map[string]interface{})
 		res["error"] = "sync object not set in apibackend"
 		return res
 	}
-	return a.sync.SyncProgressMap()
+	return a.sync.SyncProgressMap(ctx)
 }
 
 func (a *APIBackend) SyncProgress() ethereum.SyncProgress {
-	progress := a.SyncProgressMap()
+	progress := a.SyncProgressMap(context.Background())
 
 	if len(progress) == 0 {
 		return ethereum.SyncProgress{}

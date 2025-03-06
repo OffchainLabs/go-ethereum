@@ -44,7 +44,7 @@ type Backend interface {
 
 	// General Ethereum API
 	SyncProgress() ethereum.SyncProgress
-	SyncProgressMap() map[string]interface{}
+	SyncProgressMap(ctx context.Context) map[string]interface{}
 
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 	FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, []*big.Int, []float64, error)

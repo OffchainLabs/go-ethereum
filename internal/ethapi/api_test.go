@@ -636,7 +636,7 @@ func (b testBackend) FallbackClient() types.FallbackClient {
 	return nil
 }
 
-func (b testBackend) SyncProgressMap() map[string]interface{} {
+func (b testBackend) SyncProgressMap(ctx context.Context) map[string]interface{} {
 	return map[string]interface{}{}
 }
 
