@@ -354,7 +354,7 @@ func (b *backendMock) BlockByHash(ctx context.Context, hash common.Hash) (*types
 func (b *backendMock) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
 	return nil, nil
 }
-func (b *backendMock) BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error) {
+func (b *backendMock) BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error) {
 	return nil, nil
 }
 func (b *backendMock) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {

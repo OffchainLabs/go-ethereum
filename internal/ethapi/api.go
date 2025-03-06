@@ -1653,7 +1653,7 @@ func marshalReceipt(ctx context.Context, receipt *types.Receipt, blockHash commo
 
 		// If blockMetadata exists for the block containing this tx, then we will determine if it was timeboosted or not
 		// and add that info to the receipt object
-		blockMetadata, err := backend.BlockMetadataByNumber(blockNumber)
+		blockMetadata, err := backend.BlockMetadataByNumber(ctx, blockNumber)
 		if err != nil {
 			return nil, err
 		}

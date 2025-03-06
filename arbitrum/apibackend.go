@@ -121,7 +121,7 @@ func CreateFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.D
 
 type SyncProgressBackend interface {
 	SyncProgressMap() map[string]interface{}
-	BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error)
+	BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error)
 }
 
 func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration) (*filters.FilterSystem, error) {
@@ -496,8 +496,8 @@ func (a *APIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
-func (a *APIBackend) BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error) {
-	return a.sync.BlockMetadataByNumber(blockNum)
+func (a *APIBackend) BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error) {
+	return a.sync.BlockMetadataByNumber(ctx, blockNum)
 }
 
 func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *core.BlockChain, maxRecreateStateDepth int64, header *types.Header, err error) (*state.StateDB, *types.Header, error) {
