@@ -410,6 +410,6 @@ func (b *backendMock) FallbackClient() types.FallbackClient {
 	return nil
 }
 
-func (b *backendMock) SyncProgressMap() map[string]interface{} {
+func (b *backendMock) SyncProgressMap(ctx context.Context) map[string]interface{} {
 	return nil
 }

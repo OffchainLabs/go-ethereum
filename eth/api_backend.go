@@ -354,7 +354,7 @@ func (b *EthAPIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.S
 	return b.eth.txPool.SubscribeTransactions(ch, true)
 }
 
-func (b *EthAPIBackend) SyncProgressMap() map[string]interface{} {
+func (b *EthAPIBackend) SyncProgressMap(ctx context.Context) map[string]interface{} {
 	progress := b.eth.Downloader().Progress()
 	return progress.ToMap()
 }
