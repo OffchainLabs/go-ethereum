@@ -178,7 +178,7 @@ func NewRecordingDatabase(config *RecordingDatabaseConfig, ethdb ethdb.Database,
 	}
 	return &RecordingDatabase{
 		config: config,
-		db:     state.NewDatabaseWithConfig(ethdb, &trieConfig),
+		db:     state.NewDatabase(triedb.NewDatabase(ethdb, &trieConfig), nil),
 		bc:     blockchain,
 	}
 }
@@ -245,7 +245,7 @@ func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected comm
 		_, size, _ = r.db.TrieDB().Size()
 		recordingDbSize.Update(int64(size))
 	}
-	return state.New(result, statedb.Database(), nil)
+	return state.New(result, statedb.Database())
 }
 
 func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeader *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
@@ -257,7 +257,7 @@ func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeade
 	defer func() { r.Dereference(finalDereference) }()
 	recordingKeyValue := newRecordingKV(r.db.TrieDB(), r.db.DiskDB())
 
-	recordingStateDatabase := state.NewDatabase(rawdb.WrapDatabaseWithWasm(rawdb.NewDatabase(recordingKeyValue), r.db.WasmStore(), 0, r.db.WasmTargets()))
+	recordingStateDatabase := state.NewDatabase(triedb.NewDatabase(rawdb.WrapDatabaseWithWasm(rawdb.NewDatabase(recordingKeyValue), r.db.WasmStore(), 0, r.db.WasmTargets()), nil), nil)
 	var prevRoot common.Hash
 	if lastBlockHeader != nil {
 		prevRoot = lastBlockHeader.Root

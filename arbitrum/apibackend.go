@@ -516,7 +516,7 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 				// Try referencing the root, if it isn't in dirties cache then Reference will have no effect
 				db.TrieDB().Reference(header.Root, common.Hash{})
 			}
-			statedb, err := state.New(header.Root, db, snapshots)
+			statedb, err := state.New(header.Root, db)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -542,7 +542,7 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 	// note: triedb cleans cache is disabled in trie.HashDefaults
 	// note: only states committed to diskdb can be found as we're creating new triedb
 	// note: snapshots are not used here
-	ephemeral := state.NewDatabaseWithConfig(chainDb, triedb.HashDefaults)
+	ephemeral := state.NewDatabase(triedb.NewDatabase(chainDb, triedb.HashDefaults), nil)
 	lastState, lastHeader, lastStateRelease, err := FindLastAvailableState(ctx, bc, stateFor(ephemeral, nil), header, nil, maxRecreateStateDepth)
 	if err != nil {
 		return nil, nil, err
