@@ -271,12 +271,14 @@ func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb *state.
 	statedb.Finalise(true)
 }
 
+var depositTopic = common.HexToHash("0x649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5")
+
 // ParseDepositLogs extracts the EIP-6110 deposit values from logs emitted by
 // BeaconDepositContract.
 func ParseDepositLogs(logs []*types.Log, config *params.ChainConfig) (types.Requests, error) {
 	deposits := make(types.Requests, 0)
 	for _, log := range logs {
-		if log.Address == config.DepositContractAddress {
+		if log.Address == config.DepositContractAddress && len(log.Topics) > 0 && log.Topics[0] == depositTopic {
 			d, err := types.UnpackIntoDeposit(log.Data)
 			if err != nil {
 				return nil, fmt.Errorf("unable to parse deposit data: %v", err)
