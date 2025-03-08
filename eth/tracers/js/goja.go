@@ -230,6 +230,7 @@ func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage) (*trace
 			OnExit:                  t.OnExit,
 			OnOpcode:                t.OnOpcode,
 			OnFault:                 t.OnFault,
+			OnBalanceChange:         t.OnBalanceChange,
 			CaptureArbitrumTransfer: t.CaptureArbitrumTransfer,
 			CaptureStylusHostio:     t.CaptureStylusHostio,
 		},
