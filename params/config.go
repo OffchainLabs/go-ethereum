@@ -29,7 +29,6 @@ var (
 	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
 	HoleskyGenesisHash = common.HexToHash("0xb5f7f912443c940f21fd611f12828d75b534364ed9e95ca4e307729a4661bde4")
 	SepoliaGenesisHash = common.HexToHash("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9")
-	GoerliGenesisHash  = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
 )
 
 func newUint64(val uint64) *uint64 { return &val }
@@ -59,6 +58,7 @@ var (
 		TerminalTotalDifficultyPassed: true,
 		ShanghaiTime:                  newUint64(1681338455),
 		CancunTime:                    newUint64(1710338135),
+		DepositContractAddress:        common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"),
 		Ethash:                        new(EthashConfig),
 	}
 	// HoleskyChainConfig contains the chain parameters to run a node on the Holesky test network.
@@ -110,32 +110,6 @@ var (
 		ShanghaiTime:                  newUint64(1677557088),
 		CancunTime:                    newUint64(1706655072),
 		Ethash:                        new(EthashConfig),
-	}
-	// GoerliChainConfig contains the chain parameters to run a node on the Görli test network.
-	GoerliChainConfig = &ChainConfig{
-		ChainID:                       big.NewInt(5),
-		HomesteadBlock:                big.NewInt(0),
-		DAOForkBlock:                  nil,
-		DAOForkSupport:                true,
-		EIP150Block:                   big.NewInt(0),
-		EIP155Block:                   big.NewInt(0),
-		EIP158Block:                   big.NewInt(0),
-		ByzantiumBlock:                big.NewInt(0),
-		ConstantinopleBlock:           big.NewInt(0),
-		PetersburgBlock:               big.NewInt(0),
-		IstanbulBlock:                 big.NewInt(1_561_651),
-		MuirGlacierBlock:              nil,
-		BerlinBlock:                   big.NewInt(4_460_644),
-		LondonBlock:                   big.NewInt(5_062_605),
-		ArrowGlacierBlock:             nil,
-		TerminalTotalDifficulty:       big.NewInt(10_790_000),
-		TerminalTotalDifficultyPassed: true,
-		ShanghaiTime:                  newUint64(1678832736),
-		CancunTime:                    newUint64(1705473120),
-		Clique: &CliqueConfig{
-			Period: 15,
-			Epoch:  30000,
-		},
 	}
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Ethash consensus.
@@ -317,7 +291,6 @@ var (
 // NetworkNames are user friendly names to use in the chain spec banner.
 var NetworkNames = map[string]string{
 	MainnetChainConfig.ChainID.String(): "mainnet",
-	GoerliChainConfig.ChainID.String():  "goerli",
 	SepoliaChainConfig.ChainID.String(): "sepolia",
 	HoleskyChainConfig.ChainID.String(): "holesky",
 }
@@ -368,6 +341,8 @@ type ChainConfig struct {
 	//
 	// TODO(karalabe): Drop this field eventually (always assuming PoS mode)
 	TerminalTotalDifficultyPassed bool `json:"terminalTotalDifficultyPassed,omitempty"`
+
+	DepositContractAddress common.Address `json:"depositContractAddress,omitempty"`
 
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
@@ -595,6 +570,11 @@ func (c *ChainConfig) IsPrague(num *big.Int, time uint64) bool {
 // IsVerkle returns whether time is either equal to the Verkle fork time or greater.
 func (c *ChainConfig) IsVerkle(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.VerkleTime, time)
+}
+
+// IsEIP4762 returns whether eip 4762 has been activated at given block.
+func (c *ChainConfig) IsEIP4762(num *big.Int, time uint64) bool {
+	return c.IsVerkle(num, time)
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
@@ -931,6 +911,7 @@ type Rules struct {
 	ChainID                                                 *big.Int
 	ArbOSVersion                                            uint64
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
+	IsEIP2929, IsEIP4762                                    bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague                 bool
@@ -945,6 +926,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, curren
 	}
 	// disallow setting Merge out of order
 	isMerge = isMerge && c.IsLondon(num)
+	isVerkle := isMerge && c.IsVerkle(num, timestamp)
 	return Rules{
 		IsArbitrum:       c.IsArbitrum(),
 		IsStylus:         c.IsArbitrum() && currentArbosVersion >= ArbosVersion_Stylus,
@@ -959,11 +941,13 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, curren
 		IsPetersburg:     c.IsPetersburg(num),
 		IsIstanbul:       c.IsIstanbul(num),
 		IsBerlin:         c.IsBerlin(num),
+		IsEIP2929:        c.IsBerlin(num) && !isVerkle,
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          isMerge,
 		IsShanghai:       isMerge && c.IsShanghai(num, timestamp, currentArbosVersion),
 		IsCancun:         isMerge && c.IsCancun(num, timestamp, currentArbosVersion),
 		IsPrague:         isMerge && c.IsPrague(num, timestamp),
-		IsVerkle:         isMerge && c.IsVerkle(num, timestamp),
+		IsVerkle:         isVerkle,
+		IsEIP4762:        isVerkle,
 	}
 }

@@ -79,6 +79,11 @@ func (f callFrame) failed() bool {
 
 func (f *callFrame) processOutput(output []byte, err error, reverted bool) {
 	output = common.CopyBytes(output)
+	// Clear error if tx wasn't reverted. This happened
+	// for pre-homestead contract storage OOG.
+	if err != nil && !reverted {
+		err = nil
+	}
 	if err == nil {
 		f.Output = output
 		return
@@ -235,7 +240,9 @@ func (t *callTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	if err != nil {
 		return
 	}
-	t.callstack[0].GasUsed = receipt.GasUsed
+	if receipt != nil {
+		t.callstack[0].GasUsed = receipt.GasUsed
+	}
 	if t.config.WithLog {
 		// Logs are not emitted when the call fails
 		clearFailedLogs(&t.callstack[0], false)

@@ -140,7 +140,8 @@ type TxData interface {
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
 
-	skipAccountChecks() bool
+	skipNonceChecks() bool
+	skipFromEOACheck() bool
 
 	// effectiveGasPrice computes the gas price paid by the transaction, given
 	// the inclusion block baseFee.
@@ -639,11 +640,11 @@ func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 	}
 }
 
-// TxDifference returns a new set which is the difference between a and b.
+// TxDifference returns a new set of transactions that are present in a but not in b.
 func TxDifference(a, b Transactions) Transactions {
 	keep := make(Transactions, 0, len(a))
 
-	remove := make(map[common.Hash]struct{})
+	remove := make(map[common.Hash]struct{}, b.Len())
 	for _, tx := range b {
 		remove[tx.Hash()] = struct{}{}
 	}
@@ -657,7 +658,7 @@ func TxDifference(a, b Transactions) Transactions {
 	return keep
 }
 
-// HashDifference returns a new set which is the difference between a and b.
+// HashDifference returns a new set of hashes that are present in a but not in b.
 func HashDifference(a, b []common.Hash) []common.Hash {
 	keep := make([]common.Hash, 0, len(a))
 

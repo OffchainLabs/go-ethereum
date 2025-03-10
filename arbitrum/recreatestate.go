@@ -80,7 +80,7 @@ func AdvanceStateByBlock(ctx context.Context, bc *core.BlockChain, state *state.
 	if logFunc != nil {
 		logFunc(block.Header(), true)
 	}
-	_, _, _, err := bc.Processor().Process(block, state, vm.Config{})
+	_, err := bc.Processor().Process(block, state, vm.Config{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed recreating state for block %d : %w", blockToRecreate, err)
 	}

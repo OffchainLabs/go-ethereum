@@ -174,7 +174,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		extraOptions.MemTableStopWritesThreshold = 2
 	}
 	if extraOptions.MaxConcurrentCompactions == nil {
-		extraOptions.MaxConcurrentCompactions = func() int { return runtime.NumCPU() }
+		extraOptions.MaxConcurrentCompactions = runtime.NumCPU
 	}
 	var levels []pebble.LevelOptions
 	if len(extraOptions.Levels) == 0 {
@@ -371,7 +371,9 @@ func (d *Database) Has(key []byte) (bool, error) {
 	} else if err != nil {
 		return false, err
 	}
-	closer.Close()
+	if err = closer.Close(); err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -388,7 +390,9 @@ func (d *Database) Get(key []byte) ([]byte, error) {
 	}
 	ret := make([]byte, len(dat))
 	copy(ret, dat)
-	closer.Close()
+	if err = closer.Close(); err != nil {
+		return nil, err
+	}
 	return ret, nil
 }
 
@@ -429,55 +433,6 @@ func (d *Database) NewBatchWithSize(size int) ethdb.Batch {
 	}
 }
 
-// snapshot wraps a pebble snapshot for implementing the Snapshot interface.
-type snapshot struct {
-	db *pebble.Snapshot
-}
-
-// NewSnapshot creates a database snapshot based on the current state.
-// The created snapshot will not be affected by all following mutations
-// happened on the database.
-// Note don't forget to release the snapshot once it's used up, otherwise
-// the stale data will never be cleaned up by the underlying compactor.
-func (d *Database) NewSnapshot() (ethdb.Snapshot, error) {
-	snap := d.db.NewSnapshot()
-	return &snapshot{db: snap}, nil
-}
-
-// Has retrieves if a key is present in the snapshot backing by a key-value
-// data store.
-func (snap *snapshot) Has(key []byte) (bool, error) {
-	_, closer, err := snap.db.Get(key)
-	if err != nil {
-		if err != pebble.ErrNotFound {
-			return false, err
-		} else {
-			return false, nil
-		}
-	}
-	closer.Close()
-	return true, nil
-}
-
-// Get retrieves the given key if it's present in the snapshot backing by
-// key-value data store.
-func (snap *snapshot) Get(key []byte) ([]byte, error) {
-	dat, closer, err := snap.db.Get(key)
-	if err != nil {
-		return nil, err
-	}
-	ret := make([]byte, len(dat))
-	copy(ret, dat)
-	closer.Close()
-	return ret, nil
-}
-
-// Release releases associated resources. Release should always succeed and can
-// be called multiple times without causing error.
-func (snap *snapshot) Release() {
-	snap.db.Close()
-}
-
 // upperBound returns the upper bound for the given prefix
 func upperBound(prefix []byte) (limit []byte) {
 	for i := len(prefix) - 1; i >= 0; i-- {
@@ -494,10 +449,8 @@ func upperBound(prefix []byte) (limit []byte) {
 }
 
 // Stat returns the internal metrics of Pebble in a text format. It's a developer
-// method to read everything there is to read independent of Pebble version.
-//
-// The property is unused in Pebble as there's only one thing to retrieve.
-func (d *Database) Stat(property string) (string, error) {
+// method to read everything there is to read, independent of Pebble version.
+func (d *Database) Stat() (string, error) {
 	return d.db.Metrics().String(), nil
 }
 
@@ -685,14 +638,18 @@ type batch struct {
 
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
-	b.b.Set(key, value, nil)
+	if err := b.b.Set(key, value, nil); err != nil {
+		return err
+	}
 	b.size += len(key) + len(value)
 	return nil
 }
 
-// Delete inserts the a key removal into the batch for later committing.
+// Delete inserts the key removal into the batch for later committing.
 func (b *batch) Delete(key []byte) error {
-	b.b.Delete(key, nil)
+	if err := b.b.Delete(key, nil); err != nil {
+		return err
+	}
 	b.size += len(key)
 	return nil
 }
@@ -737,19 +694,22 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 	for {
 		kind, k, v, ok, err := reader.Next()
 		if !ok || err != nil {
-			break
+			return err
 		}
 		// The (k,v) slices might be overwritten if the batch is reset/reused,
 		// and the receiver should copy them if they are to be retained long-term.
 		if kind == pebble.InternalKeyKindSet {
-			w.Put(k, v)
+			if err = w.Put(k, v); err != nil {
+				return err
+			}
 		} else if kind == pebble.InternalKeyKindDelete {
-			w.Delete(k)
+			if err = w.Delete(k); err != nil {
+				return err
+			}
 		} else {
 			return fmt.Errorf("unhandled operation, keytype: %v", kind)
 		}
 	}
-	return nil
 }
 
 // pebbleIterator is a wrapper of underlying iterator in storage engine.
