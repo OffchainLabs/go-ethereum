@@ -369,6 +369,9 @@ func (s *StateDB) TxIndex() int {
 func (s *StateDB) GetCode(addr common.Address) []byte {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
+		if s.witness != nil {
+			s.witness.AddCode(stateObject.Code())
+		}
 		return stateObject.Code()
 	}
 	return nil
@@ -377,6 +380,9 @@ func (s *StateDB) GetCode(addr common.Address) []byte {
 func (s *StateDB) GetCodeSize(addr common.Address) int {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
+		if s.witness != nil {
+			s.witness.AddCode(stateObject.Code())
+		}
 		return stateObject.CodeSize()
 	}
 	return 0

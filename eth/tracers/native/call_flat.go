@@ -55,6 +55,7 @@ var parityErrorMapping = map[string]string{
 }
 
 var parityErrorMappingStartingWith = map[string]string{
+	"out of gas:":     "Out of gas", // convert OOG wrapped errors, eg `out of gas: not enough gas for reentrancy sentry`
 	"invalid opcode:": "Bad instruction",
 	"stack underflow": "Stack underflow",
 }
@@ -389,6 +390,7 @@ func convertErrorToParity(call *flatCallFrame) {
 		for gethError, parityError := range parityErrorMappingStartingWith {
 			if strings.HasPrefix(call.Error, gethError) {
 				call.Error = parityError
+				break
 			}
 		}
 	}

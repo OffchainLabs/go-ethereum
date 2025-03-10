@@ -31,6 +31,7 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	"github.com/ethereum/go-ethereum/common"
+	bls12381 "github.com/kilic/bls12-381"
 	blst "github.com/supranational/blst/bindings/go"
 )
 
@@ -213,8 +214,13 @@ func fuzzCrossG1MultiExp(data []byte) int {
 	cp.MultiExp(gnarkPoints, gnarkScalars, ecc.MultiExpConfig{})
 
 	expectedGnark := multiExpG1Gnark(gnarkPoints, gnarkScalars)
-	if !bytes.Equal(cp.Marshal(), expectedGnark.Marshal()) {
-		panic("g1 multi exponentiation mismatch")
+	// compare result
+	gnarkRes := cp.Marshal()
+	gethRes := expectedGnark.Marshal()
+	if !bytes.Equal(gnarkRes, gethRes) {
+		msg := fmt.Sprintf("G1 multi exponentiation mismatch gnark/geth.\ngnark: %x\ngeth:  %x\ninput: %x\n ",
+			gnarkRes, gethRes, data)
+		panic(msg)
 	}
 
 	// blst multi exp
@@ -289,6 +295,17 @@ func getG1Points(input io.Reader) (*gnark.G1Affine, *blst.P1Affine, error) {
 	cp.ScalarMultiplication(&g1Gen, s)
 	cpBytes := cp.Marshal()
 
+	// marshal gnark point -> geth point
+	g1 := bls12381.NewG1()
+	kp, err := g1.FromBytes(cpBytes)
+	if err != nil {
+		panic(fmt.Sprintf("Could not marshal gnark.G1 -> geth.G1: %v", err))
+	}
+
+	gnarkRes := g1.ToBytes(kp)
+	if !bytes.Equal(gnarkRes, cpBytes) {
+		panic(fmt.Sprintf("bytes(gnark.G1) != bytes(geth.G1)\ngnark.G1: %x\ngeth.G1:  %x\n", gnarkRes, cpBytes))
+	}
 	// marshal gnark point -> blst point
 	scalar := new(blst.Scalar).FromBEndian(common.LeftPadBytes(s.Bytes(), 32))
 	p1 := new(blst.P1Affine).From(scalar)
@@ -308,10 +325,22 @@ func getG2Points(input io.Reader) (*gnark.G2Affine, *blst.P2Affine, error) {
 	}
 
 	// compute a random point
-	gp := new(gnark.G2Affine)
+	cp := new(gnark.G2Affine)
 	_, _, _, g2Gen := gnark.Generators()
-	gp.ScalarMultiplication(&g2Gen, s)
-	cpBytes := gp.Marshal()
+	cp.ScalarMultiplication(&g2Gen, s)
+	cpBytes := cp.Marshal()
+
+	// marshal gnark point -> geth point
+	g2 := bls12381.NewG2()
+	kp, err := g2.FromBytes(cpBytes)
+	if err != nil {
+		panic(fmt.Sprintf("Could not marshal gnark.G2 -> geth.G2: %v", err))
+	}
+
+	gnarkRes := g2.ToBytes(kp)
+	if !bytes.Equal(gnarkRes, cpBytes) {
+		panic(fmt.Sprintf("bytes(gnark.G2) != bytes(geth.G2)\ngnark.G2: %x\ngeth.G2:  %x\n", gnarkRes, cpBytes))
+	}
 
 	// marshal gnark point -> blst point
 	// Left pad the scalar to 32 bytes
@@ -321,7 +350,7 @@ func getG2Points(input io.Reader) (*gnark.G2Affine, *blst.P2Affine, error) {
 		panic("bytes(blst.G2) != bytes(bls12381.G2)")
 	}
 
-	return gp, p2, nil
+	return cp, p2, nil
 }
 
 func randomScalar(r io.Reader, max *big.Int) (k *big.Int, err error) {
