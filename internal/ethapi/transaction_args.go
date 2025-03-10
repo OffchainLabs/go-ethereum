@@ -436,7 +436,7 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 }
 
 // Assumes that fields are not nil, i.e. setDefaults or CallDefaults has been called.
-func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, header *types.Header, state *state.StateDB, runMode core.MessageRunMode) *core.Message {
+func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, header *types.Header, state *state.StateDB, runMode core.MessageRunMode, skipNonceCheck, skipEoACheck bool) *core.Message {
 	var (
 		gasPrice  *big.Int
 		gasFeeCap *big.Int
@@ -473,26 +473,31 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, he
 	}
 
 	msg := &core.Message{
-		From:              args.from(),
-		To:                args.To,
-		Value:             (*big.Int)(args.Value),
-		GasLimit:          uint64(*args.Gas),
-		GasPrice:          gasPrice,
-		GasFeeCap:         gasFeeCap,
-		GasTipCap:         gasTipCap,
-		Data:              args.data(),
-		AccessList:        accessList,
-		BlobGasFeeCap:     (*big.Int)(args.BlobFeeCap),
-		BlobHashes:        args.BlobHashes,
-		SkipAccountChecks: true,
-		TxRunMode:         runMode,
-		SkipL1Charging:    skipL1Charging,
+		From:             args.from(),
+		To:               args.To,
+		Value:            (*big.Int)(args.Value),
+		Nonce:            uint64(*args.Nonce),
+		GasLimit:         uint64(*args.Gas),
+		GasPrice:         gasPrice,
+		GasFeeCap:        gasFeeCap,
+		GasTipCap:        gasTipCap,
+		Data:             args.data(),
+		AccessList:       accessList,
+		BlobGasFeeCap:    (*big.Int)(args.BlobFeeCap),
+		BlobHashes:       args.BlobHashes,
+		TxRunMode:        runMode,
+		SkipNonceChecks:  skipNonceCheck,
+		SkipFromEOACheck: skipEoACheck,
+		SkipL1Charging:   skipL1Charging,
 	}
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	if state != nil && !skipL1Charging {
-		// ToMessage recurses once to allow ArbOS to intercept the result for all callers
-		// ArbOS uses this to modify globalGasCap so that the cap will ignore this tx's specific L1 data costs
-		postingGas, err := core.RPCPostingGasHook(msg, header, state)
+		var postingGas uint64
+		var err error
+		if globalGasCap != 0 {
+			// Modify globalGasCap to ignore this tx's specific L1 data costs
+			postingGas, err = core.RPCPostingGasHook(msg, header, state)
+		}
 		if err == nil {
 			args.setGasUsingCap(globalGasCap + postingGas)
 			msg.GasLimit = uint64(*args.Gas)
@@ -505,10 +510,23 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, he
 
 // ToTransaction converts the arguments to a transaction.
 // This assumes that setDefaults has been called.
-func (args *TransactionArgs) ToTransaction() *types.Transaction {
-	var data types.TxData
+func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
+	usedType := types.LegacyTxType
 	switch {
-	case args.BlobHashes != nil:
+	case args.BlobHashes != nil || defaultType == types.BlobTxType:
+		usedType = types.BlobTxType
+	case args.MaxFeePerGas != nil || defaultType == types.DynamicFeeTxType:
+		usedType = types.DynamicFeeTxType
+	case args.AccessList != nil || defaultType == types.AccessListTxType:
+		usedType = types.AccessListTxType
+	}
+	// Make it possible to default to newer tx, but use legacy if gasprice is provided
+	if args.GasPrice != nil {
+		usedType = types.LegacyTxType
+	}
+	var data types.TxData
+	switch usedType {
+	case types.BlobTxType:
 		al := types.AccessList{}
 		if args.AccessList != nil {
 			al = *args.AccessList
@@ -534,7 +552,7 @@ func (args *TransactionArgs) ToTransaction() *types.Transaction {
 			}
 		}
 
-	case args.MaxFeePerGas != nil:
+	case types.DynamicFeeTxType:
 		al := types.AccessList{}
 		if args.AccessList != nil {
 			al = *args.AccessList
@@ -551,7 +569,7 @@ func (args *TransactionArgs) ToTransaction() *types.Transaction {
 			AccessList: al,
 		}
 
-	case args.AccessList != nil:
+	case types.AccessListTxType:
 		data = &types.AccessListTx{
 			To:         args.To,
 			ChainID:    (*big.Int)(args.ChainID),

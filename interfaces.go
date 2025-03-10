@@ -135,27 +135,27 @@ func (prog SyncProgress) Done() bool {
 	return prog.TxIndexRemainingBlocks == 0
 }
 
-func (progress SyncProgress) ToMap() map[string]interface{} {
-	if progress.CurrentBlock >= progress.HighestBlock {
+func (prog SyncProgress) ToMap() map[string]interface{} {
+	if prog.CurrentBlock >= prog.HighestBlock {
 		return nil
 	}
 	// Otherwise gather the block sync stats
 	return map[string]interface{}{
-		"startingBlock":       hexutil.Uint64(progress.StartingBlock),
-		"currentBlock":        hexutil.Uint64(progress.CurrentBlock),
-		"highestBlock":        hexutil.Uint64(progress.HighestBlock),
-		"syncedAccounts":      hexutil.Uint64(progress.SyncedAccounts),
-		"syncedAccountBytes":  hexutil.Uint64(progress.SyncedAccountBytes),
-		"syncedBytecodes":     hexutil.Uint64(progress.SyncedBytecodes),
-		"syncedBytecodeBytes": hexutil.Uint64(progress.SyncedBytecodeBytes),
-		"syncedStorage":       hexutil.Uint64(progress.SyncedStorage),
-		"syncedStorageBytes":  hexutil.Uint64(progress.SyncedStorageBytes),
-		"healedTrienodes":     hexutil.Uint64(progress.HealedTrienodes),
-		"healedTrienodeBytes": hexutil.Uint64(progress.HealedTrienodeBytes),
-		"healedBytecodes":     hexutil.Uint64(progress.HealedBytecodes),
-		"healedBytecodeBytes": hexutil.Uint64(progress.HealedBytecodeBytes),
-		"healingTrienodes":    hexutil.Uint64(progress.HealingTrienodes),
-		"healingBytecode":     hexutil.Uint64(progress.HealingBytecode),
+		"startingBlock":       hexutil.Uint64(prog.StartingBlock),
+		"currentBlock":        hexutil.Uint64(prog.CurrentBlock),
+		"highestBlock":        hexutil.Uint64(prog.HighestBlock),
+		"syncedAccounts":      hexutil.Uint64(prog.SyncedAccounts),
+		"syncedAccountBytes":  hexutil.Uint64(prog.SyncedAccountBytes),
+		"syncedBytecodes":     hexutil.Uint64(prog.SyncedBytecodes),
+		"syncedBytecodeBytes": hexutil.Uint64(prog.SyncedBytecodeBytes),
+		"syncedStorage":       hexutil.Uint64(prog.SyncedStorage),
+		"syncedStorageBytes":  hexutil.Uint64(prog.SyncedStorageBytes),
+		"healedTrienodes":     hexutil.Uint64(prog.HealedTrienodes),
+		"healedTrienodeBytes": hexutil.Uint64(prog.HealedTrienodeBytes),
+		"healedBytecodes":     hexutil.Uint64(prog.HealedBytecodes),
+		"healedBytecodeBytes": hexutil.Uint64(prog.HealedBytecodeBytes),
+		"healingTrienodes":    hexutil.Uint64(prog.HealingTrienodes),
+		"healingBytecode":     hexutil.Uint64(prog.HealingBytecode),
 	}
 }
 

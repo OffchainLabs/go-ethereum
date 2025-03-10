@@ -39,8 +39,8 @@ type KeyValueWriter interface {
 
 // KeyValueStater wraps the Stat method of a backing data store.
 type KeyValueStater interface {
-	// Stat returns a particular internal stat of the database.
-	Stat(property string) (string, error)
+	// Stat returns the statistic data of the database.
+	Stat() (string, error)
 }
 
 // Compacter wraps the Compact method of a backing data store.
@@ -64,7 +64,6 @@ type KeyValueStore interface {
 	Batcher
 	Iteratee
 	Compacter
-	Snapshotter
 	io.Closer
 }
 
@@ -125,11 +124,6 @@ type AncientWriter interface {
 
 	// Sync flushes all in-memory ancient store data to disk.
 	Sync() error
-
-	// MigrateTable processes and migrates entries of a given table to a new format.
-	// The second argument is a function that takes a raw entry and returns it
-	// in the newest format.
-	MigrateTable(string, func([]byte) ([]byte, error)) error
 }
 
 // AncientWriteOp is given to the function argument of ModifyAncients.
@@ -205,7 +199,6 @@ type Database interface {
 	Iteratee
 	Stater
 	Compacter
-	Snapshotter
 	io.Closer
 	WasmDataBaseRetriever
 }

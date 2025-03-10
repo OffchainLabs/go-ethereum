@@ -102,12 +102,8 @@ func (db *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 	panic("Method called on unconstructable leveldb database")
 }
 
-func (db *Database) NewSnapshot() (ethdb.Snapshot, error) {
-	panic("Method called on unconstructable leveldb database")
-}
-
 // Stat returns a particular internal stat of the database.
-func (db *Database) Stat(property string) (string, error) {
+func (db *Database) Stat() (string, error) {
 	panic("Method called on unconstructable leveldb database")
 }
 

@@ -139,7 +139,6 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		dl.cleans.Set(key, blob)
 		cleanWriteMeter.Mark(int64(len(blob)))
 	}
-
 	return blob, h.hash(blob), &nodeLoc{loc: locDiskLayer, depth: depth}, nil
 }
 
@@ -219,7 +218,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 }
 
 // revert applies the given state history and return a reverted disk layer.
-func (dl *diskLayer) revert(h *history, loader triestate.TrieLoader) (*diskLayer, error) {
+func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 	if h.meta.root != dl.rootHash() {
 		return nil, errUnexpectedHistory
 	}
@@ -229,7 +228,7 @@ func (dl *diskLayer) revert(h *history, loader triestate.TrieLoader) (*diskLayer
 	// Apply the reverse state changes upon the current state. This must
 	// be done before holding the lock in order to access state in "this"
 	// layer.
-	nodes, err := triestate.Apply(h.meta.parent, h.meta.root, h.accounts, h.storages, loader)
+	nodes, err := apply(dl.db, h.meta.parent, h.meta.root, h.accounts, h.storages)
 	if err != nil {
 		return nil, err
 	}

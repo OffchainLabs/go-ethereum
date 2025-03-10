@@ -39,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
 )
@@ -337,7 +336,7 @@ func importChain(ctx *cli.Context) error {
 	fmt.Printf("Import done in %v.\n\n", time.Since(start))
 
 	// Output pre-compaction stats mostly to see the import trashing
-	showLeveldbStats(db)
+	showDBStats(db)
 
 	// Print the memory statistics used by the importing
 	mem := new(runtime.MemStats)
@@ -360,7 +359,7 @@ func importChain(ctx *cli.Context) error {
 	}
 	fmt.Printf("Compaction done in %v.\n\n", time.Since(start))
 
-	showLeveldbStats(db)
+	showDBStats(db)
 	return importErr
 }
 
@@ -426,8 +425,6 @@ func importHistory(ctx *cli.Context) error {
 			network = "mainnet"
 		case ctx.Bool(utils.SepoliaFlag.Name):
 			network = "sepolia"
-		case ctx.Bool(utils.GoerliFlag.Name):
-			network = "goerli"
 		}
 	} else {
 		// No network flag set, try to determine network based on files
@@ -516,7 +513,7 @@ func importPreimages(ctx *cli.Context) error {
 	return nil
 }
 
-func parseDumpConfig(ctx *cli.Context, stack *node.Node, db ethdb.Database) (*state.DumpConfig, common.Hash, error) {
+func parseDumpConfig(ctx *cli.Context, db ethdb.Database) (*state.DumpConfig, common.Hash, error) {
 	var header *types.Header
 	if ctx.NArg() > 1 {
 		return nil, common.Hash{}, fmt.Errorf("expected 1 argument (number or hash), got %d", ctx.NArg())
@@ -580,14 +577,14 @@ func dump(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	conf, root, err := parseDumpConfig(ctx, stack, db)
+	conf, root, err := parseDumpConfig(ctx, db)
 	if err != nil {
 		return err
 	}
 	triedb := utils.MakeTrieDatabase(ctx, db, true, true, false) // always enable preimage lookup
 	defer triedb.Close()
 
-	state, err := state.New(root, state.NewDatabaseWithNodeDB(db, triedb), nil)
+	state, err := state.New(root, state.NewDatabase(triedb, nil))
 	if err != nil {
 		return err
 	}

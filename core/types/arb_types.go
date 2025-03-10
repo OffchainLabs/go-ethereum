@@ -15,9 +15,13 @@ import (
 )
 
 // Returns true if nonce checks should be skipped based on inner's isFake()
-// This also disables requiring that sender is an EOA and not a contract
-func (tx *Transaction) SkipAccountChecks() bool {
-	return tx.inner.skipAccountChecks()
+func (tx *Transaction) SkipNonceChecks() bool {
+	return tx.inner.skipNonceChecks()
+}
+
+// Returns true if disables requiring that sender is an EOA and not a contract
+func (tx *Transaction) SkipFromEOACheck() bool {
+	return tx.inner.skipFromEOACheck()
 }
 
 type fallbackError struct {
@@ -43,15 +47,25 @@ type FallbackClient interface {
 
 var bigZero = big.NewInt(0)
 
-func (tx *LegacyTx) skipAccountChecks() bool                  { return false }
-func (tx *AccessListTx) skipAccountChecks() bool              { return false }
-func (tx *DynamicFeeTx) skipAccountChecks() bool              { return false }
-func (tx *ArbitrumUnsignedTx) skipAccountChecks() bool        { return false }
-func (tx *ArbitrumContractTx) skipAccountChecks() bool        { return true }
-func (tx *ArbitrumRetryTx) skipAccountChecks() bool           { return true }
-func (tx *ArbitrumSubmitRetryableTx) skipAccountChecks() bool { return true }
-func (d *ArbitrumDepositTx) skipAccountChecks() bool          { return true }
-func (t *ArbitrumInternalTx) skipAccountChecks() bool         { return true }
+func (tx *LegacyTx) skipNonceChecks() bool                  { return false }
+func (tx *AccessListTx) skipNonceChecks() bool              { return false }
+func (tx *DynamicFeeTx) skipNonceChecks() bool              { return false }
+func (tx *ArbitrumUnsignedTx) skipNonceChecks() bool        { return false }
+func (tx *ArbitrumContractTx) skipNonceChecks() bool        { return true }
+func (tx *ArbitrumRetryTx) skipNonceChecks() bool           { return true }
+func (tx *ArbitrumSubmitRetryableTx) skipNonceChecks() bool { return true }
+func (d *ArbitrumDepositTx) skipNonceChecks() bool          { return true }
+func (t *ArbitrumInternalTx) skipNonceChecks() bool         { return true }
+
+func (tx *LegacyTx) skipFromEOACheck() bool                  { return false }
+func (tx *AccessListTx) skipFromEOACheck() bool              { return false }
+func (tx *DynamicFeeTx) skipFromEOACheck() bool              { return false }
+func (tx *ArbitrumUnsignedTx) skipFromEOACheck() bool        { return false }
+func (tx *ArbitrumContractTx) skipFromEOACheck() bool        { return true }
+func (tx *ArbitrumRetryTx) skipFromEOACheck() bool           { return true }
+func (tx *ArbitrumSubmitRetryableTx) skipFromEOACheck() bool { return true }
+func (d *ArbitrumDepositTx) skipFromEOACheck() bool          { return true }
+func (t *ArbitrumInternalTx) skipFromEOACheck() bool         { return true }
 
 type ArbitrumUnsignedTx struct {
 	ChainId *big.Int
@@ -453,7 +467,7 @@ func (d *ArbitrumDepositTx) setSignatureValues(chainID, v, r, s *big.Int) {
 
 }
 
-func (tx *ArbitrumDepositTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+func (d *ArbitrumDepositTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
 	return dst.Set(bigZero)
 }
 
@@ -490,15 +504,15 @@ func (t *ArbitrumInternalTx) decode(input []byte) error {
 	return rlp.DecodeBytes(input, t)
 }
 
-func (d *ArbitrumInternalTx) rawSignatureValues() (v, r, s *big.Int) {
+func (t *ArbitrumInternalTx) rawSignatureValues() (v, r, s *big.Int) {
 	return bigZero, bigZero, bigZero
 }
 
-func (d *ArbitrumInternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
+func (t *ArbitrumInternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
 
 }
 
-func (tx *ArbitrumInternalTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+func (t *ArbitrumInternalTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
 	return dst.Set(bigZero)
 }
 

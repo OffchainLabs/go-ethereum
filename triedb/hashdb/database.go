@@ -31,8 +31,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
+	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
 var (
@@ -46,7 +48,7 @@ var (
 	memcacheDirtyReadMeter  = metrics.NewRegisteredMeter("hashdb/memcache/dirty/read", nil)
 	memcacheDirtyWriteMeter = metrics.NewRegisteredMeter("hashdb/memcache/dirty/write", nil)
 
-	memcacheFlushTimeTimer  = metrics.NewRegisteredResettingTimer("hashdb/memcache/flush/time", nil)
+	memcacheFlushTimeTimer  = metrics.NewRegisteredTimer("hashdb/memcache/flush/time", nil)
 	memcacheFlushNodesMeter = metrics.NewRegisteredMeter("hashdb/memcache/flush/nodes", nil)
 	memcacheFlushBytesMeter = metrics.NewRegisteredMeter("hashdb/memcache/flush/bytes", nil)
 
@@ -54,16 +56,10 @@ var (
 	memcacheGCNodesMeter = metrics.NewRegisteredMeter("hashdb/memcache/gc/nodes", nil)
 	memcacheGCBytesMeter = metrics.NewRegisteredMeter("hashdb/memcache/gc/bytes", nil)
 
-	memcacheCommitTimeTimer  = metrics.NewRegisteredResettingTimer("hashdb/memcache/commit/time", nil)
+	memcacheCommitTimeTimer  = metrics.NewRegisteredTimer("hashdb/memcache/commit/time", nil)
 	memcacheCommitNodesMeter = metrics.NewRegisteredMeter("hashdb/memcache/commit/nodes", nil)
 	memcacheCommitBytesMeter = metrics.NewRegisteredMeter("hashdb/memcache/commit/bytes", nil)
 )
-
-// ChildResolver defines the required method to decode the provided
-// trie node and iterate the children on top.
-type ChildResolver interface {
-	ForEach(node []byte, onChild func(common.Hash))
-}
 
 // Config contains the settings for database.
 type Config struct {
@@ -83,9 +79,7 @@ var Defaults = &Config{
 // the disk database. The aim is to accumulate trie writes in-memory and only
 // periodically flush a couple tries to disk, garbage collecting the remainder.
 type Database struct {
-	diskdb   ethdb.Database // Persistent storage for matured trie nodes
-	resolver ChildResolver  // The handler to resolve children of nodes
-
+	diskdb  ethdb.Database              // Persistent storage for matured trie nodes
 	cleans  *fastcache.Cache            // GC friendly memory cache of clean node RLPs
 	dirties map[common.Hash]*cachedNode // Data and references relationships of dirty trie nodes
 	oldest  common.Hash                 // Oldest tracked node, flush-list head
@@ -123,15 +117,15 @@ var cachedNodeSize = int(reflect.TypeOf(cachedNode{}).Size())
 // forChildren invokes the callback for all the tracked children of this node,
 // both the implicit ones from inside the node as well as the explicit ones
 // from outside the node.
-func (n *cachedNode) forChildren(resolver ChildResolver, onChild func(hash common.Hash)) {
+func (n *cachedNode) forChildren(onChild func(hash common.Hash)) {
 	for child := range n.external {
 		onChild(child)
 	}
-	resolver.ForEach(n.node, onChild)
+	trie.ForGatherChildren(n.node, onChild)
 }
 
 // New initializes the hash-based node database.
-func New(diskdb ethdb.Database, config *Config, resolver ChildResolver) *Database {
+func New(diskdb ethdb.Database, config *Config) *Database {
 	if config == nil {
 		config = Defaults
 	}
@@ -140,10 +134,9 @@ func New(diskdb ethdb.Database, config *Config, resolver ChildResolver) *Databas
 		cleans = fastcache.New(config.CleanCacheSize)
 	}
 	return &Database{
-		diskdb:   diskdb,
-		resolver: resolver,
-		cleans:   cleans,
-		dirties:  make(map[common.Hash]*cachedNode),
+		diskdb:  diskdb,
+		cleans:  cleans,
+		dirties: make(map[common.Hash]*cachedNode),
 	}
 }
 
@@ -162,7 +155,7 @@ func (db *Database) insert(hash common.Hash, node []byte) {
 		node:      node,
 		flushPrev: db.newest,
 	}
-	entry.forChildren(db.resolver, func(child common.Hash) {
+	entry.forChildren(func(child common.Hash) {
 		if c := db.dirties[child]; c != nil {
 			c.parents++
 		}
@@ -320,7 +313,7 @@ func (db *Database) dereference(hash common.Hash) {
 			db.dirties[node.flushNext].flushPrev = node.flushPrev
 		}
 		// Dereference all children and delete the node
-		node.forChildren(db.resolver, func(child common.Hash) {
+		node.forChildren(func(child common.Hash) {
 			db.dereference(child)
 		})
 		delete(db.dirties, hash)
@@ -401,7 +394,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	memcacheFlushBytesMeter.Mark(int64(storage - db.dirtiesSize))
 	memcacheFlushNodesMeter.Mark(int64(nodes - len(db.dirties)))
 
-	log.Debug("Persisted nodes from memory database", "nodes", nodes-len(db.dirties), "size", storage-db.dirtiesSize, "time", time.Since(start),
+	log.Info("Persisted nodes from memory database", "nodes", nodes-len(db.dirties), "size", storage-db.dirtiesSize, "time", time.Since(start),
 		"flushnodes", db.flushnodes, "flushsize", db.flushsize, "flushtime", db.flushtime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
 
 	return nil
@@ -453,7 +446,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	if !report {
 		logger = log.Debug
 	}
-	logger("Persisted trie from memory database", "nodes", nodes-len(db.dirties)+int(db.flushnodes), "size", storage-db.dirtiesSize+db.flushsize, "time", time.Since(start)+db.flushtime,
+	logger("Persisted trie from memory database", "nodes", nodes-len(db.dirties), "flushnodes", db.flushnodes, "size", storage-db.dirtiesSize, "flushsize", db.flushsize, "time", time.Since(start), "flushtime", db.flushtime,
 		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
 
 	// Reset the garbage collection statistics
@@ -473,7 +466,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	var err error
 
 	// Dereference all children and delete the node
-	node.forChildren(db.resolver, func(child common.Hash) {
+	node.forChildren(func(child common.Hash) {
 		if err == nil {
 			err = db.commit(child, batch, uncacher)
 		}
@@ -634,7 +627,7 @@ func (db *Database) Close() error {
 
 // Reader retrieves a node reader belonging to the given state root.
 // An error will be returned if the requested state is not available.
-func (db *Database) Reader(root common.Hash) (*reader, error) {
+func (db *Database) Reader(root common.Hash) (database.Reader, error) {
 	if _, err := db.node(root); err != nil {
 		return nil, fmt.Errorf("state %#x is not available, %v", root, err)
 	}

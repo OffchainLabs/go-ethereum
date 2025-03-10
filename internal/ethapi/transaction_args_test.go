@@ -42,6 +42,8 @@ import (
 
 // TestSetFeeDefaults tests the logic for filling in default fee values works as expected.
 func TestSetFeeDefaults(t *testing.T) {
+	t.Parallel()
+
 	type test struct {
 		name string
 		fork string // options: legacy, london, cancun
@@ -349,6 +351,9 @@ func (b *backendMock) BlockByHash(ctx context.Context, hash common.Hash) (*types
 	return nil, nil
 }
 func (b *backendMock) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
+	return nil, nil
+}
+func (b *backendMock) BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error) {
 	return nil, nil
 }
 func (b *backendMock) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {

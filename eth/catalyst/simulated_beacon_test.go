@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func startSimulatedBeaconEthService(t *testing.T, genesis *core.Genesis) (*node.Node, *eth.Ethereum, *SimulatedBeacon) {
+func startSimulatedBeaconEthService(t *testing.T, genesis *core.Genesis, period uint64) (*node.Node, *eth.Ethereum, *SimulatedBeacon) {
 	t.Helper()
 
 	n, err := node.New(&node.Config{
@@ -55,7 +55,7 @@ func startSimulatedBeaconEthService(t *testing.T, genesis *core.Genesis) (*node.
 		t.Fatal("can't create eth service:", err)
 	}
 
-	simBeacon, err := NewSimulatedBeacon(1, ethservice)
+	simBeacon, err := NewSimulatedBeacon(period, ethservice)
 	if err != nil {
 		t.Fatal("can't create simulated beacon:", err)
 	}
@@ -87,7 +87,7 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 	// short period (1 second) for testing purposes
 	var gasLimit uint64 = 10_000_000
 	genesis := core.DeveloperGenesisBlock(gasLimit, &testAddr)
-	node, ethService, mock := startSimulatedBeaconEthService(t, genesis)
+	node, ethService, mock := startSimulatedBeaconEthService(t, genesis, 1)
 	_ = mock
 	defer node.Close()
 
@@ -141,63 +141,64 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 	}
 }
 
-func TestSimulatedBeaconAPIDeadlocksInExtremeConditions(t *testing.T) {
-	txs := make(map[common.Hash]*types.Transaction)
-
+// Tests that zero-period dev mode can handle a lot of simultaneous
+// transactions/withdrawals
+func TestOnDemandSpam(t *testing.T) {
 	var (
-		// testKey is a private key to use for funding a tester account.
-		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-
-		// testAddr is the Ethereum address of the tester account.
-		testAddr = crypto.PubkeyToAddress(testKey.PublicKey)
+		withdrawals     []types.Withdrawal
+		txs                    = make(map[common.Hash]*types.Transaction)
+		testKey, _             = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		testAddr               = crypto.PubkeyToAddress(testKey.PublicKey)
+		gasLimit        uint64 = 10_000_000
+		genesis                = core.DeveloperGenesisBlock(gasLimit, &testAddr)
+		node, eth, mock        = startSimulatedBeaconEthService(t, genesis, 0)
+		_                      = newSimulatedBeaconAPI(mock)
+		signer                 = types.LatestSigner(eth.BlockChain().Config())
+		chainHeadCh            = make(chan core.ChainHeadEvent, 100)
+		sub                    = eth.BlockChain().SubscribeChainHeadEvent(chainHeadCh)
 	)
-
-	// short period (1 second) for testing purposes
-	var gasLimit uint64 = 10_000_000
-	genesis := core.DeveloperGenesisBlock(gasLimit, &testAddr)
-	node, ethService, mock := startSimulatedBeaconEthService(t, genesis)
-	_ = mock
 	defer node.Close()
+	defer sub.Unsubscribe()
 
-	// simulated beacon api
-	mockApi := &api{mock}
-	go mockApi.loop()
-
-	chainHeadCh := make(chan core.ChainHeadEvent, 10)
-	subscription := ethService.BlockChain().SubscribeChainHeadEvent(chainHeadCh)
-	defer subscription.Unsubscribe()
-
-	// generate a bunch of transactions to overload simulated beacon api
-	// current capacity of core.NewTxsEvent channel is 15, we send 30 txs
-	signer := types.NewEIP155Signer(ethService.BlockChain().Config().ChainID)
-	for i := 0; i < 30; i++ {
-		tx, err := types.SignTx(types.NewTransaction(uint64(i), common.Address{}, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil), signer, testKey)
-		if err != nil {
-			t.Fatalf("error signing transaction, err=%v", err)
-		}
-		txs[tx.Hash()] = tx
-
-		if err := ethService.APIBackend.SendTx(context.Background(), tx); err != nil {
-			t.Fatal("SendTx failed", err)
+	// generate some withdrawals
+	for i := 0; i < 20; i++ {
+		withdrawals = append(withdrawals, types.Withdrawal{Index: uint64(i)})
+		if err := mock.withdrawals.add(&withdrawals[i]); err != nil {
+			t.Fatal("addWithdrawal failed", err)
 		}
 	}
 
-	includedTxs := make(map[common.Hash]struct{})
+	// generate a bunch of transactions
+	for i := 0; i < 20000; i++ {
+		tx, err := types.SignTx(types.NewTransaction(uint64(i), common.Address{byte(i), byte(1)}, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee*2), nil), signer, testKey)
+		if err != nil {
+			t.Fatal("error signing transaction", err)
+		}
+		txs[tx.Hash()] = tx
+		if err := eth.APIBackend.SendTx(context.Background(), tx); err != nil {
+			t.Fatal("error adding txs to pool", err)
+		}
+	}
 
-	timer := time.NewTimer(12 * time.Second)
+	var (
+		includedTxs = make(map[common.Hash]struct{})
+		includedWxs []uint64
+	)
 	for {
 		select {
 		case evt := <-chainHeadCh:
-			for _, includedTx := range evt.Block.Transactions() {
-				includedTxs[includedTx.Hash()] = struct{}{}
+			for _, itx := range evt.Block.Transactions() {
+				includedTxs[itx.Hash()] = struct{}{}
 			}
-
+			for _, iwx := range evt.Block.Withdrawals() {
+				includedWxs = append(includedWxs, iwx.Index)
+			}
 			// ensure all withdrawals/txs included. this will take two blocks b/c number of withdrawals > 10
-			if len(includedTxs) == len(txs) {
-				t.Fatal("all txs were included, the simulated beacon api did not deadlock")
+			if len(includedTxs) == len(txs) && len(includedWxs) == len(withdrawals) {
+				return
 			}
-		case <-timer.C:
-			return
+		case <-time.After(10 * time.Second):
+			t.Fatalf("timed out without including all withdrawals/txs: have txs %d, want %d, have wxs %d, want %d", len(includedTxs), len(txs), len(includedWxs), len(withdrawals))
 		}
 	}
 }
