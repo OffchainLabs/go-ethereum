@@ -1574,11 +1574,8 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 		fillArbitrumNitroHeaderInfo(block.Header(), fields)
 	}
 
-	if block.Header().WithdrawalsHash != nil {
+	if block.Withdrawals() != nil {
 		fields["withdrawals"] = block.Withdrawals()
-	}
-	if block.Header().RequestsHash != nil {
-		fields["requests"] = block.Requests()
 	}
 	return fields
 }
