@@ -203,5 +203,5 @@ var (
 	// HistoryStorageAddress is where the historical block hashes are stored.
 	HistoryStorageAddress = common.HexToAddress("0x0000F90827F1C53a10cb7A02335B175320002935")
 	// HistoryStorageCode is the code with getters for historical block hashes.
-	HistoryStorageCode = common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe1460575767ffffffffffffffff5f3511605357600143035f3511604b575f35612000014311604b57611fff5f3516545f5260205ff35b5f5f5260205ff35b5f5ffd5b5f35611fff60014303165500")
+	HistoryStorageCode = common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe14604857602036036044575f356001430381116044576205ffd0814303116044576205ffd09006545f5260205ff35b5f5ffd5b5f356205ffd060014303065500")
 )
