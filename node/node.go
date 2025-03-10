@@ -772,7 +772,7 @@ func (n *Node) OpenDatabaseWithExtraOptions(name string, cache, handles int, nam
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
 	} else {
-		db, err = rawdb.Open(rawdb.OpenOptions{
+		db, err = openDatabase(openOptions{
 			Type:               n.config.DBEngine,
 			Directory:          n.ResolvePath(name),
 			Namespace:          namespace,
@@ -782,7 +782,6 @@ func (n *Node) OpenDatabaseWithExtraOptions(name string, cache, handles int, nam
 			PebbleExtraOptions: pebbleExtraOptions,
 		})
 	}
-
 	if err == nil {
 		db = n.wrapDatabase(db)
 	}
@@ -809,7 +808,7 @@ func (n *Node) OpenDatabaseWithFreezerWithExtraOptions(name string, cache, handl
 	if n.config.DataDir == "" {
 		db, err = rawdb.NewDatabaseWithFreezer(memorydb.New(), "", namespace, readonly)
 	} else {
-		db, err = rawdb.Open(rawdb.OpenOptions{
+		db, err = openDatabase(openOptions{
 			Type:               n.config.DBEngine,
 			Directory:          n.ResolvePath(name),
 			AncientsDirectory:  n.ResolveAncient(name, ancient),
