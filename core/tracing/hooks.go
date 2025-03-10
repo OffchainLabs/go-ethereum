@@ -283,7 +283,8 @@ const (
 	BalanceChangeTransferActivationReimburse
 )
 
-func (b BalanceChangeReason) String() string {
+// Str gives the arbitrum specific string for the corresponding BalanceChangeReason
+func (b BalanceChangeReason) Str() string {
 	switch b {
 	case BalanceIncreaseRewardTransactionFee:
 		return "tip"

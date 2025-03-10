@@ -46,7 +46,7 @@ func (jst *jsTracer) CaptureArbitrumTransfer(
 
 	transfer.Set("value", value)
 	transfer.Set("before", before)
-	transfer.Set("purpose", reason.String())
+	transfer.Set("purpose", reason.Str())
 
 	if _, err := traceTransfer(transfer); err != nil {
 		jst.err = wrapError("captureArbitrumTransfer", err)
@@ -81,7 +81,7 @@ func (jst *jsTracer) OnBalanceChange(addr common.Address, prev, new *big.Int, re
 	balanceChange.Set("addr", addr.String())
 	balanceChange.Set("prev", prev)
 	balanceChange.Set("new", new)
-	balanceChange.Set("reason", reason.String())
+	balanceChange.Set("reason", reason.Str())
 
 	if _, err := traceBalanceChange(jst.obj, balanceChange); err != nil {
 		jst.err = wrapError("onBalanceChange", err)

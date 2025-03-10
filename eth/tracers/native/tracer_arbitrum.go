@@ -32,7 +32,7 @@ type arbitrumTransfer struct {
 
 func (t *callTracer) CaptureArbitrumTransfer(from, to *common.Address, value *big.Int, before bool, reason tracing.BalanceChangeReason) {
 	transfer := arbitrumTransfer{
-		Purpose: reason.String(),
+		Purpose: reason.Str(),
 		Value:   bigToHex(value),
 	}
 	if from != nil {
@@ -55,7 +55,7 @@ func (t *flatCallTracer) CaptureArbitrumTransfer(from, to *common.Address, value
 		return
 	}
 	transfer := arbitrumTransfer{
-		Purpose: reason.String(),
+		Purpose: reason.Str(),
 		Value:   bigToHex(value),
 	}
 	if from != nil {
