@@ -1254,7 +1254,13 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 		evm.SetPrecompiles(precompiles)
 	}
 
-	return applyMessageWithEVM(ctx, evm, msg, state, timeout, gp, b, header, *blockContext)
+	res, err = applyMessageWithEVM(ctx, evm, msg, state, timeout, gp, b, header, *blockContext)
+	// If an internal state error occurred, let that have precedence. Otherwise,
+	// a "trie root missing" type of error will masquerade as e.g. "insufficient gas"
+	if err := state.Error(); err != nil {
+		return nil, err
+	}
+	return res, err
 }
 
 func applyMessageWithEVM(ctx context.Context, evm *vm.EVM, msg *core.Message, state *state.StateDB, timeout time.Duration, gp *core.GasPool, b Backend, header *types.Header, blockContext vm.BlockContext) (*core.ExecutionResult, error) {
@@ -1267,9 +1273,6 @@ func applyMessageWithEVM(ctx context.Context, evm *vm.EVM, msg *core.Message, st
 
 	// Execute the message.
 	result, err := core.ApplyMessage(evm, msg, gp)
-	if err := state.Error(); err != nil {
-		return nil, err
-	}
 
 	// If the timer caused an abort, return an appropriate error message
 	if evm.Cancelled() {
@@ -1311,7 +1314,7 @@ func runScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, state
 			evm.Cancel()
 		}()
 
-		scheduledTxResult, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(math.MaxUint64))
+		scheduledTxResult, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(gomath.MaxUint64))
 		if err != nil {
 			return nil, err // Bail out
 		}
