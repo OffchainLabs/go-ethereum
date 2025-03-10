@@ -800,7 +800,10 @@ func decodeHash(s string) (h common.Hash, inputLength int, err error) {
 func (api *BlockChainAPI) GetHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (map[string]interface{}, error) {
 	header, err := api.b.HeaderByNumber(ctx, number)
 	if header != nil && err == nil {
-		response := api.rpcMarshalHeader(ctx, header)
+		response := RPCMarshalHeader(header)
+		if api.b.ChainConfig().IsArbitrumNitro(header.Number) {
+			fillArbitrumNitroHeaderInfo(header, response)
+		}
 		if number == rpc.PendingBlockNumber {
 			// Pending header need to nil out a few fields
 			for _, field := range []string{"hash", "nonce", "miner"} {
@@ -816,7 +819,10 @@ func (api *BlockChainAPI) GetHeaderByNumber(ctx context.Context, number rpc.Bloc
 func (api *BlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash) map[string]interface{} {
 	header, _ := api.b.HeaderByHash(ctx, hash)
 	if header != nil {
-		return api.rpcMarshalHeader(ctx, header)
+		response := RPCMarshalHeader(header)
+		if api.b.ChainConfig().IsArbitrumNitro(header.Number) {
+			fillArbitrumNitroHeaderInfo(header, response)
+		}
 	}
 	return nil
 }
@@ -831,14 +837,15 @@ func (api *BlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash)
 func (api *BlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 	block, err := api.b.BlockByNumber(ctx, number)
 	if block != nil && err == nil {
-		response, err := api.rpcMarshalBlock(ctx, block, true, fullTx)
-		if err == nil && number == rpc.PendingBlockNumber {
+		response := RPCMarshalBlock(block, true, fullTx, api.b.ChainConfig())
+		api.checkAndFillArbClassicL1BlockNumber(ctx, block, response)
+		if number == rpc.PendingBlockNumber {
 			// Pending blocks need to nil out a few fields
 			for _, field := range []string{"hash", "nonce", "miner"} {
 				response[field] = nil
 			}
 		}
-		return response, err
+		return response, nil
 	}
 	return nil, err
 }
@@ -848,7 +855,8 @@ func (api *BlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.Block
 func (api *BlockChainAPI) GetBlockByHash(ctx context.Context, hash common.Hash, fullTx bool) (map[string]interface{}, error) {
 	block, err := api.b.BlockByHash(ctx, hash)
 	if block != nil {
-		return api.rpcMarshalBlock(ctx, block, true, fullTx)
+		response := RPCMarshalBlock(block, true, fullTx, api.b.ChainConfig())
+		api.checkAndFillArbClassicL1BlockNumber(ctx, block, response)
 	}
 	return nil, err
 }
@@ -863,7 +871,8 @@ func (api *BlockChainAPI) GetUncleByBlockNumberAndIndex(ctx context.Context, blo
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
-		return api.rpcMarshalBlock(ctx, block, false, false)
+		response := RPCMarshalBlock(block, false, false, api.b.ChainConfig())
+		api.checkAndFillArbClassicL1BlockNumber(ctx, block, response)
 	}
 	return nil, err
 }
@@ -878,7 +887,9 @@ func (api *BlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, block
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
-		return api.rpcMarshalBlock(ctx, block, false, false)
+		response := RPCMarshalBlock(block, false, false, api.b.ChainConfig())
+		api.checkAndFillArbClassicL1BlockNumber(ctx, block, response)
+		return response, nil
 	}
 	return nil, err
 }
@@ -1579,15 +1590,15 @@ func fillArbitrumNitroHeaderInfo(header *types.Header, fields map[string]interfa
 	fields["sendCount"] = hexutil.Uint64(info.SendCount)
 }
 
-// rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
-// a `BlockchainAPI`.
-func (api *BlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
-	fields := RPCMarshalHeader(header)
-	fields["totalDifficulty"] = (*hexutil.Big)(api.b.GetTd(ctx, header.Hash()))
-	if api.b.ChainConfig().IsArbitrumNitro(header.Number) {
-		fillArbitrumNitroHeaderInfo(header, fields)
+func (api *BlockChainAPI) checkAndFillArbClassicL1BlockNumber(ctx context.Context, block *types.Block, response map[string]interface{}) {
+	if api.b.ChainConfig().IsArbitrum() && !api.b.ChainConfig().IsArbitrumNitro(block.Number()) {
+		l1BlockNumber, err := api.arbClassicL1BlockNumber(ctx, block)
+		if err != nil {
+			log.Error("error trying to fill legacy l1BlockNumber", "err", err)
+		} else {
+			response["l1BlockNumber"] = l1BlockNumber
+		}
 	}
-	return fields
 }
 
 func (api *BlockChainAPI) arbClassicL1BlockNumber(ctx context.Context, block *types.Block) (hexutil.Uint64, error) {
@@ -1617,26 +1628,6 @@ func (api *BlockChainAPI) arbClassicL1BlockNumber(ctx context.Context, block *ty
 			return 0, err
 		}
 	}
-}
-
-// rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
-// a `BlockchainAPI`.
-func (api *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
-	chainConfig := api.b.ChainConfig()
-	fields := RPCMarshalBlock(b, inclTx, fullTx, chainConfig)
-	if inclTx {
-		fields["totalDifficulty"] = (*hexutil.Big)(api.b.GetTd(ctx, b.Hash()))
-	}
-	if chainConfig.IsArbitrum() && !chainConfig.IsArbitrumNitro(b.Number()) {
-		l1BlockNumber, err := api.arbClassicL1BlockNumber(ctx, b)
-		if err != nil {
-			log.Error("error trying to fill legacy l1BlockNumber", "err", err)
-			return fields, err
-		} else {
-			fields["l1BlockNumber"] = l1BlockNumber
-		}
-	}
-	return fields, nil
 }
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
