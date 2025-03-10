@@ -203,9 +203,10 @@ var (
 	BeaconRootsAddress = common.HexToAddress("0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02")
 	BeaconRootsCode    = common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500")
 
-	// EIP-2935 - Serve historical block hashes from state
-	HistoryStorageAddress = common.HexToAddress("0x0aae40965e6800cd9b1f4b05ff21581047e3f91e")
-	HistoryStorageCode    = common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe1460575767ffffffffffffffff5f3511605357600143035f3511604b575f35612000014311604b57611fff5f3516545f5260205ff35b5f5f5260205ff35b5f5ffd5b5f35611fff60014303165500")
+	// HistoryStorageAddress is where the historical block hashes are stored.
+	HistoryStorageAddress = common.HexToAddress("0x0000F90827F1C53a10cb7A02335B175320002935")
+	// HistoryStorageCode is the code with getters for historical block hashes.
+	HistoryStorageCode = common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe14604857602036036044575f356001430381116044576205ffd0814303116044576205ffd09006545f5260205ff35b5f5ffd5b5f356205ffd060014303065500")
 
 	// EIP-7002 - Execution layer triggerable withdrawals
 	WithdrawalQueueAddress = common.HexToAddress("0x09Fc772D0857550724b07B850a4323f39112aAaA")
