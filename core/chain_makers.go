@@ -346,18 +346,34 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			gen(i, b)
 		}
 
-		var requests types.Requests
+		var requests [][]byte
 		if config.IsPrague(b.header.Number, b.header.Time) {
+			// EIP-6110 deposits
+			var blockLogs []*types.Log
 			for _, r := range b.receipts {
-				d, err := ParseDepositLogs(r.Logs, config)
-				if err != nil {
-					panic(fmt.Sprintf("failed to parse deposit log: %v", err))
-				}
-				requests = append(requests, d...)
+				blockLogs = append(blockLogs, r.Logs...)
 			}
+			depositRequests, err := ParseDepositLogs(blockLogs, config)
+			if err != nil {
+				panic(fmt.Sprintf("failed to parse deposit log: %v", err))
+			}
+			requests = append(requests, depositRequests)
+			// create EVM for system calls
+			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
+			vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, cm.config, vm.Config{})
+			// EIP-7002 withdrawals
+			withdrawalRequests := ProcessWithdrawalQueue(vmenv, statedb)
+			requests = append(requests, withdrawalRequests)
+			// EIP-7251 consolidations
+			consolidationRequests := ProcessConsolidationQueue(vmenv, statedb)
+			requests = append(requests, consolidationRequests)
+		}
+		if requests != nil {
+			reqHash := types.CalcRequestsHash(requests)
+			b.header.RequestsHash = &reqHash
 		}
 
-		body := types.Body{Transactions: b.txs, Uncles: b.uncles, Withdrawals: b.withdrawals, Requests: requests}
+		body := types.Body{Transactions: b.txs, Uncles: b.uncles, Withdrawals: b.withdrawals}
 		block, err := b.engine.FinalizeAndAssemble(cm, b.header, statedb, &body, b.receipts)
 		if err != nil {
 			panic(err)

@@ -166,7 +166,7 @@ func (l panicLogger) Fatalf(format string, args ...interface{}) {
 
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string, readonly bool, ephemeral bool, extraOptions *ExtraOptions) (*Database, error) {
+func New(file string, cache int, handles int, namespace string, readonly bool, extraOptions *ExtraOptions) (*Database, error) {
 	if extraOptions == nil {
 		extraOptions = &ExtraOptions{}
 	}
@@ -180,12 +180,12 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	if len(extraOptions.Levels) == 0 {
 		levels = []pebble.LevelOptions{
 			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 4 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 8 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 16 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 32 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 64 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 128 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
 		}
 	} else {
 		for _, level := range extraOptions.Levels {
@@ -238,7 +238,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		fn:           file,
 		log:          logger,
 		quitChan:     make(chan chan error),
-		writeOptions: &pebble.WriteOptions{Sync: !ephemeral && extraOptions.SyncMode},
+		writeOptions: &pebble.WriteOptions{Sync: extraOptions.SyncMode},
 	}
 	opt := &pebble.Options{
 		// Pebble has a single combined cache area and the write
@@ -413,7 +413,18 @@ func (d *Database) Delete(key []byte) error {
 	if d.closed {
 		return pebble.ErrClosed
 	}
-	return d.db.Delete(key, nil)
+	return d.db.Delete(key, d.writeOptions)
+}
+
+// DeleteRange deletes all of the keys (and values) in the range [start,end)
+// (inclusive on start, exclusive on end).
+func (d *Database) DeleteRange(start, end []byte) error {
+	d.quitLock.RLock()
+	defer d.quitLock.RUnlock()
+	if d.closed {
+		return pebble.ErrClosed
+	}
+	return d.db.DeleteRange(start, end, d.writeOptions)
 }
 
 // NewBatch creates a write-only key-value store that buffers changes to its host
