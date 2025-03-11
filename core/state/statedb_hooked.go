@@ -17,7 +17,6 @@
 package state
 
 import (
-	"github.com/ethereum/go-ethereum/ethdb"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -25,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
@@ -270,6 +270,10 @@ func (s *hookedStateDB) ActivateWasm(moduleHash common.Hash, asmMap map[ethdb.Wa
 	s.inner.ActivateWasm(moduleHash, asmMap)
 }
 
+func (s *hookedStateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
+	return s.inner.IntermediateRoot(deleteEmptyObjects)
+}
+
 func (s *hookedStateDB) TryGetActivatedAsm(target ethdb.WasmTarget, moduleHash common.Hash) (asm []byte, err error) {
 	return s.inner.TryGetActivatedAsm(target, moduleHash)
 }
@@ -283,15 +287,15 @@ func (s *hookedStateDB) RecordCacheWasm(wasm CacheWasm) {
 }
 
 func (s *hookedStateDB) RecordEvictWasm(wasm EvictWasm) {
-	s.RecordEvictWasm(wasm)
+	s.inner.RecordEvictWasm(wasm)
 }
 
 func (s *hookedStateDB) GetRecentWasms() RecentWasms {
-	return s.GetRecentWasms()
+	return s.inner.GetRecentWasms()
 }
 
 func (s *hookedStateDB) GetStylusPages() (uint16, uint16) {
-	return s.GetStylusPages()
+	return s.inner.GetStylusPages()
 }
 
 func (s *hookedStateDB) GetStylusPagesOpen() uint16 {
@@ -299,15 +303,15 @@ func (s *hookedStateDB) GetStylusPagesOpen() uint16 {
 }
 
 func (s *hookedStateDB) SetStylusPagesOpen(open uint16) {
-	s.SetStylusPagesOpen(open)
+	s.inner.SetStylusPagesOpen(open)
 }
 
 func (s *hookedStateDB) AddStylusPages(new uint16) (uint16, uint16) {
-	return s.AddStylusPages(new)
+	return s.inner.AddStylusPages(new)
 }
 
 func (s *hookedStateDB) AddStylusPagesEver(new uint16) {
-	s.AddStylusPagesEver(new)
+	s.inner.AddStylusPagesEver(new)
 }
 
 func (s *hookedStateDB) CreateZombieIfDeleted(address common.Address) {

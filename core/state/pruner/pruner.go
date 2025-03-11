@@ -153,9 +153,8 @@ func removeOtherRoots(db ethdb.Database, rootsList []common.Hash, stateBloom *st
 	var wg sync.WaitGroup
 	errors := make(chan error, threads)
 	for thread := 0; thread < threads; thread++ {
-		thread := thread
 		wg.Add(1)
-		go func() {
+		go func(thread int) {
 			defer wg.Done()
 			firstBlockNum := blockRange/uint64(threads)*uint64(thread+1) + genesisBlockNum
 			if thread == threads-1 {
@@ -204,7 +203,7 @@ func removeOtherRoots(db ethdb.Database, rootsList []common.Hash, stateBloom *st
 				}
 				block = rawdb.ReadBlock(db, block.ParentHash(), block.NumberU64()-1)
 			}
-		}()
+		}(thread)
 	}
 	wg.Wait()
 	select {

@@ -131,6 +131,8 @@ type StateDB interface {
 
 	// Finalise must be invoked at the end of a transaction
 	Finalise(bool)
+
+	IntermediateRoot(bool) common.Hash
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM
