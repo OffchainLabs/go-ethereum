@@ -120,8 +120,8 @@ func CreateFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.D
 }
 
 type SyncProgressBackend interface {
-	SyncProgressMap() map[string]interface{}
-	BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error)
+	SyncProgressMap(ctx context.Context) map[string]interface{}
+	BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error)
 }
 
 func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration) (*filters.FilterSystem, error) {
@@ -205,17 +205,17 @@ func (a *APIBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.B
 }
 
 // General Ethereum API
-func (a *APIBackend) SyncProgressMap() map[string]interface{} {
+func (a *APIBackend) SyncProgressMap(ctx context.Context) map[string]interface{} {
 	if a.sync == nil {
 		res := make(map[string]interface{})
 		res["error"] = "sync object not set in apibackend"
 		return res
 	}
-	return a.sync.SyncProgressMap()
+	return a.sync.SyncProgressMap(ctx)
 }
 
 func (a *APIBackend) SyncProgress() ethereum.SyncProgress {
-	progress := a.SyncProgressMap()
+	progress := a.SyncProgressMap(context.Background())
 
 	if len(progress) == 0 {
 		return ethereum.SyncProgress{}
@@ -496,8 +496,8 @@ func (a *APIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
-func (a *APIBackend) BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error) {
-	return a.sync.BlockMetadataByNumber(blockNum)
+func (a *APIBackend) BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error) {
+	return a.sync.BlockMetadataByNumber(ctx, blockNum)
 }
 
 func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *core.BlockChain, maxRecreateStateDepth int64, header *types.Header, err error) (*state.StateDB, *types.Header, error) {
