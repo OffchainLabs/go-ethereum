@@ -1234,13 +1234,11 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 		uncleHashes[i] = uncle.Hash()
 	}
 	fields["uncles"] = uncleHashes
-
-	if config.IsArbitrumNitro(block.Header().Number) {
-		fillArbitrumNitroHeaderInfo(block.Header(), fields)
-	}
-
 	if block.Withdrawals() != nil {
 		fields["withdrawals"] = block.Withdrawals()
+	}
+	if config.IsArbitrumNitro(block.Header().Number) {
+		fillArbitrumNitroHeaderInfo(block.Header(), fields)
 	}
 	return fields
 }
