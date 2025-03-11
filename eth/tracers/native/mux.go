@@ -192,10 +192,10 @@ func (t *muxTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int,
 	}
 }
 
-func (t *muxTracer) CaptureArbitrumTransfer(from, to *common.Address, value *big.Int, before bool, purpose string) {
+func (t *muxTracer) CaptureArbitrumTransfer(from, to *common.Address, value *big.Int, before bool, reason tracing.BalanceChangeReason) {
 	for _, t := range t.tracers {
 		if t.CaptureArbitrumTransfer != nil {
-			t.CaptureArbitrumTransfer(from, to, value, before, purpose)
+			t.CaptureArbitrumTransfer(from, to, value, before, reason)
 		}
 	}
 }
