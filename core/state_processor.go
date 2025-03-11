@@ -307,7 +307,6 @@ func processRequestsSystemCall(vmenv *vm.EVM, statedb vm.StateDB, requestType by
 			defer tracer.OnSystemCallEnd()
 		}
 	}
-
 	msg := &Message{
 		From:      params.SystemAddress,
 		GasLimit:  30_000_000,
