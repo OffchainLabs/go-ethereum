@@ -172,7 +172,7 @@ type (
 	// LogHook is called when a log is emitted.
 	LogHook = func(log *types.Log)
 
-	CaptureArbitrumTransferHook   = func(from, to *common.Address, value *big.Int, before bool, purpose string)
+	CaptureArbitrumTransferHook   = func(from, to *common.Address, value *big.Int, before bool, reason BalanceChangeReason)
 	CaptureArbitrumStorageGetHook = func(key common.Hash, depth int, before bool)
 	CaptureArbitrumStorageSetHook = func(key, value common.Hash, depth int, before bool)
 
@@ -262,6 +262,70 @@ const (
 	// Note it doesn't account for a self-destruct which appoints itself as recipient.
 	BalanceDecreaseSelfdestructBurn BalanceChangeReason = 14
 )
+
+// Arbitrum specific
+const (
+	BalanceChangeDuringEVMExecution BalanceChangeReason = 128 + iota
+	BalanceIncreaseDeposit
+	BalanceDecreaseWithdrawToL1
+	BalanceIncreaseL1PosterFee
+	BalanceIncreaseInfraFee
+	BalanceIncreaseNetworkFee
+	BalanceChangeTransferInfraRefund
+	BalanceChangeTransferNetworkRefund
+	BalanceIncreasePrepaid
+	BalanceDecreaseUndoRefund
+	BalanceChangeEscrowTransfer
+	BalanceChangeTransferBatchposterReward
+	BalanceChangeTransferBatchposterRefund
+	// Stylus
+	BalanceChangeTransferActivationFee
+	BalanceChangeTransferActivationReimburse
+)
+
+// Str gives the arbitrum specific string for the corresponding BalanceChangeReason
+func (b BalanceChangeReason) Str() string {
+	switch b {
+	case BalanceIncreaseRewardTransactionFee:
+		return "tip"
+	case BalanceDecreaseGasBuy:
+		return "feePayment"
+	case BalanceIncreaseGasReturn:
+		return "gasRefund"
+	case BalanceChangeTransfer:
+		return "transfer via a call"
+	case BalanceDecreaseSelfdestruct:
+		return "selfDestruct"
+	case BalanceChangeDuringEVMExecution:
+		return "during evm execution"
+	case BalanceIncreaseDeposit:
+		return "deposit"
+	case BalanceDecreaseWithdrawToL1:
+		return "withdraw"
+	case BalanceIncreaseL1PosterFee, BalanceIncreaseInfraFee, BalanceIncreaseNetworkFee:
+		return "feeCollection"
+	case BalanceIncreasePrepaid:
+		return "prepaid"
+	case BalanceDecreaseUndoRefund:
+		return "undoRefund"
+	case BalanceChangeEscrowTransfer:
+		return "escrow"
+	case BalanceChangeTransferInfraRefund, BalanceChangeTransferNetworkRefund:
+		return "refund"
+	// Batchposter
+	case BalanceChangeTransferBatchposterReward:
+		return "batchPosterReward"
+	case BalanceChangeTransferBatchposterRefund:
+		return "batchPosterRefund"
+	// Stylus
+	case BalanceChangeTransferActivationFee:
+		return "activate"
+	case BalanceChangeTransferActivationReimburse:
+		return "reimburse"
+	default:
+		return "unspecified"
+	}
+}
 
 // GasChangeReason is used to indicate the reason for a gas change, useful
 // for tracing and reporting.
