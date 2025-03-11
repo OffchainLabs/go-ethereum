@@ -44,6 +44,10 @@ func (db *RecordingKV) Has(key []byte) (bool, error) {
 	return false, errors.New("recording KV doesn't support Has")
 }
 
+func (db *RecordingKV) DeleteRange(start, end []byte) error {
+	return errors.New("recording KV doesn't support DeleteRange")
+}
+
 // Get may be called concurrently with other Get calls
 func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 	var hash common.Hash

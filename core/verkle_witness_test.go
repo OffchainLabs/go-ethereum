@@ -112,7 +112,7 @@ func TestProcessVerkle(t *testing.T) {
 	// genesis := gspec.MustCommit(bcdb, triedb)
 	cacheConfig := DefaultCacheConfigWithScheme(rawdb.PathScheme)
 	cacheConfig.SnapshotLimit = 0
-	blockchain, _ := NewBlockChain(bcdb, cacheConfig, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil)
+	blockchain, _ := NewBlockChain(bcdb, cacheConfig, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil)
 	defer blockchain.Stop()
 
 	txCost1 := params.TxGas

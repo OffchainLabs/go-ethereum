@@ -646,10 +646,6 @@ func (a *APIBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) even
 	return a.BlockChain().SubscribeChainHeadEvent(ch)
 }
 
-func (a *APIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
-	return a.BlockChain().SubscribeChainSideEvent(ch)
-}
-
 // Transaction pool API
 func (a *APIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	return a.b.EnqueueL2Message(ctx, signedTx, nil)

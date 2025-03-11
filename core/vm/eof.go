@@ -166,7 +166,7 @@ func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool)
 	if len(b) < 14 {
 		return io.ErrUnexpectedEOF
 	}
-	if len(b) > params.MaxInitCodeSize {
+	if len(b) > params.DefaultMaxInitCodeSize {
 		return ErrMaxInitCodeSizeExceeded
 	}
 	if !isEOFVersion1(b) {
