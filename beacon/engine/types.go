@@ -265,7 +265,15 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 
 	var requestsHash *common.Hash
 	if requests != nil {
-		h := types.CalcRequestsHash(requests)
+		// Put back request type byte.
+		typedRequests := make([][]byte, len(requests))
+		for i, reqdata := range requests {
+			typedReqdata := make([]byte, len(reqdata)+1)
+			typedReqdata[0] = byte(i)
+			copy(typedReqdata[1:], reqdata)
+			typedRequests[i] = typedReqdata
+		}
+		h := types.CalcRequestsHash(typedRequests)
 		requestsHash = &h
 	}
 
