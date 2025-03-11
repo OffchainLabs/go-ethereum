@@ -26,9 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// openOptions contains the options to apply when opening a database.
+// OpenOptions contains the options to apply when opening a database.
 // OBS: If AncientsDirectory is empty, it indicates that no freezer is to be used.
-type openOptions struct {
+type OpenOptions struct {
 	Type              string // "leveldb" | "pebble"
 	Directory         string // the datadir
 	AncientsDirectory string // the ancients-dir
@@ -40,12 +40,12 @@ type openOptions struct {
 	PebbleExtraOptions *pebble.ExtraOptions
 }
 
-// openDatabase opens both a disk-based key-value database such as leveldb or pebble, but also
+// OpenDatabase opens both a disk-based key-value database such as leveldb or pebble, but also
 // integrates it with a freezer database -- if the AncientDir option has been
 // set on the provided OpenOptions.
 // The passed o.AncientDir indicates the path of root ancient directory where
 // the chain freezer can be opened.
-func openDatabase(o openOptions) (ethdb.Database, error) {
+func OpenDatabase(o OpenOptions) (ethdb.Database, error) {
 	kvdb, err := openKeyValueDatabase(o)
 	if err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func openDatabase(o openOptions) (ethdb.Database, error) {
 //	                   +----------------------------------------
 //	db is non-existent |  pebble default  |  specified type
 //	db is existent     |  from db         |  specified type (if compatible)
-func openKeyValueDatabase(o openOptions) (ethdb.Database, error) {
+func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 	// Reject any unsupported database type
 	if len(o.Type) != 0 && o.Type != rawdb.DBLeveldb && o.Type != rawdb.DBPebble {
 		return nil, fmt.Errorf("unknown db.engine %v", o.Type)
@@ -80,20 +80,20 @@ func openKeyValueDatabase(o openOptions) (ethdb.Database, error) {
 	}
 	if o.Type == rawdb.DBPebble || existingDb == rawdb.DBPebble {
 		log.Info("Using pebble as the backing database")
-		return newPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.PebbleExtraOptions)
+		return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.PebbleExtraOptions)
 	}
 	if o.Type == rawdb.DBLeveldb || existingDb == rawdb.DBLeveldb {
 		log.Info("Using leveldb as the backing database")
-		return newLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
+		return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
 	}
 	// No pre-existing database, no user-requested one either. Default to Pebble.
 	log.Info("Defaulting to pebble as the backing database")
-	return newPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.PebbleExtraOptions)
+	return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.PebbleExtraOptions)
 }
 
-// newLevelDBDatabase creates a persistent key-value database without a freezer
+// NewLevelDBDatabase creates a persistent key-value database without a freezer
 // moving immutable chain segments into cold storage.
-func newLevelDBDatabase(file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
+func NewLevelDBDatabase(file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
 	db, err := leveldb.New(file, cache, handles, namespace, readonly)
 	if err != nil {
 		return nil, err
@@ -102,9 +102,9 @@ func newLevelDBDatabase(file string, cache int, handles int, namespace string, r
 	return rawdb.NewDatabase(db), nil
 }
 
-// newPebbleDBDatabase creates a persistent key-value database without a freezer
+// NewPebbleDBDatabase creates a persistent key-value database without a freezer
 // moving immutable chain segments into cold storage.
-func newPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly bool, extraOptions *pebble.ExtraOptions) (ethdb.Database, error) {
+func NewPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly bool, extraOptions *pebble.ExtraOptions) (ethdb.Database, error) {
 	db, err := pebble.New(file, cache, handles, namespace, readonly, extraOptions)
 	if err != nil {
 		return nil, err
