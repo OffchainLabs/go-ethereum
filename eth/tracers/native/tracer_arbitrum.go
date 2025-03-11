@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -30,11 +31,9 @@ type arbitrumTransfer struct {
 	Value   string  `json:"value"`
 }
 
-func (t *callTracer) CaptureArbitrumTransfer(
-	from, to *common.Address, value *big.Int, before bool, purpose string,
-) {
+func (t *callTracer) CaptureArbitrumTransfer(from, to *common.Address, value *big.Int, before bool, reason tracing.BalanceChangeReason) {
 	transfer := arbitrumTransfer{
-		Purpose: purpose,
+		Purpose: reason.Str(),
 		Value:   bigToHex(value),
 	}
 	if from != nil {
@@ -52,12 +51,12 @@ func (t *callTracer) CaptureArbitrumTransfer(
 	}
 }
 
-func (t *flatCallTracer) CaptureArbitrumTransfer(from, to *common.Address, value *big.Int, before bool, purpose string) {
+func (t *flatCallTracer) CaptureArbitrumTransfer(from, to *common.Address, value *big.Int, before bool, reason tracing.BalanceChangeReason) {
 	if t.interrupt.Load() {
 		return
 	}
 	transfer := arbitrumTransfer{
-		Purpose: purpose,
+		Purpose: reason.Str(),
 		Value:   bigToHex(value),
 	}
 	if from != nil {
