@@ -22,11 +22,11 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -105,7 +105,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 	if err := args.setBlobTxSidecar(ctx); err != nil {
 		return err
 	}
-	if err := args.setFeeDefaults(ctx, b); err != nil {
+	if err := args.setFeeDefaults(ctx, b, b.CurrentHeader()); err != nil {
 		return err
 	}
 
@@ -189,8 +189,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 }
 
 // setFeeDefaults fills in default fee values for unspecified tx fields.
-func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) error {
-	head := b.CurrentHeader()
+func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head *types.Header) error {
 	// Sanity check the EIP-4844 fee parameters.
 	if args.BlobFeeCap != nil && args.BlobFeeCap.ToInt().Sign() == 0 {
 		return errors.New("maxFeePerBlobGas, if specified, must be non-zero")
@@ -436,7 +435,7 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 }
 
 // Assumes that fields are not nil, i.e. setDefaults or CallDefaults has been called.
-func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, header *types.Header, state *state.StateDB, runMode core.MessageRunMode) *core.Message {
+func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, header *types.Header, state *state.StateDB, runMode core.MessageRunMode, skipNonceCheck, skipEoACheck bool) *core.Message {
 	var (
 		gasPrice  *big.Int
 		gasFeeCap *big.Int
@@ -458,7 +457,10 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, he
 			// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
 			gasPrice = new(big.Int)
 			if gasFeeCap.BitLen() > 0 || gasTipCap.BitLen() > 0 {
-				gasPrice = math.BigMin(new(big.Int).Add(gasTipCap, baseFee), gasFeeCap)
+				gasPrice = gasPrice.Add(gasTipCap, baseFee)
+				if gasPrice.Cmp(gasFeeCap) > 0 {
+					gasPrice = gasFeeCap
+				}
 			}
 		}
 	}
@@ -473,20 +475,22 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, he
 	}
 
 	msg := &core.Message{
-		From:              args.from(),
-		To:                args.To,
-		Value:             (*big.Int)(args.Value),
-		GasLimit:          uint64(*args.Gas),
-		GasPrice:          gasPrice,
-		GasFeeCap:         gasFeeCap,
-		GasTipCap:         gasTipCap,
-		Data:              args.data(),
-		AccessList:        accessList,
-		BlobGasFeeCap:     (*big.Int)(args.BlobFeeCap),
-		BlobHashes:        args.BlobHashes,
-		SkipAccountChecks: true,
-		TxRunMode:         runMode,
-		SkipL1Charging:    skipL1Charging,
+		From:             args.from(),
+		To:               args.To,
+		Value:            (*big.Int)(args.Value),
+		Nonce:            uint64(*args.Nonce),
+		GasLimit:         uint64(*args.Gas),
+		GasPrice:         gasPrice,
+		GasFeeCap:        gasFeeCap,
+		GasTipCap:        gasTipCap,
+		Data:             args.data(),
+		AccessList:       accessList,
+		BlobGasFeeCap:    (*big.Int)(args.BlobFeeCap),
+		BlobHashes:       args.BlobHashes,
+		TxRunMode:        runMode,
+		SkipNonceChecks:  skipNonceCheck,
+		SkipFromEOACheck: skipEoACheck,
+		SkipL1Charging:   skipL1Charging,
 	}
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	if state != nil && !skipL1Charging {
@@ -508,10 +512,23 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, he
 
 // ToTransaction converts the arguments to a transaction.
 // This assumes that setDefaults has been called.
-func (args *TransactionArgs) ToTransaction() *types.Transaction {
-	var data types.TxData
+func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
+	usedType := types.LegacyTxType
 	switch {
-	case args.BlobHashes != nil:
+	case args.BlobHashes != nil || defaultType == types.BlobTxType:
+		usedType = types.BlobTxType
+	case args.MaxFeePerGas != nil || defaultType == types.DynamicFeeTxType:
+		usedType = types.DynamicFeeTxType
+	case args.AccessList != nil || defaultType == types.AccessListTxType:
+		usedType = types.AccessListTxType
+	}
+	// Make it possible to default to newer tx, but use legacy if gasprice is provided
+	if args.GasPrice != nil {
+		usedType = types.LegacyTxType
+	}
+	var data types.TxData
+	switch usedType {
+	case types.BlobTxType:
 		al := types.AccessList{}
 		if args.AccessList != nil {
 			al = *args.AccessList
@@ -537,7 +554,7 @@ func (args *TransactionArgs) ToTransaction() *types.Transaction {
 			}
 		}
 
-	case args.MaxFeePerGas != nil:
+	case types.DynamicFeeTxType:
 		al := types.AccessList{}
 		if args.AccessList != nil {
 			al = *args.AccessList
@@ -554,7 +571,7 @@ func (args *TransactionArgs) ToTransaction() *types.Transaction {
 			AccessList: al,
 		}
 
-	case args.AccessList != nil:
+	case types.AccessListTxType:
 		data = &types.AccessListTx{
 			To:         args.To,
 			ChainID:    (*big.Int)(args.ChainID),

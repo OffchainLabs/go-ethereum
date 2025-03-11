@@ -152,7 +152,7 @@ func (s *StateDB) CreateZombieIfDeleted(addr common.Address) {
 }
 
 func NewDeterministic(root common.Hash, db Database) (*StateDB, error) {
-	sdb, err := New(root, db, nil)
+	sdb, err := New(root, db)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func NewDeterministic(root common.Hash, db Database) (*StateDB, error) {
 }
 
 func NewRecording(root common.Hash, db Database) (*StateDB, error) {
-	sdb, err := New(root, db, nil)
+	sdb, err := New(root, db)
 	if err != nil {
 		return nil, err
 	}
@@ -172,6 +172,10 @@ func NewRecording(root common.Hash, db Database) (*StateDB, error) {
 
 func (s *StateDB) Deterministic() bool {
 	return s.deterministic
+}
+
+func (s *StateDB) Recording() bool {
+	return s.recording
 }
 
 var ErrArbTxFilter error = errors.New("internal error")

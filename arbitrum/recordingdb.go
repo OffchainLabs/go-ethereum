@@ -44,6 +44,10 @@ func (db *RecordingKV) Has(key []byte) (bool, error) {
 	return false, errors.New("recording KV doesn't support Has")
 }
 
+func (db *RecordingKV) DeleteRange(start, end []byte) error {
+	return errors.New("recording KV doesn't support DeleteRange")
+}
+
 // Get may be called concurrently with other Get calls
 func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 	var hash common.Hash
@@ -104,11 +108,6 @@ func (db *RecordingKV) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 	}
 	log.Error("recording KV: attempted to create iterator when bypass not enabled")
 	return nil
-}
-
-func (db *RecordingKV) NewSnapshot() (ethdb.Snapshot, error) {
-	// This is fine as RecordingKV doesn't support mutation
-	return db, nil
 }
 
 func (db *RecordingKV) Stat() (string, error) {
@@ -183,7 +182,7 @@ func NewRecordingDatabase(config *RecordingDatabaseConfig, ethdb ethdb.Database,
 	}
 	return &RecordingDatabase{
 		config: config,
-		db:     state.NewDatabaseWithConfig(ethdb, &trieConfig),
+		db:     state.NewDatabase(triedb.NewDatabase(ethdb, &trieConfig), nil),
 		bc:     blockchain,
 	}
 }
@@ -250,7 +249,7 @@ func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected comm
 		_, size, _ = r.db.TrieDB().Size()
 		recordingDbSize.Update(int64(size))
 	}
-	return state.New(result, statedb.Database(), nil)
+	return state.New(result, statedb.Database())
 }
 
 func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeader *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
@@ -262,7 +261,7 @@ func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeade
 	defer func() { r.Dereference(finalDereference) }()
 	recordingKeyValue := newRecordingKV(r.db.TrieDB(), r.db.DiskDB())
 
-	recordingStateDatabase := state.NewDatabase(rawdb.WrapDatabaseWithWasm(rawdb.NewDatabase(recordingKeyValue), r.db.WasmStore(), 0, r.db.WasmTargets()))
+	recordingStateDatabase := state.NewDatabase(triedb.NewDatabase(rawdb.WrapDatabaseWithWasm(rawdb.NewDatabase(recordingKeyValue), r.db.WasmStore(), 0, r.db.WasmTargets()), nil), nil)
 	var prevRoot common.Hash
 	if lastBlockHeader != nil {
 		prevRoot = lastBlockHeader.Root

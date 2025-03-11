@@ -34,6 +34,7 @@ type OpContext interface {
 	Address() common.Address
 	CallValue() *uint256.Int
 	CallInput() []byte
+	ContractCode() []byte
 }
 
 // StateDB gives tracers access to the whole state.
@@ -42,6 +43,7 @@ type StateDB interface {
 	GetNonce(common.Address) uint64
 	GetCode(common.Address) []byte
 	GetState(common.Address, common.Hash) common.Hash
+	GetTransientState(common.Address, common.Hash) common.Hash
 	Exist(common.Address) bool
 	GetRefund() uint64
 }
@@ -53,9 +55,8 @@ type VMContext struct {
 	Time        uint64
 	Random      *common.Hash
 	// Effective tx gas price
-	GasPrice    *big.Int
-	ChainConfig *params.ChainConfig
-	StateDB     StateDB
+	GasPrice *big.Int
+	StateDB  StateDB
 
 	// Arbitrum information
 	ArbOSVersion uint64
@@ -171,7 +172,7 @@ type (
 	// LogHook is called when a log is emitted.
 	LogHook = func(log *types.Log)
 
-	CaptureArbitrumTransferHook   = func(from, to *common.Address, value *big.Int, before bool, purpose string)
+	CaptureArbitrumTransferHook   = func(from, to *common.Address, value *big.Int, before bool, reason BalanceChangeReason)
 	CaptureArbitrumStorageGetHook = func(key common.Hash, depth int, before bool)
 	CaptureArbitrumStorageSetHook = func(key, value common.Hash, depth int, before bool)
 
@@ -262,6 +263,70 @@ const (
 	BalanceDecreaseSelfdestructBurn BalanceChangeReason = 14
 )
 
+// Arbitrum specific
+const (
+	BalanceChangeDuringEVMExecution BalanceChangeReason = 128 + iota
+	BalanceIncreaseDeposit
+	BalanceDecreaseWithdrawToL1
+	BalanceIncreaseL1PosterFee
+	BalanceIncreaseInfraFee
+	BalanceIncreaseNetworkFee
+	BalanceChangeTransferInfraRefund
+	BalanceChangeTransferNetworkRefund
+	BalanceIncreasePrepaid
+	BalanceDecreaseUndoRefund
+	BalanceChangeEscrowTransfer
+	BalanceChangeTransferBatchposterReward
+	BalanceChangeTransferBatchposterRefund
+	// Stylus
+	BalanceChangeTransferActivationFee
+	BalanceChangeTransferActivationReimburse
+)
+
+// Str gives the arbitrum specific string for the corresponding BalanceChangeReason
+func (b BalanceChangeReason) Str() string {
+	switch b {
+	case BalanceIncreaseRewardTransactionFee:
+		return "tip"
+	case BalanceDecreaseGasBuy:
+		return "feePayment"
+	case BalanceIncreaseGasReturn:
+		return "gasRefund"
+	case BalanceChangeTransfer:
+		return "transfer via a call"
+	case BalanceDecreaseSelfdestruct:
+		return "selfDestruct"
+	case BalanceChangeDuringEVMExecution:
+		return "during evm execution"
+	case BalanceIncreaseDeposit:
+		return "deposit"
+	case BalanceDecreaseWithdrawToL1:
+		return "withdraw"
+	case BalanceIncreaseL1PosterFee, BalanceIncreaseInfraFee, BalanceIncreaseNetworkFee:
+		return "feeCollection"
+	case BalanceIncreasePrepaid:
+		return "prepaid"
+	case BalanceDecreaseUndoRefund:
+		return "undoRefund"
+	case BalanceChangeEscrowTransfer:
+		return "escrow"
+	case BalanceChangeTransferInfraRefund, BalanceChangeTransferNetworkRefund:
+		return "refund"
+	// Batchposter
+	case BalanceChangeTransferBatchposterReward:
+		return "batchPosterReward"
+	case BalanceChangeTransferBatchposterRefund:
+		return "batchPosterRefund"
+	// Stylus
+	case BalanceChangeTransferActivationFee:
+		return "activate"
+	case BalanceChangeTransferActivationReimburse:
+		return "reimburse"
+	default:
+		return "unspecified"
+	}
+}
+
 // GasChangeReason is used to indicate the reason for a gas change, useful
 // for tracing and reporting.
 //
@@ -316,12 +381,14 @@ const (
 	GasChangeCallStorageColdAccess GasChangeReason = 13
 	// GasChangeCallFailedExecution is the burning of the remaining gas when the execution failed without a revert.
 	GasChangeCallFailedExecution GasChangeReason = 14
-	// GasChangeWitnessContractInit is the amount charged for adding to the witness during the contract creation initialization step
+	// GasChangeWitnessContractInit flags the event of adding to the witness during the contract creation initialization step.
 	GasChangeWitnessContractInit GasChangeReason = 15
-	// GasChangeWitnessContractCreation is the amount charged for adding to the witness during the contract creation finalization step
+	// GasChangeWitnessContractCreation flags the event of adding to the witness during the contract creation finalization step.
 	GasChangeWitnessContractCreation GasChangeReason = 16
-	// GasChangeWitnessCodeChunk is the amount charged for touching one or more contract code chunks
+	// GasChangeWitnessCodeChunk flags the event of adding one or more contract code chunks to the witness.
 	GasChangeWitnessCodeChunk GasChangeReason = 17
+	// GasChangeWitnessContractCollisionCheck flags the event of adding to the witness when checking for contract address collision.
+	GasChangeWitnessContractCollisionCheck GasChangeReason = 18
 
 	// GasChangeIgnored is a special value that can be used to indicate that the gas change should be ignored as
 	// it will be "manually" tracked by a direct emit of the gas change event.

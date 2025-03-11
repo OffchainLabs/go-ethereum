@@ -153,9 +153,8 @@ func removeOtherRoots(db ethdb.Database, rootsList []common.Hash, stateBloom *st
 	var wg sync.WaitGroup
 	errors := make(chan error, threads)
 	for thread := 0; thread < threads; thread++ {
-		thread := thread
 		wg.Add(1)
-		go func() {
+		go func(thread int) {
 			defer wg.Done()
 			firstBlockNum := blockRange/uint64(threads)*uint64(thread+1) + genesisBlockNum
 			if thread == threads-1 {
@@ -204,7 +203,7 @@ func removeOtherRoots(db ethdb.Database, rootsList []common.Hash, stateBloom *st
 				}
 				block = rawdb.ReadBlock(db, block.ParentHash(), block.NumberU64()-1)
 			}
-		}()
+		}(thread)
 	}
 	wg.Wait()
 	select {
@@ -351,7 +350,8 @@ func dumpRawTrieDescendants(db ethdb.Database, root common.Hash, output *stateBl
 		Preimages: false,
 		HashDB:    &hashConfig,
 	}
-	sdb := state.NewDatabaseWithConfig(db, trieConfig)
+
+	sdb := state.NewDatabase(triedb.NewDatabase(db, trieConfig), nil)
 	defer sdb.TrieDB().Close()
 	tr, err := sdb.OpenTrie(root)
 	if err != nil {
@@ -525,11 +525,10 @@ func (p *Pruner) Prune(inputRoots []common.Hash) error {
 			if !snapshotTarget {
 				return fmt.Errorf("associated state[%x] is not present", root)
 			}
-			// The special case is for clique based networks(rinkeby, goerli
-			// and some other private networks), it's possible that two
-			// consecutive blocks will have same root. In this case snapshot
-			// difflayer won't be created. So HEAD-127 may not paired with
-			// head-127 layer. Instead the paired layer is higher than the
+			// The special case is for clique based networks, it's possible
+			// that two consecutive blocks will have same root. In this case
+			// snapshot difflayer won't be created. So HEAD-127 may not paired
+			// with head-127 layer. Instead the paired layer is higher than the
 			// bottom-most diff layer. Try to find the bottom-most snapshot
 			// layer with state available.
 			var found bool

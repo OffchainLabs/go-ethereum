@@ -18,6 +18,7 @@
 package memorydb
 
 import (
+	"bytes"
 	"errors"
 	"sort"
 	"strings"
@@ -35,10 +36,6 @@ var (
 	// ErrMemorydbNotFound is returned if a key is requested that is not found in
 	// the provided memory database.
 	ErrMemorydbNotFound = errors.New("not found")
-
-	// errSnapshotReleased is returned if callers want to retrieve data from a
-	// released snapshot.
-	errSnapshotReleased = errors.New("snapshot released")
 )
 
 // Database is an ephemeral key-value store. Apart from basic data storage
@@ -125,6 +122,20 @@ func (db *Database) Delete(key []byte) error {
 	return nil
 }
 
+// DeleteRange deletes all of the keys (and values) in the range [start,end)
+// (inclusive on start, exclusive on end).
+func (db *Database) DeleteRange(start, end []byte) error {
+	it := db.NewIterator(nil, start)
+	defer it.Release()
+
+	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
+		if err := db.Delete(it.Key()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // NewBatch creates a write-only key-value store that buffers changes to its host
 // database until a final write is called.
 func (db *Database) NewBatch() ethdb.Batch {
@@ -173,13 +184,6 @@ func (db *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 		keys:   keys,
 		values: values,
 	}
-}
-
-// NewSnapshot creates a database snapshot based on the current state.
-// The created snapshot will not be affected by all following mutations
-// happened on the database.
-func (db *Database) NewSnapshot() (ethdb.Snapshot, error) {
-	return newSnapshot(db), nil
 }
 
 // Stat returns the statistic data of the database.
@@ -331,60 +335,4 @@ func (it *iterator) Value() []byte {
 // be called multiple times without causing error.
 func (it *iterator) Release() {
 	it.index, it.keys, it.values = -1, nil, nil
-}
-
-// snapshot wraps a batch of key-value entries deep copied from the in-memory
-// database for implementing the Snapshot interface.
-type snapshot struct {
-	db   map[string][]byte
-	lock sync.RWMutex
-}
-
-// newSnapshot initializes the snapshot with the given database instance.
-func newSnapshot(db *Database) *snapshot {
-	db.lock.RLock()
-	defer db.lock.RUnlock()
-
-	copied := make(map[string][]byte, len(db.db))
-	for key, val := range db.db {
-		copied[key] = common.CopyBytes(val)
-	}
-	return &snapshot{db: copied}
-}
-
-// Has retrieves if a key is present in the snapshot backing by a key-value
-// data store.
-func (snap *snapshot) Has(key []byte) (bool, error) {
-	snap.lock.RLock()
-	defer snap.lock.RUnlock()
-
-	if snap.db == nil {
-		return false, errSnapshotReleased
-	}
-	_, ok := snap.db[string(key)]
-	return ok, nil
-}
-
-// Get retrieves the given key if it's present in the snapshot backing by
-// key-value data store.
-func (snap *snapshot) Get(key []byte) ([]byte, error) {
-	snap.lock.RLock()
-	defer snap.lock.RUnlock()
-
-	if snap.db == nil {
-		return nil, errSnapshotReleased
-	}
-	if entry, ok := snap.db[string(key)]; ok {
-		return common.CopyBytes(entry), nil
-	}
-	return nil, ErrMemorydbNotFound
-}
-
-// Release releases associated resources. Release should always succeed and can
-// be called multiple times without causing error.
-func (snap *snapshot) Release() {
-	snap.lock.Lock()
-	defer snap.lock.Unlock()
-
-	snap.db = nil
 }

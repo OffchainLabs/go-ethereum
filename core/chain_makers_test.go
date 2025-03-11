@@ -57,7 +57,6 @@ func TestGeneratePOSChain(t *testing.T) {
 		db    = rawdb.NewMemoryDatabase()
 	)
 
-	config.TerminalTotalDifficultyPassed = true
 	config.TerminalTotalDifficulty = common.Big0
 	config.ShanghaiTime = u64(0)
 	config.CancunTime = u64(0)
@@ -123,7 +122,7 @@ func TestGeneratePOSChain(t *testing.T) {
 	})
 
 	// Import the chain. This runs all block validation rules.
-	blockchain, _ := NewBlockChain(db, nil, nil, gspec, nil, beacon.NewFaker(), vm.Config{}, nil, nil)
+	blockchain, _ := NewBlockChain(db, nil, nil, gspec, nil, beacon.NewFaker(), vm.Config{}, nil)
 	defer blockchain.Stop()
 
 	if i, err := blockchain.InsertChain(genchain); err != nil {
@@ -238,7 +237,7 @@ func ExampleGenerateChain() {
 	})
 
 	// Import the chain. This runs all block validation rules.
-	blockchain, _ := NewBlockChain(db, DefaultCacheConfigWithScheme(rawdb.HashScheme), nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	blockchain, _ := NewBlockChain(db, DefaultCacheConfigWithScheme(rawdb.HashScheme), nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
 	defer blockchain.Stop()
 
 	if i, err := blockchain.InsertChain(chain); err != nil {
