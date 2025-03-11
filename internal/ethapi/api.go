@@ -823,6 +823,7 @@ func (api *BlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash)
 		if api.b.ChainConfig().IsArbitrumNitro(header.Number) {
 			fillArbitrumNitroHeaderInfo(header, response)
 		}
+		return response
 	}
 	return nil
 }
@@ -857,6 +858,7 @@ func (api *BlockChainAPI) GetBlockByHash(ctx context.Context, hash common.Hash, 
 	if block != nil {
 		response := RPCMarshalBlock(block, true, fullTx, api.b.ChainConfig())
 		api.checkAndFillArbClassicL1BlockNumber(ctx, block, response)
+		return response, nil
 	}
 	return nil, err
 }
