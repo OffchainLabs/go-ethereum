@@ -77,6 +77,10 @@ type executionResultMarshaling struct {
 	Requests []hexutil.Bytes `json:"requests"`
 }
 
+type executionResultMarshaling struct {
+	Requests []hexutil.Bytes `json:"requests,omitempty"`
+}
+
 type ommer struct {
 	Delta   uint64         `json:"delta"`
 	Address common.Address `json:"address"`

@@ -484,7 +484,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 			panic(err)
 		}
 
-		// Write state changes to DB
+		// Write state changes to DB.
 		root, err := statedb.Commit(b.header.Number.Uint64(), config.IsEIP158(b.header.Number))
 		if err != nil {
 			panic(fmt.Sprintf("state write error: %v", err))
