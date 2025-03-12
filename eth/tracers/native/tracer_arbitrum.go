@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 type arbitrumTransfer struct {
@@ -71,6 +72,16 @@ func (t *flatCallTracer) CaptureArbitrumTransfer(from, to *common.Address, value
 	} else {
 		t.afterEVMTransfers = append(t.afterEVMTransfers, transfer)
 	}
+}
+
+func (t *prestateTracer) CaptureArbitrumStorageGet(key common.Hash, depth int, before bool) {
+	t.lookupAccount(types.ArbosStateAddress)
+	t.lookupStorage(types.ArbosStateAddress, key)
+}
+
+func (t *prestateTracer) CaptureArbitrumStorageSet(key, value common.Hash, depth int, before bool) {
+	t.lookupAccount(types.ArbosStateAddress)
+	t.lookupStorage(types.ArbosStateAddress, key)
 }
 
 func bigToHex(n *big.Int) string {
