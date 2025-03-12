@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -42,10 +43,11 @@ const EstimateGasErrorRatio = 0.015
 // these together, it would be excessively hard to test. Splitting the parts out
 // allows testing without needing a proper live chain.
 type Options struct {
-	Config           *params.ChainConfig // Chain configuration for hard fork selection
-	Chain            core.ChainContext   // Chain context to access past block hashes
-	Header           *types.Header       // Header defining the block context to execute in
-	State            *state.StateDB      // Pre-state on top of which to estimate the gas
+	Config           *params.ChainConfig      // Chain configuration for hard fork selection
+	Chain            core.ChainContext        // Chain context to access past block hashes
+	Header           *types.Header            // Header defining the block context to execute in
+	State            *state.StateDB           // Pre-state on top of which to estimate the gas
+	BlockOverrides   *override.BlockOverrides // Block overrides to apply during the estimation
 	Backend          core.NodeInterfaceBackendAPI
 	RunScheduledTxes func(context.Context, core.NodeInterfaceBackendAPI, *state.StateDB, *types.Header, vm.BlockContext, core.MessageRunMode, *core.ExecutionResult) (*core.ExecutionResult, error)
 
@@ -226,6 +228,9 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 		evmContext = core.NewEVMBlockContext(opts.Header, opts.Chain, nil)
 		dirtyState = opts.State.Copy()
 	)
+	if opts.BlockOverrides != nil {
+		opts.BlockOverrides.Apply(&evmContext)
+	}
 	// Lower the basefee to 0 to avoid breaking EVM
 	// invariants (basefee < feecap).
 	if call.GasPrice.Sign() == 0 {
