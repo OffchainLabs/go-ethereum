@@ -344,7 +344,7 @@ func decodeArbitrumLegacyStoredReceiptRLP(r *ReceiptForStorage, blob []byte) err
 	r.GasUsedForL1 = stored.L1GasUsed
 	r.ContractAddress = stored.ContractAddress
 	r.Logs = stored.Logs
-	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
+	r.Bloom = CreateBloom((*Receipt)(r))
 
 	return nil
 }
@@ -360,7 +360,7 @@ func decodeStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
 	r.CumulativeGasUsed = stored.CumulativeGasUsed
 	r.GasUsedForL1 = stored.L1GasUsed
 	r.Logs = stored.Logs
-	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
+	r.Bloom = CreateBloom((*Receipt)(r))
 	if stored.ContractAddress != nil {
 		r.ContractAddress = *stored.ContractAddress
 	}
