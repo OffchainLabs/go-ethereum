@@ -136,8 +136,8 @@ type TxTrace struct {
 	BlockNumber    uint64
 	Trace          []TransactionTraceWithLogs
 	TxHash         common.Hash
-	GasUsed        *big.Int // u128 from Rust; using big.Int here
-	EffectivePrice *big.Int // u128 from Rust; using big.Int here
+	GasUsed        *big.Int
+	EffectivePrice *big.Int
 	TxIndex        uint64
 	IsSuccess      bool
 }
