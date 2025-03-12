@@ -531,16 +531,12 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 	}
 	batch := db.NewBatch()
 	rawdb.WriteGenesisStateSpec(batch, block.Hash(), blob)
-	WriteHeadBlock(batch, block, nil)
+	WriteHeadBlock(batch, block)
 	rawdb.WriteChainConfig(batch, block.Hash(), config)
 	return block, batch.Write()
 }
 
-func WriteHeadBlock(batch ethdb.Batch, block *types.Block, prevDifficulty *big.Int) {
-	if prevDifficulty == nil {
-		prevDifficulty = common.Big0
-	}
-	rawdb.WriteTd(batch, block.Hash(), block.NumberU64(), new(big.Int).Add(prevDifficulty, block.Difficulty()))
+func WriteHeadBlock(batch ethdb.Batch, block *types.Block) {
 	rawdb.WriteBlock(batch, block)
 	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), nil)
 	rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())

@@ -66,7 +66,6 @@ type VMContext struct {
 // It contains the block as well as consensus related information.
 type BlockEvent struct {
 	Block     *types.Block
-	TD        *big.Int
 	Finalized *types.Header
 	Safe      *types.Header
 }
