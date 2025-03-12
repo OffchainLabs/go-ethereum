@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,11 +14,25 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build ios || wasm || wasip1
-// +build ios wasm wasip1
+//go:build wasip1
+// +build wasip1
 
-package metrics
+package rpc
 
-// ReadCPUStats retrieves the current CPU stats. Internally this uses `gosigar`,
-// which is not supported on the platforms in this file.
-func ReadCPUStats(stats *CPUStats) {}
+import (
+	"context"
+	"errors"
+	"net"
+)
+
+var errNotSupported = errors.New("rpc: not supported")
+
+// ipcListen will create a named pipe on the given endpoint.
+func ipcListen(endpoint string) (net.Listener, error) {
+	return nil, errNotSupported
+}
+
+// newIPCConnection will connect to a named pipe with the given endpoint as name.
+func newIPCConnection(ctx context.Context, endpoint string) (net.Conn, error) {
+	return nil, errNotSupported
+}
