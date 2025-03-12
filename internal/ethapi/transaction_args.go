@@ -490,6 +490,7 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, he
 		AccessList:       accessList,
 		BlobGasFeeCap:    (*big.Int)(args.BlobFeeCap),
 		BlobHashes:       args.BlobHashes,
+		AuthList:         args.AuthorizationList,
 		TxRunMode:        runMode,
 		SkipNonceChecks:  skipNonceCheck,
 		SkipFromEOACheck: skipEoACheck,
