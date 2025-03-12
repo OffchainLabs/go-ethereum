@@ -85,13 +85,13 @@ type Database struct {
 	commitWALRotationMeter         *metrics.Meter
 	commitWaitMeter                *metrics.Meter
 
-	commitCount               *atomic.Int64
-	commitTotalDuration       *atomic.Int64
-	commitSemaphoreWait       *atomic.Int64
-	commitMemTableWriteStall  *atomic.Int64
-	commitL0ReadAmpWriteStall *atomic.Int64
-	commitWALRotation         *atomic.Int64
-	commitWait                *atomic.Int64
+	commitCount               atomic.Int64
+	commitTotalDuration       atomic.Int64
+	commitSemaphoreWait       atomic.Int64
+	commitMemTableWriteStall  atomic.Int64
+	commitL0ReadAmpWriteStall atomic.Int64
+	commitWALRotation         atomic.Int64
+	commitWait                atomic.Int64
 
 	level0SublevelsGauge *metrics.Gauge
 	levelsGauge          []*metrics.Gauge // Gauge for tracking the number of tables in levels
