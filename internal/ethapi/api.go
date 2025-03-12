@@ -1244,7 +1244,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		} else {
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
-		result.AuthorizationList = tx.AuthList()
+		result.AuthorizationList = tx.SetCodeAuthorizations()
 	}
 
 	// Arbitrum: support arbitrum-specific transaction types
