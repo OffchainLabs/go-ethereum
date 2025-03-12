@@ -38,10 +38,6 @@ import (
 	"github.com/holiman/uint256"
 )
 
-var (
-	maxBlobsPerTransaction = params.MaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
-)
-
 // TransactionArgs represents the arguments to construct a new transaction
 // or a message call.
 type TransactionArgs struct {
@@ -130,8 +126,9 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 	if args.BlobHashes != nil && len(args.BlobHashes) == 0 {
 		return errors.New(`need at least 1 blob for a blob transaction`)
 	}
-	if args.BlobHashes != nil && len(args.BlobHashes) > maxBlobsPerTransaction {
-		return fmt.Errorf(`too many blobs in transaction (have=%d, max=%d)`, len(args.BlobHashes), maxBlobsPerTransaction)
+	maxBlobs := eip4844.MaxBlobsPerBlock(b.ChainConfig(), b.CurrentHeader().Time)
+	if args.BlobHashes != nil && len(args.BlobHashes) > maxBlobs {
+		return fmt.Errorf(`too many blobs in transaction (have=%d, max=%d)`, len(args.BlobHashes), maxBlobs)
 	}
 
 	// create check
@@ -215,7 +212,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head
 			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
 		}
 		// No need to set anything other than CancunFeeDefaults, user already set MaxFeePerGas and MaxPriorityFeePerGas
-		if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
+		if err := args.setCancunFeeDefaults(ctx, b.ChainConfig(), head, b); err != nil {
 			return err
 		}
 	}
@@ -232,7 +229,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head
 
 	// Now attempt to fill in default value depending on whether London is active or not.
 	if b.ChainConfig().IsCancun(head.Number, head.Time, types.DeserializeHeaderExtraInformation(head).ArbOSFormatVersion) {
-		if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
+		if err := args.setCancunFeeDefaults(ctx, b.ChainConfig(), head, b); err != nil {
 			return err
 		}
 	} else if isLondon {
@@ -258,15 +255,10 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head
 }
 
 // setCancunFeeDefaults fills in reasonable default fee values for unspecified fields.
-func (args *TransactionArgs) setCancunFeeDefaults(ctx context.Context, head *types.Header, b Backend) error {
+func (args *TransactionArgs) setCancunFeeDefaults(ctx context.Context, config *params.ChainConfig, head *types.Header, b Backend) error {
 	// Set maxFeePerBlobGas if it is missing.
 	if args.BlobHashes != nil && args.BlobFeeCap == nil {
-		var excessBlobGas uint64
-		if head.ExcessBlobGas != nil {
-			excessBlobGas = *head.ExcessBlobGas
-		}
-		// ExcessBlobGas must be set for a Cancun block.
-		blobBaseFee := eip4844.CalcBlobFee(excessBlobGas)
+		blobBaseFee := eip4844.CalcBlobFee(config, head)
 		// Set the max fee to be 2 times larger than the previous block's blob base fee.
 		// The additional slack allows the tx to not become invalidated if the base
 		// fee is rising.
