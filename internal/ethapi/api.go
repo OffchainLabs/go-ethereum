@@ -913,7 +913,6 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
-	evm.SetTxContext(core.NewEVMTxContext(msg))
 	res, err = applyMessageWithEVM(ctx, evm, msg, state, timeout, gp, b, header, *blockContext)
 	// If an internal state error occurred, let that have precedence. Otherwise,
 	// a "trie root missing" type of error will masquerade as e.g. "insufficient gas"
@@ -974,7 +973,6 @@ func runScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, state
 			evm.Cancel()
 		}()
 
-		evm.SetTxContext(core.NewEVMTxContext(msg))
 		scheduledTxResult, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(gomath.MaxUint64))
 		if err != nil {
 			return nil, err // Bail out
@@ -1568,18 +1566,18 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		// Apply the transaction with the access list tracer
 		tracer := logger.NewAccessListTracer(accessList, args.from(), to, precompiles)
 		config := vm.Config{Tracer: tracer.Hooks(), NoBaseFee: true}
-		vmenv := b.GetEVM(ctx, statedb, header, &config, nil)
+		evm := b.GetEVM(ctx, statedb, header, &config, nil)
+
 		// Lower the basefee to 0 to avoid breaking EVM
 		// invariants (basefee < feecap).
 		if msg.GasPrice.Sign() == 0 {
-			vmenv.Context.BaseFeeInBlock = new(big.Int).Set(vmenv.Context.BaseFee)
-			vmenv.Context.BaseFee = new(big.Int)
+			evm.Context.BaseFeeInBlock = new(big.Int).Set(evm.Context.BaseFee)
+			evm.Context.BaseFee = new(big.Int)
 		}
 		if msg.BlobGasFeeCap != nil && msg.BlobGasFeeCap.BitLen() == 0 {
-			vmenv.Context.BlobBaseFee = new(big.Int)
+			evm.Context.BlobBaseFee = new(big.Int)
 		}
-		vmenv.SetTxContext(core.NewEVMTxContext(msg))
-		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit))
+		res, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction(types.LegacyTxType).Hash(), err)
 		}

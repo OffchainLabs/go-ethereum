@@ -275,8 +275,6 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 		}
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee(), core.MessageReplayMode)
-		txContext := core.NewEVMTxContext(msg)
-		evm.SetTxContext(txContext)
 
 		// Not yet the searched for transaction, execute on top of the current state
 		statedb.SetTxContext(tx.Hash(), idx)
