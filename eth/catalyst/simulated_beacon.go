@@ -97,8 +97,8 @@ type SimulatedBeacon struct {
 	lastBlockTime      uint64
 }
 
-func payloadVersion(config *params.ChainConfig, time uint64) engine.PayloadVersion {
-	switch config.LatestFork(time) {
+func payloadVersion(config *params.ChainConfig, time uint64, header *types.Header) engine.PayloadVersion {
+	switch config.LatestFork(time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {
 	case forks.Prague, forks.Cancun:
 		return engine.PayloadV3
 	case forks.Paris, forks.Shanghai:
@@ -119,7 +119,7 @@ func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, err
 
 	// if genesis block, send forkchoiceUpdated to trigger transition to PoS
 	if block.Number.Sign() == 0 {
-		version := payloadVersion(eth.BlockChain().Config(), block.Time)
+		version := payloadVersion(eth.BlockChain().Config(), block.Time, block)
 		if _, err := engineAPI.forkchoiceUpdated(current, nil, version, false); err != nil {
 			return nil, err
 		}
@@ -187,7 +187,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		return fmt.Errorf("failed to sync txpool: %w", err)
 	}
 
-	version := payloadVersion(c.eth.BlockChain().Config(), timestamp)
+	version := payloadVersion(c.eth.BlockChain().Config(), timestamp, c.eth.BlockChain().CurrentBlock())
 
 	var random [32]byte
 	rand.Read(random[:])

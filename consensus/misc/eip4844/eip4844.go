@@ -82,7 +82,7 @@ func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTim
 // CalcBlobFee calculates the blobfee from the header's excess blob gas field.
 func CalcBlobFee(config *params.ChainConfig, header *types.Header) *big.Int {
 	var frac uint64
-	switch config.LatestFork(header.Time) {
+	switch config.LatestFork(header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {
 	case forks.Osaka:
 		frac = config.BlobScheduleConfig.Osaka.UpdateFraction
 	case forks.Prague:
@@ -109,7 +109,8 @@ func MaxBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
 		return s.Osaka.Max
 	case cfg.IsPrague(london, time) && s.Prague != nil:
 		return s.Prague.Max
-	case cfg.IsCancun(london, time) && s.Cancun != nil:
+	// we can use 0 here because arbitrum doesn't support Blob transactions.
+	case cfg.IsCancun(london, time, 0) && s.Cancun != nil:
 		return s.Cancun.Max
 	default:
 		return 0
@@ -154,7 +155,8 @@ func targetBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
 		return s.Osaka.Target
 	case cfg.IsPrague(london, time) && s.Prague != nil:
 		return s.Prague.Target
-	case cfg.IsCancun(london, time) && s.Cancun != nil:
+	// we can use 0 here because arbitrum doesn't support Blob transactions.
+	case cfg.IsCancun(london, time, 0) && s.Cancun != nil:
 		return s.Cancun.Target
 	default:
 		return 0

@@ -351,7 +351,7 @@ func (a *APIBackend) FeeHistory(
 
 func (a *APIBackend) BlobBaseFee(ctx context.Context) *big.Int {
 	if excess := a.CurrentHeader().ExcessBlobGas; excess != nil {
-		return eip4844.CalcBlobFee(*excess)
+		return eip4844.CalcBlobFee(a.ChainConfig(), a.CurrentHeader())
 	}
 	return nil
 }
@@ -615,13 +615,6 @@ func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block,
 
 func (a *APIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	return a.BlockChain().GetReceiptsByHash(hash), nil
-}
-
-func (a *APIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
-	if header := a.BlockChain().GetHeaderByHash(hash); header != nil {
-		return a.BlockChain().GetTd(hash, header.Number.Uint64())
-	}
-	return nil
 }
 
 func (a *APIBackend) GetEVM(ctx context.Context, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {

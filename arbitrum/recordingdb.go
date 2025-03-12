@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
@@ -149,6 +150,10 @@ func (r *RecordingChainContext) Engine() consensus.Engine {
 	return r.bc.Engine()
 }
 
+func (r *RecordingChainContext) Config() *params.ChainConfig {
+	return r.bc.Config()
+}
+
 func (r *RecordingChainContext) GetHeader(hash common.Hash, num uint64) *types.Header {
 	if num < r.minBlockNumberAccessed {
 		r.minBlockNumberAccessed = num
@@ -231,7 +236,7 @@ func (r *RecordingDatabase) dereferenceRoot(root common.Hash) {
 func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected common.Hash, blockNumber uint64) (*state.StateDB, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	result, err := statedb.Commit(blockNumber, true)
+	result, err := statedb.Commit(blockNumber, true, false)
 	if err != nil {
 		return nil, err
 	}

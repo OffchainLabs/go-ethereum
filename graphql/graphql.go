@@ -1276,12 +1276,8 @@ func (p *Pending) EstimateGas(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (Long, error) {
 	latestBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-<<<<<<< HEAD
-	gas, err := ethapi.DoEstimateGas(ctx, p.r.backend, args.Data, latestBlockNr, nil, p.r.backend.RPCGasCap())
+	gas, err := ethapi.DoEstimateGas(ctx, p.r.backend, args.Data, latestBlockNr, nil, nil, p.r.backend.RPCGasCap())
 	return Long(gas), err
-=======
-	return ethapi.DoEstimateGas(ctx, p.r.backend, args.Data, latestBlockNr, nil, nil, p.r.backend.RPCGasCap())
->>>>>>> 88cbfab332c96edfbe99d161d9df6a40721bd786
 }
 
 // Resolver is the top-level object in the GraphQL hierarchy.
