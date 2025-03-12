@@ -459,6 +459,9 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		if witness := interpreter.evm.StateDB.Witness(); witness != nil {
 			witness.AddBlockHash(num64)
 		}
+		if tracer := interpreter.evm.Config.Tracer; tracer != nil && tracer.OnBlockHashRead != nil {
+			tracer.OnBlockHashRead(num64, h)
+		}
 		num.SetBytes(h[:])
 	} else {
 		num.Clear()

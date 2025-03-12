@@ -475,7 +475,7 @@ func (s *StateDB) ExpectBalanceBurn(amount *big.Int) {
 	s.arbExtraData.unexpectedBalanceDelta.Add(s.arbExtraData.unexpectedBalanceDelta, amount)
 }
 
-func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
+func (s *StateDB) SetNonce(addr common.Address, nonce uint64, reason tracing.NonceChangeReason) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetNonce(nonce)

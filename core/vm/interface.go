@@ -68,7 +68,7 @@ type StateDB interface {
 	ExpectBalanceBurn(*big.Int)
 
 	GetNonce(common.Address) uint64
-	SetNonce(common.Address, uint64)
+	SetNonce(common.Address, uint64, tracing.NonceChangeReason)
 
 	GetCodeHash(common.Address) common.Hash
 	GetCode(common.Address) []byte
