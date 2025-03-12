@@ -231,7 +231,7 @@ func (s pragueSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 	}
 	// Check that chain ID of tx matches the signer. We also accept ID zero here,
 	// because it indicates that the chain ID was not specified in the tx.
-	if txdata.ChainID != nil && txdata.ChainID.CmpBig(s.chainId) != 0 {
+	if txdata.ChainID.Sign() != 0 && txdata.ChainID.CmpBig(s.chainId) != 0 {
 		return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.ChainID, s.chainId)
 	}
 	R, S, _ = decodeSignature(sig)
@@ -299,7 +299,7 @@ func (s cancunSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 	}
 	// Check that chain ID of tx matches the signer. We also accept ID zero here,
 	// because it indicates that the chain ID was not specified in the tx.
-	if txdata.ChainID.Sign() != 0 && txdata.ChainID.ToBig().Cmp(s.chainId) != 0 {
+	if txdata.ChainID.Sign() != 0 && txdata.ChainID.CmpBig(s.chainId) != 0 {
 		return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.ChainID, s.chainId)
 	}
 	R, S, _ = decodeSignature(sig)
