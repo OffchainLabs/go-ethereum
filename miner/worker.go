@@ -211,7 +211,7 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 	if miner.chainConfig.IsCancun(header.Number, header.Time, prevArbosVersion) {
 		var excessBlobGas uint64
 		if miner.chainConfig.IsCancun(parent.Number, parent.Time, prevArbosVersion) {
-			excessBlobGas = eip4844.CalcExcessBlobGas(miner.chainConfig, parent, header)
+			excessBlobGas = eip4844.CalcExcessBlobGas(miner.chainConfig, parent, timestamp)
 		}
 		header.BlobGasUsed = new(uint64)
 		header.ExcessBlobGas = &excessBlobGas
