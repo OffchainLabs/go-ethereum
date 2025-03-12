@@ -30,6 +30,7 @@ type TracingInspectorConfig struct {
 	RecordLogs             bool
 }
 
+// As is in the brontes code.
 var DefaultTracingInspectorConfig = TracingInspectorConfig{
 	RecordSteps:            false,
 	RecordMemorySnapshots:  false,
