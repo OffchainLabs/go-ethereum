@@ -282,6 +282,10 @@ func (s *hookedStateDB) ActivateWasm(moduleHash common.Hash, asmMap map[ethdb.Wa
 	s.inner.ActivateWasm(moduleHash, asmMap)
 }
 
+func (s *hookedStateDB) Reader() Reader {
+	return s.inner.Reader()
+}
+
 func (s *hookedStateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	return s.inner.IntermediateRoot(deleteEmptyObjects)
 }

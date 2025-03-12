@@ -185,6 +185,11 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 	return evm.interpreter
 }
 
+// JumpDests returns the aggregated result of JUMPDEST analysis made through
+func (evm *EVM) JumpDests() map[common.Hash]bitvec {
+	return evm.jumpDests
+}
+
 func isSystemCall(caller common.Address) bool {
 	return caller == params.SystemAddress
 }

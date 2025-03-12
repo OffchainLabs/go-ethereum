@@ -128,6 +128,11 @@ func (c *Contract) Caller() common.Address {
 	return c.caller
 }
 
+// Jumpdest returns the jumpdests of the contract
+func (c *Contract) Jumpdest() map[common.Hash]bitvec {
+	return c.jumpdests
+}
+
 // UseGas attempts the use gas and subtracts it and returns true on success
 func (c *Contract) UseGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
 	if c.Gas < gas {

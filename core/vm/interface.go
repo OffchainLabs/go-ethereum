@@ -137,4 +137,6 @@ type StateDB interface {
 	Finalise(bool)
 
 	IntermediateRoot(bool) common.Hash
+
+	Reader() state.Reader
 }
