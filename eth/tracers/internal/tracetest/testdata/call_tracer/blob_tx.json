@@ -65,7 +65,7 @@
         "purpose": "feePayment",
         "from": "0x0c2c51a0990AeE1d73C1228de158688341557508",
         "to": null,
-        "value": "0x2de364958"
+        "value": "0x264958"
       }
     ],
     "afterEVMTransfers":
