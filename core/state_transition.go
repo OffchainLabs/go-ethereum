@@ -479,7 +479,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 	var (
 		msg              = st.msg
-		sender           = vm.AccountRef(msg.From)
 		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Random != nil, st.evm.Context.Time, st.evm.Context.ArbOSVersion)
 		contractCreation = msg.To == nil
 		floorDataGas     uint64
@@ -548,7 +547,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	)
 	if contractCreation {
 		deployedContract = &common.Address{}
-		ret, *deployedContract, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, value)
+		ret, *deployedContract, st.gasRemaining, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value)
 	} else {
 		// Increment the nonce for the next transaction.
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
@@ -571,7 +570,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 
 		// Execute the transaction's call.
-		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, value)
+		ret, st.gasRemaining, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining, value)
 	}
 
 	// Compute refund counter, capped to a refund quotient.
