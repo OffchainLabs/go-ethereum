@@ -303,10 +303,14 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		cacheConfig = defaultCacheConfig
 	}
 	// Open trie database with provided config
-	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(genesis != nil && genesis.IsVerkle()))
+	enableVerkle, err := EnableVerkleAtGenesis(db, genesis)
+	if err != nil {
+		return nil, err
+	}
+	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(enableVerkle))
 
 	var genesisHash common.Hash
-	var genesisErr error
+	var compatErr *params.ConfigCompatError
 
 	if chainConfig != nil && chainConfig.IsArbitrum() {
 		genesisHash = rawdb.ReadCanonicalHash(db, chainConfig.ArbitrumChainParams.GenesisBlockNum)
@@ -314,12 +318,13 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			return nil, ErrNoGenesis
 		}
 	} else {
-		// Setup the genesis block, commit the provided genesis specification
-		// to database if the genesis block is not present yet, or load the
-		// stored one from database.
-		chainConfig, genesisHash, genesisErr = SetupGenesisBlockWithOverride(db, triedb, genesis, overrides)
-		if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
-			return nil, genesisErr
+		// Write the supplied genesis to the database if it has not been initialized
+		// yet. The corresponding chain config will be returned, either from the
+		// provided genesis or from the locally stored configuration if the genesis
+		// has already been initialized.
+		chainConfig, genesisHash, compatErr, err = SetupGenesisBlockWithOverride(db, triedb, genesis, overrides)
+		if err != nil {
+			return nil, err
 		}
 	}
 	log.Info("")
@@ -347,7 +352,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		vmConfig:      vmConfig,
 		logger:        vmConfig.Tracer,
 	}
-	var err error
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
 	if err != nil {
 		return nil, err
@@ -505,16 +509,15 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 
 	// Rewind the chain in case of an incompatible config upgrade.
-	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
-		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
-		if compat.RewindToTime > 0 {
-			bc.SetHeadWithTimestamp(compat.RewindToTime)
+	if compatErr != nil {
+		log.Warn("Rewinding chain to upgrade configuration", "err", compatErr)
+		if compatErr.RewindToTime > 0 {
+			bc.SetHeadWithTimestamp(compatErr.RewindToTime)
 		} else {
-			bc.SetHead(compat.RewindToBlock)
+			bc.SetHead(compatErr.RewindToBlock)
 		}
 		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
 	}
-
 	// Start tx indexer if it's enabled.
 	if txLookupLimit != nil {
 		bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
