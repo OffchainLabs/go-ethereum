@@ -624,18 +624,17 @@ func (a *APIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	return nil
 }
 
-func (a *APIBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
+func (a *APIBackend) GetEVM(ctx context.Context, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
 	if vmConfig == nil {
 		vmConfig = a.BlockChain().GetVMConfig()
 	}
-	txContext := core.NewEVMTxContext(msg)
 	var context vm.BlockContext
 	if blockCtx != nil {
 		context = *blockCtx
 	} else {
 		context = core.NewEVMBlockContext(header, a.BlockChain(), nil)
 	}
-	return vm.NewEVM(context, txContext, state, a.BlockChain().Config(), *vmConfig)
+	return vm.NewEVM(context, state, a.BlockChain().Config(), *vmConfig)
 }
 
 func (a *APIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {

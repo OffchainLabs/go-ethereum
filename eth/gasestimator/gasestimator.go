@@ -249,8 +249,8 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 		return res, err
 	}
 
-	evm := opts.Backend.GetEVM(ctx, call, dirtyState, opts.Header, &vm.Config{NoBaseFee: true}, &evmContext)
-
+	evm := opts.Backend.GetEVM(ctx, dirtyState, opts.Header, &vm.Config{NoBaseFee: true}, &evmContext)
+	evm.SetTxContext(msgContext)
 	go func() {
 		<-ctx.Done()
 		evm.Cancel()
