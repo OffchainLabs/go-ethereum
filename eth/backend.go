@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
+	"github.com/ethereum/go-ethereum/core/txpool/locals"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -68,9 +69,10 @@ type Config = ethconfig.Config
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
 	// core protocol objects
-	config     *ethconfig.Config
-	txPool     *txpool.TxPool
-	blockchain *core.BlockChain
+	config         *ethconfig.Config
+	txPool         *txpool.TxPool
+	localTxTracker *locals.TxTracker
+	blockchain     *core.BlockChain
 
 	handler *handler
 	discmix *enode.FairMix
@@ -243,6 +245,16 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if !config.TxPool.NoLocals {
+		rejournal := config.TxPool.Rejournal
+		if rejournal < time.Second {
+			log.Warn("Sanitizing invalid txpool journal time", "provided", rejournal, "updated", time.Second)
+			rejournal = time.Second
+		}
+		eth.localTxTracker = locals.New(config.TxPool.Journal, rejournal, eth.blockchain.Config(), eth.txPool)
+		stack.RegisterLifecycle(eth.localTxTracker)
+	}
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
 	if eth.handler, err = newHandler(&handlerConfig{
@@ -261,6 +273,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	eth.miner = miner.New(eth, config.Miner, eth.engine)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
+	eth.miner.SetPrioAddresses(config.TxPool.Locals)
 
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
 	if eth.APIBackend.allowUnprotectedTxs {
@@ -337,7 +350,6 @@ func (s *Ethereum) Miner() *miner.Miner { return s.miner }
 func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
 func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
 func (s *Ethereum) TxPool() *txpool.TxPool             { return s.txPool }
-func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
 func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
 func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
 func (s *Ethereum) IsListening() bool                  { return true } // Always listening
@@ -360,7 +372,9 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 // Start implements node.Lifecycle, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
 func (s *Ethereum) Start() error {
-	s.setupDiscovery()
+	if err := s.setupDiscovery(); err != nil {
+		return err
+	}
 
 	// Start the bloom bits servicing goroutines
 	s.startBloomHandlers(params.BloomBitsBlocks)
@@ -430,17 +444,17 @@ func (s *Ethereum) Stop() error {
 
 // SyncMode retrieves the current sync mode, either explicitly set, or derived
 // from the chain status.
-func (s *Ethereum) SyncMode() downloader.SyncMode {
+func (s *Ethereum) SyncMode() ethconfig.SyncMode {
 	// If we're in snap sync mode, return that directly
 	if s.handler.snapSync.Load() {
-		return downloader.SnapSync
+		return ethconfig.SnapSync
 	}
 	// We are probably in full sync, but we might have rewound to before the
 	// snap sync pivot, check if we should re-enable snap sync.
 	head := s.blockchain.CurrentBlock()
 	if pivot := rawdb.ReadLastPivotNumber(s.chainDb); pivot != nil {
 		if head.Number.Uint64() < *pivot {
-			return downloader.SnapSync
+			return ethconfig.SnapSync
 		}
 	}
 	// We are in a full sync, but the associated head state is missing. To complete
@@ -448,8 +462,8 @@ func (s *Ethereum) SyncMode() downloader.SyncMode {
 	// persistent state is corrupted, just mismatch with the head block.
 	if !s.blockchain.HasState(head.Root) {
 		log.Info("Reenabled snap sync as chain is stateless")
-		return downloader.SnapSync
+		return ethconfig.SnapSync
 	}
 	// Nope, we're really full syncing
-	return downloader.FullSync
+	return ethconfig.FullSync
 }

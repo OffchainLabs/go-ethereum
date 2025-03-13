@@ -38,10 +38,6 @@ import (
 	"github.com/holiman/uint256"
 )
 
-var (
-	maxBlobsPerTransaction = params.MaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
-)
-
 // TransactionArgs represents the arguments to construct a new transaction
 // or a message call.
 type TransactionArgs struct {
@@ -73,6 +69,9 @@ type TransactionArgs struct {
 	Blobs       []kzg4844.Blob       `json:"blobs"`
 	Commitments []kzg4844.Commitment `json:"commitments"`
 	Proofs      []kzg4844.Proof      `json:"proofs"`
+
+	// For SetCodeTxType
+	AuthorizationList []types.SetCodeAuthorization `json:"authorizationList"`
 
 	// This configures whether blobs are allowed to be passed.
 	blobSidecarAllowed bool
@@ -127,8 +126,9 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 	if args.BlobHashes != nil && len(args.BlobHashes) == 0 {
 		return errors.New(`need at least 1 blob for a blob transaction`)
 	}
-	if args.BlobHashes != nil && len(args.BlobHashes) > maxBlobsPerTransaction {
-		return fmt.Errorf(`too many blobs in transaction (have=%d, max=%d)`, len(args.BlobHashes), maxBlobsPerTransaction)
+	maxBlobs := eip4844.MaxBlobsPerBlock(b.ChainConfig(), b.CurrentHeader().Time)
+	if args.BlobHashes != nil && len(args.BlobHashes) > maxBlobs {
+		return fmt.Errorf(`too many blobs in transaction (have=%d, max=%d)`, len(args.BlobHashes), maxBlobs)
 	}
 
 	// create check
@@ -166,7 +166,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 				BlobHashes:           args.BlobHashes,
 			}
 			latestBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-			estimated, err := DoEstimateGas(ctx, b, callArgs, latestBlockNr, nil, b.RPCGasCap())
+			estimated, err := DoEstimateGas(ctx, b, callArgs, latestBlockNr, nil, nil, b.RPCGasCap())
 			if err != nil {
 				return err
 			}
@@ -212,7 +212,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head
 			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
 		}
 		// No need to set anything other than CancunFeeDefaults, user already set MaxFeePerGas and MaxPriorityFeePerGas
-		if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
+		if err := args.setCancunFeeDefaults(ctx, b.ChainConfig(), head, b); err != nil {
 			return err
 		}
 	}
@@ -229,7 +229,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head
 
 	// Now attempt to fill in default value depending on whether London is active or not.
 	if b.ChainConfig().IsCancun(head.Number, head.Time, types.DeserializeHeaderExtraInformation(head).ArbOSFormatVersion) {
-		if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
+		if err := args.setCancunFeeDefaults(ctx, b.ChainConfig(), head, b); err != nil {
 			return err
 		}
 	} else if isLondon {
@@ -255,15 +255,10 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head
 }
 
 // setCancunFeeDefaults fills in reasonable default fee values for unspecified fields.
-func (args *TransactionArgs) setCancunFeeDefaults(ctx context.Context, head *types.Header, b Backend) error {
+func (args *TransactionArgs) setCancunFeeDefaults(ctx context.Context, config *params.ChainConfig, head *types.Header, b Backend) error {
 	// Set maxFeePerBlobGas if it is missing.
 	if args.BlobHashes != nil && args.BlobFeeCap == nil {
-		var excessBlobGas uint64
-		if head.ExcessBlobGas != nil {
-			excessBlobGas = *head.ExcessBlobGas
-		}
-		// ExcessBlobGas must be set for a Cancun block.
-		blobBaseFee := eip4844.CalcBlobFee(excessBlobGas)
+		blobBaseFee := eip4844.CalcBlobFee(config, head)
 		// Set the max fee to be 2 times larger than the previous block's blob base fee.
 		// The additional slack allows the tx to not become invalidated if the base
 		// fee is rising.
@@ -475,22 +470,23 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, he
 	}
 
 	msg := &core.Message{
-		From:             args.from(),
-		To:               args.To,
-		Value:            (*big.Int)(args.Value),
-		Nonce:            uint64(*args.Nonce),
-		GasLimit:         uint64(*args.Gas),
-		GasPrice:         gasPrice,
-		GasFeeCap:        gasFeeCap,
-		GasTipCap:        gasTipCap,
-		Data:             args.data(),
-		AccessList:       accessList,
-		BlobGasFeeCap:    (*big.Int)(args.BlobFeeCap),
-		BlobHashes:       args.BlobHashes,
-		TxRunMode:        runMode,
-		SkipNonceChecks:  skipNonceCheck,
-		SkipFromEOACheck: skipEoACheck,
-		SkipL1Charging:   skipL1Charging,
+		From:                  args.from(),
+		To:                    args.To,
+		Value:                 (*big.Int)(args.Value),
+		Nonce:                 uint64(*args.Nonce),
+		GasLimit:              uint64(*args.Gas),
+		GasPrice:              gasPrice,
+		GasFeeCap:             gasFeeCap,
+		GasTipCap:             gasTipCap,
+		Data:                  args.data(),
+		AccessList:            accessList,
+		BlobGasFeeCap:         (*big.Int)(args.BlobFeeCap),
+		BlobHashes:            args.BlobHashes,
+		SetCodeAuthorizations: args.AuthorizationList,
+		TxRunMode:             runMode,
+		SkipNonceChecks:       skipNonceCheck,
+		SkipFromEOACheck:      skipEoACheck,
+		SkipL1Charging:        skipL1Charging,
 	}
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	if state != nil && !skipL1Charging {
@@ -515,6 +511,8 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, he
 func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 	usedType := types.LegacyTxType
 	switch {
+	case args.AuthorizationList != nil || defaultType == types.SetCodeTxType:
+		usedType = types.SetCodeTxType
 	case args.BlobHashes != nil || defaultType == types.BlobTxType:
 		usedType = types.BlobTxType
 	case args.MaxFeePerGas != nil || defaultType == types.DynamicFeeTxType:
@@ -528,6 +526,28 @@ func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 	}
 	var data types.TxData
 	switch usedType {
+	case types.SetCodeTxType:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		authList := []types.SetCodeAuthorization{}
+		if args.AuthorizationList != nil {
+			authList = args.AuthorizationList
+		}
+		data = &types.SetCodeTx{
+			To:         *args.To,
+			ChainID:    uint256.MustFromBig(args.ChainID.ToInt()),
+			Nonce:      uint64(*args.Nonce),
+			Gas:        uint64(*args.Gas),
+			GasFeeCap:  uint256.MustFromBig((*big.Int)(args.MaxFeePerGas)),
+			GasTipCap:  uint256.MustFromBig((*big.Int)(args.MaxPriorityFeePerGas)),
+			Value:      uint256.MustFromBig((*big.Int)(args.Value)),
+			Data:       args.data(),
+			AccessList: al,
+			AuthList:   authList,
+		}
+
 	case types.BlobTxType:
 		al := types.AccessList{}
 		if args.AccessList != nil {

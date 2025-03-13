@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"maps"
 	gomath "math"
 	"math/big"
 	"strings"
@@ -36,12 +35,12 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/gasestimator"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -49,7 +48,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/holiman/uint256"
 )
 
 var errBlobTxNotSupported = errors.New("signing blob transactions not supported")
@@ -147,6 +145,11 @@ func (api *EthereumAPI) BlobBaseFee(ctx context.Context) *hexutil.Big {
 	return (*hexutil.Big)(api.b.BlobBaseFee(ctx))
 }
 
+// MaxBlobGasPerBlock returns the maximum blob gas per block at the current head.
+func (api *EthereumAPI) MaxBlobGasPerBlock(ctx context.Context) uint64 {
+	return api.b.MaxBlobGasPerBlock(ctx)
+}
+
 // Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not
 // yet received the latest block headers from its peers. In case it is synchronizing:
 // - startingBlock: block number this node started to synchronize from
@@ -242,7 +245,7 @@ func (api *TxPoolAPI) Inspect() map[string]map[string]map[string]string {
 	pending, queue := api.b.TxPoolContent()
 
 	// Define a formatter to flatten a transaction into a string
-	var format = func(tx *types.Transaction) string {
+	format := func(tx *types.Transaction) string {
 		if to := tx.To(); to != nil {
 			return fmt.Sprintf("%s: %v wei + %v gas × %v wei", tx.To().Hex(), tx.Value(), tx.Gas(), tx.GasPrice())
 		}
@@ -641,182 +644,11 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 	return result, nil
 }
 
-// OverrideAccount indicates the overriding fields of account during the execution
-// of a message call.
-// Note, state and stateDiff can't be specified at the same time. If state is
-// set, message execution will only use the data in the given state. Otherwise
-// if stateDiff is set, all diff will be applied first and then execute the call
-// message.
-type OverrideAccount struct {
-	Nonce            *hexutil.Uint64             `json:"nonce"`
-	Code             *hexutil.Bytes              `json:"code"`
-	Balance          *hexutil.Big                `json:"balance"`
-	State            map[common.Hash]common.Hash `json:"state"`
-	StateDiff        map[common.Hash]common.Hash `json:"stateDiff"`
-	MovePrecompileTo *common.Address             `json:"movePrecompileToAddress"`
-}
-
-// StateOverride is the collection of overridden accounts.
-type StateOverride map[common.Address]OverrideAccount
-
-func (diff *StateOverride) has(address common.Address) bool {
-	_, ok := (*diff)[address]
-	return ok
-}
-
-// Apply overrides the fields of specified accounts into the given state.
-func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.PrecompiledContracts) error {
-	if diff == nil {
-		return nil
-	}
-	// Tracks destinations of precompiles that were moved.
-	dirtyAddrs := make(map[common.Address]struct{})
-	for addr, account := range *diff {
-		if addr == types.ArbosStateAddress {
-			return fmt.Errorf("overriding address %v  not allowed", types.ArbosStateAddress)
-		}
-		// If a precompile was moved to this address already, it can't be overridden.
-		if _, ok := dirtyAddrs[addr]; ok {
-			return fmt.Errorf("account %s has already been overridden by a precompile", addr.Hex())
-		}
-		p, isPrecompile := precompiles[addr]
-		// The MoveTo feature makes it possible to move a precompile
-		// code to another address. If the target address is another precompile
-		// the code for the latter is lost for this session.
-		// Note the destination account is not cleared upon move.
-		if account.MovePrecompileTo != nil {
-			if !isPrecompile {
-				return fmt.Errorf("account %s is not a precompile", addr.Hex())
-			}
-			// Refuse to move a precompile to an address that has been
-			// or will be overridden.
-			if diff.has(*account.MovePrecompileTo) {
-				return fmt.Errorf("account %s is already overridden", account.MovePrecompileTo.Hex())
-			}
-			precompiles[*account.MovePrecompileTo] = p
-			dirtyAddrs[*account.MovePrecompileTo] = struct{}{}
-		}
-		if isPrecompile {
-			delete(precompiles, addr)
-		}
-		// Override account nonce.
-		if account.Nonce != nil {
-			statedb.SetNonce(addr, uint64(*account.Nonce))
-		}
-		// Override account(contract) code.
-		if account.Code != nil {
-			statedb.SetCode(addr, *account.Code)
-		}
-		// Override account balance.
-		if account.Balance != nil {
-			u256Balance, _ := uint256.FromBig((*big.Int)(account.Balance))
-			statedb.SetBalance(addr, u256Balance, tracing.BalanceChangeUnspecified)
-		}
-		if account.State != nil && account.StateDiff != nil {
-			return fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
-		}
-		// Replace entire state if caller requires.
-		if account.State != nil {
-			statedb.SetStorage(addr, account.State)
-		}
-		// Apply state diff into specified accounts.
-		if account.StateDiff != nil {
-			for key, value := range account.StateDiff {
-				statedb.SetState(addr, key, value)
-			}
-		}
-	}
-	// Now finalize the changes. Finalize is normally performed between transactions.
-	// By using finalize, the overrides are semantically behaving as
-	// if they were created in a transaction just before the tracing occur.
-	statedb.Finalise(false)
-	return nil
-}
-
-// BlockOverrides is a set of header fields to override.
-type BlockOverrides struct {
-	Number        *hexutil.Big
-	Difficulty    *hexutil.Big // No-op if we're simulating post-merge calls.
-	Time          *hexutil.Uint64
-	GasLimit      *hexutil.Uint64
-	FeeRecipient  *common.Address
-	PrevRandao    *common.Hash
-	BaseFeePerGas *hexutil.Big
-	BlobBaseFee   *hexutil.Big
-}
-
-// Apply overrides the given header fields into the given block context.
-func (o *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
-	if o == nil {
-		return
-	}
-	if o.Number != nil {
-		blockCtx.BlockNumber = o.Number.ToInt()
-	}
-	if o.Difficulty != nil {
-		blockCtx.Difficulty = o.Difficulty.ToInt()
-		if blockCtx.ArbOSVersion > 0 {
-			difficultHash := common.BigToHash(o.Difficulty.ToInt())
-			blockCtx.Random = &difficultHash
-		}
-	}
-	if o.Time != nil {
-		blockCtx.Time = uint64(*o.Time)
-	}
-	if o.GasLimit != nil {
-		blockCtx.GasLimit = uint64(*o.GasLimit)
-	}
-	if o.FeeRecipient != nil {
-		blockCtx.Coinbase = *o.FeeRecipient
-	}
-	if blockCtx.ArbOSVersion == 0 && o.PrevRandao != nil {
-		blockCtx.Random = o.PrevRandao
-	}
-	if o.BaseFeePerGas != nil {
-		blockCtx.BaseFee = o.BaseFeePerGas.ToInt()
-	}
-	if o.BlobBaseFee != nil {
-		blockCtx.BlobBaseFee = o.BlobBaseFee.ToInt()
-	}
-}
-
-// MakeHeader returns a new header object with the overridden
-// fields.
-// Note: MakeHeader ignores BlobBaseFee if set. That's because
-// header has no such field.
-func (o *BlockOverrides) MakeHeader(header *types.Header) *types.Header {
-	if o == nil {
-		return header
-	}
-	h := types.CopyHeader(header)
-	if o.Number != nil {
-		h.Number = o.Number.ToInt()
-	}
-	if o.Difficulty != nil {
-		h.Difficulty = o.Difficulty.ToInt()
-	}
-	if o.Time != nil {
-		h.Time = uint64(*o.Time)
-	}
-	if o.GasLimit != nil {
-		h.GasLimit = uint64(*o.GasLimit)
-	}
-	if o.FeeRecipient != nil {
-		h.Coinbase = *o.FeeRecipient
-	}
-	if o.PrevRandao != nil {
-		h.MixDigest = *o.PrevRandao
-	}
-	if o.BaseFeePerGas != nil {
-		h.BaseFee = o.BaseFeePerGas.ToInt()
-	}
-	return h
-}
-
 // ChainContextBackend provides methods required to implement ChainContext.
 type ChainContextBackend interface {
 	Engine() consensus.Engine
 	HeaderByNumber(context.Context, rpc.BlockNumber) (*types.Header, error)
+	ChainConfig() *params.ChainConfig
 }
 
 // ChainContext is an implementation of core.ChainContext. It's main use-case
@@ -845,13 +677,17 @@ func (context *ChainContext) GetHeader(hash common.Hash, number uint64) *types.H
 	return header
 }
 
-func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64, runMode core.MessageRunMode) (*core.ExecutionResult, error) {
+func (context *ChainContext) Config() *params.ChainConfig {
+	return context.b.ChainConfig()
+}
+
+func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, overrides *override.StateOverride, blockOverrides *override.BlockOverrides, timeout time.Duration, globalGasCap uint64, runMode core.MessageRunMode) (*core.ExecutionResult, error) {
 	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
 	if blockOverrides != nil {
 		blockOverrides.Apply(&blockCtx)
 	}
 	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time, blockCtx.ArbOSVersion)
-	precompiles := maps.Clone(vm.ActivePrecompiledContracts(rules))
+	precompiles := vm.ActivePrecompiledContracts(rules)
 	if err := overrides.Apply(state, precompiles); err != nil {
 		return nil, err
 	}
@@ -910,11 +746,10 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 	if msg.BlobGasFeeCap != nil && msg.BlobGasFeeCap.BitLen() == 0 {
 		blockContext.BlobBaseFee = new(big.Int)
 	}
-	evm := b.GetEVM(ctx, msg, state, header, vmConfig, blockContext)
+	evm := b.GetEVM(ctx, state, header, vmConfig, blockContext)
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
-
 	res, err = applyMessageWithEVM(ctx, evm, msg, state, timeout, gp, b, header, *blockContext)
 	// If an internal state error occurred, let that have precedence. Otherwise,
 	// a "trie root missing" type of error will masquerade as e.g. "insufficient gas"
@@ -969,7 +804,7 @@ func runScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, state
 			result.UsedGas = 0
 		}
 		// make a new EVM for the scheduled Tx (an EVM must never be reused)
-		evm := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true}, &blockCtx)
+		evm := b.GetEVM(ctx, state, header, &vm.Config{NoBaseFee: true}, &blockCtx)
 		go func() {
 			<-ctx.Done()
 			evm.Cancel()
@@ -1007,7 +842,7 @@ func updateHeaderForPendingBlocks(blockNrOrHash rpc.BlockNumberOrHash, header *t
 	return header
 }
 
-func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64, runMode core.MessageRunMode) (*core.ExecutionResult, error) {
+func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *override.StateOverride, blockOverrides *override.BlockOverrides, timeout time.Duration, globalGasCap uint64, runMode core.MessageRunMode) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
@@ -1024,7 +859,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 //
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
-func (api *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides) (hexutil.Bytes, error) {
+func (api *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash, overrides *override.StateOverride, blockOverrides *override.BlockOverrides) (hexutil.Bytes, error) {
 	if blockNrOrHash == nil {
 		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		blockNrOrHash = &latest
@@ -1053,7 +888,7 @@ func (api *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockN
 //
 // Note, this function doesn't make any changes in the state/blockchain and is
 // useful to execute and retrieve values.
-func (api *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrOrHash *rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
+func (api *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrOrHash *rpc.BlockNumberOrHash) ([]*simBlockResult, error) {
 	if len(opts.BlockStateCalls) == 0 {
 		return nil, &invalidParamsError{message: "empty input"}
 	} else if len(opts.BlockStateCalls) > maxSimulateBlocks {
@@ -1089,7 +924,7 @@ func (api *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrO
 // successfully at block `blockNrOrHash`. It returns error if the transaction would revert, or if
 // there are unexpected failures. The gas limit is capped by both `args.Gas` (if non-nil &
 // non-zero) and `gasCap` (if non-zero).
-func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, gasCap uint64) (hexutil.Uint64, error) {
+func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *override.StateOverride, blockOverrides *override.BlockOverrides, gasCap uint64) (hexutil.Uint64, error) {
 	// Retrieve the base state and mutate it with any overrides
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
@@ -1105,6 +940,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		Config:           b.ChainConfig(),
 		Chain:            NewChainContext(ctx, b),
 		Header:           header,
+		BlockOverrides:   blockOverrides,
 		State:            state,
 		Backend:          b,
 		ErrorRatio:       gasestimator.EstimateGasErrorRatio,
@@ -1147,12 +983,12 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 // value is capped by both `args.Gas` (if non-nil & non-zero) and the backend's RPCGasCap
 // configuration (if non-zero).
 // Note: Required blob gas is not computed in this method.
-func (api *BlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Uint64, error) {
+func (api *BlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash, overrides *override.StateOverride, blockOverrides *override.BlockOverrides) (hexutil.Uint64, error) {
 	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	res, err := DoEstimateGas(ctx, api.b, args, bNrOrHash, overrides, api.b.RPCGasCap())
+	res, err := DoEstimateGas(ctx, api.b, args, bNrOrHash, overrides, blockOverrides, api.b.RPCGasCap())
 	if client := fallbackClientFor(api.b, err); client != nil {
 		var res hexutil.Uint64
 		err := client.CallContext(ctx, &res, "eth_estimateGas", args, blockNrOrHash, overrides)
@@ -1200,7 +1036,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		result["parentBeaconBlockRoot"] = head.ParentBeaconRoot
 	}
 	if head.RequestsHash != nil {
-		result["requestsRoot"] = head.RequestsHash
+		result["requestsHash"] = head.RequestsHash
 	}
 	return result
 }
@@ -1234,13 +1070,11 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 		uncleHashes[i] = uncle.Hash()
 	}
 	fields["uncles"] = uncleHashes
-
-	if config.IsArbitrumNitro(block.Header().Number) {
-		fillArbitrumNitroHeaderInfo(block.Header(), fields)
-	}
-
 	if block.Withdrawals() != nil {
 		fields["withdrawals"] = block.Withdrawals()
+	}
+	if config.IsArbitrumNitro(block.Header().Number) {
+		fillArbitrumNitroHeaderInfo(block.Header(), fields)
 	}
 	return fields
 }
@@ -1294,28 +1128,29 @@ func (api *BlockChainAPI) arbClassicL1BlockNumber(ctx context.Context, block *ty
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
 type RPCTransaction struct {
-	BlockHash           *common.Hash      `json:"blockHash"`
-	BlockNumber         *hexutil.Big      `json:"blockNumber"`
-	From                common.Address    `json:"from"`
-	Gas                 hexutil.Uint64    `json:"gas"`
-	GasPrice            *hexutil.Big      `json:"gasPrice"`
-	GasFeeCap           *hexutil.Big      `json:"maxFeePerGas,omitempty"`
-	GasTipCap           *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
-	MaxFeePerBlobGas    *hexutil.Big      `json:"maxFeePerBlobGas,omitempty"`
-	Hash                common.Hash       `json:"hash"`
-	Input               hexutil.Bytes     `json:"input"`
-	Nonce               hexutil.Uint64    `json:"nonce"`
-	To                  *common.Address   `json:"to"`
-	TransactionIndex    *hexutil.Uint64   `json:"transactionIndex"`
-	Value               *hexutil.Big      `json:"value"`
-	Type                hexutil.Uint64    `json:"type"`
-	Accesses            *types.AccessList `json:"accessList,omitempty"`
-	ChainID             *hexutil.Big      `json:"chainId,omitempty"`
-	BlobVersionedHashes []common.Hash     `json:"blobVersionedHashes,omitempty"`
-	V                   *hexutil.Big      `json:"v"`
-	R                   *hexutil.Big      `json:"r"`
-	S                   *hexutil.Big      `json:"s"`
-	YParity             *hexutil.Uint64   `json:"yParity,omitempty"`
+	BlockHash           *common.Hash                 `json:"blockHash"`
+	BlockNumber         *hexutil.Big                 `json:"blockNumber"`
+	From                common.Address               `json:"from"`
+	Gas                 hexutil.Uint64               `json:"gas"`
+	GasPrice            *hexutil.Big                 `json:"gasPrice"`
+	GasFeeCap           *hexutil.Big                 `json:"maxFeePerGas,omitempty"`
+	GasTipCap           *hexutil.Big                 `json:"maxPriorityFeePerGas,omitempty"`
+	MaxFeePerBlobGas    *hexutil.Big                 `json:"maxFeePerBlobGas,omitempty"`
+	Hash                common.Hash                  `json:"hash"`
+	Input               hexutil.Bytes                `json:"input"`
+	Nonce               hexutil.Uint64               `json:"nonce"`
+	To                  *common.Address              `json:"to"`
+	TransactionIndex    *hexutil.Uint64              `json:"transactionIndex"`
+	Value               *hexutil.Big                 `json:"value"`
+	Type                hexutil.Uint64               `json:"type"`
+	Accesses            *types.AccessList            `json:"accessList,omitempty"`
+	ChainID             *hexutil.Big                 `json:"chainId,omitempty"`
+	BlobVersionedHashes []common.Hash                `json:"blobVersionedHashes,omitempty"`
+	AuthorizationList   []types.SetCodeAuthorization `json:"authorizationList,omitempty"`
+	V                   *hexutil.Big                 `json:"v"`
+	R                   *hexutil.Big                 `json:"r"`
+	S                   *hexutil.Big                 `json:"s"`
+	YParity             *hexutil.Uint64              `json:"yParity,omitempty"`
 
 	// Arbitrum fields:
 	RequestId           *common.Hash    `json:"requestId,omitempty"`           // Contract SubmitRetryable Deposit
@@ -1404,6 +1239,22 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		}
 		result.MaxFeePerBlobGas = (*hexutil.Big)(tx.BlobGasFeeCap())
 		result.BlobVersionedHashes = tx.BlobHashes()
+
+	case types.SetCodeTxType:
+		al := tx.AccessList()
+		yparity := hexutil.Uint64(v.Sign())
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		result.YParity = &yparity
+		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
+		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+		// if the transaction has been mined, compute the effective gas price
+		if baseFee != nil && blockHash != (common.Hash{}) {
+			result.GasPrice = (*hexutil.Big)(effectiveGasPrice(tx, baseFee))
+		} else {
+			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
+		}
+		result.AuthorizationList = tx.SetCodeAuthorizations()
 	}
 
 	// Arbitrum: support arbitrum-specific transaction types
@@ -1570,17 +1421,18 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		// Apply the transaction with the access list tracer
 		tracer := logger.NewAccessListTracer(accessList, args.from(), to, precompiles)
 		config := vm.Config{Tracer: tracer.Hooks(), NoBaseFee: true}
-		vmenv := b.GetEVM(ctx, msg, statedb, header, &config, nil)
+		evm := b.GetEVM(ctx, statedb, header, &config, nil)
+
 		// Lower the basefee to 0 to avoid breaking EVM
 		// invariants (basefee < feecap).
 		if msg.GasPrice.Sign() == 0 {
-			vmenv.Context.BaseFeeInBlock = new(big.Int).Set(vmenv.Context.BaseFee)
-			vmenv.Context.BaseFee = new(big.Int)
+			evm.Context.BaseFeeInBlock = new(big.Int).Set(evm.Context.BaseFee)
+			evm.Context.BaseFee = new(big.Int)
 		}
 		if msg.BlobGasFeeCap != nil && msg.BlobGasFeeCap.BitLen() == 0 {
-			vmenv.Context.BlobBaseFee = new(big.Int)
+			evm.Context.BlobBaseFee = new(big.Int)
 		}
-		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit))
+		res, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction(types.LegacyTxType).Hash(), err)
 		}
@@ -2039,11 +1891,11 @@ func (api *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs,
 	matchTx := sendArgs.ToTransaction(types.LegacyTxType)
 
 	// Before replacing the old transaction, ensure the _new_ transaction fee is reasonable.
-	var price = matchTx.GasPrice()
+	price := matchTx.GasPrice()
 	if gasPrice != nil {
 		price = gasPrice.ToInt()
 	}
-	var gas = matchTx.Gas()
+	gas := matchTx.Gas()
 	if gasLimit != nil {
 		gas = uint64(*gasLimit)
 	}
@@ -2097,7 +1949,7 @@ func (api *DebugAPI) GetRawHeader(ctx context.Context, blockNrOrHash rpc.BlockNu
 		hash = h
 	} else {
 		block, err := api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
-		if err != nil {
+		if block == nil || err != nil {
 			return nil, err
 		}
 		hash = block.Hash()
@@ -2116,7 +1968,7 @@ func (api *DebugAPI) GetRawBlock(ctx context.Context, blockNrOrHash rpc.BlockNum
 		hash = h
 	} else {
 		block, err := api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
-		if err != nil {
+		if block == nil || err != nil {
 			return nil, err
 		}
 		hash = block.Hash()
@@ -2135,7 +1987,7 @@ func (api *DebugAPI) GetRawReceipts(ctx context.Context, blockNrOrHash rpc.Block
 		hash = h
 	} else {
 		block, err := api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
-		if err != nil {
+		if block == nil || err != nil {
 			return nil, err
 		}
 		hash = block.Hash()

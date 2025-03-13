@@ -223,7 +223,7 @@ func (r *Receipt) decodeTyped(b []byte) error {
 		return errShortTypedReceipt
 	}
 	switch b[0] {
-	case DynamicFeeTxType, AccessListTxType, BlobTxType:
+	case DynamicFeeTxType, AccessListTxType, BlobTxType, SetCodeTxType:
 		var data receiptRLP
 		err := rlp.DecodeBytes(b[1:], &data)
 		if err != nil {
@@ -344,7 +344,7 @@ func decodeArbitrumLegacyStoredReceiptRLP(r *ReceiptForStorage, blob []byte) err
 	r.GasUsedForL1 = stored.L1GasUsed
 	r.ContractAddress = stored.ContractAddress
 	r.Logs = stored.Logs
-	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
+	r.Bloom = CreateBloom((*Receipt)(r))
 
 	return nil
 }
@@ -360,7 +360,7 @@ func decodeStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
 	r.CumulativeGasUsed = stored.CumulativeGasUsed
 	r.GasUsedForL1 = stored.L1GasUsed
 	r.Logs = stored.Logs
-	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
+	r.Bloom = CreateBloom((*Receipt)(r))
 	if stored.ContractAddress != nil {
 		r.ContractAddress = *stored.ContractAddress
 	}
@@ -384,7 +384,7 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 	}
 	w.WriteByte(r.Type)
 	switch r.Type {
-	case AccessListTxType, DynamicFeeTxType, BlobTxType:
+	case AccessListTxType, DynamicFeeTxType, BlobTxType, SetCodeTxType:
 		rlp.Encode(w, data)
 	case ArbitrumDepositTxType, ArbitrumUnsignedTxType, ArbitrumContractTxType, ArbitrumRetryTxType, ArbitrumSubmitRetryableTxType, ArbitrumInternalTxType:
 		// Arbitrum: same as above, but this should help prevent future merge conflicts,

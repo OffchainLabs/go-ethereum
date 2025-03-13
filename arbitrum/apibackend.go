@@ -351,9 +351,13 @@ func (a *APIBackend) FeeHistory(
 
 func (a *APIBackend) BlobBaseFee(ctx context.Context) *big.Int {
 	if excess := a.CurrentHeader().ExcessBlobGas; excess != nil {
-		return eip4844.CalcBlobFee(*excess)
+		return eip4844.CalcBlobFee(a.ChainConfig(), a.CurrentHeader())
 	}
 	return nil
+}
+
+func (a *APIBackend) MaxBlobGasPerBlock(ctx context.Context) uint64 {
+	return eip4844.MaxBlobGasPerBlock(a.ChainConfig(), a.CurrentHeader().Time)
 }
 
 func (a *APIBackend) ChainDb() ethdb.Database {
@@ -617,25 +621,17 @@ func (a *APIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.R
 	return a.BlockChain().GetReceiptsByHash(hash), nil
 }
 
-func (a *APIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
-	if header := a.BlockChain().GetHeaderByHash(hash); header != nil {
-		return a.BlockChain().GetTd(hash, header.Number.Uint64())
-	}
-	return nil
-}
-
-func (a *APIBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
+func (a *APIBackend) GetEVM(ctx context.Context, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
 	if vmConfig == nil {
 		vmConfig = a.BlockChain().GetVMConfig()
 	}
-	txContext := core.NewEVMTxContext(msg)
 	var context vm.BlockContext
 	if blockCtx != nil {
 		context = *blockCtx
 	} else {
 		context = core.NewEVMBlockContext(header, a.BlockChain(), nil)
 	}
-	return vm.NewEVM(context, txContext, state, a.BlockChain().Config(), *vmConfig)
+	return vm.NewEVM(context, state, a.BlockChain().Config(), *vmConfig)
 }
 
 func (a *APIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {

@@ -50,7 +50,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
@@ -263,7 +262,7 @@ var (
 	}
 	StateHistoryFlag = &cli.Uint64Flag{
 		Name:     "history.state",
-		Usage:    "Number of recent blocks to retain state history for (default = 90,000 blocks, 0 = entire chain)",
+		Usage:    "Number of recent blocks to retain state history for, only relevant in state.scheme=path (default = 90,000 blocks, 0 = entire chain)",
 		Value:    ethconfig.Defaults.StateHistory,
 		Category: flags.StateCategory,
 	}
@@ -761,7 +760,7 @@ var (
 	}
 	NATFlag = &cli.StringFlag{
 		Name:     "nat",
-		Usage:    "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)",
+		Usage:    "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>|stun:<IP:PORT>)",
 		Value:    "any",
 		Category: flags.NetworkingCategory,
 	}
@@ -1198,7 +1197,7 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 // setIPC creates an IPC path configuration from the set command line flags,
 // returning an empty string if IPC was explicitly disabled, or the set path.
 func setIPC(ctx *cli.Context, cfg *node.Config) {
-	CheckExclusive(ctx, IPCDisabledFlag, IPCPathFlag)
+	flags.CheckExclusive(ctx, IPCDisabledFlag, IPCPathFlag)
 	switch {
 	case ctx.Bool(IPCDisabledFlag.Name):
 		cfg.IPCPath = ""
@@ -1296,8 +1295,8 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 		cfg.NoDiscovery = true
 	}
 
-	CheckExclusive(ctx, DiscoveryV4Flag, NoDiscoverFlag)
-	CheckExclusive(ctx, DiscoveryV5Flag, NoDiscoverFlag)
+	flags.CheckExclusive(ctx, DiscoveryV4Flag, NoDiscoverFlag)
+	flags.CheckExclusive(ctx, DiscoveryV5Flag, NoDiscoverFlag)
 	cfg.DiscoveryV4 = ctx.Bool(DiscoveryV4Flag.Name)
 	cfg.DiscoveryV5 = ctx.Bool(DiscoveryV5Flag.Name)
 
@@ -1529,52 +1528,11 @@ func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 }
 
-// CheckExclusive verifies that only a single instance of the provided flags was
-// set by the user. Each flag might optionally be followed by a string type to
-// specialize it further.
-func CheckExclusive(ctx *cli.Context, args ...interface{}) {
-	set := make([]string, 0, 1)
-	for i := 0; i < len(args); i++ {
-		// Make sure the next argument is a flag and skip if not set
-		flag, ok := args[i].(cli.Flag)
-		if !ok {
-			panic(fmt.Sprintf("invalid argument, not cli.Flag type: %T", args[i]))
-		}
-		// Check if next arg extends current and expand its name if so
-		name := flag.Names()[0]
-
-		if i+1 < len(args) {
-			switch option := args[i+1].(type) {
-			case string:
-				// Extended flag check, make sure value set doesn't conflict with passed in option
-				if ctx.String(flag.Names()[0]) == option {
-					name += "=" + option
-					set = append(set, "--"+name)
-				}
-				// shift arguments and continue
-				i++
-				continue
-
-			case cli.Flag:
-			default:
-				panic(fmt.Sprintf("invalid argument, not cli.Flag or string extension: %T", args[i+1]))
-			}
-		}
-		// Mark the flag if it's set
-		if ctx.IsSet(flag.Names()[0]) {
-			set = append(set, "--"+name)
-		}
-	}
-	if len(set) > 1 {
-		Fatalf("Flags %v can't be used at the same time", strings.Join(set, ", "))
-	}
-}
-
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, SepoliaFlag, HoleskyFlag)
-	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
+	flags.CheckExclusive(ctx, MainnetFlag, DeveloperFlag, SepoliaFlag, HoleskyFlag)
+	flags.CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 
 	// Set configurations from CLI flags
 	setEtherbase(ctx, cfg)
@@ -1606,7 +1564,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	godebug.SetGCPercent(int(gogc))
 
 	if ctx.IsSet(SyncTargetFlag.Name) {
-		cfg.SyncMode = downloader.FullSync // dev sync target forces full sync
+		cfg.SyncMode = ethconfig.FullSync // dev sync target forces full sync
 	} else if ctx.IsSet(SyncModeFlag.Name) {
 		if err = cfg.SyncMode.UnmarshalText([]byte(ctx.String(SyncModeFlag.Name))); err != nil {
 			Fatalf("invalid --syncmode flag: %v", err)
@@ -1677,7 +1635,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if !ctx.Bool(SnapshotFlag.Name) || cfg.SnapshotCache == 0 {
 		// If snap-sync is requested, this flag is also required
-		if cfg.SyncMode == downloader.SnapSync {
+		if cfg.SyncMode == ethconfig.SnapSync {
 			if !ctx.Bool(SnapshotFlag.Name) {
 				log.Warn("Snap sync requested, enabling --snapshot")
 			}
@@ -1743,7 +1701,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
 		}
-		cfg.SyncMode = downloader.FullSync
+		cfg.SyncMode = ethconfig.FullSync
 		// Create new developer account or reuse existing one
 		var (
 			developer  accounts.Account
@@ -1842,7 +1800,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 func MakeBeaconLightConfig(ctx *cli.Context) bparams.ClientConfig {
 	var config bparams.ClientConfig
 	customConfig := ctx.IsSet(BeaconConfigFlag.Name)
-	CheckExclusive(ctx, MainnetFlag, SepoliaFlag, HoleskyFlag, BeaconConfigFlag)
+	flags.CheckExclusive(ctx, MainnetFlag, SepoliaFlag, HoleskyFlag, BeaconConfigFlag)
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
 		config.ChainConfig = *bparams.MainnetLightConfig
@@ -1969,67 +1927,56 @@ func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, target common.H
 	log.Info("Registered full-sync tester", "hash", target)
 }
 
-func SetupMetrics(ctx *cli.Context) {
-	if metrics.Enabled {
-		log.Info("Enabling metrics collection")
-
-		var (
-			enableExport   = ctx.Bool(MetricsEnableInfluxDBFlag.Name)
-			enableExportV2 = ctx.Bool(MetricsEnableInfluxDBV2Flag.Name)
-		)
-
-		if enableExport || enableExportV2 {
-			CheckExclusive(ctx, MetricsEnableInfluxDBFlag, MetricsEnableInfluxDBV2Flag)
-
-			v1FlagIsSet := ctx.IsSet(MetricsInfluxDBUsernameFlag.Name) ||
-				ctx.IsSet(MetricsInfluxDBPasswordFlag.Name)
-
-			v2FlagIsSet := ctx.IsSet(MetricsInfluxDBTokenFlag.Name) ||
-				ctx.IsSet(MetricsInfluxDBOrganizationFlag.Name) ||
-				ctx.IsSet(MetricsInfluxDBBucketFlag.Name)
-
-			if enableExport && v2FlagIsSet {
-				Fatalf("Flags --influxdb.metrics.organization, --influxdb.metrics.token, --influxdb.metrics.bucket are only available for influxdb-v2")
-			} else if enableExportV2 && v1FlagIsSet {
-				Fatalf("Flags --influxdb.metrics.username, --influxdb.metrics.password are only available for influxdb-v1")
-			}
-		}
-
-		var (
-			endpoint = ctx.String(MetricsInfluxDBEndpointFlag.Name)
-			database = ctx.String(MetricsInfluxDBDatabaseFlag.Name)
-			username = ctx.String(MetricsInfluxDBUsernameFlag.Name)
-			password = ctx.String(MetricsInfluxDBPasswordFlag.Name)
-
-			token        = ctx.String(MetricsInfluxDBTokenFlag.Name)
-			bucket       = ctx.String(MetricsInfluxDBBucketFlag.Name)
-			organization = ctx.String(MetricsInfluxDBOrganizationFlag.Name)
-		)
-
-		if enableExport {
-			tagsMap := SplitTagsFlag(ctx.String(MetricsInfluxDBTagsFlag.Name))
-
-			log.Info("Enabling metrics export to InfluxDB")
-
-			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "geth.", tagsMap)
-		} else if enableExportV2 {
-			tagsMap := SplitTagsFlag(ctx.String(MetricsInfluxDBTagsFlag.Name))
-
-			log.Info("Enabling metrics export to InfluxDB (v2)")
-
-			go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "geth.", tagsMap)
-		}
-
-		if ctx.IsSet(MetricsHTTPFlag.Name) {
-			address := net.JoinHostPort(ctx.String(MetricsHTTPFlag.Name), fmt.Sprintf("%d", ctx.Int(MetricsPortFlag.Name)))
-			log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
-			exp.Setup(address)
-		} else if ctx.IsSet(MetricsPortFlag.Name) {
-			log.Warn(fmt.Sprintf("--%s specified without --%s, metrics server will not start.", MetricsPortFlag.Name, MetricsHTTPFlag.Name))
-		}
+// SetupMetrics configures the metrics system.
+func SetupMetrics(cfg *metrics.Config) {
+	if !cfg.Enabled {
+		return
 	}
+	log.Info("Enabling metrics collection")
+	metrics.Enable()
+
+	// InfluxDB exporter.
+	var (
+		enableExport   = cfg.EnableInfluxDB
+		enableExportV2 = cfg.EnableInfluxDBV2
+	)
+	if cfg.EnableInfluxDB && cfg.EnableInfluxDBV2 {
+		Fatalf("Flags %v can't be used at the same time", strings.Join([]string{MetricsEnableInfluxDBFlag.Name, MetricsEnableInfluxDBV2Flag.Name}, ", "))
+	}
+	var (
+		endpoint = cfg.InfluxDBEndpoint
+		database = cfg.InfluxDBDatabase
+		username = cfg.InfluxDBUsername
+		password = cfg.InfluxDBPassword
+
+		token        = cfg.InfluxDBToken
+		bucket       = cfg.InfluxDBBucket
+		organization = cfg.InfluxDBOrganization
+		tagsMap      = SplitTagsFlag(cfg.InfluxDBTags)
+	)
+	if enableExport {
+		log.Info("Enabling metrics export to InfluxDB")
+		go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "geth.", tagsMap)
+	} else if enableExportV2 {
+		tagsMap := SplitTagsFlag(cfg.InfluxDBTags)
+		log.Info("Enabling metrics export to InfluxDB (v2)")
+		go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "geth.", tagsMap)
+	}
+
+	// Expvar exporter.
+	if cfg.HTTP != "" {
+		address := net.JoinHostPort(cfg.HTTP, fmt.Sprintf("%d", cfg.Port))
+		log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
+		exp.Setup(address)
+	} else if cfg.HTTP == "" && cfg.Port != 0 {
+		log.Warn(fmt.Sprintf("--%s specified without --%s, metrics server will not start.", MetricsPortFlag.Name, MetricsHTTPFlag.Name))
+	}
+
+	// Enable system metrics collection.
+	go metrics.CollectProcessMetrics(3 * time.Second)
 }
 
+// SplitTagsFlag parses a comma-separated list of k=v metrics tags.
 func SplitTagsFlag(tagsFlag string) map[string]string {
 	tags := strings.Split(tagsFlag, ",")
 	tagsMap := map[string]string{}
