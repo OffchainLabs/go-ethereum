@@ -607,6 +607,15 @@ func (ec *Client) BlobBaseFee(ctx context.Context) (*big.Int, error) {
 	return (*big.Int)(&hex), nil
 }
 
+// MaxBlobGasPerBlock retrieves the maximum gas limit per block for blob transactions.
+func (ec *Client) MaxBlobGasPerBlock(ctx context.Context) (uint64, error) {
+	var res uint64
+	if err := ec.c.CallContext(ctx, &res, "eth_maxBlobGasPerBlock"); err != nil {
+		return 0, err
+	}
+	return res, nil
+}
+
 type feeHistoryResultMarshaling struct {
 	OldestBlock  *hexutil.Big     `json:"oldestBlock"`
 	Reward       [][]*hexutil.Big `json:"reward,omitempty"`
