@@ -56,9 +56,9 @@ func NewError(name string, inputs Arguments) Error {
 			inputs[i] = input
 		}
 		// string representation
-		names[i] = fmt.Sprintf("%v %v", input.Type, inputs[i].Name)
+		names[i] = fmt.Sprintf("%v %v", inputs[i].Type, inputs[i].Name)
 		if input.Indexed {
-			names[i] = fmt.Sprintf("%v indexed %v", input.Type, inputs[i].Name)
+			names[i] = fmt.Sprintf("%v indexed %v", inputs[i].Type, inputs[i].Name)
 		}
 		// sig representation
 		types[i] = input.Type.String()
@@ -86,7 +86,7 @@ func (e *Error) Unpack(data []byte) ([]interface{}, error) {
 		return nil, fmt.Errorf("insufficient data for unpacking: have %d, want at least 4", len(data))
 	}
 	if !bytes.Equal(data[:4], e.ID[:4]) {
-		return nil, fmt.Errorf("invalid identifier, have %#x want %#x", data[:4], e.ID[:4])
+		return nil, fmt.Errorf("invalid identifier: have %#x, want %#x", data[:4], e.ID[:4])
 	}
 	return e.Inputs.Unpack(data[4:])
 }
