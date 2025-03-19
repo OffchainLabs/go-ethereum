@@ -180,6 +180,8 @@ func (s *StateDB) Recording() bool {
 
 var ErrArbTxFilter error = errors.New("internal error")
 
+var ErrArbStorageWipingRequired error = errors.New("arbitrum chains require storage wiping")
+
 type ArbitrumExtraData struct {
 	unexpectedBalanceDelta *big.Int                      // total balance change across all accounts
 	userWasms              UserWasms                     // user wasms encountered during execution

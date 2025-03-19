@@ -1234,6 +1234,10 @@ func (s *StateDB) GetTrie() Trie {
 // commit gathers the state mutations accumulated along with the associated
 // trie changes, resetting all internal flags with the new state as the base.
 func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*stateUpdate, error) {
+	// Arbitrum: Arbitrum chains don't support noStorageWiping == true
+	if noStorageWiping {
+		return nil, ErrArbStorageWipingRequired
+	}
 	if s.arbExtraData.arbTxFilter {
 		return nil, ErrArbTxFilter
 	}
