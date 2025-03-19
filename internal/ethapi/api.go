@@ -145,11 +145,6 @@ func (api *EthereumAPI) BlobBaseFee(ctx context.Context) *hexutil.Big {
 	return (*hexutil.Big)(api.b.BlobBaseFee(ctx))
 }
 
-// MaxBlobGasPerBlock returns the maximum blob gas per block at the current head.
-func (api *EthereumAPI) MaxBlobGasPerBlock(ctx context.Context) uint64 {
-	return api.b.MaxBlobGasPerBlock(ctx)
-}
-
 // Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not
 // yet received the latest block headers from its peers. In case it is synchronizing:
 // - startingBlock: block number this node started to synchronize from

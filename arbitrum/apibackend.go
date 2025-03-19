@@ -356,10 +356,6 @@ func (a *APIBackend) BlobBaseFee(ctx context.Context) *big.Int {
 	return nil
 }
 
-func (a *APIBackend) MaxBlobGasPerBlock(ctx context.Context) uint64 {
-	return eip4844.MaxBlobGasPerBlock(a.ChainConfig(), a.CurrentHeader().Time)
-}
-
 func (a *APIBackend) ChainDb() ethdb.Database {
 	return a.dbForAPICalls
 }
