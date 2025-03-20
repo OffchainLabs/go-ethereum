@@ -182,7 +182,7 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
-func (b *EthAPIBackend) BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error) {
+func (b *EthAPIBackend) BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error) {
 	return nil, nil
 }
 
@@ -354,7 +354,7 @@ func (b *EthAPIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.S
 	return b.eth.txPool.SubscribeTransactions(ch, true)
 }
 
-func (b *EthAPIBackend) SyncProgressMap() map[string]interface{} {
+func (b *EthAPIBackend) SyncProgressMap(ctx context.Context) map[string]interface{} {
 	progress := b.eth.Downloader().Progress()
 	return progress.ToMap()
 }
