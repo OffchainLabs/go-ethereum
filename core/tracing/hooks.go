@@ -303,6 +303,7 @@ const (
 	BalanceChangeEscrowTransfer
 	BalanceChangeTransferBatchposterReward
 	BalanceChangeTransferBatchposterRefund
+	BalanceChangeTransferRetryableExcessRefund
 	// Stylus
 	BalanceChangeTransferActivationFee
 	BalanceChangeTransferActivationReimburse
@@ -335,7 +336,7 @@ func (b BalanceChangeReason) Str() string {
 		return "undoRefund"
 	case BalanceChangeEscrowTransfer:
 		return "escrow"
-	case BalanceChangeTransferInfraRefund, BalanceChangeTransferNetworkRefund:
+	case BalanceChangeTransferInfraRefund, BalanceChangeTransferNetworkRefund, BalanceChangeTransferRetryableExcessRefund:
 		return "refund"
 	// Batchposter
 	case BalanceChangeTransferBatchposterReward:
