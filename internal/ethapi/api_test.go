@@ -535,7 +535,7 @@ func (b testBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 	}
 	panic("unknown type rpc.BlockNumberOrHash")
 }
-func (b testBackend) BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error) {
+func (b testBackend) BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error) {
 	return nil, nil
 }
 func (b testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
@@ -628,7 +628,7 @@ func (b testBackend) FallbackClient() types.FallbackClient {
 	return nil
 }
 
-func (b testBackend) SyncProgressMap(ctx context.Context) map[string]interface{} {
+func (b testBackend) SyncProgressMap() map[string]interface{} {
 	return map[string]interface{}{}
 }
 
