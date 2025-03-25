@@ -621,7 +621,10 @@ func (c *ChainConfig) IsCancun(num *big.Int, time uint64, currentArbosVersion ui
 }
 
 // IsPrague returns whether time is either equal to the Prague fork time or greater.
-func (c *ChainConfig) IsPrague(num *big.Int, time uint64) bool {
+func (c *ChainConfig) IsPrague(num *big.Int, time uint64, currentArbosVersion uint64) bool {
+	if c.IsArbitrum() {
+		return currentArbosVersion >= ArbosVersion_40
+	}
 	return c.IsLondon(num) && isTimestampForked(c.PragueTime, time)
 }
 
@@ -884,7 +887,7 @@ func (c *ChainConfig) LatestFork(time uint64, currentArbosVersion uint64) forks.
 	switch {
 	case c.IsOsaka(london, time):
 		return forks.Osaka
-	case c.IsPrague(london, time):
+	case c.IsPrague(london, time, currentArbosVersion):
 		return forks.Prague
 	case c.IsCancun(london, time, currentArbosVersion):
 		return forks.Cancun
@@ -1069,7 +1072,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, curren
 		IsMerge:          isMerge,
 		IsShanghai:       isMerge && c.IsShanghai(num, timestamp, currentArbosVersion),
 		IsCancun:         isMerge && c.IsCancun(num, timestamp, currentArbosVersion),
-		IsPrague:         isMerge && c.IsPrague(num, timestamp),
+		IsPrague:         isMerge && c.IsPrague(num, timestamp, currentArbosVersion),
 		IsOsaka:          isMerge && c.IsOsaka(num, timestamp),
 		IsVerkle:         isVerkle,
 		IsEIP4762:        isVerkle,

@@ -389,7 +389,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 			}
 			// Insert parent hash in history contract.
-			if api.backend.ChainConfig().IsPrague(next.Number(), next.Time()) {
+			if api.backend.ChainConfig().IsPrague(next.Number(), next.Time(), context.ArbOSVersion) {
 				core.ProcessParentBlockHash(next.ParentHash(), evm)
 			}
 			// Clean out any pending release functions of trace state. Note this
@@ -544,7 +544,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
-	if chainConfig.IsPrague(block.Number(), block.Time()) {
+	if chainConfig.IsPrague(block.Number(), block.Time(), vmctx.ArbOSVersion) {
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 	for i, tx := range block.Transactions() {
@@ -608,7 +608,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
-	if api.backend.ChainConfig().IsPrague(block.Number(), block.Time()) {
+	if api.backend.ChainConfig().IsPrague(block.Number(), block.Time(), blockCtx.ArbOSVersion) {
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
@@ -785,7 +785,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
-	if chainConfig.IsPrague(block.Number(), block.Time()) {
+	if chainConfig.IsPrague(block.Number(), block.Time(), vmctx.ArbOSVersion) {
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 	for i, tx := range block.Transactions() {
