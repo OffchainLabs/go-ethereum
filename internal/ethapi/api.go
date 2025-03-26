@@ -152,8 +152,8 @@ func (api *EthereumAPI) BlobBaseFee(ctx context.Context) *hexutil.Big {
 // - highestBlock:  block number of the highest block header this node has received from peers
 // - pulledStates:  number of state entries processed until now
 // - knownStates:   number of known state entries that still need to be pulled
-func (api *EthereumAPI) Syncing(ctx context.Context) (interface{}, error) {
-	progress := api.b.SyncProgressMap(ctx)
+func (api *EthereumAPI) Syncing() (interface{}, error) {
+	progress := api.b.SyncProgressMap()
 
 	if len(progress) == 0 {
 		return false, nil
@@ -1653,7 +1653,7 @@ func marshalReceipt(ctx context.Context, receipt *types.Receipt, blockHash commo
 
 		// If blockMetadata exists for the block containing this tx, then we will determine if it was timeboosted or not
 		// and add that info to the receipt object
-		blockMetadata, err := backend.BlockMetadataByNumber(ctx, blockNumber)
+		blockMetadata, err := backend.BlockMetadataByNumber(blockNumber)
 		if err != nil {
 			return nil, err
 		}
