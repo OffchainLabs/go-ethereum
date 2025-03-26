@@ -41,7 +41,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint
 	var signer Signer
 	switch {
 	// Using MaxArbosVersionSupported effectively means that if Arbos is
-	// enalbed, and we're running the current version of the OCL fork of
+	// enabled, and we're running the current version of the OCL fork of
 	// go-ethereum, or the machine with the current wasm root, then, we will use
 	// the Prague signer.
 	case config.IsPrague(blockNumber, blockTime, params.MaxArbosVersionSupported):
