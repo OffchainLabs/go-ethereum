@@ -70,7 +70,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	var (
 		context vm.BlockContext
-		signer  = types.MakeSigner(p.config, header.Number, header.Time)
 	)
 
 	// Apply pre-execution system calls.
@@ -80,6 +79,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	context = NewEVMBlockContext(header, p.chain, nil)
 	evm := vm.NewEVM(context, tracingStateDB, p.config, cfg)
+
+	signer := types.VersionedArbitrumSigner(p.config, header.Number, header.Time, context.ArbOSVersion)
 
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, evm)
@@ -213,7 +214,7 @@ func ApplyTransaction(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *
 }
 
 func ApplyTransactionWithResultFilter(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, runMode MessageRunMode, resultFilter func(*ExecutionResult) error) (*types.Receipt, *ExecutionResult, error) {
-	msg, err := TransactionToMessage(tx, types.MakeSigner(evm.ChainConfig(), header.Number, header.Time), header.BaseFee, runMode)
+	msg, err := TransactionToMessage(tx, types.VersionedArbitrumSigner(evm.ChainConfig(), header.Number, header.Time, evm.Context.ArbOSVersion), header.BaseFee, runMode)
 	if err != nil {
 		return nil, nil, err
 	}
