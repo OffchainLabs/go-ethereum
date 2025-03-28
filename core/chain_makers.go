@@ -201,7 +201,8 @@ func (b *BlockGen) Gas() uint64 {
 
 // Signer returns a valid signer instance for the current block.
 func (b *BlockGen) Signer() types.Signer {
-	return types.MakeSigner(b.cm.config, b.header.Number, b.header.Time)
+	arbosVersion := types.DeserializeHeaderExtraInformation(b.header).ArbOSFormatVersion
+	return types.VersionedArbitrumSigner(b.cm.config, b.header.Number, b.header.Time, arbosVersion)
 }
 
 // AddUncheckedReceipt forcefully adds a receipts to the block without a
