@@ -626,7 +626,8 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 	}
 
 	// Derive the sender.
-	signer := types.MakeSigner(api.b.ChainConfig(), block.Number(), block.Time())
+	arbosVersion := types.DeserializeHeaderExtraInformation(block.Header()).ArbOSFormatVersion
+	signer := types.VersionedArbitrumSigner(api.b.ChainConfig(), block.Number(), block.Time(), arbosVersion)
 
 	result := make([]map[string]interface{}, len(receipts))
 	for i, receipt := range receipts {
@@ -1164,8 +1165,8 @@ type RPCTransaction struct {
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
-func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, blockTime uint64, index uint64, baseFee *big.Int, config *params.ChainConfig) *RPCTransaction {
-	signer := types.MakeSigner(config, new(big.Int).SetUint64(blockNumber), blockTime)
+func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, blockTime uint64, index uint64, baseFee *big.Int, config *params.ChainConfig, arbosVersion uint64) *RPCTransaction {
+	signer := types.VersionedArbitrumSigner(config, new(big.Int).SetUint64(blockNumber), blockTime, arbosVersion)
 	from, _ := types.Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
 	result := &RPCTransaction{
@@ -1312,7 +1313,8 @@ func NewRPCPendingTransaction(tx *types.Transaction, current *types.Header, conf
 		blockNumber = current.Number.Uint64()
 		blockTime = current.Time
 	}
-	return newRPCTransaction(tx, common.Hash{}, blockNumber, blockTime, 0, baseFee, config)
+	arbosVersion := types.DeserializeHeaderExtraInformation(current).ArbOSFormatVersion
+	return newRPCTransaction(tx, common.Hash{}, blockNumber, blockTime, 0, baseFee, config, arbosVersion)
 }
 
 // newRPCTransactionFromBlockIndex returns a transaction that will serialize to the RPC representation.
@@ -1321,7 +1323,8 @@ func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, config *param
 	if index >= uint64(len(txs)) {
 		return nil
 	}
-	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), b.Time(), index, b.BaseFee(), config)
+	arbosVersion := types.DeserializeHeaderExtraInformation(b.Header()).ArbOSFormatVersion
+	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), b.Time(), index, b.BaseFee(), config, arbosVersion)
 }
 
 // newRPCRawTransactionFromBlockIndex returns the bytes of a transaction given a block and a transaction index.
@@ -1545,7 +1548,8 @@ func (api *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common
 	if err != nil {
 		return nil, err
 	}
-	return newRPCTransaction(tx, blockHash, blockNumber, header.Time, index, header.BaseFee, api.b.ChainConfig()), nil
+	arbosVersion := types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion
+	return newRPCTransaction(tx, blockHash, blockNumber, header.Time, index, header.BaseFee, api.b.ChainConfig(), arbosVersion), nil
 }
 
 // GetRawTransactionByHash returns the bytes of the transaction for the given hash.
@@ -1587,7 +1591,8 @@ func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash commo
 	receipt := receipts[index]
 
 	// Derive the sender.
-	signer := types.MakeSigner(api.b.ChainConfig(), header.Number, header.Time)
+	arbosVersion := types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion
+	signer := types.VersionedArbitrumSigner(api.b.ChainConfig(), header.Number, header.Time, arbosVersion)
 	return marshalReceipt(ctx, receipt, blockHash, blockNumber, signer, tx, int(index), api.b)
 }
 
@@ -1696,7 +1701,8 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	}
 	// Print a log with full tx details for manual investigations and interventions
 	head := b.CurrentBlock()
-	signer := types.MakeSigner(b.ChainConfig(), head.Number, head.Time)
+	arbosVersion := types.DeserializeHeaderExtraInformation(head).ArbOSFormatVersion
+	signer := types.VersionedArbitrumSigner(b.ChainConfig(), head.Number, head.Time, arbosVersion)
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return common.Hash{}, err

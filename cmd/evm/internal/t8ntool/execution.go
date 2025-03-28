@@ -216,7 +216,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	if beaconRoot := pre.Env.ParentBeaconBlockRoot; beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
-	if pre.Env.BlockHashes != nil && chainConfig.IsPrague(new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp) {
+	if pre.Env.BlockHashes != nil && chainConfig.IsPrague(new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp, vmContext.ArbOSVersion) {
 		var (
 			prevNumber = pre.Env.Number - 1
 			prevHash   = pre.Env.BlockHashes[math.HexOrDecimal64(prevNumber)]
@@ -355,7 +355,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 
 	// Gather the execution-layer triggered requests.
 	var requests [][]byte
-	if chainConfig.IsPrague(vmContext.BlockNumber, vmContext.Time) {
+	if chainConfig.IsPrague(vmContext.BlockNumber, vmContext.Time, vmContext.ArbOSVersion) {
 		requests = [][]byte{}
 		// EIP-6110
 		var allLogs []*types.Log

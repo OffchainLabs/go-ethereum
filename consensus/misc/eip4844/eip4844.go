@@ -107,7 +107,8 @@ func MaxBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
 	switch {
 	case cfg.IsOsaka(london, time) && s.Osaka != nil:
 		return s.Osaka.Max
-	case cfg.IsPrague(london, time) && s.Prague != nil:
+	// we can use 0 here because arbitrum doesn't support Blob transactions.
+	case cfg.IsPrague(london, time, 0) && s.Prague != nil:
 		return s.Prague.Max
 	// we can use 0 here because arbitrum doesn't support Blob transactions.
 	case cfg.IsCancun(london, time, 0) && s.Cancun != nil:
@@ -153,7 +154,8 @@ func targetBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
 	switch {
 	case cfg.IsOsaka(london, time) && s.Osaka != nil:
 		return s.Osaka.Target
-	case cfg.IsPrague(london, time) && s.Prague != nil:
+	// we can use 0 here because arbitrum doesn't support Blob transactions.
+	case cfg.IsPrague(london, time, 0) && s.Prague != nil:
 		return s.Prague.Target
 	// we can use 0 here because arbitrum doesn't support Blob transactions.
 	case cfg.IsCancun(london, time, 0) && s.Cancun != nil:

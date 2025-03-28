@@ -168,9 +168,10 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			}
 		}
 	}
-	if sim.chainConfig.IsCancun(header.Number, header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {
+	arbOSVersion := types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion
+	if sim.chainConfig.IsCancun(header.Number, header.Time, arbOSVersion) {
 		var excess uint64
-		if sim.chainConfig.IsCancun(parent.Number, parent.Time, types.DeserializeHeaderExtraInformation(parent).ArbOSFormatVersion) {
+		if sim.chainConfig.IsCancun(parent.Number, parent.Time, arbOSVersion) {
 			excess = eip4844.CalcExcessBlobGas(sim.chainConfig, parent, header.Time)
 		}
 		header.ExcessBlobGas = &excess
@@ -206,7 +207,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
-	if sim.chainConfig.IsPrague(header.Number, header.Time) || sim.chainConfig.IsVerkle(header.Number, header.Time) {
+	if sim.chainConfig.IsPrague(header.Number, header.Time, arbOSVersion) || sim.chainConfig.IsVerkle(header.Number, header.Time) {
 		core.ProcessParentBlockHash(header.ParentHash, evm)
 	}
 	var allLogs []*types.Log
@@ -256,7 +257,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	}
 	var requests [][]byte
 	// Process EIP-7685 requests
-	if sim.chainConfig.IsPrague(header.Number, header.Time) {
+	if sim.chainConfig.IsPrague(header.Number, header.Time, arbOSVersion) {
 		requests = [][]byte{}
 		// EIP-6110
 		if err := core.ParseDepositLogs(&requests, allLogs, sim.chainConfig); err != nil {
