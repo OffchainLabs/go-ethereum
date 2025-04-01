@@ -3,7 +3,7 @@
 // in the LICENSE file.
 
 //go:build amd64 || arm64 || wasm
-// +build amd64 arm64 wasm wasm
+// +build amd64 arm64 wasm
 
 // Package bn256 implements the Optimal Ate pairing over a 256-bit Barreto-Naehrig curve.
 package bn256
