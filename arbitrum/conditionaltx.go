@@ -45,7 +45,7 @@ func SubmitConditionalTransaction(ctx context.Context, b *APIBackend, tx *types.
 	}
 	// Print a log with full tx details for manual investigations and interventions
 	arbosVersion := types.DeserializeHeaderExtraInformation(b.CurrentBlock()).ArbOSFormatVersion
-	signer := types.VersionedArbitrumSigner(b.ChainConfig(), b.CurrentBlock().Number, b.CurrentBlock().Time, arbosVersion)
+	signer := types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number, b.CurrentBlock().Time, arbosVersion)
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return common.Hash{}, err

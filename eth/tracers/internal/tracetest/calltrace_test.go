@@ -123,7 +123,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			// Configure a blockchain with the given prestate
 			var (
 				context = test.Context.toBlockContext(test.Genesis)
-				signer  = types.VersionedArbitrumSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time), context.ArbOSVersion)
+				signer  = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time), context.ArbOSVersion)
 				st      = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
 			)
 			st.Close()
@@ -213,7 +213,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		b.Fatalf("failed to parse testcase input: %v", err)
 	}
 	context := test.Context.toBlockContext(test.Genesis)
-	signer := types.VersionedArbitrumSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time), context.ArbOSVersion)
+	signer := types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time), context.ArbOSVersion)
 	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, core.MessageReplayMode)
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)

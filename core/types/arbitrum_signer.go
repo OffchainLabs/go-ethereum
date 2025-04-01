@@ -4,7 +4,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 var ArbosAddress = common.HexToAddress("0xa4b05")
@@ -95,31 +94,4 @@ func (s arbitrumSigner) Hash(tx *Transaction) common.Hash {
 		return s.Signer.Hash(fakeTx)
 	}
 	return s.Signer.Hash(tx)
-}
-
-// VersionedArbitrumSigner wraps the go-ethereum signer in an ArbitrumSigner
-// that can handle both legacy and new transactions.
-func VersionedArbitrumSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint64, arbitrumVersion uint64) Signer {
-	var signer Signer
-	switch {
-	case config.IsPrague(blockNumber, blockTime, arbitrumVersion):
-		signer = NewPragueSigner(config.ChainID)
-	// we can use 0 here because arbitrum doesn't support Blob transactions.
-	case config.IsCancun(blockNumber, blockTime, 0):
-		signer = NewCancunSigner(config.ChainID)
-	case config.IsLondon(blockNumber):
-		signer = NewLondonSigner(config.ChainID)
-	case config.IsBerlin(blockNumber):
-		signer = NewEIP2930Signer(config.ChainID)
-	case config.IsEIP155(blockNumber):
-		signer = NewEIP155Signer(config.ChainID)
-	case config.IsHomestead(blockNumber):
-		signer = HomesteadSigner{}
-	default:
-		signer = FrontierSigner{}
-	}
-	if config.IsArbitrum() {
-		signer = NewArbitrumSigner(signer)
-	}
-	return signer
 }

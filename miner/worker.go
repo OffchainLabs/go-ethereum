@@ -252,7 +252,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	}
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
-		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),
+		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time, params.MaxArbosVersionSupported),
 		state:    state,
 		coinbase: coinbase,
 		header:   header,

@@ -272,7 +272,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			for task := range taskCh {
 				var (
 					blockCtx = core.NewEVMBlockContext(task.block.Header(), api.chainContext(ctx), nil)
-					signer   = types.VersionedArbitrumSigner(api.backend.ChainConfig(), task.block.Number(), task.block.Time(), blockCtx.ArbOSVersion)
+					signer   = types.MakeSigner(api.backend.ChainConfig(), task.block.Number(), task.block.Time(), blockCtx.ArbOSVersion)
 				)
 				// Trace all the transactions contained within
 				for i, tx := range task.block.Transactions() {
@@ -536,7 +536,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	var (
 		roots              []common.Hash
 		vmctx              = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-		signer             = types.VersionedArbitrumSigner(api.backend.ChainConfig(), block.Number(), block.Time(), vmctx.ArbOSVersion)
+		signer             = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time(), vmctx.ArbOSVersion)
 		chainConfig        = api.backend.ChainConfig()
 		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
 	)
@@ -625,7 +625,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		txs          = block.Transactions()
 		blockHash    = block.Hash()
 		arbosVersion = types.DeserializeHeaderExtraInformation(block.Header()).ArbOSFormatVersion
-		signer       = types.VersionedArbitrumSigner(api.backend.ChainConfig(), block.Number(), block.Time(), arbosVersion)
+		signer       = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time(), arbosVersion)
 		results      = make([]*txTraceResult, len(txs))
 	)
 	for i, tx := range txs {
@@ -655,7 +655,7 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 		txs          = block.Transactions()
 		blockHash    = block.Hash()
 		arbosVersion = types.DeserializeHeaderExtraInformation(block.Header()).ArbOSFormatVersion
-		signer       = types.VersionedArbitrumSigner(api.backend.ChainConfig(), block.Number(), block.Time(), arbosVersion)
+		signer       = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time(), arbosVersion)
 		results      = make([]*txTraceResult, len(txs))
 		pend         sync.WaitGroup
 	)
@@ -770,7 +770,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	var (
 		dumps       []string
 		vmctx       = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-		signer      = types.VersionedArbitrumSigner(api.backend.ChainConfig(), block.Number(), block.Time(), vmctx.ArbOSVersion)
+		signer      = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time(), vmctx.ArbOSVersion)
 		chainConfig = api.backend.ChainConfig()
 		canon       = true
 	)
@@ -889,7 +889,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		return nil, err
 	}
 	defer release()
-	msg, err := core.TransactionToMessage(tx, types.VersionedArbitrumSigner(api.backend.ChainConfig(), block.Number(), block.Time(), vmctx.ArbOSVersion), block.BaseFee(), core.MessageReplayMode)
+	msg, err := core.TransactionToMessage(tx, types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time(), vmctx.ArbOSVersion), block.BaseFee(), core.MessageReplayMode)
 	if err != nil {
 		return nil, err
 	}

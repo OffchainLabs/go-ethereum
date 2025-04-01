@@ -251,7 +251,7 @@ func (oracle *Oracle) getBlockValues(ctx context.Context, blockNum uint64, limit
 		return
 	}
 	arbosVersion := types.DeserializeHeaderExtraInformation(block.Header()).ArbOSFormatVersion
-	signer := types.VersionedArbitrumSigner(oracle.backend.ChainConfig(), block.Number(), block.Time(), arbosVersion)
+	signer := types.MakeSigner(oracle.backend.ChainConfig(), block.Number(), block.Time(), arbosVersion)
 
 	// Sort the transaction by effective tip in ascending sort.
 	txs := block.Transactions()

@@ -39,17 +39,13 @@ type sigCache struct {
 // MakeSigner returns a Signer based on the given chain config and block number.
 //
 // Arbitrum: If the signer is being used in any state-transition affecting code,
-// then this is not the right function to use. Instead, use
-// types.VersionedArbitrumSigner(), which will return the correct signer based
-// on the current block number and time, and active arbitrum version.
-func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint64) Signer {
+// then the active arbos version must be passed in. In places which don't affect
+// the state transition function, it is okay to pass in
+// params.MaxArbosVersionSupported.
+func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint64, arbosVersion uint64) Signer {
 	var signer Signer
 	switch {
-	// Using MaxArbosVersionSupported effectively means that if Arbos is
-	// enabled, and we're running the current version of the OCL fork of
-	// go-ethereum, or the machine with the current wasm root, then, we will use
-	// the Prague signer.
-	case config.IsPrague(blockNumber, blockTime, params.MaxArbosVersionSupported):
+	case config.IsPrague(blockNumber, blockTime, arbosVersion):
 		signer = NewPragueSigner(config.ChainID)
 	// we can use 0 here because arbitrum doesn't support Blob transactions.
 	case config.IsCancun(blockNumber, blockTime, 0):

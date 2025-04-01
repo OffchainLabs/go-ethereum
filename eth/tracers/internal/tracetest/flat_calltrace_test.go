@@ -97,7 +97,7 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 		return fmt.Errorf("failed to parse testcase input: %v", err)
 	}
 	context := test.Context.toBlockContext(test.Genesis)
-	signer := types.VersionedArbitrumSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time), context.ArbOSVersion)
+	signer := types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time), context.ArbOSVersion)
 	state := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
 	defer state.Close()
 
