@@ -208,7 +208,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
-	if sim.chainConfig.IsPrague(header.Number, header.Time, arbOSVersion) || sim.chainConfig.IsVerkle(header.Number, header.Time) {
+	if sim.chainConfig.IsPrague(header.Number, header.Time, parentArbOSVersion) || sim.chainConfig.IsVerkle(header.Number, header.Time) {
 		core.ProcessParentBlockHash(header.ParentHash, evm)
 	}
 	var allLogs []*types.Log
@@ -257,8 +257,8 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		callResults[i] = callRes
 	}
 	var requests [][]byte
-	// Process EIP-7685 requests
-	if sim.chainConfig.IsPrague(header.Number, header.Time, arbOSVersion) {
+	// Process EIP-7685 requests unless Arbitrum is enabled.
+	if !sim.chainConfig.IsArbitrum() && sim.chainConfig.IsPrague(header.Number, header.Time, parentArbOSVersion) {
 		requests = [][]byte{}
 		// EIP-6110
 		if err := core.ParseDepositLogs(&requests, allLogs, sim.chainConfig); err != nil {
@@ -271,11 +271,11 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	}
 	header.Root = sim.state.IntermediateRoot(true)
 	header.GasUsed = gasUsed
-	if sim.chainConfig.IsCancun(header.Number, header.Time, arbOSVersion) {
+	if sim.chainConfig.IsCancun(header.Number, header.Time, parentArbOSVersion) {
 		header.BlobGasUsed = &blobGasUsed
 	}
 	var withdrawals types.Withdrawals
-	if sim.chainConfig.IsShanghai(header.Number, header.Time, arbOSVersion) {
+	if sim.chainConfig.IsShanghai(header.Number, header.Time, parentArbOSVersion) {
 		withdrawals = make([]*types.Withdrawal, 0)
 	}
 	if requests != nil {

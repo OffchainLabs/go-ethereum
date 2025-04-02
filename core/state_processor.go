@@ -107,7 +107,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 	// Read requests if Prague is enabled.
 	var requests [][]byte
-	if p.config.IsPrague(block.Number(), block.Time(), context.ArbOSVersion) {
+	// Arbitrum has no Deposit, Witdrawal, or Consolidation requests.
+	if !p.config.IsArbitrum() && p.config.IsPrague(block.Number(), block.Time(), context.ArbOSVersion) {
 		requests = [][]byte{}
 		// EIP-6110
 		if err := ParseDepositLogs(&requests, allLogs, p.config); err != nil {

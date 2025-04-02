@@ -316,7 +316,8 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 	}
 
 	blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
-	if b.cm.config.IsPrague(b.header.Number, b.header.Time, blockContext.ArbOSVersion) {
+	// Arbitrum doesn't support Deposit, Withdrawal, or Consolidation requests.
+	if !b.cm.config.IsArbitrum() && b.cm.config.IsPrague(b.header.Number, b.header.Time, blockContext.ArbOSVersion) {
 		requests = [][]byte{}
 		// EIP-6110 deposits
 		var blockLogs []*types.Log
