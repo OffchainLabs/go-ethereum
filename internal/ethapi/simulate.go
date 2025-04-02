@@ -169,9 +169,10 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		}
 	}
 	arbOSVersion := types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion
+	parentArbOSVersion := types.DeserializeHeaderExtraInformation(parent).ArbOSFormatVersion
 	if sim.chainConfig.IsCancun(header.Number, header.Time, arbOSVersion) {
 		var excess uint64
-		if sim.chainConfig.IsCancun(parent.Number, parent.Time, arbOSVersion) {
+		if sim.chainConfig.IsCancun(parent.Number, parent.Time, parentArbOSVersion) {
 			excess = eip4844.CalcExcessBlobGas(sim.chainConfig, parent, header.Time)
 		}
 		header.ExcessBlobGas = &excess
@@ -270,11 +271,11 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	}
 	header.Root = sim.state.IntermediateRoot(true)
 	header.GasUsed = gasUsed
-	if sim.chainConfig.IsCancun(header.Number, header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {
+	if sim.chainConfig.IsCancun(header.Number, header.Time, arbOSVersion) {
 		header.BlobGasUsed = &blobGasUsed
 	}
 	var withdrawals types.Withdrawals
-	if sim.chainConfig.IsShanghai(header.Number, header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {
+	if sim.chainConfig.IsShanghai(header.Number, header.Time, arbOSVersion) {
 		withdrawals = make([]*types.Withdrawal, 0)
 	}
 	if requests != nil {
