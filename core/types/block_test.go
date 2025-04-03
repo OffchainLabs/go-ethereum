@@ -317,3 +317,19 @@ func TestRlpDecodeParentHash(t *testing.T) {
 		}
 	}
 }
+
+// TestRequestsHashMarshallingInBlockHashCalculation is a temporary test that is present to make sure requestsHash field is used in block hash calculation
+func TestRequestsHashMarshallingInBlockHashCalculation(t *testing.T) {
+	h := &Header{
+		ParentHash: common.HexToHash("123"),
+		Root:       common.HexToHash("abc"),
+		TxHash:     common.HexToHash("a12"),
+	}
+	withoutRequestsHash := h.Hash()
+	reqsHash := common.HexToHash("a23")
+	h.RequestsHash = &reqsHash
+	withRequestsHash := h.Hash()
+	if withRequestsHash == withoutRequestsHash {
+		t.Fatalf("blockHash with and without requestsHash is matching. Hash: %s", withoutRequestsHash)
+	}
+}
