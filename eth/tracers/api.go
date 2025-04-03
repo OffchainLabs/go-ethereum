@@ -271,8 +271,8 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			// Fetch and execute the block trace taskCh
 			for task := range taskCh {
 				var (
-					signer   = types.MakeSigner(api.backend.ChainConfig(), task.block.Number(), task.block.Time())
 					blockCtx = core.NewEVMBlockContext(task.block.Header(), api.chainContext(ctx), nil)
+					signer   = types.MakeSigner(api.backend.ChainConfig(), task.block.Number(), task.block.Time(), blockCtx.ArbOSVersion)
 				)
 				// Trace all the transactions contained within
 				for i, tx := range task.block.Transactions() {
@@ -389,7 +389,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 			}
 			// Insert parent hash in history contract.
-			if api.backend.ChainConfig().IsPrague(next.Number(), next.Time()) {
+			if api.backend.ChainConfig().IsPrague(next.Number(), next.Time(), context.ArbOSVersion) {
 				core.ProcessParentBlockHash(next.ParentHash(), evm)
 			}
 			// Clean out any pending release functions of trace state. Note this
@@ -535,16 +535,16 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	defer release()
 	var (
 		roots              []common.Hash
-		signer             = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
-		chainConfig        = api.backend.ChainConfig()
 		vmctx              = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+		signer             = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time(), vmctx.ArbOSVersion)
+		chainConfig        = api.backend.ChainConfig()
 		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
 	)
 	evm := vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
-	if chainConfig.IsPrague(block.Number(), block.Time()) {
+	if chainConfig.IsPrague(block.Number(), block.Time(), vmctx.ArbOSVersion) {
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 	for i, tx := range block.Transactions() {
@@ -608,7 +608,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
-	if api.backend.ChainConfig().IsPrague(block.Number(), block.Time()) {
+	if api.backend.ChainConfig().IsPrague(block.Number(), block.Time(), blockCtx.ArbOSVersion) {
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
@@ -622,10 +622,11 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	}
 	// Native tracers have low overhead
 	var (
-		txs       = block.Transactions()
-		blockHash = block.Hash()
-		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
-		results   = make([]*txTraceResult, len(txs))
+		txs          = block.Transactions()
+		blockHash    = block.Hash()
+		arbosVersion = types.DeserializeHeaderExtraInformation(block.Header()).ArbOSFormatVersion
+		signer       = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time(), arbosVersion)
+		results      = make([]*txTraceResult, len(txs))
 	)
 	for i, tx := range txs {
 		// Generate the next state snapshot fast without tracing
@@ -651,11 +652,12 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, statedb *state.StateDB, config *TraceConfig) ([]*txTraceResult, error) {
 	// Execute all the transaction contained within the block concurrently
 	var (
-		txs       = block.Transactions()
-		blockHash = block.Hash()
-		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
-		results   = make([]*txTraceResult, len(txs))
-		pend      sync.WaitGroup
+		txs          = block.Transactions()
+		blockHash    = block.Hash()
+		arbosVersion = types.DeserializeHeaderExtraInformation(block.Header()).ArbOSFormatVersion
+		signer       = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time(), arbosVersion)
+		results      = make([]*txTraceResult, len(txs))
+		pend         sync.WaitGroup
 	)
 	threads := runtime.NumCPU()
 	if threads > len(txs) {
@@ -767,9 +769,9 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	// Execute transaction, either tracing all or just the requested one
 	var (
 		dumps       []string
-		signer      = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
-		chainConfig = api.backend.ChainConfig()
 		vmctx       = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+		signer      = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time(), vmctx.ArbOSVersion)
+		chainConfig = api.backend.ChainConfig()
 		canon       = true
 	)
 	// Check if there are any overrides: the caller may wish to enable a future
@@ -785,7 +787,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
-	if chainConfig.IsPrague(block.Number(), block.Time()) {
+	if chainConfig.IsPrague(block.Number(), block.Time(), vmctx.ArbOSVersion) {
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 	for i, tx := range block.Transactions() {
@@ -887,7 +889,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		return nil, err
 	}
 	defer release()
-	msg, err := core.TransactionToMessage(tx, types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time()), block.BaseFee(), core.MessageReplayMode)
+	msg, err := core.TransactionToMessage(tx, types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time(), vmctx.ArbOSVersion), block.BaseFee(), core.MessageReplayMode)
 	if err != nil {
 		return nil, err
 	}

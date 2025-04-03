@@ -201,7 +201,8 @@ func (b *BlockGen) Gas() uint64 {
 
 // Signer returns a valid signer instance for the current block.
 func (b *BlockGen) Signer() types.Signer {
-	return types.MakeSigner(b.cm.config, b.header.Number, b.header.Time)
+	arbosVersion := types.DeserializeHeaderExtraInformation(b.header).ArbOSFormatVersion
+	return types.MakeSigner(b.cm.config, b.header.Number, b.header.Time, arbosVersion)
 }
 
 // AddUncheckedReceipt forcefully adds a receipts to the block without a
@@ -314,7 +315,9 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 		statedb = statedb.Copy()
 	}
 
-	if b.cm.config.IsPrague(b.header.Number, b.header.Time) {
+	arbosVersion := types.DeserializeHeaderExtraInformation(b.header).ArbOSFormatVersion
+	// Arbitrum doesn't support Deposit, Withdrawal, or Consolidation requests.
+	if !b.cm.config.IsArbitrum() && b.cm.config.IsPrague(b.header.Number, b.header.Time, arbosVersion) {
 		requests = [][]byte{}
 		// EIP-6110 deposits
 		var blockLogs []*types.Log
@@ -386,9 +389,9 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			misc.ApplyDAOHardFork(statedb)
 		}
 
-		if config.IsPrague(b.header.Number, b.header.Time) || config.IsVerkle(b.header.Number, b.header.Time) {
+		blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
+		if config.IsPrague(b.header.Number, b.header.Time, blockContext.ArbOSVersion) || config.IsVerkle(b.header.Number, b.header.Time) {
 			// EIP-2935
-			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
 			blockContext.Random = &common.Hash{} // enable post-merge instruction set
 			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
 			ProcessParentBlockHash(b.header.ParentHash, evm)

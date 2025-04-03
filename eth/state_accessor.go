@@ -261,14 +261,14 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
 	// If prague hardfork, insert parent block hash in the state as per EIP-2935.
-	if eth.blockchain.Config().IsPrague(block.Number(), block.Time()) {
+	if eth.blockchain.Config().IsPrague(block.Number(), block.Time(), context.ArbOSVersion) {
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, vm.BlockContext{}, statedb, release, nil
 	}
 	// Recompute transactions up to the target index.
-	signer := types.MakeSigner(eth.blockchain.Config(), block.Number(), block.Time())
+	signer := types.MakeSigner(eth.blockchain.Config(), block.Number(), block.Time(), evm.Context.ArbOSVersion)
 	for idx, tx := range block.Transactions() {
 		if idx == txIndex {
 			return tx, context, statedb, release, nil
