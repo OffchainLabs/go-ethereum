@@ -17,12 +17,12 @@
 package txpool
 
 import (
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -47,6 +47,11 @@ type ValidationOptions struct {
 	MinTip  *big.Int // Minimum gas tip needed to allow a transaction into the caller pool
 }
 
+// ValidationFunction is an method type which the pools use to perform the tx-validations which do not
+// require state access. Production code typically uses ValidateTransaction, whereas testing-code
+// might choose to instead use something else, e.g. to always fail or avoid heavy cpu usage.
+type ValidationFunction func(tx *types.Transaction, head *types.Header, signer types.Signer, opts *ValidationOptions) error
+
 // ValidateTransaction is a helper method to check whether a transaction is valid
 // according to the consensus rules, but does not check state-dependent validation
 // (balance, nonce, etc).
@@ -64,18 +69,22 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		return fmt.Errorf("%w: transaction size %v, limit %v", ErrOversizedData, tx.Size(), opts.MaxSize)
 	}
 	// Ensure only transactions that have been enabled are accepted
-	if !opts.Config.IsBerlin(head.Number) && tx.Type() != types.LegacyTxType {
+	arbosVersion := types.DeserializeHeaderExtraInformation(head).ArbOSFormatVersion
+	rules := opts.Config.Rules(head.Number, head.Difficulty.Sign() == 0, head.Time, arbosVersion)
+	if !rules.IsBerlin && tx.Type() != types.LegacyTxType {
 		return fmt.Errorf("%w: type %d rejected, pool not yet in Berlin", core.ErrTxTypeNotSupported, tx.Type())
 	}
-	if !opts.Config.IsLondon(head.Number) && tx.Type() == types.DynamicFeeTxType {
+	if !rules.IsLondon && tx.Type() == types.DynamicFeeTxType {
 		return fmt.Errorf("%w: type %d rejected, pool not yet in London", core.ErrTxTypeNotSupported, tx.Type())
 	}
-	arbosVersion := types.DeserializeHeaderExtraInformation(head).ArbOSFormatVersion
-	if !opts.Config.IsCancun(head.Number, head.Time, arbosVersion) && tx.Type() == types.BlobTxType {
+	if !rules.IsCancun && tx.Type() == types.BlobTxType {
 		return fmt.Errorf("%w: type %d rejected, pool not yet in Cancun", core.ErrTxTypeNotSupported, tx.Type())
 	}
+	if !rules.IsPrague && tx.Type() == types.SetCodeTxType {
+		return fmt.Errorf("%w: type %d rejected, pool not yet in Prague", core.ErrTxTypeNotSupported, tx.Type())
+	}
 	// Check whether the init code size has been exceeded
-	if opts.Config.IsShanghai(head.Number, head.Time, arbosVersion) && tx.To() == nil && len(tx.Data()) > int(opts.Config.MaxInitCodeSize()) {
+	if rules.IsShanghai && tx.To() == nil && len(tx.Data()) > int(opts.Config.MaxInitCodeSize()) {
 		return fmt.Errorf("%w: code size %v, limit %v", core.ErrMaxInitCodeSizeExceeded, len(tx.Data()), int(opts.Config.MaxInitCodeSize()))
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
@@ -100,16 +109,26 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	}
 	// Make sure the transaction is signed properly
 	if _, err := types.Sender(signer, tx); err != nil {
-		return ErrInvalidSender
+		return fmt.Errorf("%w: %v", ErrInvalidSender, err)
 	}
 	// Ensure the transaction has more gas than the bare minimum needed to cover
 	// the transaction metadata
-	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, opts.Config.IsIstanbul(head.Number), opts.Config.IsShanghai(head.Number, head.Time, types.DeserializeHeaderExtraInformation(head).ArbOSFormatVersion))
+	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, true, rules.IsIstanbul, rules.IsShanghai)
 	if err != nil {
 		return err
 	}
 	if tx.Gas() < intrGas {
 		return fmt.Errorf("%w: gas %v, minimum needed %v", core.ErrIntrinsicGas, tx.Gas(), intrGas)
+	}
+	// Ensure the transaction can cover floor data gas.
+	if opts.Config.IsPrague(head.Number, head.Time, arbosVersion) {
+		floorDataGas, err := core.FloorDataGas(tx.Data())
+		if err != nil {
+			return err
+		}
+		if tx.Gas() < floorDataGas {
+			return fmt.Errorf("%w: gas %v, minimum needed %v", core.ErrFloorDataGas, tx.Gas(), floorDataGas)
+		}
 	}
 	// Ensure the gasprice is high enough to cover the requirement of the calling pool
 	if tx.GasTipCapIntCmp(opts.MinTip) < 0 {
@@ -130,12 +149,18 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		if len(hashes) == 0 {
 			return errors.New("blobless blob transaction")
 		}
-		if len(hashes) > params.MaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob {
-			return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", len(hashes), params.MaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob)
+		maxBlobs := eip4844.MaxBlobsPerBlock(opts.Config, head.Time)
+		if len(hashes) > maxBlobs {
+			return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", len(hashes), maxBlobs)
 		}
 		// Ensure commitments, proofs and hashes are valid
 		if err := validateBlobSidecar(hashes, sidecar); err != nil {
 			return err
+		}
+	}
+	if tx.Type() == types.SetCodeTxType {
+		if len(tx.SetCodeAuthorizations()) == 0 {
+			return fmt.Errorf("set code tx must have at least one authorization tuple")
 		}
 	}
 	return nil
@@ -145,20 +170,11 @@ func validateBlobSidecar(hashes []common.Hash, sidecar *types.BlobTxSidecar) err
 	if len(sidecar.Blobs) != len(hashes) {
 		return fmt.Errorf("invalid number of %d blobs compared to %d blob hashes", len(sidecar.Blobs), len(hashes))
 	}
-	if len(sidecar.Commitments) != len(hashes) {
-		return fmt.Errorf("invalid number of %d blob commitments compared to %d blob hashes", len(sidecar.Commitments), len(hashes))
-	}
 	if len(sidecar.Proofs) != len(hashes) {
 		return fmt.Errorf("invalid number of %d blob proofs compared to %d blob hashes", len(sidecar.Proofs), len(hashes))
 	}
-	// Blob quantities match up, validate that the provers match with the
-	// transaction hash before getting to the cryptography
-	hasher := sha256.New()
-	for i, vhash := range hashes {
-		computed := kzg4844.CalcBlobHashV1(hasher, &sidecar.Commitments[i])
-		if vhash != computed {
-			return fmt.Errorf("blob %d: computed hash %#x mismatches transaction one %#x", i, computed, vhash)
-		}
+	if err := sidecar.ValidateBlobCommitmentHashes(hashes); err != nil {
+		return err
 	}
 	// Blob commitments match with the hashes in the transaction, verify the
 	// blobs themselves via KZG
@@ -181,7 +197,7 @@ type ValidationOptionsWithState struct {
 	// nonce gaps will be ignored and permitted.
 	FirstNonceGap func(addr common.Address) uint64
 
-	// UsedAndLeftSlots is a mandatory callback to retrieve the number of tx slots
+	// UsedAndLeftSlots is an optional callback to retrieve the number of tx slots
 	// used and the number still permitted for an account. New transactions will
 	// be rejected once the number of remaining slots reaches zero.
 	UsedAndLeftSlots func(addr common.Address) (int, int)
@@ -202,7 +218,7 @@ type ValidationOptionsWithState struct {
 // rules without duplicating code and running the risk of missed updates.
 func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, opts *ValidationOptionsWithState) error {
 	// Ensure the transaction adheres to nonce ordering
-	from, err := signer.Sender(tx) // already validated (and cached), but cleaner to check
+	from, err := types.Sender(signer, tx) // already validated (and cached), but cleaner to check
 	if err != nil {
 		log.Error("Transaction sender recovery failed", "err", err)
 		return err
@@ -243,8 +259,10 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 		// Transaction takes a new nonce value out of the pool. Ensure it doesn't
 		// overflow the number of permitted transactions from a single account
 		// (i.e. max cancellable via out-of-bound transaction).
-		if used, left := opts.UsedAndLeftSlots(from); left <= 0 {
-			return fmt.Errorf("%w: pooled %d txs", ErrAccountLimitExceeded, used)
+		if opts.UsedAndLeftSlots != nil {
+			if used, left := opts.UsedAndLeftSlots(from); left <= 0 {
+				return fmt.Errorf("%w: pooled %d txs", ErrAccountLimitExceeded, used)
+			}
 		}
 	}
 	return nil

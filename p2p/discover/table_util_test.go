@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 )
@@ -100,8 +101,9 @@ func idAtDistance(a enode.ID, n int) (b enode.ID) {
 	return b
 }
 
+// intIP returns a LAN IP address based on i.
 func intIP(i int) net.IP {
-	return net.IP{byte(i), 0, 2, byte(i)}
+	return net.IP{10, 0, byte(i >> 8), byte(i & 0xFF)}
 }
 
 // fillBucket inserts nodes into the given bucket until it is full.
@@ -254,7 +256,7 @@ NotEqual:
 }
 
 func nodeEqual(n1 *enode.Node, n2 *enode.Node) bool {
-	return n1.ID() == n2.ID() && n1.IP().Equal(n2.IP())
+	return n1.ID() == n2.ID() && n1.IPAddr() == n2.IPAddr()
 }
 
 func sortByID[N nodeType](nodes []N) {
@@ -283,7 +285,7 @@ func hexEncPrivkey(h string) *ecdsa.PrivateKey {
 }
 
 // hexEncPubkey decodes h as a public key.
-func hexEncPubkey(h string) (ret encPubkey) {
+func hexEncPubkey(h string) (ret v4wire.Pubkey) {
 	b, err := hex.DecodeString(h)
 	if err != nil {
 		panic(err)

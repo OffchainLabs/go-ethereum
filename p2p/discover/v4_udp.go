@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/netip"
 	"sync"
 	"time"
@@ -250,8 +249,7 @@ func (t *UDPv4) sendPing(toid enode.ID, toaddr netip.AddrPort, callback func()) 
 		return matched, matched
 	})
 	// Send the packet.
-	toUDPAddr := &net.UDPAddr{IP: toaddr.Addr().AsSlice()}
-	t.localNode.UDPContact(toUDPAddr)
+	t.localNode.UDPContact(toaddr)
 	t.write(toaddr, toid, req.Name(), packet)
 	return rm
 }
@@ -273,7 +271,7 @@ func (t *UDPv4) LookupPubkey(key *ecdsa.PublicKey) []*enode.Node {
 		// case and run the bootstrapping logic.
 		<-t.tab.refresh()
 	}
-	return t.newLookup(t.closeCtx, encodePubkey(key)).run()
+	return t.newLookup(t.closeCtx, v4wire.EncodePubkey(key)).run()
 }
 
 // RandomNodes is an iterator yielding nodes from a random walk of the DHT.
@@ -288,24 +286,24 @@ func (t *UDPv4) lookupRandom() []*enode.Node {
 
 // lookupSelf implements transport.
 func (t *UDPv4) lookupSelf() []*enode.Node {
-	return t.newLookup(t.closeCtx, encodePubkey(&t.priv.PublicKey)).run()
+	pubkey := v4wire.EncodePubkey(&t.priv.PublicKey)
+	return t.newLookup(t.closeCtx, pubkey).run()
 }
 
 func (t *UDPv4) newRandomLookup(ctx context.Context) *lookup {
-	var target encPubkey
+	var target v4wire.Pubkey
 	crand.Read(target[:])
 	return t.newLookup(ctx, target)
 }
 
-func (t *UDPv4) newLookup(ctx context.Context, targetKey encPubkey) *lookup {
+func (t *UDPv4) newLookup(ctx context.Context, targetKey v4wire.Pubkey) *lookup {
 	target := enode.ID(crypto.Keccak256Hash(targetKey[:]))
-	ekey := v4wire.Pubkey(targetKey)
 	it := newLookup(ctx, t.tab, target, func(n *enode.Node) ([]*enode.Node, error) {
 		addr, ok := n.UDPEndpoint()
 		if !ok {
 			return nil, errNoUDPEndpoint
 		}
-		return t.findnode(n.ID(), addr, ekey)
+		return t.findnode(n.ID(), addr, targetKey)
 	})
 	return it
 }
@@ -383,7 +381,7 @@ func (t *UDPv4) RequestENR(n *enode.Node) (*enode.Node, error) {
 	if respN.Seq() < n.Seq() {
 		return n, nil // response record is older
 	}
-	if err := netutil.CheckRelayIP(addr.Addr().AsSlice(), respN.IP()); err != nil {
+	if err := netutil.CheckRelayAddr(addr.Addr(), respN.IPAddr()); err != nil {
 		return nil, fmt.Errorf("invalid IP in response record: %v", err)
 	}
 	return respN, nil
@@ -549,7 +547,9 @@ func (t *UDPv4) readLoop(unhandled chan<- ReadPacket) {
 			}
 			return
 		}
-		if t.handlePacket(from, buf[:nbytes]) != nil && unhandled != nil {
+		if err := t.handlePacket(from, buf[:nbytes]); err != nil && unhandled == nil {
+			t.log.Debug("Bad discv4 packet", "addr", from, "err", err)
+		} else if err != nil && unhandled != nil {
 			select {
 			case unhandled <- ReadPacket{buf[:nbytes], from}:
 			default:
@@ -559,9 +559,13 @@ func (t *UDPv4) readLoop(unhandled chan<- ReadPacket) {
 }
 
 func (t *UDPv4) handlePacket(from netip.AddrPort, buf []byte) error {
+	// Unwrap IPv4-in-6 source address.
+	if from.Addr().Is4In6() {
+		from = netip.AddrPortFrom(netip.AddrFrom4(from.Addr().As4()), from.Port())
+	}
+
 	rawpacket, fromKey, hash, err := v4wire.Decode(buf)
 	if err != nil {
-		t.log.Debug("Bad discv4 packet", "addr", from, "err", err)
 		return err
 	}
 	packet := t.wrapPacket(rawpacket)
@@ -578,15 +582,14 @@ func (t *UDPv4) handlePacket(from netip.AddrPort, buf []byte) error {
 
 // checkBond checks if the given node has a recent enough endpoint proof.
 func (t *UDPv4) checkBond(id enode.ID, ip netip.AddrPort) bool {
-	return time.Since(t.db.LastPongReceived(id, ip.Addr().AsSlice())) < bondExpiration
+	return time.Since(t.db.LastPongReceived(id, ip.Addr())) < bondExpiration
 }
 
 // ensureBond solicits a ping from a node if we haven't seen a ping from it for a while.
 // This ensures there is a valid endpoint proof on the remote end.
 func (t *UDPv4) ensureBond(toid enode.ID, toaddr netip.AddrPort) {
-	ip := toaddr.Addr().AsSlice()
-	tooOld := time.Since(t.db.LastPingReceived(toid, ip)) > bondExpiration
-	if tooOld || t.db.FindFails(toid, ip) > maxFindnodeFailures {
+	tooOld := time.Since(t.db.LastPingReceived(toid, toaddr.Addr())) > bondExpiration
+	if tooOld || t.db.FindFails(toid, toaddr.Addr()) > maxFindnodeFailures {
 		rm := t.sendPing(toid, toaddr, nil)
 		<-rm.errc
 		// Wait for them to ping back and process our pong.
@@ -687,7 +690,7 @@ func (t *UDPv4) handlePing(h *packetHandlerV4, from netip.AddrPort, fromID enode
 	// Ping back if our last pong on file is too far in the past.
 	fromIP := from.Addr().AsSlice()
 	n := enode.NewV4(h.senderKey, fromIP, int(req.From.TCP), int(from.Port()))
-	if time.Since(t.db.LastPongReceived(n.ID(), fromIP)) > bondExpiration {
+	if time.Since(t.db.LastPongReceived(n.ID(), from.Addr())) > bondExpiration {
 		t.sendPing(fromID, from, func() {
 			t.tab.addInboundNode(n)
 		})
@@ -696,10 +699,9 @@ func (t *UDPv4) handlePing(h *packetHandlerV4, from netip.AddrPort, fromID enode
 	}
 
 	// Update node database and endpoint predictor.
-	t.db.UpdateLastPingReceived(n.ID(), fromIP, time.Now())
-	fromUDPAddr := &net.UDPAddr{IP: fromIP, Port: int(from.Port())}
-	toUDPAddr := &net.UDPAddr{IP: req.To.IP, Port: int(req.To.UDP)}
-	t.localNode.UDPEndpointStatement(fromUDPAddr, toUDPAddr)
+	t.db.UpdateLastPingReceived(n.ID(), from.Addr(), time.Now())
+	toaddr := netip.AddrPortFrom(netutil.IPToAddr(req.To.IP), req.To.UDP)
+	t.localNode.UDPEndpointStatement(from, toaddr)
 }
 
 // PONG/v4
@@ -713,11 +715,9 @@ func (t *UDPv4) verifyPong(h *packetHandlerV4, from netip.AddrPort, fromID enode
 	if !t.handleReply(fromID, from.Addr(), req) {
 		return errUnsolicitedReply
 	}
-	fromIP := from.Addr().AsSlice()
-	fromUDPAddr := &net.UDPAddr{IP: fromIP, Port: int(from.Port())}
-	toUDPAddr := &net.UDPAddr{IP: req.To.IP, Port: int(req.To.UDP)}
-	t.localNode.UDPEndpointStatement(fromUDPAddr, toUDPAddr)
-	t.db.UpdateLastPongReceived(fromID, fromIP, time.Now())
+	toaddr := netip.AddrPortFrom(netutil.IPToAddr(req.To.IP), req.To.UDP)
+	t.localNode.UDPEndpointStatement(from, toaddr)
+	t.db.UpdateLastPongReceived(fromID, from.Addr(), time.Now())
 	return nil
 }
 
@@ -746,15 +746,15 @@ func (t *UDPv4) handleFindnode(h *packetHandlerV4, from netip.AddrPort, fromID e
 
 	// Determine closest nodes.
 	target := enode.ID(crypto.Keccak256Hash(req.Target[:]))
-	closest := t.tab.findnodeByID(target, bucketSize, true).entries
+	preferLive := !t.tab.cfg.NoFindnodeLivenessCheck
+	closest := t.tab.findnodeByID(target, bucketSize, preferLive).entries
 
 	// Send neighbors in chunks with at most maxNeighbors per packet
 	// to stay below the packet size limit.
 	p := v4wire.Neighbors{Expiration: uint64(time.Now().Add(expiration).Unix())}
 	var sent bool
 	for _, n := range closest {
-		fromIP := from.Addr().AsSlice()
-		if netutil.CheckRelayIP(fromIP, n.IP()) == nil {
+		if netutil.CheckRelayAddr(from.Addr(), n.IPAddr()) == nil {
 			p.Nodes = append(p.Nodes, nodeToRPC(n))
 		}
 		if len(p.Nodes) == v4wire.MaxNeighbors {

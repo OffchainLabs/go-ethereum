@@ -22,6 +22,7 @@
       }
     ],
     "currentDifficulty": "0x20000",
-    "gasUsed": "0x520b"
+    "gasUsed": "0x520b",
+    "requests": null
   }
 }

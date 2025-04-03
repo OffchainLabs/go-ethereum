@@ -40,15 +40,16 @@ import (
 	bparams "github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
@@ -133,18 +134,13 @@ var (
 	}
 	NetworkIdFlag = &cli.Uint64Flag{
 		Name:     "networkid",
-		Usage:    "Explicitly set network id (integer)(For testnets: use --goerli, --sepolia, --holesky instead)",
+		Usage:    "Explicitly set network id (integer)(For testnets: use --sepolia, --holesky instead)",
 		Value:    ethconfig.Defaults.NetworkId,
 		Category: flags.EthCategory,
 	}
 	MainnetFlag = &cli.BoolFlag{
 		Name:     "mainnet",
 		Usage:    "Ethereum mainnet",
-		Category: flags.EthCategory,
-	}
-	GoerliFlag = &cli.BoolFlag{
-		Name:     "goerli",
-		Usage:    "Görli network: pre-configured proof-of-authority test network",
 		Category: flags.EthCategory,
 	}
 	SepoliaFlag = &cli.BoolFlag{
@@ -179,12 +175,6 @@ var (
 		Name:     "identity",
 		Usage:    "Custom node name",
 		Category: flags.NetworkingCategory,
-	}
-	DocRootFlag = &flags.DirectoryFlag{
-		Name:     "docroot",
-		Usage:    "Document Root for HTTPClient file scheme",
-		Value:    flags.DirectoryString(flags.HomeDir()),
-		Category: flags.APICategory,
 	}
 	ExitWhenSyncedFlag = &cli.BoolFlag{
 		Name:     "exitwhensynced",
@@ -221,8 +211,7 @@ var (
 		Value: 0,
 	}
 
-	defaultSyncMode = ethconfig.Defaults.SyncMode
-	SnapshotFlag    = &cli.BoolFlag{
+	SnapshotFlag = &cli.BoolFlag{
 		Name:     "snapshot",
 		Usage:    `Enables snapshot-database mode (default = enable)`,
 		Value:    true,
@@ -254,10 +243,10 @@ var (
 		Usage:    "Manually specify the Verkle fork timestamp, overriding the bundled setting",
 		Category: flags.EthCategory,
 	}
-	SyncModeFlag = &flags.TextMarshalerFlag{
+	SyncModeFlag = &cli.StringFlag{
 		Name:     "syncmode",
 		Usage:    `Blockchain sync mode ("snap" or "full")`,
-		Value:    &defaultSyncMode,
+		Value:    ethconfig.Defaults.SyncMode.String(),
 		Category: flags.StateCategory,
 	}
 	GCModeFlag = &cli.StringFlag{
@@ -273,7 +262,7 @@ var (
 	}
 	StateHistoryFlag = &cli.Uint64Flag{
 		Name:     "history.state",
-		Usage:    "Number of recent blocks to retain state history for (default = 90,000 blocks, 0 = entire chain)",
+		Usage:    "Number of recent blocks to retain state history for, only relevant in state.scheme=path (default = 90,000 blocks, 0 = entire chain)",
 		Value:    ethconfig.Defaults.StateHistory,
 		Category: flags.StateCategory,
 	}
@@ -291,7 +280,7 @@ var (
 	}
 	BeaconApiHeaderFlag = &cli.StringSliceFlag{
 		Name:     "beacon.api.header",
-		Usage:    "Pass custom HTTP header fields to the emote beacon node API in \"key:value\" format. This flag can be given multiple times.",
+		Usage:    "Pass custom HTTP header fields to the remote beacon node API in \"key:value\" format. This flag can be given multiple times.",
 		Category: flags.BeaconCategory,
 	}
 	BeaconThresholdFlag = &cli.IntFlag{
@@ -330,7 +319,7 @@ var (
 		Usage:    "Target EL engine API URL",
 		Category: flags.BeaconCategory,
 	}
-	BlsyncJWTSecretFlag = &cli.StringFlag{
+	BlsyncJWTSecretFlag = &flags.DirectoryFlag{
 		Name:     "blsync.jwtsecret",
 		Usage:    "Path to a JWT secret to use for target engine API endpoint",
 		Category: flags.BeaconCategory,
@@ -509,12 +498,6 @@ var (
 	}
 
 	// Account settings
-	UnlockedAccountFlag = &cli.StringFlag{
-		Name:     "unlock",
-		Usage:    "Comma separated list of accounts to unlock",
-		Value:    "",
-		Category: flags.AccountCategory,
-	}
 	PasswordFileFlag = &cli.PathFlag{
 		Name:      "password",
 		Usage:     "Password file to use for non-interactive password input",
@@ -527,12 +510,6 @@ var (
 		Value:    "",
 		Category: flags.AccountCategory,
 	}
-	InsecureUnlockAllowedFlag = &cli.BoolFlag{
-		Name:     "allow-insecure-unlock",
-		Usage:    "Allow insecure account unlocking when account-related RPCs are exposed by http",
-		Category: flags.AccountCategory,
-	}
-
 	// EVM settings
 	VMEnableDebugFlag = &cli.BoolFlag{
 		Name:     "vmdebug",
@@ -547,6 +524,7 @@ var (
 	VMTraceJsonConfigFlag = &cli.StringFlag{
 		Name:     "vmtrace.jsonconfig",
 		Usage:    "Tracer configuration (JSON)",
+		Value:    "{}",
 		Category: flags.VMCategory,
 	}
 	// API options.
@@ -744,11 +722,6 @@ var (
 		Value:    node.DefaultConfig.BatchResponseMaxSize,
 		Category: flags.APICategory,
 	}
-	EnablePersonal = &cli.BoolFlag{
-		Name:     "rpc.enabledeprecatedpersonal",
-		Usage:    "Enables the (deprecated) personal namespace",
-		Category: flags.APICategory,
-	}
 
 	// Network Settings
 	MaxPeersFlag = &cli.IntFlag{
@@ -787,7 +760,7 @@ var (
 	}
 	NATFlag = &cli.StringFlag{
 		Name:     "nat",
-		Usage:    "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)",
+		Usage:    "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>|stun:<IP:PORT>)",
 		Value:    "any",
 		Category: flags.NetworkingCategory,
 	}
@@ -806,8 +779,9 @@ var (
 	DiscoveryV5Flag = &cli.BoolFlag{
 		Name:     "discovery.v5",
 		Aliases:  []string{"discv5"},
-		Usage:    "Enables the experimental RLPx V5 (Topic Discovery) mechanism",
+		Usage:    "Enables the V5 discovery mechanism",
 		Category: flags.NetworkingCategory,
+		Value:    true,
 	}
 	NetrestrictFlag = &cli.StringFlag{
 		Name:     "netrestrict",
@@ -959,7 +933,6 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 var (
 	// TestnetFlags is the flag group of all built-in supported testnets.
 	TestnetFlags = []cli.Flag{
-		GoerliFlag,
 		SepoliaFlag,
 		HoleskyFlag,
 	}
@@ -982,9 +955,6 @@ var (
 // then a subdirectory of the specified datadir will be used.
 func MakeDataDir(ctx *cli.Context) string {
 	if path := ctx.String(DataDirFlag.Name); path != "" {
-		if ctx.Bool(GoerliFlag.Name) {
-			return filepath.Join(path, "goerli")
-		}
 		if ctx.Bool(SepoliaFlag.Name) {
 			return filepath.Join(path, "sepolia")
 		}
@@ -1036,7 +1006,7 @@ func setNodeUserIdent(ctx *cli.Context, cfg *node.Config) {
 //
 // 1. --bootnodes flag
 // 2. Config file
-// 3. Network preset flags (e.g. --goerli)
+// 3. Network preset flags (e.g. --holesky)
 // 4. default to mainnet nodes
 func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 	urls := params.MainnetBootnodes
@@ -1051,8 +1021,6 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 			urls = params.HoleskyBootnodes
 		case ctx.Bool(SepoliaFlag.Name):
 			urls = params.SepoliaBootnodes
-		case ctx.Bool(GoerliFlag.Name):
-			urls = params.GoerliBootnodes
 		}
 	}
 	cfg.BootstrapNodes = mustParseBootnodes(urls)
@@ -1229,7 +1197,7 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 // setIPC creates an IPC path configuration from the set command line flags,
 // returning an empty string if IPC was explicitly disabled, or the set path.
 func setIPC(ctx *cli.Context, cfg *node.Config) {
-	CheckExclusive(ctx, IPCDisabledFlag, IPCPathFlag)
+	flags.CheckExclusive(ctx, IPCDisabledFlag, IPCPathFlag)
 	switch {
 	case ctx.Bool(IPCDisabledFlag.Name):
 		cfg.IPCPath = ""
@@ -1287,36 +1255,10 @@ func MakeDatabaseHandles(max int) int {
 	return int(raised / 2) // Leave half for networking and other stuff
 }
 
-// MakeAddress converts an account specified directly as a hex encoded string or
-// a key index in the key store to an internal account representation.
-func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error) {
-	// If the specified account is a valid address, return it
-	if common.IsHexAddress(account) {
-		return accounts.Account{Address: common.HexToAddress(account)}, nil
-	}
-	// Otherwise try to interpret the account as a keystore index
-	index, err := strconv.Atoi(account)
-	if err != nil || index < 0 {
-		return accounts.Account{}, fmt.Errorf("invalid account address or index %q", account)
-	}
-	log.Warn("-------------------------------------------------------------------")
-	log.Warn("Referring to accounts by order in the keystore folder is dangerous!")
-	log.Warn("This functionality is deprecated and will be removed in the future!")
-	log.Warn("Please use explicit addresses! (can search via `geth account list`)")
-	log.Warn("-------------------------------------------------------------------")
-
-	accs := ks.Accounts()
-	if len(accs) <= index {
-		return accounts.Account{}, fmt.Errorf("index %d higher than number of accounts %d", index, len(accs))
-	}
-	return accs[index], nil
-}
-
 // setEtherbase retrieves the etherbase from the directly specified command line flags.
 func setEtherbase(ctx *cli.Context, cfg *ethconfig.Config) {
 	if ctx.IsSet(MinerEtherbaseFlag.Name) {
 		log.Warn("Option --miner.etherbase is deprecated as the etherbase is set by the consensus client post-merge")
-		return
 	}
 	if !ctx.IsSet(MinerPendingFeeRecipientFlag.Name) {
 		return
@@ -1331,24 +1273,6 @@ func setEtherbase(ctx *cli.Context, cfg *ethconfig.Config) {
 		return
 	}
 	cfg.Miner.PendingFeeRecipient = common.BytesToAddress(b)
-}
-
-// MakePasswordList reads password lines from the file specified by the global --password flag.
-func MakePasswordList(ctx *cli.Context) []string {
-	path := ctx.Path(PasswordFileFlag.Name)
-	if path == "" {
-		return nil
-	}
-	text, err := os.ReadFile(path)
-	if err != nil {
-		Fatalf("Failed to read password file: %v", err)
-	}
-	lines := strings.Split(string(text), "\n")
-	// Sanitise DOS line endings.
-	for i := range lines {
-		lines[i] = strings.TrimRight(lines[i], "\r")
-	}
-	return lines
 }
 
 func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
@@ -1371,8 +1295,8 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 		cfg.NoDiscovery = true
 	}
 
-	CheckExclusive(ctx, DiscoveryV4Flag, NoDiscoverFlag)
-	CheckExclusive(ctx, DiscoveryV5Flag, NoDiscoverFlag)
+	flags.CheckExclusive(ctx, DiscoveryV4Flag, NoDiscoverFlag)
+	flags.CheckExclusive(ctx, DiscoveryV5Flag, NoDiscoverFlag)
 	cfg.DiscoveryV4 = ctx.Bool(DiscoveryV4Flag.Name)
 	cfg.DiscoveryV5 = ctx.Bool(DiscoveryV5Flag.Name)
 
@@ -1408,9 +1332,8 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(JWTSecretFlag.Name) {
 		cfg.JWTSecret = ctx.String(JWTSecretFlag.Name)
 	}
-
 	if ctx.IsSet(EnablePersonal.Name) {
-		cfg.EnablePersonal = true
+		log.Warn(fmt.Sprintf("Option --%s is deprecated. The 'personal' RPC namespace has been removed.", EnablePersonal.Name))
 	}
 
 	if ctx.IsSet(ExternalSignerFlag.Name) {
@@ -1433,7 +1356,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 		cfg.USB = ctx.Bool(USBFlag.Name)
 	}
 	if ctx.IsSet(InsecureUnlockAllowedFlag.Name) {
-		cfg.InsecureUnlockAllowed = ctx.Bool(InsecureUnlockAllowedFlag.Name)
+		log.Warn(fmt.Sprintf("Option %q is deprecated and has no effect", InsecureUnlockAllowedFlag.Name))
 	}
 	if ctx.IsSet(DBEngineFlag.Name) {
 		dbEngine := ctx.String(DBEngineFlag.Name)
@@ -1478,8 +1401,6 @@ func SetDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = ctx.String(DataDirFlag.Name)
 	case ctx.Bool(DeveloperFlag.Name):
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
-	case ctx.Bool(GoerliFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
 	case ctx.Bool(SepoliaFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "sepolia")
 	case ctx.Bool(HoleskyFlag.Name) && cfg.DataDir == node.DefaultDataDir():
@@ -1545,6 +1466,18 @@ func setTxPool(ctx *cli.Context, cfg *legacypool.Config) {
 	}
 }
 
+func setBlobPool(ctx *cli.Context, cfg *blobpool.Config) {
+	if ctx.IsSet(BlobPoolDataDirFlag.Name) {
+		cfg.Datadir = ctx.String(BlobPoolDataDirFlag.Name)
+	}
+	if ctx.IsSet(BlobPoolDataCapFlag.Name) {
+		cfg.Datacap = ctx.Uint64(BlobPoolDataCapFlag.Name)
+	}
+	if ctx.IsSet(BlobPoolPriceBumpFlag.Name) {
+		cfg.PriceBump = ctx.Uint64(BlobPoolPriceBumpFlag.Name)
+	}
+}
+
 func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.Bool(MiningEnabledFlag.Name) {
 		log.Warn("The flag --mine is deprecated and will be removed")
@@ -1595,57 +1528,17 @@ func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 }
 
-// CheckExclusive verifies that only a single instance of the provided flags was
-// set by the user. Each flag might optionally be followed by a string type to
-// specialize it further.
-func CheckExclusive(ctx *cli.Context, args ...interface{}) {
-	set := make([]string, 0, 1)
-	for i := 0; i < len(args); i++ {
-		// Make sure the next argument is a flag and skip if not set
-		flag, ok := args[i].(cli.Flag)
-		if !ok {
-			panic(fmt.Sprintf("invalid argument, not cli.Flag type: %T", args[i]))
-		}
-		// Check if next arg extends current and expand its name if so
-		name := flag.Names()[0]
-
-		if i+1 < len(args) {
-			switch option := args[i+1].(type) {
-			case string:
-				// Extended flag check, make sure value set doesn't conflict with passed in option
-				if ctx.String(flag.Names()[0]) == option {
-					name += "=" + option
-					set = append(set, "--"+name)
-				}
-				// shift arguments and continue
-				i++
-				continue
-
-			case cli.Flag:
-			default:
-				panic(fmt.Sprintf("invalid argument, not cli.Flag or string extension: %T", args[i+1]))
-			}
-		}
-		// Mark the flag if it's set
-		if ctx.IsSet(flag.Names()[0]) {
-			set = append(set, "--"+name)
-		}
-	}
-	if len(set) > 1 {
-		Fatalf("Flags %v can't be used at the same time", strings.Join(set, ", "))
-	}
-}
-
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, GoerliFlag, SepoliaFlag, HoleskyFlag)
-	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
+	flags.CheckExclusive(ctx, MainnetFlag, DeveloperFlag, SepoliaFlag, HoleskyFlag)
+	flags.CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 
 	// Set configurations from CLI flags
 	setEtherbase(ctx, cfg)
 	setGPO(ctx, &cfg.GPO)
 	setTxPool(ctx, &cfg.TxPool)
+	setBlobPool(ctx, &cfg.BlobPool)
 	setMiner(ctx, &cfg.Miner)
 	setRequiredBlocks(ctx, cfg)
 	setLes(ctx, cfg)
@@ -1671,9 +1564,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	godebug.SetGCPercent(int(gogc))
 
 	if ctx.IsSet(SyncTargetFlag.Name) {
-		cfg.SyncMode = downloader.FullSync // dev sync target forces full sync
+		cfg.SyncMode = ethconfig.FullSync // dev sync target forces full sync
 	} else if ctx.IsSet(SyncModeFlag.Name) {
-		cfg.SyncMode = *flags.GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
+		if err = cfg.SyncMode.UnmarshalText([]byte(ctx.String(SyncModeFlag.Name))); err != nil {
+			Fatalf("invalid --syncmode flag: %v", err)
+		}
 	}
 	if ctx.IsSet(NetworkIdFlag.Name) {
 		cfg.NetworkId = ctx.Uint64(NetworkIdFlag.Name)
@@ -1740,7 +1635,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if !ctx.Bool(SnapshotFlag.Name) || cfg.SnapshotCache == 0 {
 		// If snap-sync is requested, this flag is also required
-		if cfg.SyncMode == downloader.SnapSync {
+		if cfg.SyncMode == ethconfig.SnapSync {
 			if !ctx.Bool(SnapshotFlag.Name) {
 				log.Warn("Snap sync requested, enabling --snapshot")
 			}
@@ -1752,9 +1647,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.TrieCleanCache += cfg.SnapshotCache
 			cfg.SnapshotCache = 0 // Disabled
 		}
-	}
-	if ctx.IsSet(DocRootFlag.Name) {
-		cfg.DocRoot = ctx.String(DocRootFlag.Name)
 	}
 	if ctx.IsSet(VMEnableDebugFlag.Name) {
 		// TODO(fjl): force-enable this in --dev mode
@@ -1805,30 +1697,26 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultSepoliaGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.SepoliaGenesisHash)
-	case ctx.Bool(GoerliFlag.Name):
-		if !ctx.IsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 5
-		}
-		cfg.Genesis = core.DefaultGoerliGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
 	case ctx.Bool(DeveloperFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
 		}
-		cfg.SyncMode = downloader.FullSync
+		cfg.SyncMode = ethconfig.FullSync
 		// Create new developer account or reuse existing one
 		var (
 			developer  accounts.Account
 			passphrase string
 			err        error
 		)
-		if list := MakePasswordList(ctx); len(list) > 0 {
-			// Just take the first value. Although the function returns a possible multiple values and
-			// some usages iterate through them as attempts, that doesn't make sense in this setting,
-			// when we're definitely concerned with only one account.
-			passphrase = list[0]
+		if path := ctx.Path(PasswordFileFlag.Name); path != "" {
+			if text, err := os.ReadFile(path); err != nil {
+				Fatalf("Failed to read password file: %v", err)
+			} else {
+				if lines := strings.Split(string(text), "\n"); len(lines) > 0 {
+					passphrase = strings.TrimRight(lines[0], "\r") // Sanitise DOS line endings.
+				}
+			}
 		}
-
 		// Unlock the developer account by local keystore.
 		var ks *keystore.KeyStore
 		if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0 {
@@ -1871,9 +1759,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 				if err != nil {
 					Fatalf("Could not read genesis from database: %v", err)
 				}
-				if !genesis.Config.TerminalTotalDifficultyPassed {
-					Fatalf("Bad developer-mode genesis configuration: terminalTotalDifficultyPassed must be true")
-				}
 				if genesis.Config.TerminalTotalDifficulty == nil {
 					Fatalf("Bad developer-mode genesis configuration: terminalTotalDifficulty must be specified")
 				} else if genesis.Config.TerminalTotalDifficulty.Cmp(big.NewInt(0)) != 0 {
@@ -1904,15 +1789,85 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// VM tracing config.
 	if ctx.IsSet(VMTraceFlag.Name) {
 		if name := ctx.String(VMTraceFlag.Name); name != "" {
-			var config string
-			if ctx.IsSet(VMTraceJsonConfigFlag.Name) {
-				config = ctx.String(VMTraceJsonConfigFlag.Name)
-			}
-
 			cfg.VMTrace = name
-			cfg.VMTraceJsonConfig = config
+			cfg.VMTraceJsonConfig = ctx.String(VMTraceJsonConfigFlag.Name)
 		}
 	}
+}
+
+// MakeBeaconLightConfig constructs a beacon light client config based on the
+// related command line flags.
+func MakeBeaconLightConfig(ctx *cli.Context) bparams.ClientConfig {
+	var config bparams.ClientConfig
+	customConfig := ctx.IsSet(BeaconConfigFlag.Name)
+	flags.CheckExclusive(ctx, MainnetFlag, SepoliaFlag, HoleskyFlag, BeaconConfigFlag)
+	switch {
+	case ctx.Bool(MainnetFlag.Name):
+		config.ChainConfig = *bparams.MainnetLightConfig
+	case ctx.Bool(SepoliaFlag.Name):
+		config.ChainConfig = *bparams.SepoliaLightConfig
+	case ctx.Bool(HoleskyFlag.Name):
+		config.ChainConfig = *bparams.HoleskyLightConfig
+	default:
+		if !customConfig {
+			config.ChainConfig = *bparams.MainnetLightConfig
+		}
+	}
+	// Genesis root and time should always be specified together with custom chain config
+	if customConfig {
+		if !ctx.IsSet(BeaconGenesisRootFlag.Name) {
+			Fatalf("Custom beacon chain config is specified but genesis root is missing")
+		}
+		if !ctx.IsSet(BeaconGenesisTimeFlag.Name) {
+			Fatalf("Custom beacon chain config is specified but genesis time is missing")
+		}
+		if !ctx.IsSet(BeaconCheckpointFlag.Name) {
+			Fatalf("Custom beacon chain config is specified but checkpoint is missing")
+		}
+		config.ChainConfig = bparams.ChainConfig{
+			GenesisTime: ctx.Uint64(BeaconGenesisTimeFlag.Name),
+		}
+		if c, err := hexutil.Decode(ctx.String(BeaconGenesisRootFlag.Name)); err == nil && len(c) <= 32 {
+			copy(config.GenesisValidatorsRoot[:len(c)], c)
+		} else {
+			Fatalf("Invalid hex string", "beacon.genesis.gvroot", ctx.String(BeaconGenesisRootFlag.Name), "error", err)
+		}
+		configFile := ctx.String(BeaconConfigFlag.Name)
+		if err := config.ChainConfig.LoadForks(configFile); err != nil {
+			Fatalf("Could not load beacon chain config", "file", configFile, "error", err)
+		}
+		log.Info("Using custom beacon chain config", "file", configFile)
+	} else {
+		if ctx.IsSet(BeaconGenesisRootFlag.Name) {
+			Fatalf("Genesis root is specified but custom beacon chain config is missing")
+		}
+		if ctx.IsSet(BeaconGenesisTimeFlag.Name) {
+			Fatalf("Genesis time is specified but custom beacon chain config is missing")
+		}
+	}
+	// Checkpoint is required with custom chain config and is optional with pre-defined config
+	if ctx.IsSet(BeaconCheckpointFlag.Name) {
+		if c, err := hexutil.Decode(ctx.String(BeaconCheckpointFlag.Name)); err == nil && len(c) <= 32 {
+			copy(config.Checkpoint[:len(c)], c)
+		} else {
+			Fatalf("Invalid hex string", "beacon.checkpoint", ctx.String(BeaconCheckpointFlag.Name), "error", err)
+		}
+	}
+	config.Apis = ctx.StringSlice(BeaconApiFlag.Name)
+	if config.Apis == nil {
+		Fatalf("Beacon node light client API URL not specified")
+	}
+	config.CustomHeader = make(map[string]string)
+	for _, s := range ctx.StringSlice(BeaconApiHeaderFlag.Name) {
+		kv := strings.Split(s, ":")
+		if len(kv) != 2 {
+			Fatalf("Invalid custom API header entry: %s", s)
+		}
+		config.CustomHeader[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
+	}
+	config.Threshold = ctx.Int(BeaconThresholdFlag.Name)
+	config.NoFilter = ctx.Bool(BeaconNoFilterFlag.Name)
+	return config
 }
 
 // SetDNSDiscoveryDefaults configures DNS discovery with the given URL if
@@ -1930,7 +1885,7 @@ func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
 
 // RegisterEthService adds an Ethereum client to the stack.
 // The second return value is the full node instance.
-func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend, *eth.Ethereum) {
+func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (*eth.EthAPIBackend, *eth.Ethereum) {
 	backend, err := eth.New(stack, cfg)
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
@@ -1940,7 +1895,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 }
 
 // RegisterEthStatsService configures the Ethereum Stats daemon and adds it to the node.
-func RegisterEthStatsService(stack *node.Node, backend ethapi.Backend, url string) {
+func RegisterEthStatsService(stack *node.Node, backend *eth.EthAPIBackend, url string) {
 	if err := ethstats.New(stack, backend, backend.Engine(), url); err != nil {
 		Fatalf("Failed to register the Ethereum Stats service: %v", err)
 	}
@@ -1972,67 +1927,56 @@ func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, target common.H
 	log.Info("Registered full-sync tester", "hash", target)
 }
 
-func SetupMetrics(ctx *cli.Context) {
-	if metrics.Enabled {
-		log.Info("Enabling metrics collection")
-
-		var (
-			enableExport   = ctx.Bool(MetricsEnableInfluxDBFlag.Name)
-			enableExportV2 = ctx.Bool(MetricsEnableInfluxDBV2Flag.Name)
-		)
-
-		if enableExport || enableExportV2 {
-			CheckExclusive(ctx, MetricsEnableInfluxDBFlag, MetricsEnableInfluxDBV2Flag)
-
-			v1FlagIsSet := ctx.IsSet(MetricsInfluxDBUsernameFlag.Name) ||
-				ctx.IsSet(MetricsInfluxDBPasswordFlag.Name)
-
-			v2FlagIsSet := ctx.IsSet(MetricsInfluxDBTokenFlag.Name) ||
-				ctx.IsSet(MetricsInfluxDBOrganizationFlag.Name) ||
-				ctx.IsSet(MetricsInfluxDBBucketFlag.Name)
-
-			if enableExport && v2FlagIsSet {
-				Fatalf("Flags --influxdb.metrics.organization, --influxdb.metrics.token, --influxdb.metrics.bucket are only available for influxdb-v2")
-			} else if enableExportV2 && v1FlagIsSet {
-				Fatalf("Flags --influxdb.metrics.username, --influxdb.metrics.password are only available for influxdb-v1")
-			}
-		}
-
-		var (
-			endpoint = ctx.String(MetricsInfluxDBEndpointFlag.Name)
-			database = ctx.String(MetricsInfluxDBDatabaseFlag.Name)
-			username = ctx.String(MetricsInfluxDBUsernameFlag.Name)
-			password = ctx.String(MetricsInfluxDBPasswordFlag.Name)
-
-			token        = ctx.String(MetricsInfluxDBTokenFlag.Name)
-			bucket       = ctx.String(MetricsInfluxDBBucketFlag.Name)
-			organization = ctx.String(MetricsInfluxDBOrganizationFlag.Name)
-		)
-
-		if enableExport {
-			tagsMap := SplitTagsFlag(ctx.String(MetricsInfluxDBTagsFlag.Name))
-
-			log.Info("Enabling metrics export to InfluxDB")
-
-			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "geth.", tagsMap)
-		} else if enableExportV2 {
-			tagsMap := SplitTagsFlag(ctx.String(MetricsInfluxDBTagsFlag.Name))
-
-			log.Info("Enabling metrics export to InfluxDB (v2)")
-
-			go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "geth.", tagsMap)
-		}
-
-		if ctx.IsSet(MetricsHTTPFlag.Name) {
-			address := net.JoinHostPort(ctx.String(MetricsHTTPFlag.Name), fmt.Sprintf("%d", ctx.Int(MetricsPortFlag.Name)))
-			log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
-			exp.Setup(address)
-		} else if ctx.IsSet(MetricsPortFlag.Name) {
-			log.Warn(fmt.Sprintf("--%s specified without --%s, metrics server will not start.", MetricsPortFlag.Name, MetricsHTTPFlag.Name))
-		}
+// SetupMetrics configures the metrics system.
+func SetupMetrics(cfg *metrics.Config) {
+	if !cfg.Enabled {
+		return
 	}
+	log.Info("Enabling metrics collection")
+	metrics.Enable()
+
+	// InfluxDB exporter.
+	var (
+		enableExport   = cfg.EnableInfluxDB
+		enableExportV2 = cfg.EnableInfluxDBV2
+	)
+	if cfg.EnableInfluxDB && cfg.EnableInfluxDBV2 {
+		Fatalf("Flags %v can't be used at the same time", strings.Join([]string{MetricsEnableInfluxDBFlag.Name, MetricsEnableInfluxDBV2Flag.Name}, ", "))
+	}
+	var (
+		endpoint = cfg.InfluxDBEndpoint
+		database = cfg.InfluxDBDatabase
+		username = cfg.InfluxDBUsername
+		password = cfg.InfluxDBPassword
+
+		token        = cfg.InfluxDBToken
+		bucket       = cfg.InfluxDBBucket
+		organization = cfg.InfluxDBOrganization
+		tagsMap      = SplitTagsFlag(cfg.InfluxDBTags)
+	)
+	if enableExport {
+		log.Info("Enabling metrics export to InfluxDB")
+		go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "geth.", tagsMap)
+	} else if enableExportV2 {
+		tagsMap := SplitTagsFlag(cfg.InfluxDBTags)
+		log.Info("Enabling metrics export to InfluxDB (v2)")
+		go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "geth.", tagsMap)
+	}
+
+	// Expvar exporter.
+	if cfg.HTTP != "" {
+		address := net.JoinHostPort(cfg.HTTP, fmt.Sprintf("%d", cfg.Port))
+		log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
+		exp.Setup(address)
+	} else if cfg.HTTP == "" && cfg.Port != 0 {
+		log.Warn(fmt.Sprintf("--%s specified without --%s, metrics server will not start.", MetricsPortFlag.Name, MetricsHTTPFlag.Name))
+	}
+
+	// Enable system metrics collection.
+	go metrics.CollectProcessMetrics(3 * time.Second)
 }
 
+// SplitTagsFlag parses a comma-separated list of k=v metrics tags.
 func SplitTagsFlag(tagsFlag string) map[string]string {
 	tags := strings.Split(tagsFlag, ",")
 	tagsMap := map[string]string{}
@@ -2066,8 +2010,6 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 			break
 		}
 		chainDb = remotedb.New(client)
-	case ctx.String(SyncModeFlag.Name) == "light":
-		chainDb, err = stack.OpenDatabase("lightchaindata", cache, handles, "", readonly)
 	default:
 		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles, ctx.String(AncientFlag.Name), "", readonly)
 	}
@@ -2132,8 +2074,6 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultHoleskyGenesisBlock()
 	case ctx.Bool(SepoliaFlag.Name):
 		genesis = core.DefaultSepoliaGenesisBlock()
-	case ctx.Bool(GoerliFlag.Name):
-		genesis = core.DefaultGoerliGenesisBlock()
 	case ctx.Bool(DeveloperFlag.Name):
 		Fatalf("Developer chains are ephemeral")
 	}
@@ -2190,13 +2130,12 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheGCFlag.Name) {
 		cache.TrieDirtyLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
 	}
-	vmcfg := vm.Config{EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name)}
+	vmcfg := vm.Config{
+		EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name),
+	}
 	if ctx.IsSet(VMTraceFlag.Name) {
 		if name := ctx.String(VMTraceFlag.Name); name != "" {
-			var config json.RawMessage
-			if ctx.IsSet(VMTraceJsonConfigFlag.Name) {
-				config = json.RawMessage(ctx.String(VMTraceJsonConfigFlag.Name))
-			}
+			config := json.RawMessage(ctx.String(VMTraceJsonConfigFlag.Name))
 			t, err := tracers.LiveDirectory.New(name, config)
 			if err != nil {
 				Fatalf("Failed to create tracer %q: %v", name, err)
@@ -2205,7 +2144,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		}
 	}
 	// Disable transaction indexing/unindexing by default.
-	chain, err := core.NewBlockChain(chainDb, cache, nil, gspec, nil, engine, vmcfg, nil, nil)
+	chain, err := core.NewBlockChain(chainDb, cache, nil, gspec, nil, engine, vmcfg, nil)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

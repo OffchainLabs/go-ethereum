@@ -78,8 +78,9 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			// the internal junks created by tracing will be persisted into the disk.
 			// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 			// please re-enable it for better performance.
-			database = state.NewDatabaseWithConfig(eth.chainDb, triedb.HashDefaults)
-			if statedb, err = state.New(block.Root(), database, nil); err == nil {
+			tdb := triedb.NewDatabase(eth.chainDb, triedb.HashDefaults)
+			database = state.NewDatabase(tdb, nil)
+			if statedb, err = state.New(block.Root(), database); err == nil {
 				log.Info("Found disk backend for state trie", "root", block.Root(), "number", block.Number())
 				return statedb, noopReleaser, nil
 			}
@@ -96,13 +97,13 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 		// please re-enable it for better performance.
 		tdb = triedb.NewDatabase(eth.chainDb, triedb.HashDefaults)
-		database = state.NewDatabaseWithNodeDB(eth.chainDb, tdb)
+		database = state.NewDatabase(tdb, nil)
 
 		// If we didn't check the live database, do check state over ephemeral database,
 		// otherwise we would rewind past a persisted block (specific corner case is
 		// chain tracing from the genesis).
 		if !readOnly {
-			statedb, err = state.New(current.Root(), database, nil)
+			statedb, err = state.New(current.Root(), database)
 			if err == nil {
 				return statedb, noopReleaser, nil
 			}
@@ -121,7 +122,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			}
 			current = parent
 
-			statedb, err = state.New(current.Root(), database, nil)
+			statedb, err = state.New(current.Root(), database)
 			if err == nil {
 				break
 			}
@@ -156,17 +157,17 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		if current = eth.blockchain.GetBlockByNumber(next); current == nil {
 			return nil, nil, fmt.Errorf("block #%d not found", next)
 		}
-		_, _, _, err := eth.blockchain.Processor().Process(current, statedb, vm.Config{})
+		_, err := eth.blockchain.Processor().Process(current, statedb, vm.Config{})
 		if err != nil {
 			return nil, nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
 		}
 		// Finalize the state so any modifications are written to the trie
-		root, err := statedb.Commit(current.NumberU64(), eth.blockchain.Config().IsEIP158(current.Number()))
+		root, err := statedb.Commit(current.NumberU64(), eth.blockchain.Config().IsEIP158(current.Number()), eth.blockchain.Config().IsCancun(current.Number(), current.Time(), types.DeserializeHeaderExtraInformation(current.Header()).ArbOSFormatVersion))
 		if err != nil {
 			return nil, nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(), current.Root().Hex(), err)
 		}
-		statedb, err = state.New(root, database, nil)
+		statedb, err = state.New(root, database)
 		if err != nil {
 			return nil, nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(), err)
 		}
@@ -254,34 +255,36 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 		return nil, vm.BlockContext{}, nil, nil, err
 	}
 	// Insert parent beacon block root in the state as per EIP-4788.
+	context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
+	evm := vm.NewEVM(context, statedb, eth.blockchain.Config(), vm.Config{})
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
-		vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, eth.blockchain.Config(), vm.Config{})
-		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
+		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
+	}
+	// If prague hardfork, insert parent block hash in the state as per EIP-2935.
+	if eth.blockchain.Config().IsPrague(block.Number(), block.Time(), context.ArbOSVersion) {
+		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, vm.BlockContext{}, statedb, release, nil
 	}
 	// Recompute transactions up to the target index.
-	signer := types.MakeSigner(eth.blockchain.Config(), block.Number(), block.Time())
+	signer := types.MakeSigner(eth.blockchain.Config(), block.Number(), block.Time(), evm.Context.ArbOSVersion)
 	runCtx := core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()})
 	for idx, tx := range block.Transactions() {
-		// Assemble the transaction call message and return if the requested offset
-		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee(), runCtx)
-		txContext := core.NewEVMTxContext(msg)
-		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
 		if idx == txIndex {
 			return tx, context, statedb, release, nil
 		}
+		// Assemble the transaction call message and return if the requested offset
+		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee(), runCtx)
+
 		// Not yet the searched for transaction, execute on top of the current state
-		vmenv := vm.NewEVM(context, txContext, statedb, eth.blockchain.Config(), vm.Config{})
 		statedb.SetTxContext(tx.Hash(), idx)
-		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
+		if _, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		// Ensure any modifications are committed to the state
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
+		statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
 	}
 	return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }

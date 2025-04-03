@@ -24,6 +24,7 @@ import (
 	"fmt"
 	mrand "math/rand"
 	"net"
+	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
@@ -65,11 +67,8 @@ type tcpDialer struct {
 }
 
 func (t tcpDialer) Dial(ctx context.Context, dest *enode.Node) (net.Conn, error) {
-	return t.d.DialContext(ctx, "tcp", nodeAddr(dest).String())
-}
-
-func nodeAddr(n *enode.Node) net.Addr {
-	return &net.TCPAddr{IP: n.IP(), Port: n.TCP()}
+	addr, _ := dest.TCPEndpoint()
+	return t.d.DialContext(ctx, "tcp", addr.String())
 }
 
 // checkDial errors:
@@ -80,6 +79,7 @@ var (
 	errRecentlyDialed   = errors.New("recently dialed")
 	errNetRestrict      = errors.New("not contained in netrestrict list")
 	errNoPort           = errors.New("node does not provide TCP port")
+	errNoResolvedIP     = errors.New("node does not provide a resolved IP")
 )
 
 // dialer creates outbound connections and submits them into Server.
@@ -93,16 +93,17 @@ var (
 //     to create peer connections to nodes arriving through the iterator.
 type dialScheduler struct {
 	dialConfig
-	setupFunc   dialSetupFunc
-	wg          sync.WaitGroup
-	cancel      context.CancelFunc
-	ctx         context.Context
-	nodesIn     chan *enode.Node
-	doneCh      chan *dialTask
-	addStaticCh chan *enode.Node
-	remStaticCh chan *enode.Node
-	addPeerCh   chan *conn
-	remPeerCh   chan *conn
+	setupFunc     dialSetupFunc
+	dnsLookupFunc func(ctx context.Context, network string, name string) ([]netip.Addr, error)
+	wg            sync.WaitGroup
+	cancel        context.CancelFunc
+	ctx           context.Context
+	nodesIn       chan *enode.Node
+	doneCh        chan *dialTask
+	addStaticCh   chan *enode.Node
+	remStaticCh   chan *enode.Node
+	addPeerCh     chan *conn
+	remPeerCh     chan *conn
 
 	// Everything below here belongs to loop and
 	// should only be accessed by code on the loop goroutine.
@@ -162,18 +163,19 @@ func (cfg dialConfig) withDefaults() dialConfig {
 func newDialScheduler(config dialConfig, it enode.Iterator, setupFunc dialSetupFunc) *dialScheduler {
 	cfg := config.withDefaults()
 	d := &dialScheduler{
-		dialConfig:   cfg,
-		historyTimer: mclock.NewAlarm(cfg.clock),
-		setupFunc:    setupFunc,
-		dialing:      make(map[enode.ID]*dialTask),
-		static:       make(map[enode.ID]*dialTask),
-		peers:        make(map[enode.ID]struct{}),
-		doneCh:       make(chan *dialTask),
-		nodesIn:      make(chan *enode.Node),
-		addStaticCh:  make(chan *enode.Node),
-		remStaticCh:  make(chan *enode.Node),
-		addPeerCh:    make(chan *conn),
-		remPeerCh:    make(chan *conn),
+		dialConfig:    cfg,
+		historyTimer:  mclock.NewAlarm(cfg.clock),
+		setupFunc:     setupFunc,
+		dnsLookupFunc: net.DefaultResolver.LookupNetIP,
+		dialing:       make(map[enode.ID]*dialTask),
+		static:        make(map[enode.ID]*dialTask),
+		peers:         make(map[enode.ID]struct{}),
+		doneCh:        make(chan *dialTask),
+		nodesIn:       make(chan *enode.Node),
+		addStaticCh:   make(chan *enode.Node),
+		remStaticCh:   make(chan *enode.Node),
+		addPeerCh:     make(chan *conn),
+		remPeerCh:     make(chan *conn),
 	}
 	d.lastStatsLog = d.clock.Now()
 	d.ctx, d.cancel = context.WithCancel(context.Background())
@@ -243,7 +245,7 @@ loop:
 		select {
 		case node := <-nodesCh:
 			if err := d.checkDial(node); err != nil {
-				d.log.Trace("Discarding dial candidate", "id", node.ID(), "ip", node.IP(), "reason", err)
+				d.log.Trace("Discarding dial candidate", "id", node.ID(), "ip", node.IPAddr(), "reason", err)
 			} else {
 				d.startDial(newDialTask(node, dynDialedConn))
 			}
@@ -277,7 +279,7 @@ loop:
 		case node := <-d.addStaticCh:
 			id := node.ID()
 			_, exists := d.static[id]
-			d.log.Trace("Adding static node", "id", id, "ip", node.IP(), "added", !exists)
+			d.log.Trace("Adding static node", "id", id, "endpoint", nodeEndpointForLog(node), "added", !exists)
 			if exists {
 				continue loop
 			}
@@ -376,7 +378,7 @@ func (d *dialScheduler) checkDial(n *enode.Node) error {
 	if n.ID() == d.self {
 		return errSelf
 	}
-	if n.IP() != nil && n.TCP() == 0 {
+	if n.IPAddr().IsValid() && n.TCP() == 0 {
 		// This check can trigger if a non-TCP node is found
 		// by discovery. If there is no IP, the node is a static
 		// node and the actual endpoint will be resolved later in dialTask.
@@ -388,7 +390,7 @@ func (d *dialScheduler) checkDial(n *enode.Node) error {
 	if _, ok := d.peers[n.ID()]; ok {
 		return errAlreadyConnected
 	}
-	if d.netRestrict != nil && !d.netRestrict.Contains(n.IP()) {
+	if d.netRestrict != nil && !d.netRestrict.ContainsAddr(n.IPAddr()) {
 		return errNetRestrict
 	}
 	if d.history.contains(string(n.ID().Bytes())) {
@@ -436,10 +438,68 @@ func (d *dialScheduler) removeFromStaticPool(idx int) {
 	task.staticPoolIndex = -1
 }
 
+// dnsResolveHostname updates the given node from its DNS hostname.
+// This is used to resolve static dial targets.
+func (d *dialScheduler) dnsResolveHostname(n *enode.Node) (*enode.Node, error) {
+	if n.Hostname() == "" {
+		return n, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	foundIPs, err := d.dnsLookupFunc(ctx, "ip", n.Hostname())
+	if err != nil {
+		return n, err
+	}
+
+	// Check for IP updates.
+	var (
+		nodeIP4, nodeIP6   netip.Addr
+		foundIP4, foundIP6 netip.Addr
+	)
+	n.Load((*enr.IPv4Addr)(&nodeIP4))
+	n.Load((*enr.IPv6Addr)(&nodeIP6))
+	for _, ip := range foundIPs {
+		if ip.Is4() && !foundIP4.IsValid() {
+			foundIP4 = ip
+		}
+		if ip.Is6() && !foundIP6.IsValid() {
+			foundIP6 = ip
+		}
+	}
+
+	if !foundIP4.IsValid() && !foundIP6.IsValid() {
+		// Lookup failed.
+		return n, errNoResolvedIP
+	}
+	if foundIP4 == nodeIP4 && foundIP6 == nodeIP6 {
+		// No updates necessary.
+		d.log.Trace("Node DNS lookup had no update", "id", n.ID(), "name", n.Hostname(), "ip", foundIP4, "ip6", foundIP6)
+		return n, nil
+	}
+
+	// Update the node. Note this invalidates the ENR signature, because we use SignNull
+	// to create a modified copy. But this should be OK, since we just use the node as a
+	// dial target. And nodes will usually only have a DNS hostname if they came from a
+	// enode:// URL, which has no signature anyway. If it ever becomes a problem, the
+	// resolved IP could also be stored into dialTask instead of the node.
+	rec := n.Record()
+	if foundIP4.IsValid() {
+		rec.Set(enr.IPv4Addr(foundIP4))
+	}
+	if foundIP6.IsValid() {
+		rec.Set(enr.IPv6Addr(foundIP6))
+	}
+	rec.SetSeq(n.Seq()) // ensure seq not bumped by update
+	newNode := enode.SignNull(rec, n.ID()).WithHostname(n.Hostname())
+	d.log.Debug("Node updated from DNS lookup", "id", n.ID(), "name", n.Hostname(), "ip", newNode.IP())
+	return newNode, nil
+}
+
 // startDial runs the given dial task in a separate goroutine.
 func (d *dialScheduler) startDial(task *dialTask) {
 	node := task.dest()
-	d.log.Trace("Starting p2p dial", "id", node.ID(), "ip", node.IP(), "flag", task.flags)
+	d.log.Trace("Starting p2p dial", "id", node.ID(), "endpoint", nodeEndpointForLog(node), "flag", task.flags)
 	hkey := string(node.ID().Bytes())
 	d.history.add(hkey, d.clock.Now().Add(dialHistoryExpiration))
 	d.dialing[node.ID()] = task
@@ -476,14 +536,29 @@ func (t *dialTask) dest() *enode.Node {
 }
 
 func (t *dialTask) run(d *dialScheduler) {
-	if t.needResolve() && !t.resolve(d) {
-		return
+	if t.isStatic() {
+		// Resolve DNS.
+		if n := t.dest(); n.Hostname() != "" {
+			resolved, err := d.dnsResolveHostname(n)
+			if err != nil {
+				d.log.Warn("DNS lookup of static node failed", "id", n.ID(), "name", n.Hostname(), "err", err)
+			} else {
+				t.destPtr.Store(resolved)
+			}
+		}
+		// Try resolving node ID through the DHT if there is no IP address.
+		if !t.dest().IPAddr().IsValid() {
+			if !t.resolve(d) {
+				return // DHT resolve failed, skip dial.
+			}
+		}
 	}
 
 	err := t.dial(d, t.dest())
 	if err != nil {
 		// For static nodes, resolve one more time if dialing fails.
-		if _, ok := err.(*dialError); ok && t.flags&staticDialedConn != 0 {
+		var dialErr *dialError
+		if errors.As(err, &dialErr) && t.isStatic() {
 			if t.resolve(d) {
 				t.dial(d, t.dest())
 			}
@@ -491,8 +566,8 @@ func (t *dialTask) run(d *dialScheduler) {
 	}
 }
 
-func (t *dialTask) needResolve() bool {
-	return t.flags&staticDialedConn != 0 && t.dest().IP() == nil
+func (t *dialTask) isStatic() bool {
+	return t.flags&staticDialedConn != 0
 }
 
 // resolve attempts to find the current endpoint for the destination
@@ -526,7 +601,8 @@ func (t *dialTask) resolve(d *dialScheduler) bool {
 	// The node was found.
 	t.resolveDelay = initialResolveDelay
 	t.destPtr.Store(resolved)
-	d.log.Debug("Resolved node", "id", resolved.ID(), "addr", &net.TCPAddr{IP: resolved.IP(), Port: resolved.TCP()})
+	resAddr, _ := resolved.TCPEndpoint()
+	d.log.Debug("Resolved node", "id", resolved.ID(), "addr", resAddr)
 	return true
 }
 
@@ -535,7 +611,8 @@ func (t *dialTask) dial(d *dialScheduler, dest *enode.Node) error {
 	dialMeter.Mark(1)
 	fd, err := d.dialer.Dial(d.ctx, dest)
 	if err != nil {
-		d.log.Trace("Dial error", "id", dest.ID(), "addr", nodeAddr(dest), "conn", t.flags, "err", cleanupDialErr(err))
+		addr, _ := dest.TCPEndpoint()
+		d.log.Trace("Dial error", "id", dest.ID(), "addr", addr, "conn", t.flags, "err", cleanupDialErr(err))
 		dialConnectionError.Mark(1)
 		return &dialError{err}
 	}
@@ -545,7 +622,7 @@ func (t *dialTask) dial(d *dialScheduler, dest *enode.Node) error {
 func (t *dialTask) String() string {
 	node := t.dest()
 	id := node.ID()
-	return fmt.Sprintf("%v %x %v:%d", t.flags, id[:8], node.IP(), node.TCP())
+	return fmt.Sprintf("%v %x %v:%d", t.flags, id[:8], node.IPAddr(), node.TCP())
 }
 
 func cleanupDialErr(err error) error {
@@ -553,4 +630,11 @@ func cleanupDialErr(err error) error {
 		return netErr.Err
 	}
 	return err
+}
+
+func nodeEndpointForLog(n *enode.Node) string {
+	if n.Hostname() != "" {
+		return n.Hostname()
+	}
+	return n.IPAddr().String()
 }

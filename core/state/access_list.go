@@ -60,11 +60,11 @@ func newAccessList() *accessList {
 }
 
 // Copy creates an independent copy of an accessList.
-func (a *accessList) Copy() *accessList {
+func (al *accessList) Copy() *accessList {
 	cp := newAccessList()
-	cp.addresses = maps.Clone(a.addresses)
-	cp.slots = make([]map[common.Hash]struct{}, len(a.slots))
-	for i, slotMap := range a.slots {
+	cp.addresses = maps.Clone(al.addresses)
+	cp.slots = make([]map[common.Hash]struct{}, len(al.slots))
+	for i, slotMap := range al.slots {
 		cp.slots[i] = maps.Clone(slotMap)
 	}
 	return cp
@@ -139,10 +139,7 @@ func (al *accessList) Equal(other *accessList) bool {
 	if !maps.Equal(al.addresses, other.addresses) {
 		return false
 	}
-	return slices.EqualFunc(al.slots, other.slots,
-		func(m map[common.Hash]struct{}, m2 map[common.Hash]struct{}) bool {
-			return maps.Equal(m, m2)
-		})
+	return slices.EqualFunc(al.slots, other.slots, maps.Equal)
 }
 
 // PrettyPrint prints the contents of the access list in a human-readable form

@@ -458,7 +458,7 @@ func (tt *cliqueTest) run(t *testing.T) {
 		batches[len(batches)-1] = append(batches[len(batches)-1], block)
 	}
 	// Pass all the headers through clique and ensure tallying succeeds
-	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, nil, genesis, nil, engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, nil, genesis, nil, engine, vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("failed to create test chain: %v", err)
 	}
@@ -467,7 +467,6 @@ func (tt *cliqueTest) run(t *testing.T) {
 	for j := 0; j < len(batches)-1; j++ {
 		if k, err := chain.InsertChain(batches[j]); err != nil {
 			t.Fatalf("failed to import batch %d, block %d: %v", j, k, err)
-			break
 		}
 	}
 	if _, err = chain.InsertChain(batches[len(batches)-1]); err != tt.failure {

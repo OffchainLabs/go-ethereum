@@ -35,9 +35,6 @@ const (
 
 // NewSlidingTimeWindowArraySample creates new object with given window of time
 func NewSlidingTimeWindowArraySample(window time.Duration) Sample {
-	if !Enabled {
-		return NilSample{}
-	}
 	return &SlidingTimeWindowArraySample{
 		startTick:    time.Now().UnixNano(),
 		measurements: NewChunkedAssociativeArray(ChunkedAssociativeArrayDefaultChunkSize),
@@ -81,7 +78,7 @@ func (s *SlidingTimeWindowArraySample) getTick() int64 {
 }
 
 // Snapshot returns a read-only copy of the sample.
-func (s *SlidingTimeWindowArraySample) Snapshot() SampleSnapshot {
+func (s *SlidingTimeWindowArraySample) Snapshot() *sampleSnapshot {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.trim()

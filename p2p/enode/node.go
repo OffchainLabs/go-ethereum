@@ -37,6 +37,10 @@ var errMissingPrefix = errors.New("missing 'enr:' prefix for base64-encoded reco
 type Node struct {
 	r  enr.Record
 	id ID
+
+	// hostname tracks the DNS name of the node.
+	hostname string
+
 	// endpoint information
 	ip  netip.Addr
 	udp uint16
@@ -77,6 +81,8 @@ func newNodeWithID(r *enr.Record, id ID) *Node {
 		n.setIP4(ip4)
 	case valid6:
 		n.setIP6(ip6)
+	default:
+		n.setIPv4Ports()
 	}
 	return n
 }
@@ -103,6 +109,10 @@ func localityScore(ip netip.Addr) int {
 
 func (n *Node) setIP4(ip netip.Addr) {
 	n.ip = ip
+	n.setIPv4Ports()
+}
+
+func (n *Node) setIPv4Ports() {
 	n.Load((*enr.UDP)(&n.udp))
 	n.Load((*enr.TCP)(&n.tcp))
 }
@@ -184,6 +194,18 @@ func (n *Node) TCP() int {
 	return int(n.tcp)
 }
 
+// WithHostname adds a DNS hostname to the node.
+func (n *Node) WithHostname(hostname string) *Node {
+	cpy := *n
+	cpy.hostname = hostname
+	return &cpy
+}
+
+// Hostname returns the DNS name assigned by WithHostname.
+func (n *Node) Hostname() string {
+	return n.hostname
+}
+
 // UDPEndpoint returns the announced UDP endpoint.
 func (n *Node) UDPEndpoint() (netip.AddrPort, bool) {
 	if !n.ip.IsValid() || n.ip.IsUnspecified() || n.udp == 0 {
@@ -198,6 +220,20 @@ func (n *Node) TCPEndpoint() (netip.AddrPort, bool) {
 		return netip.AddrPort{}, false
 	}
 	return netip.AddrPortFrom(n.ip, n.tcp), true
+}
+
+// QUICEndpoint returns the announced QUIC endpoint.
+func (n *Node) QUICEndpoint() (netip.AddrPort, bool) {
+	var quic uint16
+	if n.ip.Is4() || n.ip.Is4In6() {
+		n.Load((*enr.QUIC)(&quic))
+	} else if n.ip.Is6() {
+		n.Load((*enr.QUIC6)(&quic))
+	}
+	if !n.ip.IsValid() || n.ip.IsUnspecified() || quic == 0 {
+		return netip.AddrPort{}, false
+	}
+	return netip.AddrPortFrom(n.ip, quic), true
 }
 
 // Pubkey returns the secp256k1 public key of the node, if present.

@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -42,10 +43,11 @@ const EstimateGasErrorRatio = 0.015
 // these together, it would be excessively hard to test. Splitting the parts out
 // allows testing without needing a proper live chain.
 type Options struct {
-	Config           *params.ChainConfig // Chain configuration for hard fork selection
-	Chain            core.ChainContext   // Chain context to access past block hashes
-	Header           *types.Header       // Header defining the block context to execute in
-	State            *state.StateDB      // Pre-state on top of which to estimate the gas
+	Config           *params.ChainConfig      // Chain configuration for hard fork selection
+	Chain            core.ChainContext        // Chain context to access past block hashes
+	Header           *types.Header            // Header defining the block context to execute in
+	State            *state.StateDB           // Pre-state on top of which to estimate the gas
+	BlockOverrides   *override.BlockOverrides // Block overrides to apply during the estimation
 	Backend          core.NodeInterfaceBackendAPI
 	RunScheduledTxes func(context.Context, core.NodeInterfaceBackendAPI, *state.StateDB, *types.Header, vm.BlockContext, *core.MessageRunContext, *core.ExecutionResult) (*core.ExecutionResult, error)
 
@@ -226,6 +228,18 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 		evmContext = core.NewEVMBlockContext(opts.Header, opts.Chain, nil)
 		dirtyState = opts.State.Copy()
 	)
+	if opts.BlockOverrides != nil {
+		opts.BlockOverrides.Apply(&evmContext)
+	}
+	// Lower the basefee to 0 to avoid breaking EVM
+	// invariants (basefee < feecap).
+	if call.GasPrice.Sign() == 0 {
+		evmContext.BaseFeeInBlock = new(big.Int).Set(evmContext.BaseFee)
+		evmContext.BaseFee = new(big.Int)
+	}
+	if call.BlobGasFeeCap != nil && call.BlobGasFeeCap.BitLen() == 0 {
+		evmContext.BlobBaseFee = new(big.Int)
+	}
 	// Monitor the outer context and interrupt the EVM upon cancellation. To avoid
 	// a dangling goroutine until the outer estimation finishes, create an internal
 	// context for the lifetime of this method call.
@@ -239,8 +253,7 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 		return res, err
 	}
 
-	evm := opts.Backend.GetEVM(ctx, call, dirtyState, opts.Header, &vm.Config{NoBaseFee: true}, &evmContext)
-
+	evm := opts.Backend.GetEVM(ctx, dirtyState, opts.Header, &vm.Config{NoBaseFee: true}, &evmContext)
 	go func() {
 		<-ctx.Done()
 		evm.Cancel()

@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 //go:generate go run github.com/fjl/gencodec -type callFrame -field-override callFrameMarshaling -out gen_callframe_json.go
@@ -134,7 +135,7 @@ type callTracerConfig struct {
 
 // newCallTracer returns a native go tracer which tracks
 // call frames of a tx, and implements vm.EVMLogger.
-func newCallTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, error) {
+func newCallTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
 	t, err := newCallTracerObject(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -155,10 +156,8 @@ func newCallTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, 
 
 func newCallTracerObject(ctx *tracers.Context, cfg json.RawMessage) (*callTracer, error) {
 	var config callTracerConfig
-	if cfg != nil {
-		if err := json.Unmarshal(cfg, &config); err != nil {
-			return nil, err
-		}
+	if err := json.Unmarshal(cfg, &config); err != nil {
+		return nil, err
 	}
 	// First callframe contains tx context info
 	// and is populated on start and end.
@@ -240,7 +239,9 @@ func (t *callTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	if err != nil {
 		return
 	}
-	t.callstack[0].GasUsed = receipt.GasUsed
+	if receipt != nil {
+		t.callstack[0].GasUsed = receipt.GasUsed
+	}
 	if t.config.WithLog {
 		// Logs are not emitted when the call fails
 		clearFailedLogs(&t.callstack[0], false)

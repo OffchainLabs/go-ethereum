@@ -68,11 +68,13 @@ func TestPythonInterop(t *testing.T) {
 func TestNodeEndpoints(t *testing.T) {
 	id := HexID("00000000000000806ad9b61fa5ae014307ebdc964253adcd9f2c0a392aa11abc")
 	type endpointTest struct {
-		name    string
-		node    *Node
-		wantIP  netip.Addr
-		wantUDP int
-		wantTCP int
+		name     string
+		node     *Node
+		wantIP   netip.Addr
+		wantUDP  int
+		wantTCP  int
+		wantQUIC int
+		wantDNS  string
 	}
 	tests := []endpointTest{
 		{
@@ -89,12 +91,30 @@ func TestNodeEndpoints(t *testing.T) {
 				r.Set(enr.UDP(9000))
 				return SignNull(&r, id)
 			}(),
+			wantUDP: 9000,
 		},
 		{
 			name: "tcp-only",
 			node: func() *Node {
 				var r enr.Record
 				r.Set(enr.TCP(9000))
+				return SignNull(&r, id)
+			}(),
+			wantTCP: 9000,
+		},
+		{
+			name: "quic-only",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.QUIC(9000))
+				return SignNull(&r, id)
+			}(),
+		},
+		{
+			name: "quic6-only",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.QUIC6(9000))
 				return SignNull(&r, id)
 			}(),
 		},
@@ -209,6 +229,61 @@ func TestNodeEndpoints(t *testing.T) {
 			wantIP:  netip.MustParseAddr("192.168.2.2"),
 			wantUDP: 30304,
 		},
+		{
+			name: "ipv4-quic",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.IPv4Addr(netip.MustParseAddr("99.22.33.1")))
+				r.Set(enr.QUIC(9001))
+				return SignNull(&r, id)
+			}(),
+			wantIP:   netip.MustParseAddr("99.22.33.1"),
+			wantQUIC: 9001,
+		},
+		{ // Because the node is IPv4, the quic6 entry won't be loaded.
+			name: "ipv4-quic6",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.IPv4Addr(netip.MustParseAddr("99.22.33.1")))
+				r.Set(enr.QUIC6(9001))
+				return SignNull(&r, id)
+			}(),
+			wantIP: netip.MustParseAddr("99.22.33.1"),
+		},
+		{
+			name: "ipv6-quic",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.IPv6Addr(netip.MustParseAddr("2001::ff00:0042:8329")))
+				r.Set(enr.QUIC(9001))
+				return SignNull(&r, id)
+			}(),
+			wantIP: netip.MustParseAddr("2001::ff00:0042:8329"),
+		},
+		{
+			name: "ipv6-quic6",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.IPv6Addr(netip.MustParseAddr("2001::ff00:0042:8329")))
+				r.Set(enr.QUIC6(9001))
+				return SignNull(&r, id)
+			}(),
+			wantIP:   netip.MustParseAddr("2001::ff00:0042:8329"),
+			wantQUIC: 9001,
+		},
+		{
+			name: "dns-only",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.UDP(30303))
+				r.Set(enr.TCP(30303))
+				n := SignNull(&r, id).WithHostname("example.com")
+				return n
+			}(),
+			wantTCP: 30303,
+			wantUDP: 30303,
+			wantDNS: "example.com",
+		},
 	}
 
 	for _, test := range tests {
@@ -221,6 +296,12 @@ func TestNodeEndpoints(t *testing.T) {
 			}
 			if test.wantTCP != test.node.TCP() {
 				t.Errorf("node has wrong TCP port %d, want %d", test.node.TCP(), test.wantTCP)
+			}
+			if quic, _ := test.node.QUICEndpoint(); test.wantQUIC != int(quic.Port()) {
+				t.Errorf("node has wrong QUIC port %d, want %d", quic.Port(), test.wantQUIC)
+			}
+			if test.wantDNS != test.node.Hostname() {
+				t.Errorf("node has wrong DNS name %s, want %s", test.node.Hostname(), test.wantDNS)
 			}
 		})
 	}

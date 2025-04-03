@@ -18,7 +18,7 @@
 package ethconfig
 
 import (
-	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -29,9 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -48,12 +48,11 @@ var FullNodeGPO = gasprice.Config{
 
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
-	SyncMode:           downloader.SnapSync,
+	SyncMode:           SnapSync,
 	NetworkId:          0, // enable auto configuration of networkID == chainID
 	TxLookupLimit:      2350000,
 	TransactionHistory: 2350000,
 	StateHistory:       params.FullImmutabilityThreshold,
-	LightPeers:         100,
 	DatabaseCache:      512,
 	TrieCleanCache:     154,
 	TrieDirtyCache:     256,
@@ -80,18 +79,20 @@ type Config struct {
 	// Network ID separates blockchains on the peer-to-peer networking level. When left
 	// zero, the chain ID is used as network ID.
 	NetworkId uint64
-	SyncMode  downloader.SyncMode
+	SyncMode  SyncMode
 
 	// This can be set to list of enrtree:// URLs which will be queried for
 	// nodes to connect to.
 	EthDiscoveryURLs  []string
 	SnapDiscoveryURLs []string
 
+	// State options.
 	NoPruning  bool // Whether to disable pruning and flush everything to disk
 	NoPrefetch bool // Whether to disable prefetching and only load state on demand
 
-	// Deprecated, use 'TransactionHistory' instead.
-	TxLookupLimit      uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
+	// Deprecated: use 'TransactionHistory' instead.
+	TxLookupLimit uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
+
 	TransactionHistory uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
 	StateHistory       uint64 `toml:",omitempty"` // The maximum number of blocks from head whose state histories are reserved.
 
@@ -104,14 +105,6 @@ type Config struct {
 	// canonical chain of all remote peers. Setting the option makes geth verify the
 	// presence of these blocks for every new peer connection.
 	RequiredBlocks map[uint64]common.Hash `toml:"-"`
-
-	// Light client options
-	LightServ        int  `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests
-	LightIngress     int  `toml:",omitempty"` // Incoming bandwidth limit for light servers
-	LightEgress      int  `toml:",omitempty"` // Outgoing bandwidth limit for light servers
-	LightPeers       int  `toml:",omitempty"` // Maximum number of LES client peers
-	LightNoPrune     bool `toml:",omitempty"` // Whether to disable light chain pruning
-	LightNoSyncServe bool `toml:",omitempty"` // Whether to serve light clients before syncing
 
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`
@@ -145,9 +138,6 @@ type Config struct {
 	VMTrace           string
 	VMTraceJsonConfig string
 
-	// Miscellaneous options
-	DocRoot string `toml:"-"`
-
 	// RPCGasCap is the global gas cap for eth-call variants.
 	RPCGasCap uint64
 
@@ -169,10 +159,9 @@ type Config struct {
 // Clique is allowed for now to live standalone, but ethash is forbidden and can
 // only exist on already merged networks.
 func CreateConsensusEngine(config *params.ChainConfig, db ethdb.Database) (consensus.Engine, error) {
-	// Geth v1.14.0 dropped support for non-merged networks in any consensus
-	// mode. If such a network is requested, reject startup.
-	if !config.TerminalTotalDifficultyPassed {
-		return nil, errors.New("only PoS networks are supported, please transition old ones with Geth v1.13.x")
+	if config.TerminalTotalDifficulty == nil {
+		log.Error("Geth only supports PoS networks. Please transition legacy networks using Geth v1.13.x.")
+		return nil, fmt.Errorf("'terminalTotalDifficulty' is not set in genesis block")
 	}
 	// Wrap previously supported consensus engines into their post-merge counterpart
 	if config.Clique != nil {

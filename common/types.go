@@ -468,7 +468,7 @@ func (d *Decimal) UnmarshalJSON(input []byte) error {
 	if !isString(input) {
 		return &json.UnmarshalTypeError{Value: "non-string", Type: reflect.TypeOf(uint64(0))}
 	}
-	if i, err := strconv.ParseInt(string(input[1:len(input)-1]), 10, 64); err == nil {
+	if i, err := strconv.ParseUint(string(input[1:len(input)-1]), 10, 64); err == nil {
 		*d = Decimal(i)
 		return nil
 	} else {
@@ -487,6 +487,7 @@ func (b PrettyBytes) TerminalString() string {
 	return fmt.Sprintf("%#x...%x (%dB)", b[:3], b[len(b)-3:], len(b))
 }
 
+// BlockMetadata is a byte array representation of statuses of transactions in a block on whether they were timeboosted or not
 type BlockMetadata []byte
 
 // IsTxTimeboosted given a tx's index in the block returns whether the tx was timeboosted
