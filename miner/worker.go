@@ -120,7 +120,9 @@ func (miner *Miner) generateWork(params *generateParams, witness bool) *newPaylo
 
 	// Collect consensus-layer requests if Prague is enabled.
 	var requests [][]byte
-	if miner.chainConfig.IsPrague(work.header.Number, work.header.Time) {
+	parent := miner.chain.CurrentBlock()
+	prevArbOSVersion := types.DeserializeHeaderExtraInformation(parent).ArbOSFormatVersion
+	if miner.chainConfig.IsPrague(work.header.Number, work.header.Time, prevArbOSVersion) {
 		requests = [][]byte{}
 		// EIP-6110 deposits
 		if err := core.ParseDepositLogs(&requests, allLogs, miner.chainConfig); err != nil {
@@ -228,7 +230,7 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 	if header.ParentBeaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, env.evm)
 	}
-	if miner.chainConfig.IsPrague(header.Number, header.Time) {
+	if miner.chainConfig.IsPrague(header.Number, header.Time, prevArbosVersion) {
 		core.ProcessParentBlockHash(header.ParentHash, env.evm)
 	}
 	return env, nil
@@ -250,7 +252,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	}
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
-		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),
+		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time, params.MaxArbosVersionSupported),
 		state:    state,
 		coinbase: coinbase,
 		header:   header,
