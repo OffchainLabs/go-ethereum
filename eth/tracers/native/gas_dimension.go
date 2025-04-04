@@ -2,7 +2,6 @@ package native
 
 import (
 	"encoding/json"
-	"fmt"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -50,6 +49,8 @@ type GasDimensionTracer struct {
 
 	interrupt atomic.Bool // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption
+
+	prevOpcodeState *PrevOpcodeState // Track previous opcode state, to observe changes on a per-opcode basis
 }
 
 // gasDimensionTracer returns a new tracer that traces gas
@@ -64,10 +65,10 @@ func NewGasDimensionTracer(
 
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnOpcode:    t.OnOpcode,
-			OnTxStart:   t.OnTxStart,
-			OnTxEnd:     t.OnTxEnd,
-			OnGasChange: t.OnGasChange,
+			OnOpcode:  t.OnOpcode,
+			OnTxStart: t.OnTxStart,
+			OnTxEnd:   t.OnTxEnd,
+			//OnGasChange: t.OnGasChange,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
@@ -92,8 +93,15 @@ func (t *GasDimensionTracer) OnOpcode(
 		return
 	}
 
+	// Free the previous state if it exists
+	if t.prevOpcodeState != nil {
+		freePrevOpcodeState(t.prevOpcodeState)
+	}
+	// Create new state for this opcode
+	t.prevOpcodeState = DeepCopyOpcodeState(scope)
+
 	f := getCalcGasDimensionFunc(vm.OpCode(op))
-	gasesByDimension := f(pc, op, gas, cost, scope, rData, depth, err, t.env.StateDB)
+	gasesByDimension := f(pc, op, gas, cost, scope, rData, depth, err, t.prevOpcodeState)
 
 	t.logs = append(t.logs, DimensionLog{
 		Pc:                    pc,
@@ -109,6 +117,7 @@ func (t *GasDimensionTracer) OnOpcode(
 	})
 }
 
+/*
 // hook into gas changes
 // used to observe Cold Storage Accesses
 // We do not have access to StateDb.AddressInAccessList and StateDb.SlotInAccessList
@@ -139,6 +148,7 @@ func (t *GasDimensionTracer) OnGasChange(old, new uint64, reason tracing.GasChan
 		}
 	}
 }
+*/
 
 func (t *GasDimensionTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
@@ -154,6 +164,12 @@ func (t *GasDimensionTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	}
 	t.usedGas = receipt.GasUsed
 	t.txHash = receipt.TxHash
+
+	// Free the final state
+	if t.prevOpcodeState != nil {
+		freePrevOpcodeState(t.prevOpcodeState)
+		t.prevOpcodeState = nil
+	}
 }
 
 // signal the tracer to stop tracing, e.g. on timeout
