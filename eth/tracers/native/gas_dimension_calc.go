@@ -1,6 +1,8 @@
 package native
 
 import (
+	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
@@ -38,7 +40,7 @@ type calcGasDimensionFunc func(
 	rData []byte,
 	depth int,
 	err error,
-	stateDB tracing.StateDB,
+	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension
 
 // getCalcGasDimensionFunc is a massive case switch
@@ -84,19 +86,6 @@ func getCalcGasDimensionFunc(op vm.OpCode) calcGasDimensionFunc {
 	}
 }
 
-// canHaveColdStorageAccess returns true if the opcode can have cold storage access
-func canHaveColdStorageAccess(op vm.OpCode) bool {
-	// todo make this list fully complete
-	switch op {
-	case vm.BALANCE, vm.EXTCODESIZE, vm.EXTCODEHASH:
-		return true
-	case vm.SLOAD:
-		return true
-	default:
-		return false
-	}
-}
-
 // calcSimpleSingleDimensionGas returns the gas used for the
 // simplest of transactions, that only use the computation dimension
 func calcSimpleSingleDimensionGas(
@@ -107,7 +96,7 @@ func calcSimpleSingleDimensionGas(
 	rData []byte,
 	depth int,
 	err error,
-	stateDB tracing.StateDB,
+	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 	return GasesByDimension{
 		Computation:       cost,
@@ -134,7 +123,7 @@ func calcSimpleAddressAccessSetGas(
 	rData []byte,
 	depth int,
 	err error,
-	stateDB tracing.StateDB,
+	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 	// We do not have access to StateDb.AddressInAccessList and StateDb.SlotInAccessList
 	// to check cold storage access directly.
@@ -176,10 +165,52 @@ func calcSLOADGas(
 	rData []byte,
 	depth int,
 	err error,
-	stateDB tracing.StateDB,
+	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 	// need access to StateDb.AddressInAccessList and StateDb.SlotInAccessList
 	return GasesByDimension{}
+}
+
+// copied from go-ethereum/core/vm/gas_table.go because not exported there
+// toWordSize returns the ceiled word size required for memory expansion.
+func toWordSize(size uint64) uint64 {
+	if size > math.MaxUint64-31 {
+		return math.MaxUint64/32 + 1
+	}
+
+	return (size + 31) / 32
+}
+
+// This code is copied and edited from go-ethereum/core/vm/gas_table.go
+// because the code there is not exported.
+// memoryGasCost calculates the quadratic gas for memory expansion. It does so
+// only for the memory region that is expanded, not the total memory.
+func memoryGasCost(mem []byte, lastGasCost uint64, newMemSize uint64) (fee uint64, newTotalFee uint64, err error) {
+	if newMemSize == 0 {
+		return 0, 0, nil
+	}
+	// The maximum that will fit in a uint64 is max_word_count - 1. Anything above
+	// that will result in an overflow. Additionally, a newMemSize which results in
+	// a newMemSizeWords larger than 0xFFFFFFFF will cause the square operation to
+	// overflow. The constant 0x1FFFFFFFE0 is the highest number that can be used
+	// without overflowing the gas calculation.
+	if newMemSize > 0x1FFFFFFFE0 {
+		return 0, 0, vm.ErrGasUintOverflow
+	}
+	newMemSizeWords := toWordSize(newMemSize)
+	newMemSize = newMemSizeWords * 32
+
+	if newMemSize > uint64(len(mem)) {
+		square := newMemSizeWords * newMemSizeWords
+		linCoef := newMemSizeWords * params.MemoryGas
+		quadCoef := square / params.QuadCoeffDiv
+		newTotalFee = linCoef + quadCoef
+
+		fee = newTotalFee - lastGasCost
+
+		return fee, newTotalFee, nil
+	}
+	return 0, 0, nil
 }
 
 // calcExtCodeCopyGas returns the gas used
@@ -194,10 +225,53 @@ func calcExtCodeCopyGas(
 	rData []byte,
 	depth int,
 	err error,
-	stateDB tracing.StateDB,
+	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
-	// todo: implement
-	return GasesByDimension{}
+	// extcodecody has three components to its gas cost:
+	// 1. minimum_word_size = (size + 31) / 32
+	// 2. memory_expansion_cost
+	// 3. address_access_cost - the access set.
+	// gas for extcodecopy is 3 * minimum_word_size + memory_expansion_cost + address_access_cost
+	//
+	// at time of opcode trace, we know the state of the memory, and stack
+	// and we know the total cost of the opcode.
+	// therefore, we calculate minimum_word_size, and memory_expansion_cost
+	// and observe if the subtraction of cost - memory_expansion_cost - minimum_word_size = 100 or 2600
+	// 3*minimum_word_size is always state access
+	// if it is 2600, then have 2500 for state access.
+	// rest is computation.
+
+	stack := scope.StackData()
+	lenStack := len(stack)
+	size := stack[lenStack-4].Uint64()   // size in stack position 4
+	offset := stack[lenStack-2].Uint64() // destination offset in stack position 2
+
+	// computing the memory gas cost requires knowing a "previous" price
+	var emptyMem []byte = make([]byte, 0)
+	memoryDataBeforeExtCodeCopyApplied := scope.MemoryData()
+	_, lastGasCost, memErr := memoryGasCost(emptyMem, 0, uint64(len(memoryDataBeforeExtCodeCopyApplied)))
+	if memErr != nil {
+		return GasesByDimension{}
+	}
+	memoryExpansionCost, _, memErr := memoryGasCost(memoryDataBeforeExtCodeCopyApplied, lastGasCost, size+offset)
+	if memErr != nil {
+		return GasesByDimension{}
+	}
+	minimumWordSizeCost := (size + 31) / 32 * 3
+	leftOver := cost - memoryExpansionCost - minimumWordSizeCost
+	stateAccess := minimumWordSizeCost
+	// check if the access set was hot or cold
+	if leftOver == params.ColdAccountAccessCostEIP2929 {
+		stateAccess += params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
+	}
+	computation := cost - stateAccess
+	return GasesByDimension{
+		Computation:       computation,
+		StateAccess:       stateAccess,
+		StateGrowth:       0,
+		HistoryGrowth:     0,
+		StateGrowthRefund: 0,
+	}
 }
 
 // calcStateReadCallGas returns the gas used
@@ -217,7 +291,7 @@ func calcStateReadCallGas(
 	rData []byte,
 	depth int,
 	err error,
-	stateDB tracing.StateDB,
+	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 
 	// todo: implement
@@ -238,7 +312,7 @@ func calcLogGas(
 	rData []byte,
 	depth int,
 	err error,
-	stateDB tracing.StateDB,
+	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 	// todo: implement
 	return GasesByDimension{}
@@ -256,7 +330,7 @@ func calcCreateGas(
 	rData []byte,
 	depth int,
 	err error,
-	stateDB tracing.StateDB,
+	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 	// todo: implement
 	return GasesByDimension{}
@@ -276,7 +350,7 @@ func calcReadAndStoreCallGas(
 	rData []byte,
 	depth int,
 	err error,
-	stateDB tracing.StateDB,
+	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 	// todo: implement
 	return GasesByDimension{}
@@ -295,7 +369,7 @@ func calcSStoreGas(
 	rData []byte,
 	depth int,
 	err error,
-	stateDB tracing.StateDB,
+	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 	// todo: implement
 	return GasesByDimension{}
@@ -311,7 +385,7 @@ func calcSelfDestructGas(
 	rData []byte,
 	depth int,
 	err error,
-	stateDB tracing.StateDB,
+	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 	// todo: implement
 	return GasesByDimension{}
