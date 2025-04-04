@@ -40,7 +40,6 @@ type calcGasDimensionFunc func(
 	rData []byte,
 	depth int,
 	err error,
-	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension
 
 // getCalcGasDimensionFunc is a massive case switch
@@ -96,7 +95,6 @@ func calcSimpleSingleDimensionGas(
 	rData []byte,
 	depth int,
 	err error,
-	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 	return GasesByDimension{
 		Computation:       cost,
@@ -123,7 +121,6 @@ func calcSimpleAddressAccessSetGas(
 	rData []byte,
 	depth int,
 	err error,
-	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 	// We do not have access to StateDb.AddressInAccessList and StateDb.SlotInAccessList
 	// to check cold storage access directly.
@@ -165,7 +162,6 @@ func calcSLOADGas(
 	rData []byte,
 	depth int,
 	err error,
-	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 	// need access to StateDb.AddressInAccessList and StateDb.SlotInAccessList
 	return GasesByDimension{}
@@ -225,7 +221,6 @@ func calcExtCodeCopyGas(
 	rData []byte,
 	depth int,
 	err error,
-	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 	// extcodecody has three components to its gas cost:
 	// 1. minimum_word_size = (size + 31) / 32
@@ -291,7 +286,6 @@ func calcStateReadCallGas(
 	rData []byte,
 	depth int,
 	err error,
-	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 
 	// todo: implement
@@ -312,7 +306,6 @@ func calcLogGas(
 	rData []byte,
 	depth int,
 	err error,
-	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 	// todo: implement
 	return GasesByDimension{}
@@ -330,7 +323,6 @@ func calcCreateGas(
 	rData []byte,
 	depth int,
 	err error,
-	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 	// todo: implement
 	return GasesByDimension{}
@@ -350,7 +342,6 @@ func calcReadAndStoreCallGas(
 	rData []byte,
 	depth int,
 	err error,
-	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 	// todo: implement
 	return GasesByDimension{}
@@ -369,7 +360,6 @@ func calcSStoreGas(
 	rData []byte,
 	depth int,
 	err error,
-	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 	// todo: implement
 	return GasesByDimension{}
@@ -385,7 +375,6 @@ func calcSelfDestructGas(
 	rData []byte,
 	depth int,
 	err error,
-	prevOpcodeState *PrevOpcodeState,
 ) GasesByDimension {
 	// todo: implement
 	return GasesByDimension{}
