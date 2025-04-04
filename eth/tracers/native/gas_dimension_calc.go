@@ -186,48 +186,6 @@ func calcSLOADGas(
 	}
 }
 
-// copied from go-ethereum/core/vm/gas_table.go because not exported there
-// toWordSize returns the ceiled word size required for memory expansion.
-func toWordSize(size uint64) uint64 {
-	if size > math.MaxUint64-31 {
-		return math.MaxUint64/32 + 1
-	}
-
-	return (size + 31) / 32
-}
-
-// This code is copied and edited from go-ethereum/core/vm/gas_table.go
-// because the code there is not exported.
-// memoryGasCost calculates the quadratic gas for memory expansion. It does so
-// only for the memory region that is expanded, not the total memory.
-func memoryGasCost(mem []byte, lastGasCost uint64, newMemSize uint64) (fee uint64, newTotalFee uint64, err error) {
-	if newMemSize == 0 {
-		return 0, 0, nil
-	}
-	// The maximum that will fit in a uint64 is max_word_count - 1. Anything above
-	// that will result in an overflow. Additionally, a newMemSize which results in
-	// a newMemSizeWords larger than 0xFFFFFFFF will cause the square operation to
-	// overflow. The constant 0x1FFFFFFFE0 is the highest number that can be used
-	// without overflowing the gas calculation.
-	if newMemSize > 0x1FFFFFFFE0 {
-		return 0, 0, vm.ErrGasUintOverflow
-	}
-	newMemSizeWords := toWordSize(newMemSize)
-	newMemSize = newMemSizeWords * 32
-
-	if newMemSize > uint64(len(mem)) {
-		square := newMemSizeWords * newMemSizeWords
-		linCoef := newMemSizeWords * params.MemoryGas
-		quadCoef := square / params.QuadCoeffDiv
-		newTotalFee = linCoef + quadCoef
-
-		fee = newTotalFee - lastGasCost
-
-		return fee, newTotalFee, nil
-	}
-	return 0, 0, nil
-}
-
 // calcExtCodeCopyGas returns the gas used
 // for the `EXTCODECOPY` opcode, which reads from
 // the code of an external contract.
@@ -326,8 +284,42 @@ func calcLogGas(
 	depth int,
 	err error,
 ) GasesByDimension {
-	// todo: implement
-	return GasesByDimension{}
+	// log gas = 375 + 375 * topic_count + 8 * size + memory_expansion_cost
+	// 8 * size is always history growth
+	// the size is charged 8 gas per byte, and 32 bytes per topic are
+	// stored in the bloom filter in the history so at 8 gas per byte,
+	// 32 bytes per topic is 256 gas per topic.
+	// rest is computation (for the bloom filter computation, memory expansion, etc)
+	numTopics := uint64(0)
+	switch vm.OpCode(op) {
+	case vm.LOG0:
+		numTopics = 0
+	case vm.LOG1:
+		numTopics = 1
+	case vm.LOG2:
+		numTopics = 2
+	case vm.LOG3:
+		numTopics = 3
+	case vm.LOG4:
+		numTopics = 4
+	default:
+		numTopics = 0
+	}
+	bloomHistoryGrowthCost := 256 * numTopics
+	// size is on stack position 2
+	stackData := scope.StackData()
+	size := stackData[len(stackData)-2].Uint64()
+	sizeHistoryGrowthCost := 8 * size
+	historyGrowthCost := sizeHistoryGrowthCost + bloomHistoryGrowthCost
+	computationCost := cost - historyGrowthCost
+
+	return GasesByDimension{
+		Computation:       computationCost,
+		StateAccess:       0,
+		StateGrowth:       0,
+		HistoryGrowth:     historyGrowthCost,
+		StateGrowthRefund: 0,
+	}
 }
 
 // calcCreateGas returns the gas used for the CREATE set of opcodes
@@ -397,4 +389,50 @@ func calcSelfDestructGas(
 ) GasesByDimension {
 	// todo: implement
 	return GasesByDimension{}
+}
+
+// ############################################################################
+//                        HELPER FUNCTIONS
+// ############################################################################
+
+// copied from go-ethereum/core/vm/gas_table.go because not exported there
+// toWordSize returns the ceiled word size required for memory expansion.
+func toWordSize(size uint64) uint64 {
+	if size > math.MaxUint64-31 {
+		return math.MaxUint64/32 + 1
+	}
+
+	return (size + 31) / 32
+}
+
+// This code is copied and edited from go-ethereum/core/vm/gas_table.go
+// because the code there is not exported.
+// memoryGasCost calculates the quadratic gas for memory expansion. It does so
+// only for the memory region that is expanded, not the total memory.
+func memoryGasCost(mem []byte, lastGasCost uint64, newMemSize uint64) (fee uint64, newTotalFee uint64, err error) {
+	if newMemSize == 0 {
+		return 0, 0, nil
+	}
+	// The maximum that will fit in a uint64 is max_word_count - 1. Anything above
+	// that will result in an overflow. Additionally, a newMemSize which results in
+	// a newMemSizeWords larger than 0xFFFFFFFF will cause the square operation to
+	// overflow. The constant 0x1FFFFFFFE0 is the highest number that can be used
+	// without overflowing the gas calculation.
+	if newMemSize > 0x1FFFFFFFE0 {
+		return 0, 0, vm.ErrGasUintOverflow
+	}
+	newMemSizeWords := toWordSize(newMemSize)
+	newMemSize = newMemSizeWords * 32
+
+	if newMemSize > uint64(len(mem)) {
+		square := newMemSizeWords * newMemSizeWords
+		linCoef := newMemSizeWords * params.MemoryGas
+		quadCoef := square / params.QuadCoeffDiv
+		newTotalFee = linCoef + quadCoef
+
+		fee = newTotalFee - lastGasCost
+
+		return fee, newTotalFee, nil
+	}
+	return 0, 0, nil
 }
