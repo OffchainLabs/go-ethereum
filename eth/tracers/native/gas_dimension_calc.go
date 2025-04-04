@@ -387,8 +387,64 @@ func calcSelfDestructGas(
 	depth int,
 	err error,
 ) GasesByDimension {
-	// todo: implement
-	return GasesByDimension{}
+	// reverse engineer the gas dimensions from the cost
+	// two things we care about:
+	// address being cold or warm for the access set
+	// account being empty or not for the target of the selfdestruct.
+	// basically there are only 4 possible cases for the cost:
+	// 5000, 7600 (cold), 30000 (warm but target for funds is empty), 32600 (warm and target for funds is not empty)
+	// we consider the static cost of 5000 as a state read/write because selfdestruct,
+	// excepting 100 for the warm access set
+	// doesn't actually delete anything from disk, it just marks it as deleted.
+	if cost == params.CreateBySelfdestructGas+params.SelfdestructGasEIP150 {
+		// warm but funds target empty
+		// 30000 gas total
+		// 100 for warm cost (computation)
+		// 25000 for the selfdestruct (state growth)
+		// 4900 for read/write (deleting the contract)
+		return GasesByDimension{
+			Computation:       params.WarmStorageReadCostEIP2929,
+			StateAccess:       params.SelfdestructGasEIP150 - params.WarmStorageReadCostEIP2929,
+			StateGrowth:       params.CreateBySelfdestructGas,
+			HistoryGrowth:     0,
+			StateGrowthRefund: 0,
+		}
+	} else if cost == params.CreateBySelfdestructGas+params.SelfdestructGasEIP150+params.ColdAccountAccessCostEIP2929 {
+		// cold and funds target empty
+		// 32600 gas total
+		// 100 for warm cost (computation)
+		// 25000 for the selfdestruct (state growth)
+		// 2500 + 5000 for read/write (deleting the contract)
+		return GasesByDimension{
+			Computation:       params.WarmStorageReadCostEIP2929,
+			StateAccess:       params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929 + params.SelfdestructGasEIP150,
+			StateGrowth:       params.CreateBySelfdestructGas,
+			HistoryGrowth:     0,
+			StateGrowthRefund: 0,
+		}
+	} else if cost == params.SelfdestructGasEIP150+params.ColdAccountAccessCostEIP2929 {
+		// address lookup was cold but funds target has money already. Cost is 7600
+		// 100 for warm cost (computation)
+		// 2500 to access the address cold (access)
+		// 5000 for the selfdestruct (access)
+		return GasesByDimension{
+			Computation:       params.WarmStorageReadCostEIP2929,
+			StateAccess:       params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929 + params.SelfdestructGasEIP150,
+			StateGrowth:       0,
+			HistoryGrowth:     0,
+			StateGrowthRefund: 0,
+		}
+	}
+	// if you reach here, then the cost was 5000
+	// in which case give 100 for a warm access read
+	// and 4900 for the state access (deleting the contract)
+	return GasesByDimension{
+		Computation:       params.WarmStorageReadCostEIP2929,
+		StateAccess:       params.SelfdestructGasEIP150 - params.WarmStorageReadCostEIP2929,
+		StateGrowth:       0,
+		HistoryGrowth:     0,
+		StateGrowthRefund: 0,
+	}
 }
 
 // ############################################################################
