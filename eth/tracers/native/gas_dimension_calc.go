@@ -163,8 +163,27 @@ func calcSLOADGas(
 	depth int,
 	err error,
 ) GasesByDimension {
-	// need access to StateDb.AddressInAccessList and StateDb.SlotInAccessList
-	return GasesByDimension{}
+	// we don't have access to StateDb.SlotInAccessList
+	// so we have to infer whether the slot was cold or warm based on the absolute cost
+	// and then deduce the dimensions from that
+	if cost == params.ColdSloadCostEIP2929 {
+		accessCost := params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929
+		leftOver := cost - accessCost
+		return GasesByDimension{
+			Computation:       leftOver,
+			StateAccess:       accessCost,
+			StateGrowth:       0,
+			HistoryGrowth:     0,
+			StateGrowthRefund: 0,
+		}
+	}
+	return GasesByDimension{
+		Computation:       cost,
+		StateAccess:       0,
+		StateGrowth:       0,
+		HistoryGrowth:     0,
+		StateGrowthRefund: 0,
+	}
 }
 
 // copied from go-ethereum/core/vm/gas_table.go because not exported there
