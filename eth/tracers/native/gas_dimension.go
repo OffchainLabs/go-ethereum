@@ -49,8 +49,6 @@ type GasDimensionTracer struct {
 
 	interrupt atomic.Bool // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption
-
-	prevOpcodeState *PrevOpcodeState // Track previous opcode state, to observe changes on a per-opcode basis
 }
 
 // gasDimensionTracer returns a new tracer that traces gas
@@ -93,15 +91,8 @@ func (t *GasDimensionTracer) OnOpcode(
 		return
 	}
 
-	// Free the previous state if it exists
-	if t.prevOpcodeState != nil {
-		freePrevOpcodeState(t.prevOpcodeState)
-	}
-	// Create new state for this opcode
-	t.prevOpcodeState = DeepCopyOpcodeState(scope)
-
 	f := getCalcGasDimensionFunc(vm.OpCode(op))
-	gasesByDimension := f(pc, op, gas, cost, scope, rData, depth, err, t.prevOpcodeState)
+	gasesByDimension := f(pc, op, gas, cost, scope, rData, depth, err)
 
 	t.logs = append(t.logs, DimensionLog{
 		Pc:                    pc,
@@ -118,6 +109,11 @@ func (t *GasDimensionTracer) OnOpcode(
 }
 
 /*
+
+This code is garbage left over from when I was trying to figure out how to directly
+compute state access costs. It doesn't work but I'm keeping it around for when
+its time to do sload or sstore which will fire this onGasChange event.
+
 // hook into gas changes
 // used to observe Cold Storage Accesses
 // We do not have access to StateDb.AddressInAccessList and StateDb.SlotInAccessList
@@ -164,12 +160,6 @@ func (t *GasDimensionTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	}
 	t.usedGas = receipt.GasUsed
 	t.txHash = receipt.TxHash
-
-	// Free the final state
-	if t.prevOpcodeState != nil {
-		freePrevOpcodeState(t.prevOpcodeState)
-		t.prevOpcodeState = nil
-	}
 }
 
 // signal the tracer to stop tracing, e.g. on timeout
