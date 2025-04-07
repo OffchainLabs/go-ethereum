@@ -392,7 +392,10 @@ func calcSelfDestructGas(
 	// address being cold or warm for the access set
 	// account being empty or not for the target of the selfdestruct.
 	// basically there are only 4 possible cases for the cost:
-	// 5000, 7600 (cold), 30000 (warm but target for funds is empty), 32600 (warm and target for funds is not empty)
+	// 5000  (warm, target for funds is not empty),
+	// 7600  (cold, target for funds is not empty),
+	// 30000 (warm, target for funds is empty),
+	// 32600 (cold, target for funds is empty)
 	// we consider the static cost of 5000 as a state read/write because selfdestruct,
 	// excepting 100 for the warm access set
 	// doesn't actually delete anything from disk, it just marks it as deleted.
