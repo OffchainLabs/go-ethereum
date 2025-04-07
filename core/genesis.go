@@ -508,7 +508,7 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 				head.BlobGasUsed = new(uint64)
 			}
 		}
-		if conf.IsPrague(num, g.Timestamp) {
+		if conf.IsPrague(num, g.Timestamp, arbosVersion) {
 			head.RequestsHash = &types.EmptyRequestsHash
 		}
 	}
