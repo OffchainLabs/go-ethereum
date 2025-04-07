@@ -23,6 +23,7 @@ import (
 	"io"
 	"math"
 	"math/big"
+	"math/rand/v2"
 	"runtime"
 	"slices"
 	"strings"
@@ -160,8 +161,9 @@ type CacheConfig struct {
 	SnapshotRestoreMaxGas uint64 // Rollback up to this much gas to restore snapshot (otherwise snapshot recalculated from nothing)
 
 	// Arbitrum: configure GC window
-	TriesInMemory uint64        // Height difference before which a trie may not be garbage-collected
-	TrieRetention time.Duration // Time limit before which a trie may not be garbage-collected
+	TriesInMemory             uint64        // Height difference before which a trie may not be garbage-collected
+	TrieRetention             time.Duration // Time limit before which a trie may not be garbage-collected
+	TrieTimeLimitRandomOffset time.Duration // Range of random offset of the commit due to TrieTimeLimit period (randomizes initial gcproc value)
 
 	MaxNumberOfBlocksToSkipStateSaving uint32
 	MaxAmountOfGasToSkipStateSaving    uint64
@@ -203,6 +205,7 @@ var defaultCacheConfig = &CacheConfig{
 	// Arbitrum Config Options
 	TriesInMemory:                      state.DefaultTriesInMemory,
 	TrieRetention:                      30 * time.Minute,
+	TrieTimeLimitRandomOffset:          0,
 	MaxNumberOfBlocksToSkipStateSaving: 0,
 	MaxAmountOfGasToSkipStateSaving:    0,
 
@@ -375,6 +378,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(chainConfig, bc.hc)
+
+	if cacheConfig.TrieTimeLimitRandomOffset > 0 {
+		bc.gcproc = time.Duration(rand.Int64N(int64(cacheConfig.TrieTimeLimitRandomOffset)))
+	}
 
 	bc.genesisBlock = bc.GetBlockByNumber(0)
 	if bc.genesisBlock == nil {
