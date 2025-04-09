@@ -91,7 +91,7 @@ type calcGasDimensionFunc func(
 	rData []byte,
 	depth int,
 	err error,
-) (GasesByDimension, *CallGasDimensionInfo)
+) (GasesByDimension, *CallGasDimensionInfo, error)
 
 // finishCalcGasDimensionFunc defines a type signature that takes the
 // code execution cost of the call and the callGasDimensionInfo
@@ -173,14 +173,14 @@ func calcSimpleSingleDimensionGas(
 	rData []byte,
 	depth int,
 	err error,
-) (GasesByDimension, *CallGasDimensionInfo) {
+) (GasesByDimension, *CallGasDimensionInfo, error) {
 	return GasesByDimension{
 		Computation:       cost,
 		StateAccess:       0,
 		StateGrowth:       0,
 		HistoryGrowth:     0,
 		StateGrowthRefund: 0,
-	}, nil
+	}, nil, nil
 }
 
 // calcSimpleAddressAccessSetGas returns the gas used
@@ -199,7 +199,7 @@ func calcSimpleAddressAccessSetGas(
 	rData []byte,
 	depth int,
 	err error,
-) (GasesByDimension, *CallGasDimensionInfo) {
+) (GasesByDimension, *CallGasDimensionInfo, error) {
 	// We do not have access to StateDb.AddressInAccessList and StateDb.SlotInAccessList
 	// to check cold storage access directly.
 	// Additionally, cold storage access for these address opcodes are handled differently
@@ -219,7 +219,7 @@ func calcSimpleAddressAccessSetGas(
 			StateGrowth:       0,
 			HistoryGrowth:     0,
 			StateGrowthRefund: 0,
-		}, nil
+		}, nil, nil
 	}
 	return GasesByDimension{
 		Computation:       cost,
@@ -227,7 +227,7 @@ func calcSimpleAddressAccessSetGas(
 		StateGrowth:       0,
 		HistoryGrowth:     0,
 		StateGrowthRefund: 0,
-	}, nil
+	}, nil, nil
 }
 
 // calcSLOADGas returns the gas used for the `SLOAD` opcode
@@ -240,7 +240,7 @@ func calcSLOADGas(
 	rData []byte,
 	depth int,
 	err error,
-) (GasesByDimension, *CallGasDimensionInfo) {
+) (GasesByDimension, *CallGasDimensionInfo, error) {
 	// we don't have access to StateDb.SlotInAccessList
 	// so we have to infer whether the slot was cold or warm based on the absolute cost
 	// and then deduce the dimensions from that
@@ -253,7 +253,7 @@ func calcSLOADGas(
 			StateGrowth:       0,
 			HistoryGrowth:     0,
 			StateGrowthRefund: 0,
-		}, nil
+		}, nil, nil
 	}
 	return GasesByDimension{
 		Computation:       cost,
@@ -261,7 +261,7 @@ func calcSLOADGas(
 		StateGrowth:       0,
 		HistoryGrowth:     0,
 		StateGrowthRefund: 0,
-	}, nil
+	}, nil, nil
 }
 
 // calcExtCodeCopyGas returns the gas used
@@ -276,7 +276,7 @@ func calcExtCodeCopyGas(
 	rData []byte,
 	depth int,
 	err error,
-) (GasesByDimension, *CallGasDimensionInfo) {
+) (GasesByDimension, *CallGasDimensionInfo, error) {
 	// extcodecody has three components to its gas cost:
 	// 1. minimum_word_size = (size + 31) / 32
 	// 2. memory_expansion_cost
@@ -298,7 +298,7 @@ func calcExtCodeCopyGas(
 
 	memoryExpansionCost, memErr := memoryExpansionCost(scope.MemoryData(), offset, size)
 	if memErr != nil {
-		return GasesByDimension{}, nil
+		return GasesByDimension{}, nil, memErr
 	}
 	minimumWordSizeCost := (size + 31) / 32 * 3
 	leftOver := cost - memoryExpansionCost - minimumWordSizeCost
@@ -314,7 +314,7 @@ func calcExtCodeCopyGas(
 		StateGrowth:       0,
 		HistoryGrowth:     0,
 		StateGrowthRefund: 0,
-	}, nil
+	}, nil, nil
 }
 
 // calcStateReadCallGas returns the gas used
@@ -334,17 +334,25 @@ func calcStateReadCallGas(
 	rData []byte,
 	depth int,
 	err error,
-) (GasesByDimension, *CallGasDimensionInfo) {
+) (GasesByDimension, *CallGasDimensionInfo, error) {
 	stack := scope.StackData()
 	lenStack := len(stack)
 	// argsOffset in stack position 3 (1-indexed)
 	// argsSize in stack position 4
 	argsOffset := stack[lenStack-3].Uint64()
 	argsSize := stack[lenStack-4].Uint64()
+	// Note that opcodes with a byte size parameter of 0 will not trigger memory expansion, regardless of their offset parameters
+	if argsSize == 0 {
+		argsOffset = 0
+	}
 	// return data offset in stack position 5
 	// return data size in stack position 6
 	returnDataOffset := stack[lenStack-5].Uint64()
 	returnDataSize := stack[lenStack-6].Uint64()
+	// Note that opcodes with a byte size parameter of 0 will not trigger memory expansion, regardless of their offset parameters
+	if returnDataSize == 0 {
+		returnDataOffset = 0
+	}
 
 	// to figure out memory expansion cost, take the bigger of the two memory writes
 	// which will determine how big memory is expanded to
@@ -355,14 +363,18 @@ func calcStateReadCallGas(
 		memExpansionSize = returnDataSize
 	}
 
-	memoryExpansionCost, memErr := memoryExpansionCost(scope.MemoryData(), memExpansionOffset, memExpansionSize)
-	if memErr != nil {
-		return GasesByDimension{}, nil
+	var memExpansionCost uint64 = 0
+	var memErr error = nil
+	if memExpansionOffset+memExpansionSize != 0 {
+		memExpansionCost, memErr = memoryExpansionCost(scope.MemoryData(), memExpansionOffset, memExpansionSize)
+		if memErr != nil {
+			return GasesByDimension{}, nil, memErr
+		}
 	}
 
 	// at a minimum, the cost is 100 for the warm access set
 	// and the memory expansion cost
-	computation := memoryExpansionCost + params.WarmStorageReadCostEIP2929
+	computation := memExpansionCost + params.WarmStorageReadCostEIP2929
 	// see finishCalcStateReadCallGas for more details
 	return GasesByDimension{
 			Computation:       computation,
@@ -373,8 +385,8 @@ func calcStateReadCallGas(
 		}, &CallGasDimensionInfo{
 			op:                     vm.OpCode(op),
 			gasCounterAtTimeOfCall: gas,
-			memoryExpansionCost:    memoryExpansionCost,
-		}
+			memoryExpansionCost:    memExpansionCost,
+		}, nil
 }
 
 // In order to calculate the gas dimensions for opcodes that
@@ -421,7 +433,7 @@ func calcLogGas(
 	rData []byte,
 	depth int,
 	err error,
-) (GasesByDimension, *CallGasDimensionInfo) {
+) (GasesByDimension, *CallGasDimensionInfo, error) {
 	// log gas = 375 + 375 * topic_count + 8 * size + memory_expansion_cost
 	// 8 * size is always history growth
 	// the size is charged 8 gas per byte, and 32 bytes per topic are
@@ -457,7 +469,7 @@ func calcLogGas(
 		StateGrowth:       0,
 		HistoryGrowth:     historyGrowthCost,
 		StateGrowthRefund: 0,
-	}, nil
+	}, nil, nil
 }
 
 // calcCreateGas returns the gas used for the CREATE set of opcodes
@@ -472,9 +484,9 @@ func calcCreateGas(
 	rData []byte,
 	depth int,
 	err error,
-) (GasesByDimension, *CallGasDimensionInfo) {
+) (GasesByDimension, *CallGasDimensionInfo, error) {
 	// todo: implement
-	return GasesByDimension{}, nil
+	return GasesByDimension{}, nil, nil
 }
 
 // calcReadAndStoreCallGas returns the gas used for the `CALL, CALLCODE` opcodes
@@ -491,9 +503,9 @@ func calcReadAndStoreCallGas(
 	rData []byte,
 	depth int,
 	err error,
-) (GasesByDimension, *CallGasDimensionInfo) {
+) (GasesByDimension, *CallGasDimensionInfo, error) {
 	// todo: implement
-	return GasesByDimension{}, nil
+	return GasesByDimension{}, nil, nil
 }
 
 // calcSStoreGas returns the gas used for the `SSTORE` opcode
@@ -509,9 +521,9 @@ func calcSStoreGas(
 	rData []byte,
 	depth int,
 	err error,
-) (GasesByDimension, *CallGasDimensionInfo) {
+) (GasesByDimension, *CallGasDimensionInfo, error) {
 	// todo: implement
-	return GasesByDimension{}, nil
+	return GasesByDimension{}, nil, nil
 }
 
 // calcSelfDestructGas returns the gas used for the `SELFDESTRUCT` opcode
@@ -524,7 +536,7 @@ func calcSelfDestructGas(
 	rData []byte,
 	depth int,
 	err error,
-) (GasesByDimension, *CallGasDimensionInfo) {
+) (GasesByDimension, *CallGasDimensionInfo, error) {
 	// reverse engineer the gas dimensions from the cost
 	// two things we care about:
 	// address being cold or warm for the access set
@@ -549,7 +561,7 @@ func calcSelfDestructGas(
 			StateGrowth:       params.CreateBySelfdestructGas,
 			HistoryGrowth:     0,
 			StateGrowthRefund: 0,
-		}, nil
+		}, nil, nil
 	} else if cost == params.CreateBySelfdestructGas+params.SelfdestructGasEIP150+params.ColdAccountAccessCostEIP2929 {
 		// cold and funds target empty
 		// 32600 gas total
@@ -562,7 +574,7 @@ func calcSelfDestructGas(
 			StateGrowth:       params.CreateBySelfdestructGas,
 			HistoryGrowth:     0,
 			StateGrowthRefund: 0,
-		}, nil
+		}, nil, nil
 	} else if cost == params.SelfdestructGasEIP150+params.ColdAccountAccessCostEIP2929 {
 		// address lookup was cold but funds target has money already. Cost is 7600
 		// 100 for warm cost (computation)
@@ -574,7 +586,7 @@ func calcSelfDestructGas(
 			StateGrowth:       0,
 			HistoryGrowth:     0,
 			StateGrowthRefund: 0,
-		}, nil
+		}, nil, nil
 	}
 	// if you reach here, then the cost was 5000
 	// in which case give 100 for a warm access read
@@ -585,7 +597,7 @@ func calcSelfDestructGas(
 		StateGrowth:       0,
 		HistoryGrowth:     0,
 		StateGrowthRefund: 0,
-	}, nil
+	}, nil, nil
 }
 
 // ############################################################################
