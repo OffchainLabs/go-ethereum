@@ -104,6 +104,9 @@ func (s *SlidingTimeWindowArraySample) Snapshot() *sampleSnapshot {
 
 // Update samples a new value.
 func (s *SlidingTimeWindowArraySample) Update(v int64) {
+	if !metricsEnabled {
+		return
+	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	var newTick int64
