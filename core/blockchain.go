@@ -23,7 +23,6 @@ import (
 	"io"
 	"math"
 	"math/big"
-	"math/rand/v2"
 	"runtime"
 	"slices"
 	"strings"
@@ -163,7 +162,7 @@ type CacheConfig struct {
 	// Arbitrum: configure GC window
 	TriesInMemory             uint64        // Height difference before which a trie may not be garbage-collected
 	TrieRetention             time.Duration // Time limit before which a trie may not be garbage-collected
-	TrieTimeLimitRandomOffset time.Duration // Range of random offset of the commit due to TrieTimeLimit period (randomizes initial gcproc value)
+	TrieTimeLimitRandomOffset time.Duration // Range of random offset of each commit due to TrieTimeLimit period
 
 	MaxNumberOfBlocksToSkipStateSaving uint32
 	MaxAmountOfGasToSkipStateSaving    uint64
@@ -298,8 +297,10 @@ type BlockChain struct {
 	vmConfig   vm.Config
 	logger     *tracing.Hooks
 
+	// Arbitrum:
 	numberOfBlocksToSkipStateSaving      uint32
 	amountOfGasInBlocksToSkipStateSaving uint64
+	gcprocRandOffset                     time.Duration // random offset for gcproc time
 }
 
 type trieGcEntry struct {
@@ -379,9 +380,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(chainConfig, bc.hc)
 
-	if cacheConfig.TrieTimeLimitRandomOffset > 0 {
-		bc.gcproc = time.Duration(rand.Int64N(int64(cacheConfig.TrieTimeLimitRandomOffset)))
-	}
+	bc.gcprocRandOffset = bc.generateGcprocRandOffset()
 
 	bc.genesisBlock = bc.GetBlockByNumber(0)
 	if bc.genesisBlock == nil {
@@ -1634,8 +1633,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		}
 		flushInterval := time.Duration(bc.flushInterval.Load())
 		// If we exceeded out time allowance, flush an entire trie to disk
+		// The time threshold can be offset by gcprocRandOffset if TrieTimeLimitRandomOffset > 0; the offset is re-generated after each full trie flush
 		// In case of archive node that skips some trie commits we don't flush tries here
-		if bc.gcproc > flushInterval && prevEntry != nil && !archiveNode {
+		if bc.gcproc+bc.gcprocRandOffset > flushInterval && prevEntry != nil && !archiveNode {
 			// If the header is missing (canonical chain behind), we're reorging a low
 			// diff sidechain. Suspend committing until this operation is completed.
 			header := bc.GetHeaderByNumber(prevNum)
@@ -1651,6 +1651,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				bc.triedb.Commit(header.Root, true)
 				bc.lastWrite = prevNum
 				bc.gcproc = 0
+				bc.gcprocRandOffset = bc.generateGcprocRandOffset()
 			}
 		}
 		if prevEntry != nil {
