@@ -45,14 +45,13 @@ func (d *DimensionLog) ErrorString() string {
 
 // gasDimensionTracer struct
 type GasDimensionTracer struct {
-	env            *tracing.VMContext
-	txHash         common.Hash
-	logs           []DimensionLog
-	err            error
-	usedGas        uint64
-	callStack      CallGasDimensionStack
-	depth          int
-	previousOpcode vm.OpCode
+	env       *tracing.VMContext
+	txHash    common.Hash
+	logs      []DimensionLog
+	err       error
+	usedGas   uint64
+	callStack CallGasDimensionStack
+	depth     int
 
 	interrupt atomic.Bool // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption
@@ -99,26 +98,44 @@ func (t *GasDimensionTracer) OnOpcode(
 	if t.interrupt.Load() {
 		return
 	}
-
-	if depth > t.depth {
-		t.depth = depth
+	if depth != t.depth && depth != t.depth-1 {
+		t.interrupt.Store(true)
+		t.reason = fmt.Errorf(
+			"expected depth fell out of sync with actual depth: %d %d != %d, callStack: %v",
+			pc,
+			t.depth,
+			depth,
+			t.callStack,
+		)
+		return
+	}
+	if t.depth != len(t.callStack)+1 {
+		t.interrupt.Store(true)
+		t.reason = fmt.Errorf(
+			"depth fell out of sync with callStack: %d %d != %d, callStack: %v",
+			pc,
+			t.depth,
+			len(t.callStack),
+			t.callStack,
+		)
 	}
 
+	// get the gas dimension function
+	// if it's not a call, directly calculate the gas dimensions for the opcode
 	f := getCalcGasDimensionFunc(vm.OpCode(op))
 	gasesByDimension, callStackInfo := f(pc, op, gas, cost, scope, rData, depth, err)
-	// if callStackInfo is not nil then we need to take a note of the index of the
-	// DimensionLog that represents this opcode and save the callStackInfo
-	// to call finishX after the call has returned
-	if callStackInfo != nil {
-		opcodeLogIndex := len(t.logs)
-		t.callStack.Push(
-			CallGasDimensionStackInfo{
-				gasDimensionInfo:     *callStackInfo,
-				dimensionLogPosition: opcodeLogIndex,
-				executionCost:        0,
-			})
-	}
 	opcode := vm.OpCode(op)
+
+	if wasCall(opcode) && callStackInfo == nil || !wasCall(opcode) && callStackInfo != nil {
+		t.interrupt.Store(true)
+		t.reason = fmt.Errorf(
+			"logic bug, calls should always be accompanied by callStackInfo and non-calls should not have callStackInfo %d %s %v",
+			pc,
+			opcode.String(),
+			callStackInfo,
+		)
+		return
+	}
 
 	t.logs = append(t.logs, DimensionLog{
 		Pc:                    pc,
@@ -133,93 +150,69 @@ func (t *GasDimensionTracer) OnOpcode(
 		Err:                   err,
 	})
 
-	// if the opcode returns from the call stack depth, or
-	// if this is an opcode immediately after a call that did not increase the stack depth
-	// because it called an empty account or contract or wrong function signature,
-	// call the appropriate finishX function to write the gas dimensions
-	// for the call that increased the stack depth in the past
-	if depth < t.depth || (t.depth == depth && wasCall(t.previousOpcode)) {
-		stackInfo, ok := t.callStack.Pop()
-		// base case, stack is empty, do nothing
-		if !ok {
-			// I am not sure if we should consider an empty stack an error
-			// theoretically the top-level of the stack could be empty if
-			// the transaction was not inside a call and one of the four key opcodes
-			// was fired. That would halt execution of the transaction so theoretically
-			// doing nothing should be the correct behavior - i thiiiiiiink
-			//t.interrupt.Store(true)
-			//t.reason = fmt.Errorf("call stack depth is empty, top level should now halt execution")
-			return
+	// if callStackInfo is not nil then we need to take a note of the index of the
+	// DimensionLog that represents this opcode and save the callStackInfo
+	// to call finishX after the call has returned
+	if wasCall(opcode) {
+		opcodeLogIndex := len(t.logs) - 1 // minus 1 because we've already appended the log
+		t.callStack.Push(
+			CallGasDimensionStackInfo{
+				gasDimensionInfo:     *callStackInfo,
+				dimensionLogPosition: opcodeLogIndex,
+				executionCost:        0,
+			})
+		t.depth += 1
+	} else {
+		// if the opcode returns from the call stack depth, or
+		// if this is an opcode immediately after a call that did not increase the stack depth
+		// because it called an empty account or contract or wrong function signature,
+		// call the appropriate finishX function to write the gas dimensions
+		// for the call that increased the stack depth in the past
+		if depth < t.depth {
+			stackInfo, ok := t.callStack.Pop()
+			// base case, stack is empty, do nothing
+			if !ok {
+				t.interrupt.Store(true)
+				t.reason = fmt.Errorf("call stack is unexpectedly empty %d %d %d", pc, depth, t.depth)
+				return
+			}
+			finishFunction := getFinishCalcGasDimensionFunc(stackInfo.gasDimensionInfo.op)
+			if finishFunction == nil {
+				t.interrupt.Store(true)
+				t.reason = fmt.Errorf(
+					"no finish function found for opcode %s, call stack is messed up %d",
+					stackInfo.gasDimensionInfo.op.String(),
+					pc,
+				)
+				return
+			}
+			// IMPORTANT NOTE: for some reason the only reliable way to actually get the gas cost of the call
+			// is to subtract gas at time of call from gas at opcode AFTER return
+			// you can't trust the `gas` field on the call itself. I wonder if the gas field is an estimation
+			gasUsedByCall := stackInfo.gasDimensionInfo.gasCounterAtTimeOfCall - gas
+			gasesByDimension := finishFunction(gasUsedByCall, stackInfo.executionCost, stackInfo.gasDimensionInfo)
+			callDimensionLog := t.logs[stackInfo.dimensionLogPosition]
+			callDimensionLog.Computation = gasesByDimension[Computation]
+			callDimensionLog.StateAccess = gasesByDimension[StateAccess]
+			callDimensionLog.StateGrowth = gasesByDimension[StateGrowth]
+			callDimensionLog.HistoryGrowth = gasesByDimension[HistoryGrowth]
+			callDimensionLog.StateGrowthRefund = gasesByDimension[StateGrowthRefund]
+			callDimensionLog.CallRealGas = gasUsedByCall
+			callDimensionLog.CallExecutionCost = stackInfo.executionCost
+			callDimensionLog.CallMemoryExpansion = stackInfo.gasDimensionInfo.memoryExpansionCost
+			t.logs[stackInfo.dimensionLogPosition] = callDimensionLog
+			t.depth -= 1
 		}
-		finishFunction := getFinishCalcGasDimensionFunc(stackInfo.gasDimensionInfo.op)
-		if finishFunction == nil {
-			t.interrupt.Store(true)
-			t.reason = fmt.Errorf("no finish function found for RETURN opcode, call stack is messed up")
-			return
-		}
-		// IMPORTANT NOTE: for some reason the only reliable way to actually get the gas cost of the call
-		// is to subtract gas at time of call from gas at opcode AFTER return
-		gasUsedByCall := stackInfo.gasDimensionInfo.gasCounterAtTimeOfCall - gas
-		gasesByDimension := finishFunction(gasUsedByCall, stackInfo.executionCost, stackInfo.gasDimensionInfo)
-		callDimensionLog := t.logs[stackInfo.dimensionLogPosition]
-		callDimensionLog.Computation = gasesByDimension[Computation]
-		callDimensionLog.StateAccess = gasesByDimension[StateAccess]
-		callDimensionLog.StateGrowth = gasesByDimension[StateGrowth]
-		callDimensionLog.HistoryGrowth = gasesByDimension[HistoryGrowth]
-		callDimensionLog.StateGrowthRefund = gasesByDimension[StateGrowthRefund]
-		callDimensionLog.CallRealGas = gasUsedByCall
-		callDimensionLog.CallExecutionCost = stackInfo.executionCost
-		callDimensionLog.CallMemoryExpansion = stackInfo.gasDimensionInfo.memoryExpansionCost
-		t.logs[stackInfo.dimensionLogPosition] = callDimensionLog
-		t.depth = depth
-	}
 
-	// if we are in a call stack depth greater than 0, then we need to track the execution gas
-	// of our own code so that when the call returns, we can write the gas dimensions for the call opcode itself
-	// but we shouldn't do this if we are the call ourselves!
-	if len(t.callStack) > 0 && callStackInfo == nil {
-		t.callStack.UpdateExecutionCost(cost)
-	}
-	t.previousOpcode = opcode
-}
-
-/*
-
-This code is garbage left over from when I was trying to figure out how to directly
-compute state access costs. It doesn't work but I'm keeping it around for when
-its time to do sload or sstore which will fire this onGasChange event.
-
-// hook into gas changes
-// used to observe Cold Storage Accesses
-// We do not have access to StateDb.AddressInAccessList and StateDb.SlotInAccessList
-// to check cold storage access directly. So instead what we do here is we
-// assign all of the gas to the CPU dimension, which is what it would be if the
-// state access was warm. If the state access is cold, then immediately after
-// the onOpcode event is fired, we should observe an OnGasChange event
-// that will indicate the GasChangeReason is a GasChangeCallStorageColdAccess
-// and then we modify the logs in that hook.
-func (t *GasDimensionTracer) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {
-	fmt.Println("OnGasChange", old, new, reason)
-	if reason == tracing.GasChangeCallStorageColdAccess {
-		lastLog := t.logs[len(t.logs)-1]
-		fmt.Println("lastLog", lastLog)
-		if canHaveColdStorageAccess(lastLog.Op) {
-			coldCost := new - old
-			fmt.Println("coldCost", coldCost)
-			lastLog.StateAccess += coldCost
-			lastLog.Computation -= coldCost
-			// replace the last log with the corrected log
-			t.logs[len(t.logs)-1] = lastLog
-			fmt.Println("correctedLog", lastLog)
-		} else {
-			lastLog.Err = fmt.Errorf("cold storage access on opcode that is unsupported??? %s", lastLog.Op.String())
-			t.interrupt.Store(true)
-			t.reason = lastLog.Err
-			return
+		// if we are in a call stack depth greater than 0,
+		// then we need to track the execution gas
+		// of our own code so that when the call returns,
+		// we can write the gas dimensions for the call opcode itself
+		if len(t.callStack) > 0 {
+			t.callStack.UpdateExecutionCost(cost)
 		}
 	}
 }
-*/
 
 func (t *GasDimensionTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
