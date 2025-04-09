@@ -45,6 +45,8 @@ type CallGasDimensionInfo struct {
 	gasCounterAtTimeOfCall uint64
 	memoryExpansionCost    uint64
 	isValueSentWithCall    bool
+	initCodeCost           uint64
+	hashCost               uint64
 }
 
 // CallGasDimensionStackInfo is a struct that contains the gas dimension info
@@ -111,7 +113,7 @@ type calcGasDimensionFunc func(
 // and the dimensions of their children are computed as their children are
 // seen/traced.
 type finishCalcGasDimensionFunc func(
-	totalCallGasUsed uint64,
+	totalGasUsed uint64,
 	codeExecutionCost uint64,
 	callGasDimensionInfo CallGasDimensionInfo,
 ) GasesByDimension
@@ -170,6 +172,8 @@ func getFinishCalcGasDimensionFunc(op vm.OpCode) finishCalcGasDimensionFunc {
 		return finishCalcStateReadCallGas
 	case vm.CALL, vm.CALLCODE:
 		return finishCalcStateReadAndStoreCallGas
+	case vm.CREATE, vm.CREATE2:
+		return finishCalcCreateGas
 	default:
 		return nil
 	}
@@ -399,6 +403,8 @@ func calcStateReadCallGas(
 			gasCounterAtTimeOfCall: gas,
 			memoryExpansionCost:    memExpansionCost,
 			isValueSentWithCall:    false,
+			initCodeCost:           0,
+			hashCost:               0,
 		}, nil
 }
 
@@ -410,11 +416,11 @@ func calcStateReadCallGas(
 // when the call is first seen, and then calling finishX after the call has returned.
 // this function finishes the DELEGATECALL and STATICCALL opcodes
 func finishCalcStateReadCallGas(
-	totalCallGasUsed uint64,
+	totalGasUsed uint64,
 	codeExecutionCost uint64,
 	callGasDimensionInfo CallGasDimensionInfo,
 ) GasesByDimension {
-	leftOver := totalCallGasUsed - callGasDimensionInfo.memoryExpansionCost - codeExecutionCost
+	leftOver := totalGasUsed - callGasDimensionInfo.memoryExpansionCost - codeExecutionCost
 	if leftOver == params.ColdAccountAccessCostEIP2929 {
 		return GasesByDimension{
 			Computation:       params.WarmStorageReadCostEIP2929 + callGasDimensionInfo.memoryExpansionCost,
@@ -486,7 +492,7 @@ func calcLogGas(
 	}, nil, nil
 }
 
-// calcCreateGas returns the gas used for the CREATE set of opcodes
+// calcCreateGas returns the gas used for the CREATE and CREATE2 opcodes
 // which do storage growth when the store the newly created contract code.
 // the relevant opcodes here are:
 // `CREATE, CREATE2`
@@ -499,8 +505,72 @@ func calcCreateGas(
 	depth int,
 	err error,
 ) (GasesByDimension, *CallGasDimensionInfo, error) {
-	// todo: implement
-	return GasesByDimension{}, nil, nil
+	// Create costs
+	// minimum_word_size = (size + 31) / 32
+	// init_code_cost = 2 * minimum_word_size
+	// code_deposit_cost = 200 * deployed_code_size
+	// static_gas = 32000
+	// dynamic_gas = init_code_cost + memory_expansion_cost + deployment_code_execution_cost + code_deposit_cost
+	stack := scope.StackData()
+	lenStack := len(stack)
+	// size is on stack position 3 (1-indexed)
+	size := stack[lenStack-3].Uint64()
+	// offset is on stack position 2 (1-indexed)
+	offset := stack[lenStack-2].Uint64()
+	minimumWordSize := toWordSize(size)
+	initCodeCost := 2 * minimumWordSize
+	// if create2, then additionally we have hash_cost = 6*minimum_word_size
+	var hashCost uint64 = 0
+	if vm.OpCode(op) == vm.CREATE2 {
+		hashCost = 6 * minimumWordSize
+	}
+
+	memExpansionCost, memErr := memoryExpansionCost(scope.MemoryData(), offset, size)
+	if memErr != nil {
+		return GasesByDimension{}, nil, memErr
+	}
+	// at this point we know everything except deployment_code_execution_cost and code_deposit_cost
+	// so we can get those from the finishCalcCreateGas function
+	return GasesByDimension{
+			Computation:       initCodeCost + memExpansionCost + params.CreateGas + hashCost,
+			StateAccess:       0,
+			StateGrowth:       0,
+			HistoryGrowth:     0,
+			StateGrowthRefund: 0,
+		}, &CallGasDimensionInfo{
+			op:                     vm.OpCode(op),
+			gasCounterAtTimeOfCall: gas,
+			memoryExpansionCost:    memExpansionCost,
+			isValueSentWithCall:    false,
+			initCodeCost:           initCodeCost,
+			hashCost:               hashCost,
+		}, nil
+}
+
+// finishCalcCreateGas returns the gas used for the CREATE and CREATE2 opcodes
+// after finding out the deployment_code_execution_cost
+func finishCalcCreateGas(
+	totalGasUsed uint64,
+	codeExecutionCost uint64,
+	callGasDimensionInfo CallGasDimensionInfo,
+) GasesByDimension {
+	// totalGasUsed = init_code_cost + memory_expansion_cost + deployment_code_execution_cost + code_deposit_cost
+	codeDepositCost := totalGasUsed - params.CreateGas - callGasDimensionInfo.initCodeCost -
+		callGasDimensionInfo.memoryExpansionCost - callGasDimensionInfo.hashCost - codeExecutionCost
+	// CALL costs 25000 for write to an empty account,
+	// so of the 32000 static cost of CREATE and CREATE2 give 25000 to storage growth,
+	// and then cut the last 7000 in half for compute and state growth to
+	// manage the cost of intializing new accounts
+	staticNonNewAccountCost := params.CreateGas - params.CallNewAccountGas
+	computeNonNewAccountCost := staticNonNewAccountCost / 2
+	growthNonNewAccountCost := staticNonNewAccountCost - computeNonNewAccountCost
+	return GasesByDimension{
+		Computation:       callGasDimensionInfo.initCodeCost + callGasDimensionInfo.memoryExpansionCost + callGasDimensionInfo.hashCost + computeNonNewAccountCost,
+		StateAccess:       0,
+		StateGrowth:       growthNonNewAccountCost + params.CallNewAccountGas + codeDepositCost,
+		HistoryGrowth:     0,
+		StateGrowthRefund: 0,
+	}
 }
 
 // calcReadAndStoreCallGas returns the gas used for the `CALL, CALLCODE` opcodes
@@ -572,6 +642,8 @@ func calcReadAndStoreCallGas(
 			gasCounterAtTimeOfCall: gas,
 			memoryExpansionCost:    memExpansionCost,
 			isValueSentWithCall:    valueSentWithCall > 0,
+			initCodeCost:           0,
+			hashCost:               0,
 		}, nil
 
 }
@@ -584,7 +656,7 @@ func calcReadAndStoreCallGas(
 // when the call is first seen, and then calling finishX after the call has returned.
 // this function finishes the CALL and CALLCODE opcodes
 func finishCalcStateReadAndStoreCallGas(
-	totalCallGasUsed uint64,
+	totalGasUsed uint64,
 	codeExecutionCost uint64,
 	callGasDimensionInfo CallGasDimensionInfo,
 ) GasesByDimension {
@@ -596,7 +668,7 @@ func finishCalcStateReadAndStoreCallGas(
 	// the formula for call is:
 	// dynamic_gas = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost + value_to_empty_account_cost
 	// now with leftOver, we are left with address_access_cost + value_to_empty_account_cost
-	leftOver := totalCallGasUsed - callGasDimensionInfo.memoryExpansionCost - codeExecutionCost - positiveValueCostLessStipend
+	leftOver := totalGasUsed - callGasDimensionInfo.memoryExpansionCost - codeExecutionCost - positiveValueCostLessStipend
 	// the maximum address_access_cost can ever be is 2600. Meanwhile value_to_empty_account_cost is at minimum 25000
 	// so if leftOver is greater than 2600 then we know that the value_to_empty_account_cost was 25000
 	// and whatever was left over after that was address_access_cost
