@@ -26,11 +26,62 @@ const (
 	StateGrowthRefund GasDimension = 4
 )
 
+// in the case of opcodes like CALL, STATICCALL, DELEGATECALL, etc,
+// in order to calculate the gas dimensions we need to allow the call to complete
+// and then look at the data from that completion after the call has returned.
+// CallGasDimensionInfo retains the relevant information that needs to be remembered
+// from the start of the call to compute the gas dimensions after the call has returned.
+type CallGasDimensionInfo struct {
+	op                     vm.OpCode
+	gasCounterAtTimeOfCall uint64
+	memoryExpansionCost    uint64
+}
+
+// CallGasDimensionStackInfo is a struct that contains the gas dimension info
+// and the position of the dimension log in the dimension logs array
+// so that the finish functions can directly write into the dimension logs
+type CallGasDimensionStackInfo struct {
+	gasDimensionInfo     CallGasDimensionInfo
+	dimensionLogPosition int
+	executionCost        uint64
+}
+
+// CallGasDimensionStack is a stack of CallGasDimensionStackInfo
+// so that RETURN opcodes can pop the appropriate gas dimension info
+// and then write the gas dimensions into the dimension logs
+type CallGasDimensionStack []CallGasDimensionStackInfo
+
+// Push a new CallGasDimensionStackInfo onto the stack
+func (c *CallGasDimensionStack) Push(info CallGasDimensionStackInfo) { // gasDimensionInfo CallGasDimensionInfo, dimensionLogPosition int, executionCost uint64) {
+	*c = append(*c, info)
+}
+
+// Pop a CallGasDimensionStackInfo from the stack, returning false if the stack is empty
+func (c *CallGasDimensionStack) Pop() (CallGasDimensionStackInfo, bool) {
+	if len(*c) == 0 {
+		return CallGasDimensionStackInfo{}, false
+	}
+	last := (*c)[len(*c)-1]
+	*c = (*c)[:len(*c)-1]
+	return last, true
+}
+
+// UpdateExecutionCost updates the execution cost for the top layer of the call stack
+// so that the call knows how much gas was consumed by child opcodes in that call depth
+func (c *CallGasDimensionStack) UpdateExecutionCost(executionCost uint64) {
+	if len(*c) == 0 {
+		return
+	}
+	top := (*c)[len(*c)-1]
+	top.executionCost += executionCost
+	(*c)[len(*c)-1] = top
+}
+
 // calcGasDimensionFunc defines a type signature that takes the opcode
 // tracing data for an opcode and return the gas consumption for each dimension
 // for that given opcode.
 //
-// INVARIANT: the sum of the gas consumption for each dimension
+// INVARIANT (for non-call opcodes): the sum of the gas consumption for each dimension
 // equals the input `gas` to this function
 type calcGasDimensionFunc func(
 	pc uint64,
@@ -40,6 +91,19 @@ type calcGasDimensionFunc func(
 	rData []byte,
 	depth int,
 	err error,
+) (GasesByDimension, *CallGasDimensionInfo)
+
+// finishCalcGasDimensionFunc defines a type signature that takes the
+// code execution cost of the call and the callGasDimensionInfo
+// and returns the gas dimensions for the call opcode itself
+// THIS EXPLICITLY BREAKS THE ABOVE INVARIANT FOR THE NON-CALL OPCODES
+// as call opcodes only contain the dimensions for the call itself,
+// and the dimensions of their children are computed as their children are
+// seen/traced.
+type finishCalcGasDimensionFunc func(
+	totalCallGasUsed uint64,
+	codeExecutionCost uint64,
+	callGasDimensionInfo CallGasDimensionInfo,
 ) GasesByDimension
 
 // getCalcGasDimensionFunc is a massive case switch
@@ -85,6 +149,20 @@ func getCalcGasDimensionFunc(op vm.OpCode) calcGasDimensionFunc {
 	}
 }
 
+// for any opcode that increases the depth of the stack,
+// we have to call a finish function after the call has returned
+// to know the code_execution_cost of the call
+// and then use that to compute the gas dimensions
+// for the call opcode itself.
+func getFinishCalcGasDimensionFunc(op vm.OpCode) finishCalcGasDimensionFunc {
+	switch op {
+	case vm.DELEGATECALL, vm.STATICCALL:
+		return finishCalcStateReadCallGas
+	default:
+		return nil
+	}
+}
+
 // calcSimpleSingleDimensionGas returns the gas used for the
 // simplest of transactions, that only use the computation dimension
 func calcSimpleSingleDimensionGas(
@@ -95,14 +173,14 @@ func calcSimpleSingleDimensionGas(
 	rData []byte,
 	depth int,
 	err error,
-) GasesByDimension {
+) (GasesByDimension, *CallGasDimensionInfo) {
 	return GasesByDimension{
 		Computation:       cost,
 		StateAccess:       0,
 		StateGrowth:       0,
 		HistoryGrowth:     0,
 		StateGrowthRefund: 0,
-	}
+	}, nil
 }
 
 // calcSimpleAddressAccessSetGas returns the gas used
@@ -121,7 +199,7 @@ func calcSimpleAddressAccessSetGas(
 	rData []byte,
 	depth int,
 	err error,
-) GasesByDimension {
+) (GasesByDimension, *CallGasDimensionInfo) {
 	// We do not have access to StateDb.AddressInAccessList and StateDb.SlotInAccessList
 	// to check cold storage access directly.
 	// Additionally, cold storage access for these address opcodes are handled differently
@@ -141,7 +219,7 @@ func calcSimpleAddressAccessSetGas(
 			StateGrowth:       0,
 			HistoryGrowth:     0,
 			StateGrowthRefund: 0,
-		}
+		}, nil
 	}
 	return GasesByDimension{
 		Computation:       cost,
@@ -149,7 +227,7 @@ func calcSimpleAddressAccessSetGas(
 		StateGrowth:       0,
 		HistoryGrowth:     0,
 		StateGrowthRefund: 0,
-	}
+	}, nil
 }
 
 // calcSLOADGas returns the gas used for the `SLOAD` opcode
@@ -162,7 +240,7 @@ func calcSLOADGas(
 	rData []byte,
 	depth int,
 	err error,
-) GasesByDimension {
+) (GasesByDimension, *CallGasDimensionInfo) {
 	// we don't have access to StateDb.SlotInAccessList
 	// so we have to infer whether the slot was cold or warm based on the absolute cost
 	// and then deduce the dimensions from that
@@ -175,7 +253,7 @@ func calcSLOADGas(
 			StateGrowth:       0,
 			HistoryGrowth:     0,
 			StateGrowthRefund: 0,
-		}
+		}, nil
 	}
 	return GasesByDimension{
 		Computation:       cost,
@@ -183,7 +261,7 @@ func calcSLOADGas(
 		StateGrowth:       0,
 		HistoryGrowth:     0,
 		StateGrowthRefund: 0,
-	}
+	}, nil
 }
 
 // calcExtCodeCopyGas returns the gas used
@@ -198,7 +276,7 @@ func calcExtCodeCopyGas(
 	rData []byte,
 	depth int,
 	err error,
-) GasesByDimension {
+) (GasesByDimension, *CallGasDimensionInfo) {
 	// extcodecody has three components to its gas cost:
 	// 1. minimum_word_size = (size + 31) / 32
 	// 2. memory_expansion_cost
@@ -218,16 +296,9 @@ func calcExtCodeCopyGas(
 	size := stack[lenStack-4].Uint64()   // size in stack position 4
 	offset := stack[lenStack-2].Uint64() // destination offset in stack position 2
 
-	// computing the memory gas cost requires knowing a "previous" price
-	var emptyMem []byte = make([]byte, 0)
-	memoryDataBeforeExtCodeCopyApplied := scope.MemoryData()
-	_, lastGasCost, memErr := memoryGasCost(emptyMem, 0, uint64(len(memoryDataBeforeExtCodeCopyApplied)))
+	memoryExpansionCost, memErr := memoryExpansionCost(scope.MemoryData(), offset, size)
 	if memErr != nil {
-		return GasesByDimension{}
-	}
-	memoryExpansionCost, _, memErr := memoryGasCost(memoryDataBeforeExtCodeCopyApplied, lastGasCost, size+offset)
-	if memErr != nil {
-		return GasesByDimension{}
+		return GasesByDimension{}, nil
 	}
 	minimumWordSizeCost := (size + 31) / 32 * 3
 	leftOver := cost - memoryExpansionCost - minimumWordSizeCost
@@ -243,7 +314,7 @@ func calcExtCodeCopyGas(
 		StateGrowth:       0,
 		HistoryGrowth:     0,
 		StateGrowthRefund: 0,
-	}
+	}, nil
 }
 
 // calcStateReadCallGas returns the gas used
@@ -263,10 +334,77 @@ func calcStateReadCallGas(
 	rData []byte,
 	depth int,
 	err error,
-) GasesByDimension {
+) (GasesByDimension, *CallGasDimensionInfo) {
+	stack := scope.StackData()
+	lenStack := len(stack)
+	// argsOffset in stack position 3 (1-indexed)
+	// argsSize in stack position 4
+	argsOffset := stack[lenStack-3].Uint64()
+	argsSize := stack[lenStack-4].Uint64()
+	// return data offset in stack position 5
+	// return data size in stack position 6
+	returnDataOffset := stack[lenStack-5].Uint64()
+	returnDataSize := stack[lenStack-6].Uint64()
 
-	// todo: implement
-	return GasesByDimension{}
+	// to figure out memory expansion cost, take the bigger of the two memory writes
+	// which will determine how big memory is expanded to
+	var memExpansionOffset uint64 = argsOffset
+	var memExpansionSize uint64 = argsSize
+	if returnDataOffset+returnDataSize > argsOffset+argsSize {
+		memExpansionOffset = returnDataOffset
+		memExpansionSize = returnDataSize
+	}
+
+	memoryExpansionCost, memErr := memoryExpansionCost(scope.MemoryData(), memExpansionOffset, memExpansionSize)
+	if memErr != nil {
+		return GasesByDimension{}, nil
+	}
+
+	// at a minimum, the cost is 100 for the warm access set
+	// and the memory expansion cost
+	computation := memoryExpansionCost + params.WarmStorageReadCostEIP2929
+	// see finishCalcStateReadCallGas for more details
+	return GasesByDimension{
+			Computation:       computation,
+			StateAccess:       0,
+			StateGrowth:       0,
+			HistoryGrowth:     0,
+			StateGrowthRefund: 0,
+		}, &CallGasDimensionInfo{
+			op:                     vm.OpCode(op),
+			gasCounterAtTimeOfCall: gas,
+			memoryExpansionCost:    memoryExpansionCost,
+		}
+}
+
+// In order to calculate the gas dimensions for opcodes that
+// increase the stack depth, we need to know
+// the computed gas consumption of the code executed in the call
+// AFAIK, this is only computable after the call has returned
+// the caller is responsible for maintaining the state of the CallGasDimensionInfo
+// when the call is first seen, and then calling finishX after the call has returned.
+func finishCalcStateReadCallGas(
+	totalCallGasUsed uint64,
+	codeExecutionCost uint64,
+	callGasDimensionInfo CallGasDimensionInfo,
+) GasesByDimension {
+	leftOver := totalCallGasUsed - callGasDimensionInfo.memoryExpansionCost - codeExecutionCost
+	if leftOver == params.ColdAccountAccessCostEIP2929 {
+		return GasesByDimension{
+			Computation:       params.WarmStorageReadCostEIP2929 + callGasDimensionInfo.memoryExpansionCost,
+			StateAccess:       params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929,
+			StateGrowth:       0,
+			HistoryGrowth:     0,
+			StateGrowthRefund: 0,
+		}
+	}
+	return GasesByDimension{
+		Computation:       leftOver + callGasDimensionInfo.memoryExpansionCost,
+		StateAccess:       0,
+		StateGrowth:       0,
+		HistoryGrowth:     0,
+		StateGrowthRefund: 0,
+	}
 }
 
 // calcLogGas returns the gas used for the `LOG0, LOG1, LOG2, LOG3, LOG4` opcodes
@@ -283,7 +421,7 @@ func calcLogGas(
 	rData []byte,
 	depth int,
 	err error,
-) GasesByDimension {
+) (GasesByDimension, *CallGasDimensionInfo) {
 	// log gas = 375 + 375 * topic_count + 8 * size + memory_expansion_cost
 	// 8 * size is always history growth
 	// the size is charged 8 gas per byte, and 32 bytes per topic are
@@ -319,7 +457,7 @@ func calcLogGas(
 		StateGrowth:       0,
 		HistoryGrowth:     historyGrowthCost,
 		StateGrowthRefund: 0,
-	}
+	}, nil
 }
 
 // calcCreateGas returns the gas used for the CREATE set of opcodes
@@ -334,9 +472,9 @@ func calcCreateGas(
 	rData []byte,
 	depth int,
 	err error,
-) GasesByDimension {
+) (GasesByDimension, *CallGasDimensionInfo) {
 	// todo: implement
-	return GasesByDimension{}
+	return GasesByDimension{}, nil
 }
 
 // calcReadAndStoreCallGas returns the gas used for the `CALL, CALLCODE` opcodes
@@ -353,9 +491,9 @@ func calcReadAndStoreCallGas(
 	rData []byte,
 	depth int,
 	err error,
-) GasesByDimension {
+) (GasesByDimension, *CallGasDimensionInfo) {
 	// todo: implement
-	return GasesByDimension{}
+	return GasesByDimension{}, nil
 }
 
 // calcSStoreGas returns the gas used for the `SSTORE` opcode
@@ -371,9 +509,9 @@ func calcSStoreGas(
 	rData []byte,
 	depth int,
 	err error,
-) GasesByDimension {
+) (GasesByDimension, *CallGasDimensionInfo) {
 	// todo: implement
-	return GasesByDimension{}
+	return GasesByDimension{}, nil
 }
 
 // calcSelfDestructGas returns the gas used for the `SELFDESTRUCT` opcode
@@ -386,7 +524,7 @@ func calcSelfDestructGas(
 	rData []byte,
 	depth int,
 	err error,
-) GasesByDimension {
+) (GasesByDimension, *CallGasDimensionInfo) {
 	// reverse engineer the gas dimensions from the cost
 	// two things we care about:
 	// address being cold or warm for the access set
@@ -411,7 +549,7 @@ func calcSelfDestructGas(
 			StateGrowth:       params.CreateBySelfdestructGas,
 			HistoryGrowth:     0,
 			StateGrowthRefund: 0,
-		}
+		}, nil
 	} else if cost == params.CreateBySelfdestructGas+params.SelfdestructGasEIP150+params.ColdAccountAccessCostEIP2929 {
 		// cold and funds target empty
 		// 32600 gas total
@@ -424,7 +562,7 @@ func calcSelfDestructGas(
 			StateGrowth:       params.CreateBySelfdestructGas,
 			HistoryGrowth:     0,
 			StateGrowthRefund: 0,
-		}
+		}, nil
 	} else if cost == params.SelfdestructGasEIP150+params.ColdAccountAccessCostEIP2929 {
 		// address lookup was cold but funds target has money already. Cost is 7600
 		// 100 for warm cost (computation)
@@ -436,7 +574,7 @@ func calcSelfDestructGas(
 			StateGrowth:       0,
 			HistoryGrowth:     0,
 			StateGrowthRefund: 0,
-		}
+		}, nil
 	}
 	// if you reach here, then the cost was 5000
 	// in which case give 100 for a warm access read
@@ -447,12 +585,64 @@ func calcSelfDestructGas(
 		StateGrowth:       0,
 		HistoryGrowth:     0,
 		StateGrowthRefund: 0,
-	}
+	}, nil
 }
 
 // ############################################################################
 //                        HELPER FUNCTIONS
 // ############################################################################
+
+// Calculating the memory expansion cost requires calling `memoryGasCost` twice
+// because computing the memory gas cost expects to know a "previous" price
+func memoryExpansionCost(memoryBefore []byte, offset uint64, size uint64) (memoryExpansionCost uint64, err error) {
+	// calculating the "lastGasCost" requires working around uint64 overflow
+	var lastGasCost uint64 = calculateLastGasCost(toWordSize(uint64(len(memoryBefore))))
+	memoryExpansionCost, _, err = memoryGasCost(memoryBefore, lastGasCost, size+offset)
+	return memoryExpansionCost, err
+}
+
+func calculateLastGasCost(targetWords uint64) uint64 {
+	// Start from 0 words and build up
+	var currentWords uint64 = 0
+	var totalGas uint64 = 0
+
+	// Use a reasonable step size that won't cause overflow
+	// We'll increase by 2^20 words (about 1M words) at a time maximum
+	const maxStep uint64 = 1 << 20
+
+	for currentWords < targetWords {
+		var nextWords uint64
+		if targetWords-currentWords > maxStep {
+			nextWords = currentWords + maxStep
+		} else {
+			nextWords = targetWords
+		}
+		// Calculate incremental cost from currentWords to nextWords
+		// Using the formula: (newWords - oldWords) * (3 + (newWords + oldWords) / 512)
+		wordsDiff := nextWords - currentWords
+		wordsSum := nextWords + currentWords
+
+		// Use 64-bit math carefully to avoid overflow
+		// First part: 3 * wordsDiff
+		linearCost := 3 * wordsDiff
+
+		// Second part: wordsDiff * wordsSum / 512
+		// We do this carefully to avoid overflow:
+		// 1. Calculate wordsDiff * (wordsSum / 512)
+		// 2. Add any remainder: wordsDiff * (wordsSum % 512) / 512
+		quadraticCost := wordsDiff * (wordsSum / 512)
+		remainder := wordsDiff * (wordsSum % 512) / 512
+
+		incrementalCost := linearCost + quadraticCost + remainder
+
+		// Add to total cost
+		totalGas += incrementalCost
+
+		// Move to next chunk
+		currentWords = nextWords
+	}
+	return totalGas
+}
 
 // copied from go-ethereum/core/vm/gas_table.go because not exported there
 // toWordSize returns the ceiled word size required for memory expansion.

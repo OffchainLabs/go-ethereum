@@ -2,6 +2,7 @@ package native
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -28,6 +29,9 @@ type DimensionLog struct {
 	StateGrowth           uint64    `json:"stateGrowth"`
 	HistoryGrowth         uint64    `json:"historyGrowth"`
 	StateGrowthRefund     uint64    `json:"stateGrowthRefund"`
+	CallRealGas           uint64    `json:"callRealGas"`
+	CallExecutionCost     uint64    `json:"callExecutionCost"`
+	CallMemoryExpansion   uint64    `json:"callMemoryExpansion"`
 	Err                   error     `json:"-"`
 }
 
@@ -41,11 +45,14 @@ func (d *DimensionLog) ErrorString() string {
 
 // gasDimensionTracer struct
 type GasDimensionTracer struct {
-	env     *tracing.VMContext
-	txHash  common.Hash
-	logs    []DimensionLog
-	err     error
-	usedGas uint64
+	env            *tracing.VMContext
+	txHash         common.Hash
+	logs           []DimensionLog
+	err            error
+	usedGas        uint64
+	callStack      CallGasDimensionStack
+	depth          int
+	previousOpcode vm.OpCode
 
 	interrupt atomic.Bool // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption
@@ -59,7 +66,9 @@ func NewGasDimensionTracer(
 	_ json.RawMessage,
 ) (*tracers.Tracer, error) {
 
-	t := &GasDimensionTracer{}
+	t := &GasDimensionTracer{
+		depth: 1,
+	}
 
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
@@ -91,12 +100,29 @@ func (t *GasDimensionTracer) OnOpcode(
 		return
 	}
 
+	if depth > t.depth {
+		t.depth = depth
+	}
+
 	f := getCalcGasDimensionFunc(vm.OpCode(op))
-	gasesByDimension := f(pc, op, gas, cost, scope, rData, depth, err)
+	gasesByDimension, callStackInfo := f(pc, op, gas, cost, scope, rData, depth, err)
+	// if callStackInfo is not nil then we need to take a note of the index of the
+	// DimensionLog that represents this opcode and save the callStackInfo
+	// to call finishX after the call has returned
+	if callStackInfo != nil {
+		opcodeLogIndex := len(t.logs)
+		t.callStack.Push(
+			CallGasDimensionStackInfo{
+				gasDimensionInfo:     *callStackInfo,
+				dimensionLogPosition: opcodeLogIndex,
+				executionCost:        0,
+			})
+	}
+	opcode := vm.OpCode(op)
 
 	t.logs = append(t.logs, DimensionLog{
 		Pc:                    pc,
-		Op:                    vm.OpCode(op),
+		Op:                    opcode,
 		Depth:                 depth,
 		OneDimensionalGasCost: cost,
 		Computation:           gasesByDimension[Computation],
@@ -106,6 +132,55 @@ func (t *GasDimensionTracer) OnOpcode(
 		StateGrowthRefund:     gasesByDimension[StateGrowthRefund],
 		Err:                   err,
 	})
+
+	// if the opcode returns from the call stack depth, or
+	// if this is an opcode immediately after a call that did not increase the stack depth
+	// because it called an empty account or contract or wrong function signature,
+	// call the appropriate finishX function to write the gas dimensions
+	// for the call that increased the stack depth in the past
+	if depth < t.depth || (t.depth == depth && wasCall(t.previousOpcode)) {
+		stackInfo, ok := t.callStack.Pop()
+		// base case, stack is empty, do nothing
+		if !ok {
+			// I am not sure if we should consider an empty stack an error
+			// theoretically the top-level of the stack could be empty if
+			// the transaction was not inside a call and one of the four key opcodes
+			// was fired. That would halt execution of the transaction so theoretically
+			// doing nothing should be the correct behavior - i thiiiiiiink
+			//t.interrupt.Store(true)
+			//t.reason = fmt.Errorf("call stack depth is empty, top level should now halt execution")
+			return
+		}
+		finishFunction := getFinishCalcGasDimensionFunc(stackInfo.gasDimensionInfo.op)
+		if finishFunction == nil {
+			t.interrupt.Store(true)
+			t.reason = fmt.Errorf("no finish function found for RETURN opcode, call stack is messed up")
+			return
+		}
+		// IMPORTANT NOTE: for some reason the only reliable way to actually get the gas cost of the call
+		// is to subtract gas at time of call from gas at opcode AFTER return
+		gasUsedByCall := stackInfo.gasDimensionInfo.gasCounterAtTimeOfCall - gas
+		gasesByDimension := finishFunction(gasUsedByCall, stackInfo.executionCost, stackInfo.gasDimensionInfo)
+		callDimensionLog := t.logs[stackInfo.dimensionLogPosition]
+		callDimensionLog.Computation = gasesByDimension[Computation]
+		callDimensionLog.StateAccess = gasesByDimension[StateAccess]
+		callDimensionLog.StateGrowth = gasesByDimension[StateGrowth]
+		callDimensionLog.HistoryGrowth = gasesByDimension[HistoryGrowth]
+		callDimensionLog.StateGrowthRefund = gasesByDimension[StateGrowthRefund]
+		callDimensionLog.CallRealGas = gasUsedByCall
+		callDimensionLog.CallExecutionCost = stackInfo.executionCost
+		callDimensionLog.CallMemoryExpansion = stackInfo.gasDimensionInfo.memoryExpansionCost
+		t.logs[stackInfo.dimensionLogPosition] = callDimensionLog
+		t.depth = depth
+	}
+
+	// if we are in a call stack depth greater than 0, then we need to track the execution gas
+	// of our own code so that when the call returns, we can write the gas dimensions for the call opcode itself
+	// but we shouldn't do this if we are the call ourselves!
+	if len(t.callStack) > 0 && callStackInfo == nil {
+		t.callStack.UpdateExecutionCost(cost)
+	}
+	t.previousOpcode = opcode
 }
 
 /*
@@ -172,6 +247,12 @@ func (t *GasDimensionTracer) Stop(err error) {
 //                        JSON OUTPUT PRODUCTION
 // ############################################################################
 
+// wasCall returns true if the opcode is a type of opcode that makes calls increasing the stack depth
+// todo: does CREATE and CREATE2 count?
+func wasCall(opcode vm.OpCode) bool {
+	return opcode == vm.CALL || opcode == vm.CALLCODE || opcode == vm.DELEGATECALL || opcode == vm.STATICCALL
+}
+
 // DimensionLogs returns the captured log entries.
 func (t *GasDimensionTracer) DimensionLogs() []DimensionLog { return t.logs }
 
@@ -220,6 +301,9 @@ type DimensionLogRes struct {
 	StateGrowth           uint64 `json:"growth,omitempty"`
 	HistoryGrowth         uint64 `json:"hist,omitempty"`
 	StateGrowthRefund     uint64 `json:"refund,omitempty"`
+	CallRealGas           uint64 `json:"callRealGas,omitempty"`
+	CallExecutionCost     uint64 `json:"callExecutionCost,omitempty"`
+	CallMemoryExpansion   uint64 `json:"callMemoryExpansion,omitempty"`
 	Err                   error  `json:"error,omitempty"`
 }
 
@@ -237,6 +321,9 @@ func formatLogs(logs []DimensionLog) []DimensionLogRes {
 			StateGrowth:           trace.StateGrowth,
 			HistoryGrowth:         trace.HistoryGrowth,
 			StateGrowthRefund:     trace.StateGrowthRefund,
+			CallRealGas:           trace.CallRealGas,
+			CallExecutionCost:     trace.CallExecutionCost,
+			CallMemoryExpansion:   trace.CallMemoryExpansion,
 			Err:                   trace.Err,
 		}
 	}
