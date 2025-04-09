@@ -147,11 +147,11 @@ func (t *GasDimensionTracer) OnOpcode(
 		Op:                    opcode,
 		Depth:                 depth,
 		OneDimensionalGasCost: cost,
-		Computation:           gasesByDimension[Computation],
-		StateAccess:           gasesByDimension[StateAccess],
-		StateGrowth:           gasesByDimension[StateGrowth],
-		HistoryGrowth:         gasesByDimension[HistoryGrowth],
-		StateGrowthRefund:     gasesByDimension[StateGrowthRefund],
+		Computation:           gasesByDimension.Computation,
+		StateAccess:           gasesByDimension.StateAccess,
+		StateGrowth:           gasesByDimension.StateGrowth,
+		HistoryGrowth:         gasesByDimension.HistoryGrowth,
+		StateGrowthRefund:     gasesByDimension.StateGrowthRefund,
 		Err:                   err,
 	})
 
@@ -197,11 +197,11 @@ func (t *GasDimensionTracer) OnOpcode(
 			gasUsedByCall := stackInfo.gasDimensionInfo.gasCounterAtTimeOfCall - gas
 			gasesByDimension := finishFunction(gasUsedByCall, stackInfo.executionCost, stackInfo.gasDimensionInfo)
 			callDimensionLog := t.logs[stackInfo.dimensionLogPosition]
-			callDimensionLog.Computation = gasesByDimension[Computation]
-			callDimensionLog.StateAccess = gasesByDimension[StateAccess]
-			callDimensionLog.StateGrowth = gasesByDimension[StateGrowth]
-			callDimensionLog.HistoryGrowth = gasesByDimension[HistoryGrowth]
-			callDimensionLog.StateGrowthRefund = gasesByDimension[StateGrowthRefund]
+			callDimensionLog.Computation = gasesByDimension.Computation
+			callDimensionLog.StateAccess = gasesByDimension.StateAccess
+			callDimensionLog.StateGrowth = gasesByDimension.StateGrowth
+			callDimensionLog.HistoryGrowth = gasesByDimension.HistoryGrowth
+			callDimensionLog.StateGrowthRefund = gasesByDimension.StateGrowthRefund
 			callDimensionLog.CallRealGas = gasUsedByCall
 			callDimensionLog.CallExecutionCost = stackInfo.executionCost
 			callDimensionLog.CallMemoryExpansion = stackInfo.gasDimensionInfo.memoryExpansionCost
