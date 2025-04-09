@@ -32,6 +32,8 @@ type DimensionLog struct {
 	CallRealGas           uint64    `json:"callRealGas"`
 	CallExecutionCost     uint64    `json:"callExecutionCost"`
 	CallMemoryExpansion   uint64    `json:"callMemoryExpansion"`
+	CreateInitCodeCost    uint64    `json:"createInitCodeCost"`
+	Create2HashCost       uint64    `json:"create2HashCost"`
 	Err                   error     `json:"-"`
 }
 
@@ -131,10 +133,10 @@ func (t *GasDimensionTracer) OnOpcode(
 	}
 	opcode := vm.OpCode(op)
 
-	if wasCall(opcode) && callStackInfo == nil || !wasCall(opcode) && callStackInfo != nil {
+	if wasCallOrCreate(opcode) && callStackInfo == nil || !wasCallOrCreate(opcode) && callStackInfo != nil {
 		t.interrupt.Store(true)
 		t.reason = fmt.Errorf(
-			"logic bug, calls should always be accompanied by callStackInfo and non-calls should not have callStackInfo %d %s %v",
+			"logic bug, calls/creates should always be accompanied by callStackInfo and non-calls should not have callStackInfo %d %s %v",
 			pc,
 			opcode.String(),
 			callStackInfo,
@@ -158,7 +160,7 @@ func (t *GasDimensionTracer) OnOpcode(
 	// if callStackInfo is not nil then we need to take a note of the index of the
 	// DimensionLog that represents this opcode and save the callStackInfo
 	// to call finishX after the call has returned
-	if wasCall(opcode) {
+	if wasCallOrCreate(opcode) {
 		opcodeLogIndex := len(t.logs) - 1 // minus 1 because we've already appended the log
 		t.callStack.Push(
 			CallGasDimensionStackInfo{
@@ -205,6 +207,8 @@ func (t *GasDimensionTracer) OnOpcode(
 			callDimensionLog.CallRealGas = gasUsedByCall
 			callDimensionLog.CallExecutionCost = stackInfo.executionCost
 			callDimensionLog.CallMemoryExpansion = stackInfo.gasDimensionInfo.memoryExpansionCost
+			callDimensionLog.CreateInitCodeCost = stackInfo.gasDimensionInfo.initCodeCost
+			callDimensionLog.Create2HashCost = stackInfo.gasDimensionInfo.hashCost
 			t.logs[stackInfo.dimensionLogPosition] = callDimensionLog
 			t.depth -= 1
 		}
@@ -246,9 +250,8 @@ func (t *GasDimensionTracer) Stop(err error) {
 // ############################################################################
 
 // wasCall returns true if the opcode is a type of opcode that makes calls increasing the stack depth
-// todo: does CREATE and CREATE2 count?
-func wasCall(opcode vm.OpCode) bool {
-	return opcode == vm.CALL || opcode == vm.CALLCODE || opcode == vm.DELEGATECALL || opcode == vm.STATICCALL
+func wasCallOrCreate(opcode vm.OpCode) bool {
+	return opcode == vm.CALL || opcode == vm.CALLCODE || opcode == vm.DELEGATECALL || opcode == vm.STATICCALL || opcode == vm.CREATE || opcode == vm.CREATE2
 }
 
 // DimensionLogs returns the captured log entries.
@@ -302,6 +305,8 @@ type DimensionLogRes struct {
 	CallRealGas           uint64 `json:"callRealGas,omitempty"`
 	CallExecutionCost     uint64 `json:"callExecutionCost,omitempty"`
 	CallMemoryExpansion   uint64 `json:"callMemoryExpansion,omitempty"`
+	CreateInitCodeCost    uint64 `json:"createInitCodeCost,omitempty"`
+	Create2HashCost       uint64 `json:"create2HashCost,omitempty"`
 	Err                   error  `json:"error,omitempty"`
 }
 
@@ -322,6 +327,8 @@ func formatLogs(logs []DimensionLog) []DimensionLogRes {
 			CallRealGas:           trace.CallRealGas,
 			CallExecutionCost:     trace.CallExecutionCost,
 			CallMemoryExpansion:   trace.CallMemoryExpansion,
+			CreateInitCodeCost:    trace.CreateInitCodeCost,
+			Create2HashCost:       trace.Create2HashCost,
 			Err:                   trace.Err,
 		}
 	}
