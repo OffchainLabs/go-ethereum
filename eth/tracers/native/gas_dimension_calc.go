@@ -15,16 +15,25 @@ import (
 // 1: Storage Access (Read/Write)
 // 2: State Growth (Expanding the size of the state)
 // 3: History Growth (Expanding the size of the history, especially on archive nodes)
-type GasesByDimension [5]uint64
-type GasDimension = uint8
-
-const (
-	Computation       GasDimension = 0
-	StateAccess       GasDimension = 1
-	StateGrowth       GasDimension = 2
-	HistoryGrowth     GasDimension = 3
-	StateGrowthRefund GasDimension = 4
-)
+// type GasesByDimension [5]uint64
+// type GasDimension = uint8
+//
+// const (
+//
+//	Computation       GasDimension = 0
+//	StateAccess       GasDimension = 1
+//	StateGrowth       GasDimension = 2
+//	HistoryGrowth     GasDimension = 3
+//	StateGrowthRefund GasDimension = 4
+//
+// )
+type GasesByDimension struct {
+	Computation       uint64
+	StateAccess       uint64
+	StateGrowth       uint64
+	HistoryGrowth     uint64
+	StateGrowthRefund uint64
+}
 
 // in the case of opcodes like CALL, STATICCALL, DELEGATECALL, etc,
 // in order to calculate the gas dimensions we need to allow the call to complete
@@ -35,6 +44,7 @@ type CallGasDimensionInfo struct {
 	op                     vm.OpCode
 	gasCounterAtTimeOfCall uint64
 	memoryExpansionCost    uint64
+	isValueSentWithCall    bool
 }
 
 // CallGasDimensionStackInfo is a struct that contains the gas dimension info
@@ -158,6 +168,8 @@ func getFinishCalcGasDimensionFunc(op vm.OpCode) finishCalcGasDimensionFunc {
 	switch op {
 	case vm.DELEGATECALL, vm.STATICCALL:
 		return finishCalcStateReadCallGas
+	case vm.CALL, vm.CALLCODE:
+		return finishCalcStateReadAndStoreCallGas
 	default:
 		return nil
 	}
@@ -386,6 +398,7 @@ func calcStateReadCallGas(
 			op:                     vm.OpCode(op),
 			gasCounterAtTimeOfCall: gas,
 			memoryExpansionCost:    memExpansionCost,
+			isValueSentWithCall:    false,
 		}, nil
 }
 
@@ -395,6 +408,7 @@ func calcStateReadCallGas(
 // AFAIK, this is only computable after the call has returned
 // the caller is responsible for maintaining the state of the CallGasDimensionInfo
 // when the call is first seen, and then calling finishX after the call has returned.
+// this function finishes the DELEGATECALL and STATICCALL opcodes
 func finishCalcStateReadCallGas(
 	totalCallGasUsed uint64,
 	codeExecutionCost uint64,
@@ -504,8 +518,119 @@ func calcReadAndStoreCallGas(
 	depth int,
 	err error,
 ) (GasesByDimension, *CallGasDimensionInfo, error) {
-	// todo: implement
-	return GasesByDimension{}, nil, nil
+	stack := scope.StackData()
+	lenStack := len(stack)
+	// value is in stack position 3
+	valueSentWithCall := stack[lenStack-3].Uint64()
+	// argsOffset in stack position 4 (1-indexed)
+	// argsSize in stack position 5
+	argsOffset := stack[lenStack-4].Uint64()
+	argsSize := stack[lenStack-5].Uint64()
+	// Note that opcodes with a byte size parameter of 0 will not trigger memory expansion, regardless of their offset parameters
+	if argsSize == 0 {
+		argsOffset = 0
+	}
+	// return data offset in stack position 6
+	// return data size in stack position 7
+	returnDataOffset := stack[lenStack-6].Uint64()
+	returnDataSize := stack[lenStack-7].Uint64()
+	// Note that opcodes with a byte size parameter of 0 will not trigger memory expansion, regardless of their offset parameters
+	if returnDataSize == 0 {
+		returnDataOffset = 0
+	}
+
+	// to figure out memory expansion cost, take the bigger of the two memory writes
+	// which will determine how big memory is expanded to
+	var memExpansionOffset uint64 = argsOffset
+	var memExpansionSize uint64 = argsSize
+	if returnDataOffset+returnDataSize > argsOffset+argsSize {
+		memExpansionOffset = returnDataOffset
+		memExpansionSize = returnDataSize
+	}
+
+	var memExpansionCost uint64 = 0
+	var memErr error = nil
+	if memExpansionOffset+memExpansionSize != 0 {
+		memExpansionCost, memErr = memoryExpansionCost(scope.MemoryData(), memExpansionOffset, memExpansionSize)
+		if memErr != nil {
+			return GasesByDimension{}, nil, memErr
+		}
+	}
+
+	// at a minimum, the cost is 100 for the warm access set
+	// and the memory expansion cost
+	computation := memExpansionCost + params.WarmStorageReadCostEIP2929
+	// see finishCalcStateReadCallGas for more details
+	return GasesByDimension{
+			Computation:       computation,
+			StateAccess:       0,
+			StateGrowth:       0,
+			HistoryGrowth:     0,
+			StateGrowthRefund: 0,
+		}, &CallGasDimensionInfo{
+			op:                     vm.OpCode(op),
+			gasCounterAtTimeOfCall: gas,
+			memoryExpansionCost:    memExpansionCost,
+			isValueSentWithCall:    valueSentWithCall > 0,
+		}, nil
+
+}
+
+// In order to calculate the gas dimensions for opcodes that
+// increase the stack depth, we need to know
+// the computed gas consumption of the code executed in the call
+// AFAIK, this is only computable after the call has returned
+// the caller is responsible for maintaining the state of the CallGasDimensionInfo
+// when the call is first seen, and then calling finishX after the call has returned.
+// this function finishes the CALL and CALLCODE opcodes
+func finishCalcStateReadAndStoreCallGas(
+	totalCallGasUsed uint64,
+	codeExecutionCost uint64,
+	callGasDimensionInfo CallGasDimensionInfo,
+) GasesByDimension {
+	// the stipend is 2300 and it is not charged to the call itself but used in the execution cost
+	var positiveValueCostLessStipend uint64 = 0
+	if callGasDimensionInfo.isValueSentWithCall {
+		positiveValueCostLessStipend = params.CallValueTransferGas - params.CallStipend
+	}
+	// the formula for call is:
+	// dynamic_gas = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost + value_to_empty_account_cost
+	// now with leftOver, we are left with address_access_cost + value_to_empty_account_cost
+	leftOver := totalCallGasUsed - callGasDimensionInfo.memoryExpansionCost - codeExecutionCost - positiveValueCostLessStipend
+	// the maximum address_access_cost can ever be is 2600. Meanwhile value_to_empty_account_cost is at minimum 25000
+	// so if leftOver is greater than 2600 then we know that the value_to_empty_account_cost was 25000
+	// and whatever was left over after that was address_access_cost
+	// callcode is the same as call except does not have value_to_empty_account_cost,
+	// so this code properly handles it coincidentally, too
+	if leftOver > params.ColdAccountAccessCostEIP2929 { // there is a value being sent to an empty account
+		var coldCost uint64 = 0
+		if leftOver-params.CallNewAccountGas == params.ColdAccountAccessCostEIP2929 {
+			coldCost = params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
+		}
+		return GasesByDimension{
+			Computation:       callGasDimensionInfo.memoryExpansionCost + params.WarmStorageReadCostEIP2929,
+			StateAccess:       coldCost + positiveValueCostLessStipend,
+			StateGrowth:       params.CallNewAccountGas,
+			HistoryGrowth:     0,
+			StateGrowthRefund: 0,
+		}
+	} else if leftOver == params.ColdAccountAccessCostEIP2929 {
+		var coldCost uint64 = params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
+		return GasesByDimension{
+			Computation:       callGasDimensionInfo.memoryExpansionCost + params.WarmStorageReadCostEIP2929,
+			StateAccess:       coldCost + positiveValueCostLessStipend,
+			StateGrowth:       0,
+			HistoryGrowth:     0,
+			StateGrowthRefund: 0,
+		}
+	}
+	return GasesByDimension{
+		Computation:       callGasDimensionInfo.memoryExpansionCost + params.WarmStorageReadCostEIP2929,
+		StateAccess:       positiveValueCostLessStipend,
+		StateGrowth:       0,
+		HistoryGrowth:     0,
+		StateGrowthRefund: 0,
+	}
 }
 
 // calcSStoreGas returns the gas used for the `SSTORE` opcode
