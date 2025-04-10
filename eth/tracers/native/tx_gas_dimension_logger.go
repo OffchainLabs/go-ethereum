@@ -16,7 +16,7 @@ import (
 
 // initializer for the tracer
 func init() {
-	tracers.DefaultDirectory.Register("gasDimension", NewGasDimensionTracer, false)
+	tracers.DefaultDirectory.Register("txGasDimensionLogger", NewTxGasDimensionLogger, false)
 }
 
 // DimensionLog emitted to the EVM each cycle and lists information about each opcode
@@ -48,7 +48,7 @@ func (d *DimensionLog) ErrorString() string {
 }
 
 // gasDimensionTracer struct
-type GasDimensionTracer struct {
+type TxGasDimensionLogger struct {
 	env               *tracing.VMContext
 	txHash            common.Hash
 	logs              []DimensionLog
@@ -65,13 +65,13 @@ type GasDimensionTracer struct {
 // gasDimensionTracer returns a new tracer that traces gas
 // usage for each opcode against the dimension of that opcode
 // takes a context, and json input for configuration parameters
-func NewGasDimensionTracer(
+func NewTxGasDimensionLogger(
 	ctx *tracers.Context,
 	_ json.RawMessage,
 	_ *params.ChainConfig,
 ) (*tracers.Tracer, error) {
 
-	t := &GasDimensionTracer{
+	t := &TxGasDimensionLogger{
 		depth:             1,
 		refundAccumulated: 0,
 	}
@@ -81,7 +81,6 @@ func NewGasDimensionTracer(
 			OnOpcode:  t.OnOpcode,
 			OnTxStart: t.OnTxStart,
 			OnTxEnd:   t.OnTxEnd,
-			//OnGasChange: t.OnGasChange,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
@@ -93,7 +92,7 @@ func NewGasDimensionTracer(
 // ############################################################################
 
 // hook into each opcode execution
-func (t *GasDimensionTracer) OnOpcode(
+func (t *TxGasDimensionLogger) OnOpcode(
 	pc uint64,
 	op byte,
 	gas, cost uint64,
@@ -153,7 +152,7 @@ func (t *GasDimensionTracer) OnOpcode(
 		Pc:                    pc,
 		Op:                    opcode,
 		Depth:                 depth,
-		OneDimensionalGasCost: cost,
+		OneDimensionalGasCost: gasesByDimension.OneDimensionalGasCost,
 		Computation:           gasesByDimension.Computation,
 		StateAccess:           gasesByDimension.StateAccess,
 		StateGrowth:           gasesByDimension.StateGrowth,
@@ -204,6 +203,7 @@ func (t *GasDimensionTracer) OnOpcode(
 			gasUsedByCall := stackInfo.gasDimensionInfo.gasCounterAtTimeOfCall - gas
 			gasesByDimension := finishFunction(gasUsedByCall, stackInfo.executionCost, stackInfo.gasDimensionInfo)
 			callDimensionLog := t.logs[stackInfo.dimensionLogPosition]
+			callDimensionLog.OneDimensionalGasCost = gasesByDimension.OneDimensionalGasCost
 			callDimensionLog.Computation = gasesByDimension.Computation
 			callDimensionLog.StateAccess = gasesByDimension.StateAccess
 			callDimensionLog.StateGrowth = gasesByDimension.StateGrowth
@@ -228,11 +228,11 @@ func (t *GasDimensionTracer) OnOpcode(
 	}
 }
 
-func (t *GasDimensionTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (t *TxGasDimensionLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
 }
 
-func (t *GasDimensionTracer) OnTxEnd(receipt *types.Receipt, err error) {
+func (t *TxGasDimensionLogger) OnTxEnd(receipt *types.Receipt, err error) {
 	if err != nil {
 		// Don't override vm error
 		if t.err == nil {
@@ -245,13 +245,13 @@ func (t *GasDimensionTracer) OnTxEnd(receipt *types.Receipt, err error) {
 }
 
 // signal the tracer to stop tracing, e.g. on timeout
-func (t *GasDimensionTracer) Stop(err error) {
+func (t *TxGasDimensionLogger) Stop(err error) {
 	t.reason = err
 	t.interrupt.Store(true)
 }
 
 // ############################################################################
-//                        JSON OUTPUT PRODUCTION
+//                                HELPERS
 // ############################################################################
 
 // wasCall returns true if the opcode is a type of opcode that makes calls increasing the stack depth
@@ -259,11 +259,27 @@ func wasCallOrCreate(opcode vm.OpCode) bool {
 	return opcode == vm.CALL || opcode == vm.CALLCODE || opcode == vm.DELEGATECALL || opcode == vm.STATICCALL || opcode == vm.CREATE || opcode == vm.CREATE2
 }
 
+func (t *TxGasDimensionLogger) GetOpRefund() uint64 {
+	return t.env.StateDB.GetRefund()
+}
+
+func (t *TxGasDimensionLogger) GetRefundAccumulated() uint64 {
+	return t.refundAccumulated
+}
+
+func (t *TxGasDimensionLogger) SetRefundAccumulated(refund uint64) {
+	t.refundAccumulated = refund
+}
+
+// ############################################################################
+//                        JSON OUTPUT PRODUCTION
+// ############################################################################
+
 // DimensionLogs returns the captured log entries.
-func (t *GasDimensionTracer) DimensionLogs() []DimensionLog { return t.logs }
+func (t *TxGasDimensionLogger) DimensionLogs() []DimensionLog { return t.logs }
 
 // Error returns the VM error captured by the trace.
-func (t *GasDimensionTracer) Error() error { return t.err }
+func (t *TxGasDimensionLogger) Error() error { return t.err }
 
 // ExecutionResult groups all dimension logs emitted by the EVM
 // while replaying a transaction in debug mode as well as transaction
@@ -279,7 +295,7 @@ type ExecutionResult struct {
 
 // produce json result for output from tracer
 // this is what the end-user actually gets from the RPC endpoint
-func (t *GasDimensionTracer) GetResult() (json.RawMessage, error) {
+func (t *TxGasDimensionLogger) GetResult() (json.RawMessage, error) {
 	// Tracing aborted
 	if t.reason != nil {
 		return nil, t.reason
