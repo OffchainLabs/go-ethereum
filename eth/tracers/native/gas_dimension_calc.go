@@ -25,21 +25,21 @@ type GasesByDimension struct {
 // CallGasDimensionInfo retains the relevant information that needs to be remembered
 // from the start of the call to compute the gas dimensions after the call has returned.
 type CallGasDimensionInfo struct {
-	op                     vm.OpCode
-	gasCounterAtTimeOfCall uint64
-	memoryExpansionCost    uint64
-	isValueSentWithCall    bool
-	initCodeCost           uint64
-	hashCost               uint64
+	Op                     vm.OpCode
+	GasCounterAtTimeOfCall uint64
+	MemoryExpansionCost    uint64
+	IsValueSentWithCall    bool
+	InitCodeCost           uint64
+	HashCost               uint64
 }
 
 // CallGasDimensionStackInfo is a struct that contains the gas dimension info
 // and the position of the dimension log in the dimension logs array
 // so that the finish functions can directly write into the dimension logs
 type CallGasDimensionStackInfo struct {
-	gasDimensionInfo     CallGasDimensionInfo
-	dimensionLogPosition int
-	executionCost        uint64
+	GasDimensionInfo     CallGasDimensionInfo
+	DimensionLogPosition int
+	ExecutionCost        uint64
 }
 
 // CallGasDimensionStack is a stack of CallGasDimensionStackInfo
@@ -69,7 +69,7 @@ func (c *CallGasDimensionStack) UpdateExecutionCost(executionCost uint64) {
 		return
 	}
 	top := (*c)[len(*c)-1]
-	top.executionCost += executionCost
+	top.ExecutionCost += executionCost
 	(*c)[len(*c)-1] = top
 }
 
@@ -88,7 +88,7 @@ type DimensionTracer interface {
 //
 // INVARIANT (for non-call opcodes): the sum of the gas consumption for each dimension
 // equals the input `gas` to this function
-type calcGasDimensionFunc func(
+type CalcGasDimensionFunc func(
 	t DimensionTracer,
 	pc uint64,
 	op byte,
@@ -99,14 +99,14 @@ type calcGasDimensionFunc func(
 	err error,
 ) (GasesByDimension, *CallGasDimensionInfo, error)
 
-// finishCalcGasDimensionFunc defines a type signature that takes the
+// FinishCalcGasDimensionFunc defines a type signature that takes the
 // code execution cost of the call and the callGasDimensionInfo
 // and returns the gas dimensions for the call opcode itself
 // THIS EXPLICITLY BREAKS THE ABOVE INVARIANT FOR THE NON-CALL OPCODES
 // as call opcodes only contain the dimensions for the call itself,
 // and the dimensions of their children are computed as their children are
 // seen/traced.
-type finishCalcGasDimensionFunc func(
+type FinishCalcGasDimensionFunc func(
 	totalGasUsed uint64,
 	codeExecutionCost uint64,
 	callGasDimensionInfo CallGasDimensionInfo,
@@ -115,7 +115,7 @@ type finishCalcGasDimensionFunc func(
 // getCalcGasDimensionFunc is a massive case switch
 // statement that returns which function to call
 // based on which opcode is being traced/executed
-func getCalcGasDimensionFunc(op vm.OpCode) calcGasDimensionFunc {
+func GetCalcGasDimensionFunc(op vm.OpCode) CalcGasDimensionFunc {
 	switch op {
 	//  Opcodes that Only Operate on Storage Read/Write (storage access in the short run)
 	// `BALANCE, EXTCODESIZE, EXTCODEHASH,`
@@ -160,7 +160,7 @@ func getCalcGasDimensionFunc(op vm.OpCode) calcGasDimensionFunc {
 // to know the code_execution_cost of the call
 // and then use that to compute the gas dimensions
 // for the call opcode itself.
-func getFinishCalcGasDimensionFunc(op vm.OpCode) finishCalcGasDimensionFunc {
+func GetFinishCalcGasDimensionFunc(op vm.OpCode) FinishCalcGasDimensionFunc {
 	switch op {
 	case vm.DELEGATECALL, vm.STATICCALL:
 		return finishCalcStateReadCallGas
@@ -405,12 +405,12 @@ func calcStateReadCallGas(
 			HistoryGrowth:         0,
 			StateGrowthRefund:     0,
 		}, &CallGasDimensionInfo{
-			op:                     vm.OpCode(op),
-			gasCounterAtTimeOfCall: gas,
-			memoryExpansionCost:    memExpansionCost,
-			isValueSentWithCall:    false,
-			initCodeCost:           0,
-			hashCost:               0,
+			Op:                     vm.OpCode(op),
+			GasCounterAtTimeOfCall: gas,
+			MemoryExpansionCost:    memExpansionCost,
+			IsValueSentWithCall:    false,
+			InitCodeCost:           0,
+			HashCost:               0,
 		}, nil
 }
 
@@ -426,11 +426,11 @@ func finishCalcStateReadCallGas(
 	codeExecutionCost uint64,
 	callGasDimensionInfo CallGasDimensionInfo,
 ) GasesByDimension {
-	leftOver := totalGasUsed - callGasDimensionInfo.memoryExpansionCost - codeExecutionCost
+	leftOver := totalGasUsed - callGasDimensionInfo.MemoryExpansionCost - codeExecutionCost
 	if leftOver == params.ColdAccountAccessCostEIP2929 {
 		return GasesByDimension{
 			OneDimensionalGasCost: totalGasUsed,
-			Computation:           params.WarmStorageReadCostEIP2929 + callGasDimensionInfo.memoryExpansionCost,
+			Computation:           params.WarmStorageReadCostEIP2929 + callGasDimensionInfo.MemoryExpansionCost,
 			StateAccess:           params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929,
 			StateGrowth:           0,
 			HistoryGrowth:         0,
@@ -439,7 +439,7 @@ func finishCalcStateReadCallGas(
 	}
 	return GasesByDimension{
 		OneDimensionalGasCost: totalGasUsed,
-		Computation:           leftOver + callGasDimensionInfo.memoryExpansionCost,
+		Computation:           leftOver + callGasDimensionInfo.MemoryExpansionCost,
 		StateAccess:           0,
 		StateGrowth:           0,
 		HistoryGrowth:         0,
@@ -550,12 +550,12 @@ func calcCreateGas(
 			HistoryGrowth:         0,
 			StateGrowthRefund:     0,
 		}, &CallGasDimensionInfo{
-			op:                     vm.OpCode(op),
-			gasCounterAtTimeOfCall: gas,
-			memoryExpansionCost:    memExpansionCost,
-			isValueSentWithCall:    false,
-			initCodeCost:           initCodeCost,
-			hashCost:               hashCost,
+			Op:                     vm.OpCode(op),
+			GasCounterAtTimeOfCall: gas,
+			MemoryExpansionCost:    memExpansionCost,
+			IsValueSentWithCall:    false,
+			InitCodeCost:           initCodeCost,
+			HashCost:               hashCost,
 		}, nil
 }
 
@@ -567,8 +567,8 @@ func finishCalcCreateGas(
 	callGasDimensionInfo CallGasDimensionInfo,
 ) GasesByDimension {
 	// totalGasUsed = init_code_cost + memory_expansion_cost + deployment_code_execution_cost + code_deposit_cost
-	codeDepositCost := totalGasUsed - params.CreateGas - callGasDimensionInfo.initCodeCost -
-		callGasDimensionInfo.memoryExpansionCost - callGasDimensionInfo.hashCost - codeExecutionCost
+	codeDepositCost := totalGasUsed - params.CreateGas - callGasDimensionInfo.InitCodeCost -
+		callGasDimensionInfo.MemoryExpansionCost - callGasDimensionInfo.HashCost - codeExecutionCost
 	// CALL costs 25000 for write to an empty account,
 	// so of the 32000 static cost of CREATE and CREATE2 give 25000 to storage growth,
 	// and then cut the last 7000 in half for compute and state growth to
@@ -578,7 +578,7 @@ func finishCalcCreateGas(
 	growthNonNewAccountCost := staticNonNewAccountCost - computeNonNewAccountCost
 	return GasesByDimension{
 		OneDimensionalGasCost: totalGasUsed,
-		Computation:           callGasDimensionInfo.initCodeCost + callGasDimensionInfo.memoryExpansionCost + callGasDimensionInfo.hashCost + computeNonNewAccountCost,
+		Computation:           callGasDimensionInfo.InitCodeCost + callGasDimensionInfo.MemoryExpansionCost + callGasDimensionInfo.HashCost + computeNonNewAccountCost,
 		StateAccess:           0,
 		StateGrowth:           growthNonNewAccountCost + params.CallNewAccountGas + codeDepositCost,
 		HistoryGrowth:         0,
@@ -653,12 +653,12 @@ func calcReadAndStoreCallGas(
 			HistoryGrowth:         0,
 			StateGrowthRefund:     0,
 		}, &CallGasDimensionInfo{
-			op:                     vm.OpCode(op),
-			gasCounterAtTimeOfCall: gas,
-			memoryExpansionCost:    memExpansionCost,
-			isValueSentWithCall:    valueSentWithCall > 0,
-			initCodeCost:           0,
-			hashCost:               0,
+			Op:                     vm.OpCode(op),
+			GasCounterAtTimeOfCall: gas,
+			MemoryExpansionCost:    memExpansionCost,
+			IsValueSentWithCall:    valueSentWithCall > 0,
+			InitCodeCost:           0,
+			HashCost:               0,
 		}, nil
 
 }
@@ -677,13 +677,13 @@ func finishCalcStateReadAndStoreCallGas(
 ) GasesByDimension {
 	// the stipend is 2300 and it is not charged to the call itself but used in the execution cost
 	var positiveValueCostLessStipend uint64 = 0
-	if callGasDimensionInfo.isValueSentWithCall {
+	if callGasDimensionInfo.IsValueSentWithCall {
 		positiveValueCostLessStipend = params.CallValueTransferGas - params.CallStipend
 	}
 	// the formula for call is:
 	// dynamic_gas = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost + value_to_empty_account_cost
 	// now with leftOver, we are left with address_access_cost + value_to_empty_account_cost
-	leftOver := totalGasUsed - callGasDimensionInfo.memoryExpansionCost - codeExecutionCost - positiveValueCostLessStipend
+	leftOver := totalGasUsed - callGasDimensionInfo.MemoryExpansionCost - codeExecutionCost - positiveValueCostLessStipend
 	// the maximum address_access_cost can ever be is 2600. Meanwhile value_to_empty_account_cost is at minimum 25000
 	// so if leftOver is greater than 2600 then we know that the value_to_empty_account_cost was 25000
 	// and whatever was left over after that was address_access_cost
@@ -696,7 +696,7 @@ func finishCalcStateReadAndStoreCallGas(
 		}
 		return GasesByDimension{
 			OneDimensionalGasCost: totalGasUsed,
-			Computation:           callGasDimensionInfo.memoryExpansionCost + params.WarmStorageReadCostEIP2929,
+			Computation:           callGasDimensionInfo.MemoryExpansionCost + params.WarmStorageReadCostEIP2929,
 			StateAccess:           coldCost + positiveValueCostLessStipend,
 			StateGrowth:           params.CallNewAccountGas,
 			HistoryGrowth:         0,
@@ -706,7 +706,7 @@ func finishCalcStateReadAndStoreCallGas(
 		var coldCost uint64 = params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
 		return GasesByDimension{
 			OneDimensionalGasCost: totalGasUsed,
-			Computation:           callGasDimensionInfo.memoryExpansionCost + params.WarmStorageReadCostEIP2929,
+			Computation:           callGasDimensionInfo.MemoryExpansionCost + params.WarmStorageReadCostEIP2929,
 			StateAccess:           coldCost + positiveValueCostLessStipend,
 			StateGrowth:           0,
 			HistoryGrowth:         0,
@@ -715,7 +715,7 @@ func finishCalcStateReadAndStoreCallGas(
 	}
 	return GasesByDimension{
 		OneDimensionalGasCost: totalGasUsed,
-		Computation:           callGasDimensionInfo.memoryExpansionCost + params.WarmStorageReadCostEIP2929,
+		Computation:           callGasDimensionInfo.MemoryExpansionCost + params.WarmStorageReadCostEIP2929,
 		StateAccess:           positiveValueCostLessStipend,
 		StateGrowth:           0,
 		HistoryGrowth:         0,
