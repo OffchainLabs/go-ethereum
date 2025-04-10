@@ -14,21 +14,21 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers/native"
 )
 
-type gasDimensionLiveTracer struct {
+type txGasDimensionLiveTraceLogger struct {
 	Path               string `json:"path"`
 	GasDimensionTracer *tracers.Tracer
 }
 
 func init() {
-	tracers.LiveDirectory.Register("gasDimension", newGasDimensionLiveTracer)
+	tracers.LiveDirectory.Register("txGasDimensionLogger", newTxGasDimensionLiveTraceLogger)
 }
 
-type gasDimensionLiveTracerConfig struct {
+type txGasDimensionLiveTraceLoggerConfig struct {
 	Path string `json:"path"` // Path to directory for output
 }
 
-func newGasDimensionLiveTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
-	var config gasDimensionLiveTracerConfig
+func newTxGasDimensionLiveTraceLogger(cfg json.RawMessage) (*tracing.Hooks, error) {
+	var config txGasDimensionLiveTraceLoggerConfig
 	if err := json.Unmarshal(cfg, &config); err != nil {
 		return nil, err
 	}
@@ -37,12 +37,12 @@ func newGasDimensionLiveTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 		return nil, fmt.Errorf("gas dimension live tracer path for output is required: %v", config)
 	}
 
-	gasDimensionTracer, err := native.NewGasDimensionTracer(nil, nil, nil)
+	gasDimensionTracer, err := native.NewTxGasDimensionLogger(nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	t := &gasDimensionLiveTracer{
+	t := &txGasDimensionLiveTraceLogger{
 		Path:               config.Path,
 		GasDimensionTracer: gasDimensionTracer,
 	}
@@ -56,16 +56,16 @@ func newGasDimensionLiveTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 	}, nil
 }
 
-func (t *gasDimensionLiveTracer) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (t *txGasDimensionLiveTraceLogger) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.GasDimensionTracer.OnTxStart(vm, tx, from)
 }
 
-func (t *gasDimensionLiveTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *txGasDimensionLiveTraceLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	t.GasDimensionTracer.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
 }
 
-func (t *gasDimensionLiveTracer) OnTxEnd(receipt *types.Receipt, err error) {
-	// first call the navive tracer's OnTxEnd
+func (t *txGasDimensionLiveTraceLogger) OnTxEnd(receipt *types.Receipt, err error) {
+	// first call the native tracer's OnTxEnd
 	t.GasDimensionTracer.OnTxEnd(receipt, err)
 
 	// then get the json from the native tracer
@@ -96,10 +96,10 @@ func (t *gasDimensionLiveTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	}
 }
 
-func (t *gasDimensionLiveTracer) OnBlockStart(ev tracing.BlockEvent) {
+func (t *txGasDimensionLiveTraceLogger) OnBlockStart(ev tracing.BlockEvent) {
 	fmt.Println("Live Tracer Seen: new block", ev.Block.Number())
 }
 
-func (t *gasDimensionLiveTracer) OnBlockEnd(err error) {
+func (t *txGasDimensionLiveTraceLogger) OnBlockEnd(err error) {
 	fmt.Println("Live Tracer Seen block end")
 }
