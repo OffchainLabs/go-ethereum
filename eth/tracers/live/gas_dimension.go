@@ -37,7 +37,7 @@ func newGasDimensionLiveTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 		return nil, fmt.Errorf("gas dimension live tracer path for output is required: %v", config)
 	}
 
-	gasDimensionTracer, err := native.NewGasDimensionTracer(nil, nil)
+	gasDimensionTracer, err := native.NewGasDimensionTracer(nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}

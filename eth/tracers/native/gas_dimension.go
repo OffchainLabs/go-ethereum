@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // initializer for the tracer
@@ -67,6 +68,7 @@ type GasDimensionTracer struct {
 func NewGasDimensionTracer(
 	ctx *tracers.Context,
 	_ json.RawMessage,
+	_ *params.ChainConfig,
 ) (*tracers.Tracer, error) {
 
 	t := &GasDimensionTracer{
@@ -273,7 +275,6 @@ type ExecutionResult struct {
 	TxHash        string            `json:"txHash"`
 	BlockTimetamp uint64            `json:"blockTimestamp"`
 	BlockNumber   *big.Int          `json:"blockNumber"`
-	GasPrice      *big.Int          `json:"gasPrice"`
 }
 
 // produce json result for output from tracer
@@ -292,7 +293,6 @@ func (t *GasDimensionTracer) GetResult() (json.RawMessage, error) {
 		TxHash:        t.txHash.Hex(),
 		BlockTimetamp: t.env.Time,
 		BlockNumber:   t.env.BlockNumber,
-		GasPrice:      t.env.GasPrice,
 	})
 }
 
