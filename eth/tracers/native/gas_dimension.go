@@ -28,7 +28,7 @@ type DimensionLog struct {
 	StateAccess           uint64    `json:"stateAccess"`
 	StateGrowth           uint64    `json:"stateGrowth"`
 	HistoryGrowth         uint64    `json:"historyGrowth"`
-	StateGrowthRefund     uint64    `json:"stateGrowthRefund"`
+	StateGrowthRefund     int64     `json:"stateGrowthRefund"`
 	CallRealGas           uint64    `json:"callRealGas"`
 	CallExecutionCost     uint64    `json:"callExecutionCost"`
 	CallMemoryExpansion   uint64    `json:"callMemoryExpansion"`
@@ -47,13 +47,14 @@ func (d *DimensionLog) ErrorString() string {
 
 // gasDimensionTracer struct
 type GasDimensionTracer struct {
-	env       *tracing.VMContext
-	txHash    common.Hash
-	logs      []DimensionLog
-	err       error
-	usedGas   uint64
-	callStack CallGasDimensionStack
-	depth     int
+	env               *tracing.VMContext
+	txHash            common.Hash
+	logs              []DimensionLog
+	err               error
+	usedGas           uint64
+	callStack         CallGasDimensionStack
+	depth             int
+	refundAccumulated uint64
 
 	interrupt atomic.Bool // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption
@@ -68,7 +69,8 @@ func NewGasDimensionTracer(
 ) (*tracers.Tracer, error) {
 
 	t := &GasDimensionTracer{
-		depth: 1,
+		depth:             1,
+		refundAccumulated: 0,
 	}
 
 	return &tracers.Tracer{
@@ -125,7 +127,7 @@ func (t *GasDimensionTracer) OnOpcode(
 	// get the gas dimension function
 	// if it's not a call, directly calculate the gas dimensions for the opcode
 	f := getCalcGasDimensionFunc(vm.OpCode(op))
-	gasesByDimension, callStackInfo, err := f(pc, op, gas, cost, scope, rData, depth, err)
+	gasesByDimension, callStackInfo, err := f(t, pc, op, gas, cost, scope, rData, depth, err)
 	if err != nil {
 		t.interrupt.Store(true)
 		t.reason = err
@@ -301,7 +303,7 @@ type DimensionLogRes struct {
 	StateAccess           uint64 `json:"access,omitempty"`
 	StateGrowth           uint64 `json:"growth,omitempty"`
 	HistoryGrowth         uint64 `json:"hist,omitempty"`
-	StateGrowthRefund     uint64 `json:"refund,omitempty"`
+	StateGrowthRefund     int64  `json:"refund,omitempty"`
 	CallRealGas           uint64 `json:"callRealGas,omitempty"`
 	CallExecutionCost     uint64 `json:"callExecutionCost,omitempty"`
 	CallMemoryExpansion   uint64 `json:"callMemoryExpansion,omitempty"`
