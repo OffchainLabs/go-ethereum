@@ -11,11 +11,12 @@ import (
 // GasesByDimension is a type that represents the gas consumption for each dimension
 // for a given opcode.
 type GasesByDimension struct {
-	Computation       uint64
-	StateAccess       uint64
-	StateGrowth       uint64
-	HistoryGrowth     uint64
-	StateGrowthRefund int64
+	OneDimensionalGasCost uint64 `json:"total"`
+	Computation           uint64 `json:"cpu"`
+	StateAccess           uint64 `json:"access,omitempty"`
+	StateGrowth           uint64 `json:"growth,omitempty"`
+	HistoryGrowth         uint64 `json:"hist,omitempty"`
+	StateGrowthRefund     int64  `json:"refund,omitempty"`
 }
 
 // in the case of opcodes like CALL, STATICCALL, DELEGATECALL, etc,
@@ -72,6 +73,15 @@ func (c *CallGasDimensionStack) UpdateExecutionCost(executionCost uint64) {
 	(*c)[len(*c)-1] = top
 }
 
+// define interface for a dimension tracer
+// that provides the minimum necessary methods
+// to make the calcSstore function work
+type DimensionTracer interface {
+	GetOpRefund() uint64
+	GetRefundAccumulated() uint64
+	SetRefundAccumulated(uint64)
+}
+
 // calcGasDimensionFunc defines a type signature that takes the opcode
 // tracing data for an opcode and return the gas consumption for each dimension
 // for that given opcode.
@@ -79,7 +89,7 @@ func (c *CallGasDimensionStack) UpdateExecutionCost(executionCost uint64) {
 // INVARIANT (for non-call opcodes): the sum of the gas consumption for each dimension
 // equals the input `gas` to this function
 type calcGasDimensionFunc func(
-	t *GasDimensionTracer,
+	t DimensionTracer,
 	pc uint64,
 	op byte,
 	gas, cost uint64,
@@ -166,7 +176,7 @@ func getFinishCalcGasDimensionFunc(op vm.OpCode) finishCalcGasDimensionFunc {
 // calcSimpleSingleDimensionGas returns the gas used for the
 // simplest of transactions, that only use the computation dimension
 func calcSimpleSingleDimensionGas(
-	t *GasDimensionTracer,
+	t DimensionTracer,
 	pc uint64,
 	op byte,
 	gas, cost uint64,
@@ -176,11 +186,12 @@ func calcSimpleSingleDimensionGas(
 	err error,
 ) (GasesByDimension, *CallGasDimensionInfo, error) {
 	return GasesByDimension{
-		Computation:       cost,
-		StateAccess:       0,
-		StateGrowth:       0,
-		HistoryGrowth:     0,
-		StateGrowthRefund: 0,
+		OneDimensionalGasCost: cost,
+		Computation:           cost,
+		StateAccess:           0,
+		StateGrowth:           0,
+		HistoryGrowth:         0,
+		StateGrowthRefund:     0,
 	}, nil, nil
 }
 
@@ -193,7 +204,7 @@ func calcSimpleSingleDimensionGas(
 // this includes:
 // `BALANCE, EXTCODESIZE, EXTCODEHASH
 func calcSimpleAddressAccessSetGas(
-	t *GasDimensionTracer,
+	t DimensionTracer,
 	pc uint64,
 	op byte,
 	gas, cost uint64,
@@ -216,26 +227,28 @@ func calcSimpleAddressAccessSetGas(
 
 	if cost == params.ColdAccountAccessCostEIP2929 {
 		return GasesByDimension{
-			Computation:       params.WarmStorageReadCostEIP2929,
-			StateAccess:       params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929,
-			StateGrowth:       0,
-			HistoryGrowth:     0,
-			StateGrowthRefund: 0,
+			OneDimensionalGasCost: cost,
+			Computation:           params.WarmStorageReadCostEIP2929,
+			StateAccess:           params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
 		}, nil, nil
 	}
 	return GasesByDimension{
-		Computation:       cost,
-		StateAccess:       0,
-		StateGrowth:       0,
-		HistoryGrowth:     0,
-		StateGrowthRefund: 0,
+		OneDimensionalGasCost: cost,
+		Computation:           cost,
+		StateAccess:           0,
+		StateGrowth:           0,
+		HistoryGrowth:         0,
+		StateGrowthRefund:     0,
 	}, nil, nil
 }
 
 // calcSLOADGas returns the gas used for the `SLOAD` opcode
 // SLOAD reads a slot from the state. It cannot expand the state
 func calcSLOADGas(
-	t *GasDimensionTracer,
+	t DimensionTracer,
 	pc uint64,
 	op byte,
 	gas, cost uint64,
@@ -251,19 +264,21 @@ func calcSLOADGas(
 		accessCost := params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929
 		leftOver := cost - accessCost
 		return GasesByDimension{
-			Computation:       leftOver,
-			StateAccess:       accessCost,
-			StateGrowth:       0,
-			HistoryGrowth:     0,
-			StateGrowthRefund: 0,
+			OneDimensionalGasCost: cost,
+			Computation:           leftOver,
+			StateAccess:           accessCost,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
 		}, nil, nil
 	}
 	return GasesByDimension{
-		Computation:       cost,
-		StateAccess:       0,
-		StateGrowth:       0,
-		HistoryGrowth:     0,
-		StateGrowthRefund: 0,
+		OneDimensionalGasCost: cost,
+		Computation:           cost,
+		StateAccess:           0,
+		StateGrowth:           0,
+		HistoryGrowth:         0,
+		StateGrowthRefund:     0,
 	}, nil, nil
 }
 
@@ -272,7 +287,7 @@ func calcSLOADGas(
 // the code of an external contract.
 // Hence only state read implications
 func calcExtCodeCopyGas(
-	t *GasDimensionTracer,
+	t DimensionTracer,
 	pc uint64,
 	op byte,
 	gas, cost uint64,
@@ -313,11 +328,12 @@ func calcExtCodeCopyGas(
 	}
 	computation := cost - stateAccess
 	return GasesByDimension{
-		Computation:       computation,
-		StateAccess:       stateAccess,
-		StateGrowth:       0,
-		HistoryGrowth:     0,
-		StateGrowthRefund: 0,
+		OneDimensionalGasCost: cost,
+		Computation:           computation,
+		StateAccess:           stateAccess,
+		StateGrowth:           0,
+		HistoryGrowth:         0,
+		StateGrowthRefund:     0,
 	}, nil, nil
 }
 
@@ -331,7 +347,7 @@ func calcExtCodeCopyGas(
 // are accounted for on those opcodes (e.g. SSTORE), which means the delegatecall opcode itself
 // only has state read implications. Staticcall is the same but even more read-only.
 func calcStateReadCallGas(
-	t *GasDimensionTracer,
+	t DimensionTracer,
 	pc uint64,
 	op byte,
 	gas, cost uint64,
@@ -382,11 +398,12 @@ func calcStateReadCallGas(
 	computation := memExpansionCost + params.WarmStorageReadCostEIP2929
 	// see finishCalcStateReadCallGas for more details
 	return GasesByDimension{
-			Computation:       computation,
-			StateAccess:       0,
-			StateGrowth:       0,
-			HistoryGrowth:     0,
-			StateGrowthRefund: 0,
+			OneDimensionalGasCost: cost,
+			Computation:           computation,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
 		}, &CallGasDimensionInfo{
 			op:                     vm.OpCode(op),
 			gasCounterAtTimeOfCall: gas,
@@ -412,19 +429,21 @@ func finishCalcStateReadCallGas(
 	leftOver := totalGasUsed - callGasDimensionInfo.memoryExpansionCost - codeExecutionCost
 	if leftOver == params.ColdAccountAccessCostEIP2929 {
 		return GasesByDimension{
-			Computation:       params.WarmStorageReadCostEIP2929 + callGasDimensionInfo.memoryExpansionCost,
-			StateAccess:       params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929,
-			StateGrowth:       0,
-			HistoryGrowth:     0,
-			StateGrowthRefund: 0,
+			OneDimensionalGasCost: totalGasUsed,
+			Computation:           params.WarmStorageReadCostEIP2929 + callGasDimensionInfo.memoryExpansionCost,
+			StateAccess:           params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
 		}
 	}
 	return GasesByDimension{
-		Computation:       leftOver + callGasDimensionInfo.memoryExpansionCost,
-		StateAccess:       0,
-		StateGrowth:       0,
-		HistoryGrowth:     0,
-		StateGrowthRefund: 0,
+		OneDimensionalGasCost: totalGasUsed,
+		Computation:           leftOver + callGasDimensionInfo.memoryExpansionCost,
+		StateAccess:           0,
+		StateGrowth:           0,
+		HistoryGrowth:         0,
+		StateGrowthRefund:     0,
 	}
 }
 
@@ -435,7 +454,7 @@ func finishCalcStateReadCallGas(
 // The relevant opcodes here are:
 // `LOG0, LOG1, LOG2, LOG3, LOG4`
 func calcLogGas(
-	t *GasDimensionTracer,
+	t DimensionTracer,
 	pc uint64,
 	op byte,
 	gas, cost uint64,
@@ -474,11 +493,12 @@ func calcLogGas(
 	computationCost := cost - historyGrowthCost
 
 	return GasesByDimension{
-		Computation:       computationCost,
-		StateAccess:       0,
-		StateGrowth:       0,
-		HistoryGrowth:     historyGrowthCost,
-		StateGrowthRefund: 0,
+		OneDimensionalGasCost: cost,
+		Computation:           computationCost,
+		StateAccess:           0,
+		StateGrowth:           0,
+		HistoryGrowth:         historyGrowthCost,
+		StateGrowthRefund:     0,
 	}, nil, nil
 }
 
@@ -487,7 +507,7 @@ func calcLogGas(
 // the relevant opcodes here are:
 // `CREATE, CREATE2`
 func calcCreateGas(
-	t *GasDimensionTracer,
+	t DimensionTracer,
 	pc uint64,
 	op byte,
 	gas, cost uint64,
@@ -523,11 +543,12 @@ func calcCreateGas(
 	// at this point we know everything except deployment_code_execution_cost and code_deposit_cost
 	// so we can get those from the finishCalcCreateGas function
 	return GasesByDimension{
-			Computation:       initCodeCost + memExpansionCost + params.CreateGas + hashCost,
-			StateAccess:       0,
-			StateGrowth:       0,
-			HistoryGrowth:     0,
-			StateGrowthRefund: 0,
+			OneDimensionalGasCost: cost,
+			Computation:           initCodeCost + memExpansionCost + params.CreateGas + hashCost,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
 		}, &CallGasDimensionInfo{
 			op:                     vm.OpCode(op),
 			gasCounterAtTimeOfCall: gas,
@@ -556,11 +577,12 @@ func finishCalcCreateGas(
 	computeNonNewAccountCost := staticNonNewAccountCost / 2
 	growthNonNewAccountCost := staticNonNewAccountCost - computeNonNewAccountCost
 	return GasesByDimension{
-		Computation:       callGasDimensionInfo.initCodeCost + callGasDimensionInfo.memoryExpansionCost + callGasDimensionInfo.hashCost + computeNonNewAccountCost,
-		StateAccess:       0,
-		StateGrowth:       growthNonNewAccountCost + params.CallNewAccountGas + codeDepositCost,
-		HistoryGrowth:     0,
-		StateGrowthRefund: 0,
+		OneDimensionalGasCost: totalGasUsed,
+		Computation:           callGasDimensionInfo.initCodeCost + callGasDimensionInfo.memoryExpansionCost + callGasDimensionInfo.hashCost + computeNonNewAccountCost,
+		StateAccess:           0,
+		StateGrowth:           growthNonNewAccountCost + params.CallNewAccountGas + codeDepositCost,
+		HistoryGrowth:         0,
+		StateGrowthRefund:     0,
 	}
 }
 
@@ -571,7 +593,7 @@ func finishCalcCreateGas(
 // the relevant opcodes here are:
 // `CALL, CALLCODE`
 func calcReadAndStoreCallGas(
-	t *GasDimensionTracer,
+	t DimensionTracer,
 	pc uint64,
 	op byte,
 	gas, cost uint64,
@@ -624,11 +646,12 @@ func calcReadAndStoreCallGas(
 	computation := memExpansionCost + params.WarmStorageReadCostEIP2929
 	// see finishCalcStateReadCallGas for more details
 	return GasesByDimension{
-			Computation:       computation,
-			StateAccess:       0,
-			StateGrowth:       0,
-			HistoryGrowth:     0,
-			StateGrowthRefund: 0,
+			OneDimensionalGasCost: cost,
+			Computation:           computation,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
 		}, &CallGasDimensionInfo{
 			op:                     vm.OpCode(op),
 			gasCounterAtTimeOfCall: gas,
@@ -672,34 +695,37 @@ func finishCalcStateReadAndStoreCallGas(
 			coldCost = params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
 		}
 		return GasesByDimension{
-			Computation:       callGasDimensionInfo.memoryExpansionCost + params.WarmStorageReadCostEIP2929,
-			StateAccess:       coldCost + positiveValueCostLessStipend,
-			StateGrowth:       params.CallNewAccountGas,
-			HistoryGrowth:     0,
-			StateGrowthRefund: 0,
+			OneDimensionalGasCost: totalGasUsed,
+			Computation:           callGasDimensionInfo.memoryExpansionCost + params.WarmStorageReadCostEIP2929,
+			StateAccess:           coldCost + positiveValueCostLessStipend,
+			StateGrowth:           params.CallNewAccountGas,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
 		}
 	} else if leftOver == params.ColdAccountAccessCostEIP2929 {
 		var coldCost uint64 = params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
 		return GasesByDimension{
-			Computation:       callGasDimensionInfo.memoryExpansionCost + params.WarmStorageReadCostEIP2929,
-			StateAccess:       coldCost + positiveValueCostLessStipend,
-			StateGrowth:       0,
-			HistoryGrowth:     0,
-			StateGrowthRefund: 0,
+			OneDimensionalGasCost: totalGasUsed,
+			Computation:           callGasDimensionInfo.memoryExpansionCost + params.WarmStorageReadCostEIP2929,
+			StateAccess:           coldCost + positiveValueCostLessStipend,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
 		}
 	}
 	return GasesByDimension{
-		Computation:       callGasDimensionInfo.memoryExpansionCost + params.WarmStorageReadCostEIP2929,
-		StateAccess:       positiveValueCostLessStipend,
-		StateGrowth:       0,
-		HistoryGrowth:     0,
-		StateGrowthRefund: 0,
+		OneDimensionalGasCost: totalGasUsed,
+		Computation:           callGasDimensionInfo.memoryExpansionCost + params.WarmStorageReadCostEIP2929,
+		StateAccess:           positiveValueCostLessStipend,
+		StateGrowth:           0,
+		HistoryGrowth:         0,
+		StateGrowthRefund:     0,
 	}
 }
 
 // calcSStoreGas returns the gas used for the `SSTORE` opcode
 func calcSStoreGas(
-	t *GasDimensionTracer,
+	t DimensionTracer,
 	pc uint64,
 	op byte,
 	gas, cost uint64,
@@ -738,8 +764,8 @@ func calcSStoreGas(
 	// refunds are tracked in the statedb
 	// to find per-step changes, we track the accumulated refund
 	// and compare it to the current refund
-	currentRefund := t.env.StateDB.GetRefund()
-	accumulatedRefund := t.refundAccumulated
+	currentRefund := t.GetOpRefund()
+	accumulatedRefund := t.GetRefundAccumulated()
 	var diff int64 = 0
 	if accumulatedRefund != currentRefund {
 		if accumulatedRefund < currentRefund {
@@ -747,25 +773,27 @@ func calcSStoreGas(
 		} else {
 			diff = int64(accumulatedRefund - currentRefund)
 		}
-		t.refundAccumulated = currentRefund
+		t.SetRefundAccumulated(currentRefund)
 	}
 
 	if cost >= params.SstoreSetGas { // 22100 case and 20000 case
 		accessCost := cost - params.SstoreSetGas
 		return GasesByDimension{
-			Computation:       params.WarmStorageReadCostEIP2929,
-			StateAccess:       accessCost,
-			StateGrowth:       params.SstoreSetGas - params.WarmStorageReadCostEIP2929,
-			HistoryGrowth:     0,
-			StateGrowthRefund: diff,
+			OneDimensionalGasCost: cost,
+			Computation:           params.WarmStorageReadCostEIP2929,
+			StateAccess:           accessCost,
+			StateGrowth:           params.SstoreSetGas - params.WarmStorageReadCostEIP2929,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     diff,
 		}, nil, nil
 	} else if cost > 0 {
 		return GasesByDimension{
-			Computation:       params.WarmStorageReadCostEIP2929,
-			StateAccess:       cost - params.WarmStorageReadCostEIP2929,
-			StateGrowth:       0,
-			HistoryGrowth:     0,
-			StateGrowthRefund: diff,
+			OneDimensionalGasCost: cost,
+			Computation:           params.WarmStorageReadCostEIP2929,
+			StateAccess:           cost - params.WarmStorageReadCostEIP2929,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     diff,
 		}, nil, nil
 	}
 	// bizarre "system transactions" that can have costs of zero...
@@ -775,7 +803,7 @@ func calcSStoreGas(
 // calcSelfDestructGas returns the gas used for the `SELFDESTRUCT` opcode
 // which deletes a contract which is a write to the state
 func calcSelfDestructGas(
-	t *GasDimensionTracer,
+	t DimensionTracer,
 	pc uint64,
 	op byte,
 	gas, cost uint64,
@@ -803,11 +831,12 @@ func calcSelfDestructGas(
 		// 25000 for the selfdestruct (state growth)
 		// 4900 for read/write (deleting the contract)
 		return GasesByDimension{
-			Computation:       params.WarmStorageReadCostEIP2929,
-			StateAccess:       params.SelfdestructGasEIP150 - params.WarmStorageReadCostEIP2929,
-			StateGrowth:       params.CreateBySelfdestructGas,
-			HistoryGrowth:     0,
-			StateGrowthRefund: 0,
+			OneDimensionalGasCost: cost,
+			Computation:           params.WarmStorageReadCostEIP2929,
+			StateAccess:           params.SelfdestructGasEIP150 - params.WarmStorageReadCostEIP2929,
+			StateGrowth:           params.CreateBySelfdestructGas,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
 		}, nil, nil
 	} else if cost == params.CreateBySelfdestructGas+params.SelfdestructGasEIP150+params.ColdAccountAccessCostEIP2929 {
 		// cold and funds target empty
@@ -816,11 +845,12 @@ func calcSelfDestructGas(
 		// 25000 for the selfdestruct (state growth)
 		// 2500 + 5000 for read/write (deleting the contract)
 		return GasesByDimension{
-			Computation:       params.WarmStorageReadCostEIP2929,
-			StateAccess:       params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929 + params.SelfdestructGasEIP150,
-			StateGrowth:       params.CreateBySelfdestructGas,
-			HistoryGrowth:     0,
-			StateGrowthRefund: 0,
+			OneDimensionalGasCost: cost,
+			Computation:           params.WarmStorageReadCostEIP2929,
+			StateAccess:           params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929 + params.SelfdestructGasEIP150,
+			StateGrowth:           params.CreateBySelfdestructGas,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
 		}, nil, nil
 	} else if cost == params.SelfdestructGasEIP150+params.ColdAccountAccessCostEIP2929 {
 		// address lookup was cold but funds target has money already. Cost is 7600
@@ -828,22 +858,24 @@ func calcSelfDestructGas(
 		// 2500 to access the address cold (access)
 		// 5000 for the selfdestruct (access)
 		return GasesByDimension{
-			Computation:       params.WarmStorageReadCostEIP2929,
-			StateAccess:       params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929 + params.SelfdestructGasEIP150,
-			StateGrowth:       0,
-			HistoryGrowth:     0,
-			StateGrowthRefund: 0,
+			OneDimensionalGasCost: cost,
+			Computation:           params.WarmStorageReadCostEIP2929,
+			StateAccess:           params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929 + params.SelfdestructGasEIP150,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
 		}, nil, nil
 	}
 	// if you reach here, then the cost was 5000
 	// in which case give 100 for a warm access read
 	// and 4900 for the state access (deleting the contract)
 	return GasesByDimension{
-		Computation:       params.WarmStorageReadCostEIP2929,
-		StateAccess:       params.SelfdestructGasEIP150 - params.WarmStorageReadCostEIP2929,
-		StateGrowth:       0,
-		HistoryGrowth:     0,
-		StateGrowthRefund: 0,
+		OneDimensionalGasCost: cost,
+		Computation:           params.WarmStorageReadCostEIP2929,
+		StateAccess:           params.SelfdestructGasEIP150 - params.WarmStorageReadCostEIP2929,
+		StateGrowth:           0,
+		HistoryGrowth:         0,
+		StateGrowthRefund:     0,
 	}, nil, nil
 }
 
