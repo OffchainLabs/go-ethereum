@@ -128,7 +128,7 @@ func (t *TxGasDimensionLogger) OnOpcode(
 
 	// get the gas dimension function
 	// if it's not a call, directly calculate the gas dimensions for the opcode
-	f := getCalcGasDimensionFunc(vm.OpCode(op))
+	f := GetCalcGasDimensionFunc(vm.OpCode(op))
 	gasesByDimension, callStackInfo, err := f(t, pc, op, gas, cost, scope, rData, depth, err)
 	if err != nil {
 		t.interrupt.Store(true)
@@ -137,7 +137,7 @@ func (t *TxGasDimensionLogger) OnOpcode(
 	}
 	opcode := vm.OpCode(op)
 
-	if wasCallOrCreate(opcode) && callStackInfo == nil || !wasCallOrCreate(opcode) && callStackInfo != nil {
+	if WasCallOrCreate(opcode) && callStackInfo == nil || !WasCallOrCreate(opcode) && callStackInfo != nil {
 		t.interrupt.Store(true)
 		t.reason = fmt.Errorf(
 			"logic bug, calls/creates should always be accompanied by callStackInfo and non-calls should not have callStackInfo %d %s %v",
@@ -164,13 +164,13 @@ func (t *TxGasDimensionLogger) OnOpcode(
 	// if callStackInfo is not nil then we need to take a note of the index of the
 	// DimensionLog that represents this opcode and save the callStackInfo
 	// to call finishX after the call has returned
-	if wasCallOrCreate(opcode) {
+	if WasCallOrCreate(opcode) {
 		opcodeLogIndex := len(t.logs) - 1 // minus 1 because we've already appended the log
 		t.callStack.Push(
 			CallGasDimensionStackInfo{
-				gasDimensionInfo:     *callStackInfo,
-				dimensionLogPosition: opcodeLogIndex,
-				executionCost:        0,
+				GasDimensionInfo:     *callStackInfo,
+				DimensionLogPosition: opcodeLogIndex,
+				ExecutionCost:        0,
 			})
 		t.depth += 1
 	} else {
@@ -187,12 +187,12 @@ func (t *TxGasDimensionLogger) OnOpcode(
 				t.reason = fmt.Errorf("call stack is unexpectedly empty %d %d %d", pc, depth, t.depth)
 				return
 			}
-			finishFunction := getFinishCalcGasDimensionFunc(stackInfo.gasDimensionInfo.op)
+			finishFunction := GetFinishCalcGasDimensionFunc(stackInfo.GasDimensionInfo.Op)
 			if finishFunction == nil {
 				t.interrupt.Store(true)
 				t.reason = fmt.Errorf(
 					"no finish function found for opcode %s, call stack is messed up %d",
-					stackInfo.gasDimensionInfo.op.String(),
+					stackInfo.GasDimensionInfo.Op.String(),
 					pc,
 				)
 				return
@@ -200,9 +200,9 @@ func (t *TxGasDimensionLogger) OnOpcode(
 			// IMPORTANT NOTE: for some reason the only reliable way to actually get the gas cost of the call
 			// is to subtract gas at time of call from gas at opcode AFTER return
 			// you can't trust the `gas` field on the call itself. I wonder if the gas field is an estimation
-			gasUsedByCall := stackInfo.gasDimensionInfo.gasCounterAtTimeOfCall - gas
-			gasesByDimension := finishFunction(gasUsedByCall, stackInfo.executionCost, stackInfo.gasDimensionInfo)
-			callDimensionLog := t.logs[stackInfo.dimensionLogPosition]
+			gasUsedByCall := stackInfo.GasDimensionInfo.GasCounterAtTimeOfCall - gas
+			gasesByDimension := finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
+			callDimensionLog := t.logs[stackInfo.DimensionLogPosition]
 			callDimensionLog.OneDimensionalGasCost = gasesByDimension.OneDimensionalGasCost
 			callDimensionLog.Computation = gasesByDimension.Computation
 			callDimensionLog.StateAccess = gasesByDimension.StateAccess
@@ -210,11 +210,11 @@ func (t *TxGasDimensionLogger) OnOpcode(
 			callDimensionLog.HistoryGrowth = gasesByDimension.HistoryGrowth
 			callDimensionLog.StateGrowthRefund = gasesByDimension.StateGrowthRefund
 			callDimensionLog.CallRealGas = gasUsedByCall
-			callDimensionLog.CallExecutionCost = stackInfo.executionCost
-			callDimensionLog.CallMemoryExpansion = stackInfo.gasDimensionInfo.memoryExpansionCost
-			callDimensionLog.CreateInitCodeCost = stackInfo.gasDimensionInfo.initCodeCost
-			callDimensionLog.Create2HashCost = stackInfo.gasDimensionInfo.hashCost
-			t.logs[stackInfo.dimensionLogPosition] = callDimensionLog
+			callDimensionLog.CallExecutionCost = stackInfo.ExecutionCost
+			callDimensionLog.CallMemoryExpansion = stackInfo.GasDimensionInfo.MemoryExpansionCost
+			callDimensionLog.CreateInitCodeCost = stackInfo.GasDimensionInfo.InitCodeCost
+			callDimensionLog.Create2HashCost = stackInfo.GasDimensionInfo.HashCost
+			t.logs[stackInfo.DimensionLogPosition] = callDimensionLog
 			t.depth -= 1
 		}
 
@@ -254,8 +254,8 @@ func (t *TxGasDimensionLogger) Stop(err error) {
 //                                HELPERS
 // ############################################################################
 
-// wasCall returns true if the opcode is a type of opcode that makes calls increasing the stack depth
-func wasCallOrCreate(opcode vm.OpCode) bool {
+// returns true if the opcode is a type of opcode that makes calls increasing the stack depth
+func WasCallOrCreate(opcode vm.OpCode) bool {
 	return opcode == vm.CALL || opcode == vm.CALLCODE || opcode == vm.DELEGATECALL || opcode == vm.STATICCALL || opcode == vm.CREATE || opcode == vm.CREATE2
 }
 

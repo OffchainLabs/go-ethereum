@@ -101,7 +101,7 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 
 	// get the gas dimension function
 	// if it's not a call, directly calculate the gas dimensions for the opcode
-	f := getCalcGasDimensionFunc(vm.OpCode(op))
+	f := GetCalcGasDimensionFunc(vm.OpCode(op))
 	gasesByDimension, callStackInfo, err := f(t, pc, op, gas, cost, scope, rData, depth, err)
 	if err != nil {
 		t.interrupt.Store(true)
@@ -110,7 +110,7 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 	}
 	opcode := vm.OpCode(op)
 
-	if wasCallOrCreate(opcode) && callStackInfo == nil || !wasCallOrCreate(opcode) && callStackInfo != nil {
+	if WasCallOrCreate(opcode) && callStackInfo == nil || !WasCallOrCreate(opcode) && callStackInfo != nil {
 		t.interrupt.Store(true)
 		t.reason = fmt.Errorf(
 			"logic bug, calls/creates should always be accompanied by callStackInfo and non-calls should not have callStackInfo %d %s %v",
@@ -124,12 +124,12 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 	// if callStackInfo is not nil then we need to take a note of the index of the
 	// DimensionLog that represents this opcode and save the callStackInfo
 	// to call finishX after the call has returned
-	if wasCallOrCreate(opcode) {
+	if WasCallOrCreate(opcode) {
 		t.callStack.Push(
 			CallGasDimensionStackInfo{
-				gasDimensionInfo:     *callStackInfo,
-				dimensionLogPosition: 0, //unused in this tracer
-				executionCost:        0,
+				GasDimensionInfo:     *callStackInfo,
+				DimensionLogPosition: 0, //unused in this tracer
+				ExecutionCost:        0,
 			})
 		t.depth += 1
 	} else {
@@ -159,12 +159,12 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 				t.reason = fmt.Errorf("call stack is unexpectedly empty %d %d %d", pc, depth, t.depth)
 				return
 			}
-			finishFunction := getFinishCalcGasDimensionFunc(stackInfo.gasDimensionInfo.op)
+			finishFunction := GetFinishCalcGasDimensionFunc(stackInfo.GasDimensionInfo.Op)
 			if finishFunction == nil {
 				t.interrupt.Store(true)
 				t.reason = fmt.Errorf(
 					"no finish function found for opcode %s, call stack is messed up %d",
-					stackInfo.gasDimensionInfo.op.String(),
+					stackInfo.GasDimensionInfo.Op.String(),
 					pc,
 				)
 				return
@@ -172,9 +172,9 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 			// IMPORTANT NOTE: for some reason the only reliable way to actually get the gas cost of the call
 			// is to subtract gas at time of call from gas at opcode AFTER return
 			// you can't trust the `gas` field on the call itself. I wonder if the gas field is an estimation
-			gasUsedByCall := stackInfo.gasDimensionInfo.gasCounterAtTimeOfCall - gas
-			gasesByDimensionCall := finishFunction(gasUsedByCall, stackInfo.executionCost, stackInfo.gasDimensionInfo)
-			accumulatedDimensionsCall := t.opcodeToDimensions[stackInfo.gasDimensionInfo.op]
+			gasUsedByCall := stackInfo.GasDimensionInfo.GasCounterAtTimeOfCall - gas
+			gasesByDimensionCall := finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
+			accumulatedDimensionsCall := t.opcodeToDimensions[stackInfo.GasDimensionInfo.Op]
 
 			accumulatedDimensionsCall.OneDimensionalGasCost += gasesByDimensionCall.OneDimensionalGasCost
 			accumulatedDimensionsCall.Computation += gasesByDimensionCall.Computation
@@ -183,7 +183,7 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 			accumulatedDimensionsCall.HistoryGrowth += gasesByDimensionCall.HistoryGrowth
 			accumulatedDimensionsCall.StateGrowthRefund += gasesByDimensionCall.StateGrowthRefund
 
-			t.opcodeToDimensions[stackInfo.gasDimensionInfo.op] = accumulatedDimensionsCall
+			t.opcodeToDimensions[stackInfo.GasDimensionInfo.Op] = accumulatedDimensionsCall
 			t.depth -= 1
 		}
 
