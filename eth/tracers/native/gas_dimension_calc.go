@@ -1,7 +1,7 @@
 package native
 
 import (
-	"github.com/ethereum/go-ethereum/common/math"
+	"math"
 
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/vm"
