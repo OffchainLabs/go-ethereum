@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -47,12 +48,20 @@ func newGasDimensionLiveTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 	}
 
 	return &tracing.Hooks{
-		OnOpcode:     t.GasDimensionTracer.OnOpcode,
-		OnTxStart:    t.GasDimensionTracer.OnTxStart,
+		OnOpcode:     t.OnOpcode,
+		OnTxStart:    t.OnTxStart,
 		OnTxEnd:      t.OnTxEnd,
 		OnBlockStart: t.OnBlockStart,
 		OnBlockEnd:   t.OnBlockEnd,
 	}, nil
+}
+
+func (t *gasDimensionLiveTracer) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	t.GasDimensionTracer.OnTxStart(vm, tx, from)
+}
+
+func (t *gasDimensionLiveTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	t.GasDimensionTracer.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
 }
 
 func (t *gasDimensionLiveTracer) OnTxEnd(receipt *types.Receipt, err error) {
