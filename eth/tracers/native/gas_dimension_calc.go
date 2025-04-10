@@ -759,14 +759,17 @@ func calcSStoreGas(
 			HistoryGrowth:     0,
 			StateGrowthRefund: diff,
 		}, nil, nil
+	} else if cost > 0 {
+		return GasesByDimension{
+			Computation:       params.WarmStorageReadCostEIP2929,
+			StateAccess:       cost - params.WarmStorageReadCostEIP2929,
+			StateGrowth:       0,
+			HistoryGrowth:     0,
+			StateGrowthRefund: diff,
+		}, nil, nil
 	}
-	return GasesByDimension{
-		Computation:       params.WarmStorageReadCostEIP2929,
-		StateAccess:       cost - params.WarmStorageReadCostEIP2929,
-		StateGrowth:       0,
-		HistoryGrowth:     0,
-		StateGrowthRefund: diff,
-	}, nil, nil
+	// bizarre "system transactions" that can have costs of zero...
+	return GasesByDimension{}, nil, nil
 }
 
 // calcSelfDestructGas returns the gas used for the `SELFDESTRUCT` opcode

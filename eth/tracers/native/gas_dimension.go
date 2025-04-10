@@ -3,6 +3,7 @@ package native
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -271,6 +272,8 @@ type ExecutionResult struct {
 	DimensionLogs []DimensionLogRes `json:"dimensionLogs"`
 	TxHash        string            `json:"txHash"`
 	BlockTimetamp uint64            `json:"blockTimestamp"`
+	BlockNumber   *big.Int          `json:"blockNumber"`
+	GasPrice      *big.Int          `json:"gasPrice"`
 }
 
 // produce json result for output from tracer
@@ -288,6 +291,8 @@ func (t *GasDimensionTracer) GetResult() (json.RawMessage, error) {
 		DimensionLogs: formatLogs(t.DimensionLogs()),
 		TxHash:        t.txHash.Hex(),
 		BlockTimetamp: t.env.Time,
+		BlockNumber:   t.env.BlockNumber,
+		GasPrice:      t.env.GasPrice,
 	})
 }
 
