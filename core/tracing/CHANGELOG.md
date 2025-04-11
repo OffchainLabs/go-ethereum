@@ -4,6 +4,79 @@ All notable changes to the tracing interface will be documented in this file.
 
 ## [Unreleased]
 
+The tracing interface has been extended with backwards-compatible changes to support more use-cases and simplify tracer code. The most notable change is a state journaling library which emits reverse events when a call is reverted.
+
+### Deprecated methods
+
+- `OnSystemCallStart()`: This hook is deprecated in favor of `OnSystemCallStartV2(vm *VMContext)`.
+- `OnNonceChange(addr common.Address, prev, new uint64)`: This hook is deprecated in favor of `OnNonceChangeV2(addr common.Address, prev, new uint64, reason NonceChangeReason)`.
+
+### New methods
+
+- `OnBlockHashRead(blockNum uint64, hash common.Hash)`: This hook is called when a block hash is read by EVM.
+- `OnSystemCallStartV2(vm *VMContext)`. This allows access to EVM context during system calls. It is a successor to `OnSystemCallStart`.
+- `OnNonceChangeV2(addr common.Address, prev, new uint64, reason NonceChangeReason)`: This hook is called when a nonce change occurs. It is a successor to `OnNonceChange`.
+
+### New types
+
+- `NonceChangeReason` is a new type used to provide a reason for nonce changes. Notably it includes `NonceChangeRevert` which will be emitted by the state journaling library when a nonce change is due to a revert.
+
+### Modified types
+
+- `VMContext.StateDB` has been extended with `GetCodeHash(addr common.Address) common.Hash` method used to retrieve the code hash an account.
+- `BalanceChangeReason` has been extended with the `BalanceChangeRevert` reason. More on that below.
+
+### State journaling
+
+Tracers receive state changes events from the node. The tracer was so far expected to keep track of modified accounts and slots and revert those changes when a call frame failed. Now a utility tracer wrapper is provided which will emit "reverse change" events when a call frame fails. To use this feature the hooks have to be wrapped prior to registering the tracer. The following example demonstrates how to use the state journaling library:
+
+```go
+func init() {
+    tracers.LiveDirectory.Register("test", func (cfg json.RawMessage) (*tracing.Hooks, error) {
+        hooks, err := newTestTracer(cfg)
+        if err != nil {
+            return nil, err
+        }
+        return tracing.WrapWithJournal(hooks)
+    })
+}
+```
+
+The state changes that are covered by the journaling library are:
+
+- `OnBalanceChange`. Note that `OnBalanceChange` will carry the `BalanceChangeRevert` reason.
+- `OnNonceChange`, `OnNonceChangeV2`
+- `OnCodeChange`
+- `OnStorageChange`
+
+## [v1.14.9](https://github.com/ethereum/go-ethereum/releases/tag/v1.14.9)
+
+### Modified types
+
+- `GasChangeReason` has been extended with the following reasons which will be enabled only post-Verkle. There shouldn't be any gas changes with those reasons prior to the fork.
+  - `GasChangeWitnessContractCollisionCheck` flags the event of adding to the witness when checking for contract address collision.
+
+## [v1.14.12]
+
+This release contains a change in behavior for `OnCodeChange` hook.
+
+### `OnCodeChange` change
+
+The `OnCodeChange` hook is now called when the code of a contract is removed due to a selfdestruct. Previously, no code change was emitted on such occasions.
+
+## [v1.14.4]
+
+This release contained only minor extensions to the tracing interface.
+
+### Modified types
+
+- `GasChangeReason` has been extended with the following reasons that will only be active post-Verkle.
+  - `GasChangeWitnessContractInit` flags the event of adding to the witness during the contract creation initialization step.
+  - `GasChangeWitnessContractCreation` flags the event of adding to the witness during the contract creation finalization step.
+  - `GasChangeWitnessCodeChunk` flags the event of adding one or more contract code chunks to the witness.
+
+## [v1.14.3]
+
 There have been minor backwards-compatible changes to the tracing interface to explicitly mark the execution of **system** contracts. As of now the only system call updates the parent beacon block root as per [EIP-4788](https://eips.ethereum.org/EIPS/eip-4788). Other system calls are being considered for the future hardfork.
 
 ### New methods
@@ -75,5 +148,7 @@ The hooks `CaptureStart` and `CaptureEnd` have been removed. These hooks signale
 - `CaptureState` -> `OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error)`. `op` is of type `byte` which can be cast to `vm.OpCode` when necessary. A `*vm.ScopeContext` is not passed anymore. It is replaced by `tracing.OpContext` which offers access to the memory, stack and current contract.
 - `CaptureFault` -> `OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error)`. Similar to above.
 
-[unreleased]: https://github.com/ethereum/go-ethereum/compare/v1.14.0...master
+[unreleased]: https://github.com/ethereum/go-ethereum/compare/v1.14.8...master
 [v1.14.0]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.0
+[v1.14.3]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.3
+[v1.14.4]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.4

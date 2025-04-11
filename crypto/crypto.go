@@ -45,7 +45,7 @@ const RecoveryIDOffset = 64
 const DigestLength = 32
 
 var (
-	secp256k1N, _  = new(big.Int).SetString("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16)
+	secp256k1N     = S256().Params().N
 	secp256k1halfN = new(big.Int).Div(secp256k1N, big.NewInt(2))
 )
 
@@ -178,9 +178,15 @@ func UnmarshalPubkey(pub []byte) (*ecdsa.PublicKey, error) {
 	if x == nil {
 		return nil, errInvalidPubkey
 	}
+	if !S256().IsOnCurve(x, y) {
+		return nil, errInvalidPubkey
+	}
 	return &ecdsa.PublicKey{Curve: S256(), X: x, Y: y}, nil
 }
 
+// FromECDSAPub converts a secp256k1 public key to bytes.
+// Note: it does not use the curve from pub, instead it always
+// encodes using secp256k1.
 func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
 	if pub == nil || pub.X == nil || pub.Y == nil {
 		return nil

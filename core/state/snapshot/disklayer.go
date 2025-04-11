@@ -74,10 +74,18 @@ func (dl *diskLayer) Stale() bool {
 	return dl.stale
 }
 
+// markStale sets the stale flag as true.
+func (dl *diskLayer) markStale() {
+	dl.lock.Lock()
+	defer dl.lock.Unlock()
+
+	dl.stale = true
+}
+
 // Account directly retrieves the account associated with a particular hash in
 // the snapshot slim data format.
-func (dl *diskLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
-	data, err := dl.AccountRLP(hash)
+func (dl *diskLayer) account(hash common.Hash, evenIfStale bool) (*types.SlimAccount, error) {
+	data, err := dl.accountRLP(hash, evenIfStale)
 	if err != nil {
 		return nil, err
 	}
@@ -85,21 +93,19 @@ func (dl *diskLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
 		return nil, nil
 	}
 	account := new(types.SlimAccount)
-	if err := rlp.DecodeBytes(data, account); err != nil {
-		panic(err)
-	}
-	return account, nil
+	err = rlp.DecodeBytes(data, account)
+	return account, err
 }
 
 // AccountRLP directly retrieves the account RLP associated with a particular
 // hash in the snapshot slim data format.
-func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
+func (dl *diskLayer) accountRLP(hash common.Hash, evenIfStale bool) ([]byte, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	// If the layer was flattened into, consider it invalid (any live reference to
 	// the original should be marked as unusable).
-	if dl.stale {
+	if dl.stale && !evenIfStale {
 		return nil, ErrSnapshotStale
 	}
 	// If the layer is being generated, ensure the requested hash has already been
@@ -121,7 +127,9 @@ func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	dl.cache.Set(hash[:], blob)
+	if !dl.stale {
+		dl.cache.Set(hash[:], blob)
+	}
 
 	snapshotCleanAccountMissMeter.Mark(1)
 	if n := len(blob); n > 0 {
@@ -130,6 +138,14 @@ func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 		snapshotCleanAccountInexMeter.Mark(1)
 	}
 	return blob, nil
+}
+
+func (dl *diskLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
+	return dl.account(hash, false)
+}
+
+func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
+	return dl.accountRLP(hash, false)
 }
 
 // Storage directly retrieves the storage data associated with a particular hash,
@@ -178,6 +194,21 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 // Update creates a new layer on top of the existing snapshot diff tree with
 // the specified data items. Note, the maps are retained by the method to avoid
 // copying everything.
-func (dl *diskLayer) Update(blockHash common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
-	return newDiffLayer(dl, blockHash, destructs, accounts, storage)
+func (dl *diskLayer) Update(blockHash common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
+	return newDiffLayer(dl, blockHash, accounts, storage)
+}
+
+// stopGeneration aborts the state snapshot generation if it is currently running.
+func (dl *diskLayer) stopGeneration() {
+	dl.lock.RLock()
+	generating := dl.genMarker != nil
+	dl.lock.RUnlock()
+	if !generating {
+		return
+	}
+	if dl.genAbort != nil {
+		abort := make(chan *generatorStats)
+		dl.genAbort <- abort
+		<-abort
+	}
 }

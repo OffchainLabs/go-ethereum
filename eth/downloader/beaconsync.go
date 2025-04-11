@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -123,7 +124,8 @@ func (b *beaconBackfiller) resume() {
 func (b *beaconBackfiller) setMode(mode SyncMode) {
 	// Update the old sync mode and track if it was changed
 	b.lock.Lock()
-	updated := b.syncMode != mode
+	oldMode := b.syncMode
+	updated := oldMode != mode
 	filling := b.filling
 	b.syncMode = mode
 	b.lock.Unlock()
@@ -133,7 +135,7 @@ func (b *beaconBackfiller) setMode(mode SyncMode) {
 	if !updated || !filling {
 		return
 	}
-	log.Error("Downloader sync mode changed mid-run", "old", mode.String(), "new", mode.String())
+	log.Error("Downloader sync mode changed mid-run", "old", oldMode.String(), "new", mode.String())
 	b.suspend()
 	b.resume()
 }
@@ -197,12 +199,12 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 	var chainHead *types.Header
 
 	switch d.getMode() {
-	case FullSync:
+	case ethconfig.FullSync:
 		chainHead = d.blockchain.CurrentBlock()
-	case SnapSync:
+	case ethconfig.SnapSync:
 		chainHead = d.blockchain.CurrentSnapBlock()
 	default:
-		chainHead = d.lightchain.CurrentHeader()
+		panic("unknown sync mode")
 	}
 	number := chainHead.Number.Uint64()
 
@@ -217,12 +219,12 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 	}
 	var linked bool
 	switch d.getMode() {
-	case FullSync:
+	case ethconfig.FullSync:
 		linked = d.blockchain.HasBlock(beaconTail.ParentHash, beaconTail.Number.Uint64()-1)
-	case SnapSync:
+	case ethconfig.SnapSync:
 		linked = d.blockchain.HasFastBlock(beaconTail.ParentHash, beaconTail.Number.Uint64()-1)
 	default:
-		linked = d.blockchain.HasHeader(beaconTail.ParentHash, beaconTail.Number.Uint64()-1)
+		panic("unknown sync mode")
 	}
 	if !linked {
 		// This is a programming error. The chain backfiller was called with a
@@ -252,12 +254,12 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 
 		var known bool
 		switch d.getMode() {
-		case FullSync:
+		case ethconfig.FullSync:
 			known = d.blockchain.HasBlock(h.Hash(), n)
-		case SnapSync:
+		case ethconfig.SnapSync:
 			known = d.blockchain.HasFastBlock(h.Hash(), n)
 		default:
-			known = d.lightchain.HasHeader(h.Hash(), n)
+			panic("unknown sync mode")
 		}
 		if !known {
 			end = check

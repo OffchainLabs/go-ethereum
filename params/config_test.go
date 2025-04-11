@@ -17,12 +17,12 @@
 package params
 
 import (
+	"math"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/require"
 )
 
@@ -131,7 +131,7 @@ func TestConfigRules(t *testing.T) {
 		t.Errorf("expected %v to not be shanghai", currentArbosVersion)
 	}
 	stamp = 500
-	currentArbosVersion = 11
+	currentArbosVersion = ArbosVersion_11
 	if r := c.Rules(big.NewInt(0), true, stamp, currentArbosVersion); !r.IsShanghai {
 		t.Errorf("expected %v to be shanghai", currentArbosVersion)
 	}

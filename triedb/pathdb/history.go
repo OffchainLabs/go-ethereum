@@ -1,4 +1,4 @@
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -12,7 +12,7 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package pathdb
 
@@ -21,14 +21,15 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
 // State history records the state changes involved in executing a block. The
@@ -68,7 +69,9 @@ const (
 	slotIndexSize    = common.HashLength + 5     // The length of encoded slot index
 	historyMetaSize  = 9 + 2*common.HashLength   // The length of encoded history meta
 
-	stateHistoryVersion = uint8(0) // initial version of state history structure.
+	stateHistoryV0 = uint8(0)       // initial version of state history structure
+	stateHistoryV1 = uint8(1)       // use the storage slot raw key as the identifier instead of the key hash
+	historyVersion = stateHistoryV1 // the default state history version
 )
 
 // Each state history entry is consisted of five elements:
@@ -169,15 +172,18 @@ func (i *accountIndex) decode(blob []byte) {
 
 // slotIndex describes the metadata belonging to a storage slot.
 type slotIndex struct {
-	hash   common.Hash // The hash of slot key
-	length uint8       // The length of storage slot, up to 32 bytes defined in protocol
-	offset uint32      // The offset of item in storage slot data table
+	// the identifier of the storage slot. Specifically
+	// in v0, it's the hash of the raw storage slot key (32 bytes);
+	// in v1, it's the raw storage slot key (32 bytes);
+	id     common.Hash
+	length uint8  // The length of storage slot, up to 32 bytes defined in protocol
+	offset uint32 // The offset of item in storage slot data table
 }
 
 // encode packs slot index into byte stream.
 func (i *slotIndex) encode() []byte {
 	var buf [slotIndexSize]byte
-	copy(buf[:common.HashLength], i.hash.Bytes())
+	copy(buf[:common.HashLength], i.id.Bytes())
 	buf[common.HashLength] = i.length
 	binary.BigEndian.PutUint32(buf[common.HashLength+1:], i.offset)
 	return buf[:]
@@ -185,7 +191,7 @@ func (i *slotIndex) encode() []byte {
 
 // decode unpack slot index from the byte stream.
 func (i *slotIndex) decode(blob []byte) {
-	i.hash = common.BytesToHash(blob[:common.HashLength])
+	i.id = common.BytesToHash(blob[:common.HashLength])
 	i.length = blob[common.HashLength]
 	i.offset = binary.BigEndian.Uint32(blob[common.HashLength+1:])
 }
@@ -214,7 +220,7 @@ func (m *meta) decode(blob []byte) error {
 		return errors.New("no version tag")
 	}
 	switch blob[0] {
-	case stateHistoryVersion:
+	case stateHistoryV0, stateHistoryV1:
 		if len(blob) != historyMetaSize {
 			return fmt.Errorf("invalid state history meta, len: %d", len(blob))
 		}
@@ -242,36 +248,59 @@ type history struct {
 }
 
 // newHistory constructs the state history object with provided state change set.
-func newHistory(root common.Hash, parent common.Hash, block uint64, states *triestate.Set) *history {
+func newHistory(root common.Hash, parent common.Hash, block uint64, accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte, rawStorageKey bool) *history {
 	var (
-		accountList []common.Address
+		accountList = slices.SortedFunc(maps.Keys(accounts), common.Address.Cmp)
 		storageList = make(map[common.Address][]common.Hash)
 	)
-	for addr := range states.Accounts {
-		accountList = append(accountList, addr)
+	for addr, slots := range storages {
+		storageList[addr] = slices.SortedFunc(maps.Keys(slots), common.Hash.Cmp)
 	}
-	slices.SortFunc(accountList, common.Address.Cmp)
-
-	for addr, slots := range states.Storages {
-		slist := make([]common.Hash, 0, len(slots))
-		for slotHash := range slots {
-			slist = append(slist, slotHash)
-		}
-		slices.SortFunc(slist, common.Hash.Cmp)
-		storageList[addr] = slist
+	version := historyVersion
+	if !rawStorageKey {
+		version = stateHistoryV0
 	}
 	return &history{
 		meta: &meta{
-			version: stateHistoryVersion,
+			version: version,
 			parent:  parent,
 			root:    root,
 			block:   block,
 		},
-		accounts:    states.Accounts,
+		accounts:    accounts,
 		accountList: accountList,
-		storages:    states.Storages,
+		storages:    storages,
 		storageList: storageList,
 	}
+}
+
+// stateSet returns the state set, keyed by the hash of the account address
+// and the hash of the storage slot key.
+func (h *history) stateSet() (map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte) {
+	var (
+		buff     = crypto.NewKeccakState()
+		accounts = make(map[common.Hash][]byte)
+		storages = make(map[common.Hash]map[common.Hash][]byte)
+	)
+	for addr, blob := range h.accounts {
+		addrHash := crypto.HashData(buff, addr.Bytes())
+		accounts[addrHash] = blob
+
+		storage, exist := h.storages[addr]
+		if !exist {
+			continue
+		}
+		if h.meta.version == stateHistoryV0 {
+			storages[addrHash] = storage
+		} else {
+			subset := make(map[common.Hash][]byte)
+			for key, slot := range storage {
+				subset[crypto.HashData(buff, key.Bytes())] = slot
+			}
+			storages[addrHash] = subset
+		}
+	}
+	return accounts, storages
 }
 
 // encode serializes the state history and returns four byte streams represent
@@ -295,7 +324,7 @@ func (h *history) encode() ([]byte, []byte, []byte, []byte) {
 			// Encode storage slots in order
 			for _, slotHash := range h.storageList[addr] {
 				sIndex := slotIndex{
-					hash:   slotHash,
+					id:     slotHash,
 					length: uint8(len(slots[slotHash])),
 					offset: uint32(len(storageData)),
 				}
@@ -383,11 +412,12 @@ func (r *decoder) readAccount(pos int) (accountIndex, []byte, error) {
 // readStorage parses the storage slots from the byte stream with specified account.
 func (r *decoder) readStorage(accIndex accountIndex) ([]common.Hash, map[common.Hash][]byte, error) {
 	var (
-		last    common.Hash
-		list    []common.Hash
-		storage = make(map[common.Hash][]byte)
+		last    *common.Hash
+		count   = int(accIndex.storageSlots)
+		list    = make([]common.Hash, 0, count)
+		storage = make(map[common.Hash][]byte, count)
 	)
-	for j := 0; j < int(accIndex.storageSlots); j++ {
+	for j := 0; j < count; j++ {
 		var (
 			index slotIndex
 			start = (accIndex.storageOffset + uint32(j)) * uint32(slotIndexSize)
@@ -407,8 +437,10 @@ func (r *decoder) readStorage(accIndex accountIndex) ([]common.Hash, map[common.
 		}
 		index.decode(r.storageIndexes[start:end])
 
-		if bytes.Compare(last.Bytes(), index.hash.Bytes()) >= 0 {
-			return nil, nil, errors.New("storage slot is not in order")
+		if last != nil {
+			if bytes.Compare(last.Bytes(), index.id.Bytes()) >= 0 {
+				return nil, nil, fmt.Errorf("storage slot is not in order, last: %x, current: %x", *last, index.id)
+			}
 		}
 		if index.offset != r.lastSlotDataRead {
 			return nil, nil, errors.New("storage data buffer is gapped")
@@ -417,10 +449,10 @@ func (r *decoder) readStorage(accIndex accountIndex) ([]common.Hash, map[common.
 		if uint32(len(r.storageData)) < sEnd {
 			return nil, nil, errors.New("storage data buffer is corrupted")
 		}
-		storage[index.hash] = r.storageData[r.lastSlotDataRead:sEnd]
-		list = append(list, index.hash)
+		storage[index.id] = r.storageData[r.lastSlotDataRead:sEnd]
+		list = append(list, index.id)
 
-		last = index.hash
+		last = &index.id
 		r.lastSlotIndexRead = end
 		r.lastSlotDataRead = sEnd
 	}
@@ -430,9 +462,10 @@ func (r *decoder) readStorage(accIndex accountIndex) ([]common.Hash, map[common.
 // decode deserializes the account and storage data from the provided byte stream.
 func (h *history) decode(accountData, storageData, accountIndexes, storageIndexes []byte) error {
 	var (
-		accounts    = make(map[common.Address][]byte)
+		count       = len(accountIndexes) / accountIndexSize
+		accounts    = make(map[common.Address][]byte, count)
 		storages    = make(map[common.Address]map[common.Hash][]byte)
-		accountList []common.Address
+		accountList = make([]common.Address, 0, count)
 		storageList = make(map[common.Address][]common.Hash)
 
 		r = &decoder{
@@ -445,7 +478,7 @@ func (h *history) decode(accountData, storageData, accountIndexes, storageIndexe
 	if err := r.verify(); err != nil {
 		return err
 	}
-	for i := 0; i < len(accountIndexes)/accountIndexSize; i++ {
+	for i := 0; i < count; i++ {
 		// Resolve account first
 		accIndex, accData, err := r.readAccount(i)
 		if err != nil {
@@ -502,7 +535,7 @@ func writeHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
 	}
 	var (
 		start   = time.Now()
-		history = newHistory(dl.rootHash(), dl.parentLayer().rootHash(), dl.block, dl.states)
+		history = newHistory(dl.rootHash(), dl.parentLayer().rootHash(), dl.block, dl.states.accountOrigin, dl.states.storageOrigin, dl.states.rawStorageKey)
 	)
 	accountData, storageData, accountIndex, storageIndex := history.encode()
 	dataSize := common.StorageSize(len(accountData) + len(storageData))

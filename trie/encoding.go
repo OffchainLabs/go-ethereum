@@ -93,6 +93,8 @@ func compactToHex(compact []byte) []byte {
 	return base[chop:]
 }
 
+func KeybytesToHex(str []byte) []byte { return keybytesToHex(str) }
+
 func keybytesToHex(str []byte) []byte {
 	l := len(str)*2 + 1
 	var nibbles = make([]byte, l)
@@ -102,6 +104,18 @@ func keybytesToHex(str []byte) []byte {
 	}
 	nibbles[l-1] = 16
 	return nibbles
+}
+
+// writeHexKey writes the hexkey into the given slice.
+// OBS! This method omits the termination flag.
+// OBS! The dst slice must be at least 2x as large as the key
+func writeHexKey(dst []byte, key []byte) []byte {
+	_ = dst[2*len(key)-1]
+	for i, b := range key {
+		dst[i*2] = b / 16
+		dst[i*2+1] = b % 16
+	}
+	return dst[:2*len(key)]
 }
 
 // hexToKeybytes turns hex nibbles into key bytes.

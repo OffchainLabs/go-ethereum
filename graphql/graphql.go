@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -278,7 +277,11 @@ func (t *Transaction) GasPrice(ctx context.Context) hexutil.Big {
 		if block != nil {
 			if baseFee, _ := block.BaseFeePerGas(ctx); baseFee != nil {
 				// price = min(gasTipCap + baseFee, gasFeeCap)
-				return (hexutil.Big)(*math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee.ToInt()), tx.GasFeeCap()))
+				gasFeeCap, effectivePrice := tx.GasFeeCap(), new(big.Int).Add(tx.GasTipCap(), baseFee.ToInt())
+				if effectivePrice.Cmp(gasFeeCap) < 0 {
+					return (hexutil.Big)(*effectivePrice)
+				}
+				return (hexutil.Big)(*gasFeeCap)
 			}
 		}
 		return hexutil.Big(*tx.GasPrice())
@@ -306,7 +309,11 @@ func (t *Transaction) EffectiveGasPrice(ctx context.Context) (*hexutil.Big, erro
 	if t.r.backend.ChainConfig().IsArbitrum() {
 		return (*hexutil.Big)(header.BaseFee), nil
 	}
-	return (*hexutil.Big)(math.BigMin(new(big.Int).Add(tx.GasTipCap(), header.BaseFee), tx.GasFeeCap())), nil
+	gasFeeCap, effectivePrice := tx.GasFeeCap(), new(big.Int).Add(tx.GasTipCap(), header.BaseFee)
+	if effectivePrice.Cmp(gasFeeCap) < 0 {
+		return (*hexutil.Big)(effectivePrice), nil
+	}
+	return (*hexutil.Big)(gasFeeCap), nil
 }
 
 func (t *Transaction) MaxFeePerGas(ctx context.Context) *hexutil.Big {
@@ -315,7 +322,7 @@ func (t *Transaction) MaxFeePerGas(ctx context.Context) *hexutil.Big {
 		return nil
 	}
 	switch tx.Type() {
-	case types.DynamicFeeTxType, types.BlobTxType:
+	case types.DynamicFeeTxType, types.BlobTxType, types.SetCodeTxType:
 		return (*hexutil.Big)(tx.GasFeeCap())
 	default:
 		return nil
@@ -328,7 +335,7 @@ func (t *Transaction) MaxPriorityFeePerGas(ctx context.Context) *hexutil.Big {
 		return nil
 	}
 	switch tx.Type() {
-	case types.DynamicFeeTxType, types.BlobTxType:
+	case types.DynamicFeeTxType, types.BlobTxType, types.SetCodeTxType:
 		return (*hexutil.Big)(tx.GasTipCap())
 	default:
 		return nil
@@ -910,18 +917,6 @@ func (b *Block) LogsBloom(ctx context.Context) (hexutil.Bytes, error) {
 	return header.Bloom.Bytes(), nil
 }
 
-func (b *Block) TotalDifficulty(ctx context.Context) (hexutil.Big, error) {
-	hash, err := b.Hash(ctx)
-	if err != nil {
-		return hexutil.Big{}, err
-	}
-	td := b.r.backend.GetTd(ctx, hash)
-	if td == nil {
-		return hexutil.Big{}, fmt.Errorf("total difficulty not found %x", hash)
-	}
-	return hexutil.Big(*td), nil
-}
-
 func (b *Block) RawHeader(ctx context.Context) (hexutil.Bytes, error) {
 	header, err := b.resolveHeader(ctx)
 	if err != nil {
@@ -1217,7 +1212,7 @@ func (b *Block) Call(ctx context.Context, args struct {
 func (b *Block) EstimateGas(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (hexutil.Uint64, error) {
-	return ethapi.DoEstimateGas(ctx, b.r.backend, args.Data, *b.numberOrHash, nil, b.r.backend.RPCGasCap())
+	return ethapi.DoEstimateGas(ctx, b.r.backend, args.Data, *b.numberOrHash, nil, nil, b.r.backend.RPCGasCap())
 }
 
 type Pending struct {
@@ -1281,7 +1276,7 @@ func (p *Pending) EstimateGas(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (Long, error) {
 	latestBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-	gas, err := ethapi.DoEstimateGas(ctx, p.r.backend, args.Data, latestBlockNr, nil, p.r.backend.RPCGasCap())
+	gas, err := ethapi.DoEstimateGas(ctx, p.r.backend, args.Data, latestBlockNr, nil, nil, p.r.backend.RPCGasCap())
 	return Long(gas), err
 }
 

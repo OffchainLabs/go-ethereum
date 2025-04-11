@@ -16,13 +16,11 @@
 
 package ethconfig
 
-import "github.com/ethereum/go-ethereum/eth/downloader"
-
 // The default config with archive mode enabled
 var ArchiveDefaults = Defaults
 
 func init() {
-	ArchiveDefaults.SyncMode = downloader.FullSync
+	ArchiveDefaults.SyncMode = FullSync
 	ArchiveDefaults.NoPruning = true
 	ArchiveDefaults.Preimages = true
 	ArchiveDefaults.TrieCleanCache += ArchiveDefaults.TrieDirtyCache * 3 / 5

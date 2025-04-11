@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -57,6 +56,7 @@ const (
 	AccessListTxType = 0x01
 	DynamicFeeTxType = 0x02
 	BlobTxType       = 0x03
+	SetCodeTxType    = 0x04
 )
 
 // Transaction is an Ethereum transaction.
@@ -64,13 +64,52 @@ type Transaction struct {
 	inner TxData    // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)
 
-	// Arbitrum cache: must be atomically accessed
-	CalldataUnits uint64
+	// Arbitrum cache of the calldata units at a brotli compression level.
+	// The top 8 bits are the brotli compression level last used to compute this,
+	// and the remaining 56 bits are the calldata units at that compression level.
+	calldataUnitsForBrotliCompressionLevel atomic.Uint64
 
 	// caches
 	hash atomic.Pointer[common.Hash]
 	size atomic.Uint64
 	from atomic.Pointer[sigCache]
+}
+
+// GetRawCachedCalldataUnits returns the cached brotli compression level and corresponding calldata units,
+// or (0, 0) if the cache is empty.
+func (tx *Transaction) GetRawCachedCalldataUnits() (uint64, uint64) {
+	repr := tx.calldataUnitsForBrotliCompressionLevel.Load()
+	cachedCompressionLevel := repr >> 56
+	calldataUnits := repr & ((1 << 56) - 1)
+	return cachedCompressionLevel, calldataUnits
+}
+
+// GetCachedCalldataUnits returns the cached calldata units for a given brotli compression level,
+// returning nil if no cache is present or the cache is for a different compression level.
+func (tx *Transaction) GetCachedCalldataUnits(requestedCompressionLevel uint64) *uint64 {
+	cachedCompressionLevel, cachedUnits := tx.GetRawCachedCalldataUnits()
+	if cachedUnits == 0 {
+		// empty cache
+		return nil
+	}
+	if cachedCompressionLevel != requestedCompressionLevel {
+		// wrong compression level
+		return nil
+	}
+	return &cachedUnits
+}
+
+// SetCachedCalldataUnits sets the cached brotli compression level and corresponding calldata units,
+// or clears the cache if the values are too large to fit (at least 2**8 and 2**56 respectively).
+// Note that a zero calldataUnits is also treated as an empty cache.
+func (tx *Transaction) SetCachedCalldataUnits(compressionLevel uint64, calldataUnits uint64) {
+	var repr uint64
+	// Ensure the compressionLevel and calldataUnits will fit.
+	// Otherwise, just clear the cache.
+	if compressionLevel < 1<<8 && calldataUnits < 1<<56 {
+		repr = compressionLevel<<56 | calldataUnits
+	}
+	tx.calldataUnitsForBrotliCompressionLevel.Store(repr)
 }
 
 // NewTx creates a new transaction.
@@ -101,7 +140,8 @@ type TxData interface {
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
 
-	skipAccountChecks() bool
+	skipNonceChecks() bool
+	skipFromEOACheck() bool
 
 	// effectiveGasPrice computes the gas price paid by the transaction, given
 	// the inclusion block baseFee.
@@ -240,6 +280,8 @@ func (tx *Transaction) decodeTyped(b []byte, arbParsing bool) (TxData, error) {
 			inner = new(DynamicFeeTx)
 		case BlobTxType:
 			inner = new(BlobTx)
+		case SetCodeTxType:
+			inner = new(SetCodeTx)
 		default:
 			return nil, ErrTxTypeNotSupported
 		}
@@ -394,10 +436,16 @@ func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
 	}
 	var err error
 	gasFeeCap := tx.GasFeeCap()
-	if gasFeeCap.Cmp(baseFee) == -1 {
+	if gasFeeCap.Cmp(baseFee) < 0 {
 		err = ErrGasFeeCapTooLow
 	}
-	return math.BigMin(tx.GasTipCap(), gasFeeCap.Sub(gasFeeCap, baseFee)), err
+	gasFeeCap = gasFeeCap.Sub(gasFeeCap, baseFee)
+
+	gasTipCap := tx.GasTipCap()
+	if gasTipCap.Cmp(gasFeeCap) < 0 {
+		return gasTipCap, err
+	}
+	return gasFeeCap, err
 }
 
 // EffectiveGasTipValue is identical to EffectiveGasTip, but does not return an
@@ -505,6 +553,38 @@ func (tx *Transaction) WithBlobTxSidecar(sideCar *BlobTxSidecar) *Transaction {
 	return cpy
 }
 
+// SetCodeAuthorizations returns the authorizations list of the transaction.
+func (tx *Transaction) SetCodeAuthorizations() []SetCodeAuthorization {
+	setcodetx, ok := tx.inner.(*SetCodeTx)
+	if !ok {
+		return nil
+	}
+	return setcodetx.AuthList
+}
+
+// SetCodeAuthorities returns a list of unique authorities from the
+// authorization list.
+func (tx *Transaction) SetCodeAuthorities() []common.Address {
+	setcodetx, ok := tx.inner.(*SetCodeTx)
+	if !ok {
+		return nil
+	}
+	var (
+		marks = make(map[common.Address]bool)
+		auths = make([]common.Address, 0, len(setcodetx.AuthList))
+	)
+	for _, auth := range setcodetx.AuthList {
+		if addr, err := auth.Authority(); err == nil {
+			if marks[addr] {
+				continue
+			}
+			marks[addr] = true
+			auths = append(auths, addr)
+		}
+	}
+	return auths
+}
+
 // SetTime sets the decoding time of a transaction. This is used by tests to set
 // arbitrary times and by persistent transaction pools when loading old txs from
 // disk.
@@ -600,11 +680,11 @@ func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 	}
 }
 
-// TxDifference returns a new set which is the difference between a and b.
+// TxDifference returns a new set of transactions that are present in a but not in b.
 func TxDifference(a, b Transactions) Transactions {
 	keep := make(Transactions, 0, len(a))
 
-	remove := make(map[common.Hash]struct{})
+	remove := make(map[common.Hash]struct{}, b.Len())
 	for _, tx := range b {
 		remove[tx.Hash()] = struct{}{}
 	}
@@ -618,7 +698,7 @@ func TxDifference(a, b Transactions) Transactions {
 	return keep
 }
 
-// HashDifference returns a new set which is the difference between a and b.
+// HashDifference returns a new set of hashes that are present in a but not in b.
 func HashDifference(a, b []common.Hash) []common.Hash {
 	keep := make([]common.Hash, 0, len(a))
 

@@ -103,7 +103,7 @@ var (
 	// to allow concurrent retrievals.
 	accountConcurrency = 16
 
-	// storageConcurrency is the number of chunks to split the a large contract
+	// storageConcurrency is the number of chunks to split a large contract
 	// storage trie into to allow concurrent retrievals.
 	storageConcurrency = 16
 )
@@ -345,7 +345,6 @@ func (task *accountTask) activeSubTasks() map[common.Hash][]*storageTask {
 		last  = task.res.hashes[len(task.res.hashes)-1]
 	)
 	for hash, subTasks := range task.SubTasks {
-		subTasks := subTasks // closure
 		if hash.Cmp(last) <= 0 {
 			tasks[hash] = subTasks
 		}
@@ -765,8 +764,6 @@ func (s *Syncer) loadSyncStatus() {
 			}
 			s.tasks = progress.Tasks
 			for _, task := range s.tasks {
-				task := task // closure for task.genBatch in the stacktrie writer callback
-
 				// Restore the completed storages
 				task.stateCompleted = make(map[common.Hash]struct{})
 				for _, hash := range task.StorageCompleted {
@@ -790,8 +787,6 @@ func (s *Syncer) loadSyncStatus() {
 				// Restore leftover storage tasks
 				for accountHash, subtasks := range task.SubTasks {
 					for _, subtask := range subtasks {
-						subtask := subtask // closure for subtask.genBatch in the stacktrie writer callback
-
 						subtask.genBatch = ethdb.HookedBatch{
 							Batch: s.db.NewBatch(),
 							OnPut: func(key []byte, value []byte) {
@@ -2358,7 +2353,7 @@ func (s *Syncer) commitHealer(force bool) {
 	}
 	batch := s.db.NewBatch()
 	if err := s.healer.scheduler.Commit(batch); err != nil {
-		log.Error("Failed to commit healing data", "err", err)
+		log.Crit("Failed to commit healing data", "err", err)
 	}
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to persist healing data", "err", err)
@@ -2424,14 +2419,21 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 		slim := types.SlimAccountRLP(*res.accounts[i])
 		rawdb.WriteAccountSnapshot(batch, hash, slim)
 
-		// If the task is complete, drop it into the stack trie to generate
-		// account trie nodes for it
 		if !task.needHeal[i] {
+			// If the storage task is complete, drop it into the stack trie
+			// to generate account trie nodes for it
 			full, err := types.FullAccountRLP(slim) // TODO(karalabe): Slim parsing can be omitted
 			if err != nil {
 				panic(err) // Really shouldn't ever happen
 			}
 			task.genTrie.update(hash[:], full)
+		} else {
+			// If the storage task is incomplete, explicitly delete the corresponding
+			// account item from the account trie to ensure that all nodes along the
+			// path to the incomplete storage trie are cleaned up.
+			if err := task.genTrie.delete(hash[:]); err != nil {
+				panic(err) // Really shouldn't ever happen
+			}
 		}
 	}
 	// Flush anything written just now and update the stats
@@ -3250,9 +3252,9 @@ func (t *healRequestSort) Merge() []TrieNodePathSet {
 // sortByAccountPath takes hashes and paths, and sorts them. After that, it generates
 // the TrieNodePaths and merges paths which belongs to the same account path.
 func sortByAccountPath(paths []string, hashes []common.Hash) ([]string, []common.Hash, []trie.SyncPath, []TrieNodePathSet) {
-	var syncPaths []trie.SyncPath
-	for _, path := range paths {
-		syncPaths = append(syncPaths, trie.NewSyncPath([]byte(path)))
+	syncPaths := make([]trie.SyncPath, len(paths))
+	for i, path := range paths {
+		syncPaths[i] = trie.NewSyncPath([]byte(path))
 	}
 	n := &healRequestSort{paths, hashes, syncPaths}
 	sort.Sort(n)

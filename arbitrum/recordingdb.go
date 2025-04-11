@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
@@ -32,11 +33,12 @@ type RecordingKV struct {
 	inner         *triedb.Database
 	diskDb        ethdb.KeyValueStore
 	readDbEntries map[common.Hash][]byte
+	mutex         sync.Mutex
 	enableBypass  bool
 }
 
 func newRecordingKV(inner *triedb.Database, diskDb ethdb.KeyValueStore) *RecordingKV {
-	return &RecordingKV{inner, diskDb, make(map[common.Hash][]byte), false}
+	return &RecordingKV{inner, diskDb, make(map[common.Hash][]byte), sync.Mutex{}, false}
 }
 
 func (db *RecordingKV) CreateDBSnapshot(dir string) error {
@@ -47,6 +49,11 @@ func (db *RecordingKV) Has(key []byte) (bool, error) {
 	return false, errors.New("recording KV doesn't support Has")
 }
 
+func (db *RecordingKV) DeleteRange(start, end []byte) error {
+	return errors.New("recording KV doesn't support DeleteRange")
+}
+
+// Get may be called concurrently with other Get calls
 func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 	var hash common.Hash
 	var res []byte
@@ -70,6 +77,8 @@ func (db *RecordingKV) Get(key []byte) ([]byte, error) {
 	if crypto.Keccak256Hash(res) != hash {
 		return nil, fmt.Errorf("recording KV attempted to access non-hash key %v", hash)
 	}
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
 	db.readDbEntries[hash] = res
 	return res, nil
 }
@@ -106,12 +115,7 @@ func (db *RecordingKV) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 	return nil
 }
 
-func (db *RecordingKV) NewSnapshot() (ethdb.Snapshot, error) {
-	// This is fine as RecordingKV doesn't support mutation
-	return db, nil
-}
-
-func (db *RecordingKV) Stat(property string) (string, error) {
+func (db *RecordingKV) Stat() (string, error) {
 	return "", errors.New("recording KV doesn't support Stat")
 }
 
@@ -150,6 +154,10 @@ func (r *RecordingChainContext) Engine() consensus.Engine {
 	return r.bc.Engine()
 }
 
+func (r *RecordingChainContext) Config() *params.ChainConfig {
+	return r.bc.Config()
+}
+
 func (r *RecordingChainContext) GetHeader(hash common.Hash, num uint64) *types.Header {
 	if num < r.minBlockNumberAccessed {
 		r.minBlockNumberAccessed = num
@@ -183,7 +191,7 @@ func NewRecordingDatabase(config *RecordingDatabaseConfig, ethdb ethdb.Database,
 	}
 	return &RecordingDatabase{
 		config: config,
-		db:     state.NewDatabaseWithConfig(ethdb, &trieConfig),
+		db:     state.NewDatabase(triedb.NewDatabase(ethdb, &trieConfig), nil),
 		bc:     blockchain,
 	}
 }
@@ -194,7 +202,7 @@ func (r *RecordingDatabase) StateFor(header *types.Header) (*state.StateDB, erro
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	sdb, err := state.NewDeterministic(header.Root, r.db)
+	sdb, err := state.NewRecording(header.Root, r.db)
 	if err == nil {
 		r.referenceRootLockHeld(header.Root)
 	}
@@ -232,7 +240,7 @@ func (r *RecordingDatabase) dereferenceRoot(root common.Hash) {
 func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected common.Hash, blockNumber uint64) (*state.StateDB, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	result, err := statedb.Commit(blockNumber, true)
+	result, err := statedb.Commit(blockNumber, true, false)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +258,7 @@ func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected comm
 		_, size, _ = r.db.TrieDB().Size()
 		recordingDbSize.Update(int64(size))
 	}
-	return state.New(result, statedb.Database(), nil)
+	return state.New(result, statedb.Database())
 }
 
 func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeader *types.Header, logFunc StateBuildingLogFunction) (*state.StateDB, core.ChainContext, *RecordingKV, error) {
@@ -262,12 +270,12 @@ func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeade
 	defer func() { r.Dereference(finalDereference) }()
 	recordingKeyValue := newRecordingKV(r.db.TrieDB(), r.db.DiskDB())
 
-	recordingStateDatabase := state.NewDatabase(rawdb.WrapDatabaseWithWasm(rawdb.NewDatabase(recordingKeyValue), r.db.WasmStore(), 0, r.db.WasmTargets()))
+	recordingStateDatabase := state.NewDatabase(triedb.NewDatabase(rawdb.WrapDatabaseWithWasm(rawdb.NewDatabase(recordingKeyValue), r.db.WasmStore(), 0, r.db.WasmTargets()), nil), nil)
 	var prevRoot common.Hash
 	if lastBlockHeader != nil {
 		prevRoot = lastBlockHeader.Root
 	}
-	recordingStateDb, err := state.NewDeterministic(prevRoot, recordingStateDatabase)
+	recordingStateDb, err := state.NewRecording(prevRoot, recordingStateDatabase)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create recordingStateDb: %w", err)
 	}

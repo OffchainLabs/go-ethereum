@@ -35,19 +35,15 @@ const (
 
 	// ChainFreezerReceiptTable indicates the name of the freezer receipts table.
 	ChainFreezerReceiptTable = "receipts"
-
-	// ChainFreezerDifficultyTable indicates the name of the freezer total difficulty table.
-	ChainFreezerDifficultyTable = "diffs"
 )
 
 // chainFreezerNoSnappy configures whether compression is disabled for the ancient-tables.
 // Hashes and difficulties don't compress well.
 var chainFreezerNoSnappy = map[string]bool{
-	ChainFreezerHeaderTable:     false,
-	ChainFreezerHashTable:       true,
-	ChainFreezerBodiesTable:     false,
-	ChainFreezerReceiptTable:    false,
-	ChainFreezerDifficultyTable: true,
+	ChainFreezerHeaderTable:  false,
+	ChainFreezerHashTable:    true,
+	ChainFreezerBodiesTable:  false,
+	ChainFreezerReceiptTable: false,
 }
 
 const (
@@ -62,6 +58,7 @@ const (
 	stateHistoryStorageData  = "storage.data"
 )
 
+// stateFreezerNoSnappy configures whether compression is disabled for the state freezer.
 var stateFreezerNoSnappy = map[string]bool{
 	stateHistoryMeta:         true,
 	stateHistoryAccountIndex: false,
@@ -72,12 +69,13 @@ var stateFreezerNoSnappy = map[string]bool{
 
 // The list of identifiers of ancient stores.
 var (
-	ChainFreezerName = "chain" // the folder name of chain segment ancient store.
-	StateFreezerName = "state" // the folder name of reverse diff ancient store.
+	ChainFreezerName       = "chain"        // the folder name of chain segment ancient store.
+	MerkleStateFreezerName = "state"        // the folder name of state history ancient store.
+	VerkleStateFreezerName = "state_verkle" // the folder name of state history ancient store.
 )
 
 // freezers the collections of all builtin freezers.
-var freezers = []string{ChainFreezerName, StateFreezerName}
+var freezers = []string{ChainFreezerName, MerkleStateFreezerName, VerkleStateFreezerName}
 
 // NewStateFreezer initializes the ancient store for state history.
 //
@@ -85,9 +83,15 @@ var freezers = []string{ChainFreezerName, StateFreezerName}
 //     state freezer (e.g. dev mode).
 //   - if non-empty directory is given, initializes the regular file-based
 //     state freezer.
-func NewStateFreezer(ancientDir string, readOnly bool) (ethdb.ResettableAncientStore, error) {
+func NewStateFreezer(ancientDir string, verkle bool, readOnly bool) (ethdb.ResettableAncientStore, error) {
 	if ancientDir == "" {
 		return NewMemoryFreezer(readOnly, stateFreezerNoSnappy), nil
 	}
-	return newResettableFreezer(filepath.Join(ancientDir, StateFreezerName), "eth/db/state", readOnly, stateHistoryTableSize, stateFreezerNoSnappy)
+	var name string
+	if verkle {
+		name = filepath.Join(ancientDir, VerkleStateFreezerName)
+	} else {
+		name = filepath.Join(ancientDir, MerkleStateFreezerName)
+	}
+	return newResettableFreezer(name, "eth/db/state", readOnly, stateHistoryTableSize, stateFreezerNoSnappy)
 }

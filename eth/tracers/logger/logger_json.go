@@ -58,6 +58,7 @@ type jsonLogger struct {
 	encoder *json.Encoder
 	cfg     *Config
 	env     *tracing.VMContext
+	hooks   *tracing.Hooks
 }
 
 // NewJSONLogger creates a new EVM tracer that prints execution steps as JSON objects
@@ -67,12 +68,14 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
-	return &tracing.Hooks{
-		OnTxStart: l.OnTxStart,
-		OnExit:    l.OnExit,
-		OnOpcode:  l.OnOpcode,
-		OnFault:   l.OnFault,
+	l.hooks = &tracing.Hooks{
+		OnTxStart:         l.OnTxStart,
+		OnSystemCallStart: l.onSystemCallStart,
+		OnExit:            l.OnExit,
+		OnOpcode:          l.OnOpcode,
+		OnFault:           l.OnFault,
 	}
+	return l.hooks
 }
 
 // NewJSONLoggerWithCallFrames creates a new EVM tracer that prints execution steps as JSON objects
@@ -82,13 +85,15 @@ func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
-	return &tracing.Hooks{
-		OnTxStart: l.OnTxStart,
-		OnEnter:   l.OnEnter,
-		OnExit:    l.OnExit,
-		OnOpcode:  l.OnOpcode,
-		OnFault:   l.OnFault,
+	l.hooks = &tracing.Hooks{
+		OnTxStart:         l.OnTxStart,
+		OnSystemCallStart: l.onSystemCallStart,
+		OnEnter:           l.OnEnter,
+		OnExit:            l.OnExit,
+		OnOpcode:          l.OnOpcode,
+		OnFault:           l.OnFault,
 	}
+	return l.hooks
 }
 
 func (l *jsonLogger) OnFault(pc uint64, op byte, gas uint64, cost uint64, scope tracing.OpContext, depth int, err error) {
@@ -122,6 +127,16 @@ func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracin
 	l.encoder.Encode(log)
 }
 
+func (l *jsonLogger) onSystemCallStart() {
+	// Process no events while in system call.
+	hooks := *l.hooks
+	*l.hooks = tracing.Hooks{
+		OnSystemCallEnd: func() {
+			*l.hooks = hooks
+		},
+	}
+}
+
 // OnEnter is not enabled by default.
 func (l *jsonLogger) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	frame := callFrame{
@@ -135,13 +150,6 @@ func (l *jsonLogger) OnEnter(depth int, typ byte, from common.Address, to common
 		frame.Input = input
 	}
 	l.encoder.Encode(frame)
-}
-
-func (l *jsonLogger) OnEnd(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-	if depth > 0 {
-		return
-	}
-	l.OnExit(depth, output, gasUsed, err, false)
 }
 
 func (l *jsonLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {

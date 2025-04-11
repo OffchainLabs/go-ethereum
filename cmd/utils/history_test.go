@@ -78,7 +78,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	})
 
 	// Initialize BlockChain.
-	chain, err := core.NewBlockChain(db, nil, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, nil, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("unable to initialize chain: %v", err)
 	}
@@ -87,11 +87,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	}
 
 	// Make temp directory for era files.
-	dir, err := os.MkdirTemp("", "history-export-test")
-	if err != nil {
-		t.Fatalf("error creating temp test directory: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Export history to temp directory.
 	if err := ExportHistory(chain, dir, 0, count, step); err != nil {
@@ -170,8 +166,8 @@ func TestHistoryImportAndExport(t *testing.T) {
 		db2.Close()
 	})
 
-	genesis.MustCommit(db2, triedb.NewDatabase(db, triedb.HashDefaults))
-	imported, err := core.NewBlockChain(db2, nil, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	genesis.MustCommit(db2, triedb.NewDatabase(db2, triedb.HashDefaults))
+	imported, err := core.NewBlockChain(db2, nil, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("unable to initialize chain: %v", err)
 	}

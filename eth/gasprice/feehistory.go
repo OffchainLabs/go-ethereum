@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -44,7 +43,8 @@ const (
 	// maxBlockFetchers is the max number of goroutines to spin up to pull blocks
 	// for the fee history calculation (mostly relevant for LES).
 	maxBlockFetchers = 4
-	maxQueryLimit    = 100
+	// maxQueryLimit is the max number of requested percentiles.
+	maxQueryLimit = 100
 )
 
 // blockFees represents a single block for processing
@@ -96,8 +96,10 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	}
 	// Fill in blob base fee and next blob base fee.
 	if excessBlobGas := bf.header.ExcessBlobGas; excessBlobGas != nil {
-		bf.results.blobBaseFee = eip4844.CalcBlobFee(*excessBlobGas)
-		bf.results.nextBlobBaseFee = eip4844.CalcBlobFee(eip4844.CalcExcessBlobGas(*excessBlobGas, *bf.header.BlobGasUsed))
+		bf.results.blobBaseFee = eip4844.CalcBlobFee(config, bf.header)
+		excess := eip4844.CalcExcessBlobGas(config, bf.header, bf.header.Time)
+		next := &types.Header{Number: bf.header.Number, Time: bf.header.Time, ExcessBlobGas: &excess}
+		bf.results.nextBlobBaseFee = eip4844.CalcBlobFee(config, next)
 	} else {
 		bf.results.blobBaseFee = new(big.Int)
 		bf.results.nextBlobBaseFee = new(big.Int)
@@ -105,7 +107,8 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	// Compute gas used ratio for normal and blob gas.
 	bf.results.gasUsedRatio = float64(bf.header.GasUsed) / float64(bf.header.GasLimit)
 	if blobGasUsed := bf.header.BlobGasUsed; blobGasUsed != nil {
-		bf.results.blobGasUsedRatio = float64(*blobGasUsed) / params.MaxBlobGasPerBlock
+		maxBlobGas := eip4844.MaxBlobGasPerBlock(config, bf.header.Time)
+		bf.results.blobGasUsedRatio = float64(*blobGasUsed) / float64(maxBlobGas)
 	}
 
 	if len(percentiles) == 0 {

@@ -19,6 +19,7 @@ package types
 import (
 	"bytes"
 	"crypto/sha256"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -47,9 +48,9 @@ type BlobTx struct {
 	Sidecar *BlobTxSidecar `rlp:"-"`
 
 	// Signature values
-	V *uint256.Int `json:"v" gencodec:"required"`
-	R *uint256.Int `json:"r" gencodec:"required"`
-	S *uint256.Int `json:"s" gencodec:"required"`
+	V *uint256.Int
+	R *uint256.Int
+	S *uint256.Int
 }
 
 // BlobTxSidecar contains the blobs of a blob transaction.
@@ -83,6 +84,22 @@ func (sc *BlobTxSidecar) encodedSize() uint64 {
 		proofs += rlp.BytesSize(sc.Proofs[i][:])
 	}
 	return rlp.ListSize(blobs) + rlp.ListSize(commitments) + rlp.ListSize(proofs)
+}
+
+// ValidateBlobCommitmentHashes checks whether the given hashes correspond to the
+// commitments in the sidecar
+func (sc *BlobTxSidecar) ValidateBlobCommitmentHashes(hashes []common.Hash) error {
+	if len(sc.Commitments) != len(hashes) {
+		return fmt.Errorf("invalid number of %d blob commitments compared to %d blob hashes", len(sc.Commitments), len(hashes))
+	}
+	hasher := sha256.New()
+	for i, vhash := range hashes {
+		computed := kzg4844.CalcBlobHashV1(hasher, &sc.Commitments[i])
+		if vhash != computed {
+			return fmt.Errorf("blob %d: computed hash %#x mismatches transaction one %#x", i, computed, vhash)
+		}
+	}
+	return nil
 }
 
 // blobTxWithBlobs is used for encoding of transactions when blobs are present.
@@ -150,19 +167,20 @@ func (tx *BlobTx) copy() TxData {
 }
 
 // accessors for innerTx.
-func (tx *BlobTx) txType() byte            { return BlobTxType }
-func (tx *BlobTx) chainID() *big.Int       { return tx.ChainID.ToBig() }
-func (tx *BlobTx) accessList() AccessList  { return tx.AccessList }
-func (tx *BlobTx) data() []byte            { return tx.Data }
-func (tx *BlobTx) gas() uint64             { return tx.Gas }
-func (tx *BlobTx) gasFeeCap() *big.Int     { return tx.GasFeeCap.ToBig() }
-func (tx *BlobTx) gasTipCap() *big.Int     { return tx.GasTipCap.ToBig() }
-func (tx *BlobTx) gasPrice() *big.Int      { return tx.GasFeeCap.ToBig() }
-func (tx *BlobTx) value() *big.Int         { return tx.Value.ToBig() }
-func (tx *BlobTx) nonce() uint64           { return tx.Nonce }
-func (tx *BlobTx) to() *common.Address     { tmp := tx.To; return &tmp }
-func (tx *BlobTx) blobGas() uint64         { return params.BlobTxBlobGasPerBlob * uint64(len(tx.BlobHashes)) }
-func (tx *BlobTx) skipAccountChecks() bool { return false }
+func (tx *BlobTx) txType() byte           { return BlobTxType }
+func (tx *BlobTx) chainID() *big.Int      { return tx.ChainID.ToBig() }
+func (tx *BlobTx) accessList() AccessList { return tx.AccessList }
+func (tx *BlobTx) data() []byte           { return tx.Data }
+func (tx *BlobTx) gas() uint64            { return tx.Gas }
+func (tx *BlobTx) gasFeeCap() *big.Int    { return tx.GasFeeCap.ToBig() }
+func (tx *BlobTx) gasTipCap() *big.Int    { return tx.GasTipCap.ToBig() }
+func (tx *BlobTx) gasPrice() *big.Int     { return tx.GasFeeCap.ToBig() }
+func (tx *BlobTx) value() *big.Int        { return tx.Value.ToBig() }
+func (tx *BlobTx) nonce() uint64          { return tx.Nonce }
+func (tx *BlobTx) to() *common.Address    { tmp := tx.To; return &tmp }
+func (tx *BlobTx) blobGas() uint64        { return params.BlobTxBlobGasPerBlob * uint64(len(tx.BlobHashes)) }
+func (tx *BlobTx) skipNonceChecks() bool  { return false }
+func (tx *BlobTx) skipFromEOACheck() bool { return false }
 
 func (tx *BlobTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
 	if baseFee == nil {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -51,6 +52,22 @@ type APIBackend struct {
 	sync           SyncProgressBackend
 }
 
+type errorFilteredFallbackClient struct {
+	impl types.FallbackClient
+	url  string
+}
+
+func (c *errorFilteredFallbackClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	err := c.impl.CallContext(ctx, result, method, args...)
+	if err != nil && strings.Contains(err.Error(), c.url) {
+		// avoids leaking the URL in the error message.
+		// URL can contain sensitive information such as API keys.
+		log.Warn("fallback client error", "error", err)
+		return errors.New("Failed to call fallback API")
+	}
+	return err
+}
+
 type timeoutFallbackClient struct {
 	impl    types.FallbackClient
 	timeout time.Duration
@@ -77,12 +94,22 @@ func CreateFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.D
 		types.SetFallbackError(strings.Join(fields, ":"), int(errNumber))
 		return nil, nil
 	}
+
 	var fallbackClient types.FallbackClient
 	var err error
 	fallbackClient, err = rpc.Dial(fallbackClientUrl)
 	if err != nil {
 		return nil, fmt.Errorf("failed creating fallback connection: %w", err)
 	}
+	url, err := url.Parse(fallbackClientUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed parsing fallback URL: %w", err)
+	}
+	fallbackClient = &errorFilteredFallbackClient{
+		impl: fallbackClient,
+		url:  url.String(),
+	}
+
 	if fallbackClientTimeout != 0 {
 		fallbackClient = &timeoutFallbackClient{
 			impl:    fallbackClient,
@@ -93,9 +120,8 @@ func CreateFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.D
 }
 
 type SyncProgressBackend interface {
-	SyncProgressMap() map[string]interface{}
-	SafeBlockNumber(ctx context.Context) (uint64, error)
-	FinalizedBlockNumber(ctx context.Context) (uint64, error)
+	SyncProgressMap(ctx context.Context) map[string]interface{}
+	BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error)
 }
 
 func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration) (*filters.FilterSystem, error) {
@@ -179,17 +205,17 @@ func (a *APIBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.B
 }
 
 // General Ethereum API
-func (a *APIBackend) SyncProgressMap() map[string]interface{} {
+func (a *APIBackend) SyncProgressMap(ctx context.Context) map[string]interface{} {
 	if a.sync == nil {
 		res := make(map[string]interface{})
 		res["error"] = "sync object not set in apibackend"
 		return res
 	}
-	return a.sync.SyncProgressMap()
+	return a.sync.SyncProgressMap(ctx)
 }
 
 func (a *APIBackend) SyncProgress() ethereum.SyncProgress {
-	progress := a.SyncProgressMap()
+	progress := a.SyncProgressMap(context.Background())
 
 	if len(progress) == 0 {
 		return ethereum.SyncProgress{}
@@ -325,7 +351,7 @@ func (a *APIBackend) FeeHistory(
 
 func (a *APIBackend) BlobBaseFee(ctx context.Context) *big.Int {
 	if excess := a.CurrentHeader().ExcessBlobGas; excess != nil {
-		return eip4844.CalcBlobFee(*excess)
+		return eip4844.CalcBlobFee(a.ChainConfig(), a.CurrentHeader())
 	}
 	return nil
 }
@@ -379,13 +405,23 @@ func (a *APIBackend) blockNumberToUint(ctx context.Context, number rpc.BlockNumb
 		if a.sync == nil {
 			return 0, errors.New("block number not supported: object not set")
 		}
-		return a.sync.SafeBlockNumber(ctx)
+
+		currentSafeBlock := a.BlockChain().CurrentSafeBlock()
+		if currentSafeBlock == nil {
+			return 0, errors.New("safe block not found")
+		}
+		return currentSafeBlock.Number.Uint64(), nil
 	}
 	if number == rpc.FinalizedBlockNumber {
 		if a.sync == nil {
 			return 0, errors.New("block number not supported: object not set")
 		}
-		return a.sync.FinalizedBlockNumber(ctx)
+
+		currentFinalizedBlock := a.BlockChain().CurrentFinalBlock()
+		if currentFinalizedBlock == nil {
+			return 0, errors.New("finalized block not found")
+		}
+		return currentFinalizedBlock.Number.Uint64(), nil
 	}
 	if number < 0 {
 		return 0, errors.New("block number not supported")
@@ -460,6 +496,10 @@ func (a *APIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
+func (a *APIBackend) BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error) {
+	return a.sync.BlockMetadataByNumber(ctx, blockNum)
+}
+
 func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *core.BlockChain, maxRecreateStateDepth int64, header *types.Header, err error) (*state.StateDB, *types.Header, error) {
 	if err != nil {
 		return nil, header, err
@@ -476,7 +516,7 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 				// Try referencing the root, if it isn't in dirties cache then Reference will have no effect
 				db.TrieDB().Reference(header.Root, common.Hash{})
 			}
-			statedb, err := state.New(header.Root, db, snapshots)
+			statedb, err := state.New(header.Root, db)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -502,7 +542,7 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 	// note: triedb cleans cache is disabled in trie.HashDefaults
 	// note: only states committed to diskdb can be found as we're creating new triedb
 	// note: snapshots are not used here
-	ephemeral := state.NewDatabaseWithConfig(chainDb, triedb.HashDefaults)
+	ephemeral := state.NewDatabase(triedb.NewDatabase(chainDb, triedb.HashDefaults), nil)
 	lastState, lastHeader, lastStateRelease, err := FindLastAvailableState(ctx, bc, stateFor(ephemeral, nil), header, nil, maxRecreateStateDepth)
 	if err != nil {
 		return nil, nil, err
@@ -577,25 +617,17 @@ func (a *APIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.R
 	return a.BlockChain().GetReceiptsByHash(hash), nil
 }
 
-func (a *APIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
-	if header := a.BlockChain().GetHeaderByHash(hash); header != nil {
-		return a.BlockChain().GetTd(hash, header.Number.Uint64())
-	}
-	return nil
-}
-
-func (a *APIBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
+func (a *APIBackend) GetEVM(ctx context.Context, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
 	if vmConfig == nil {
 		vmConfig = a.BlockChain().GetVMConfig()
 	}
-	txContext := core.NewEVMTxContext(msg)
 	var context vm.BlockContext
 	if blockCtx != nil {
 		context = *blockCtx
 	} else {
 		context = core.NewEVMBlockContext(header, a.BlockChain(), nil)
 	}
-	return vm.NewEVM(context, txContext, state, a.BlockChain().Config(), *vmConfig)
+	return vm.NewEVM(context, state, a.BlockChain().Config(), *vmConfig)
 }
 
 func (a *APIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
@@ -604,10 +636,6 @@ func (a *APIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscr
 
 func (a *APIBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return a.BlockChain().SubscribeChainHeadEvent(ch)
-}
-
-func (a *APIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
-	return a.BlockChain().SubscribeChainSideEvent(ch)
 }
 
 // Transaction pool API
@@ -695,10 +723,10 @@ func (a *APIBackend) Engine() consensus.Engine {
 	return a.b.Engine()
 }
 
-func (b *APIBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
+func (a *APIBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
 	return nil, nil, nil
 }
 
-func (b *APIBackend) FallbackClient() types.FallbackClient {
-	return b.fallbackClient
+func (a *APIBackend) FallbackClient() types.FallbackClient {
+	return a.fallbackClient
 }

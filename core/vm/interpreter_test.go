@@ -17,12 +17,11 @@
 package vm
 
 import (
+	"math"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -43,18 +42,18 @@ func TestLoopInterrupt(t *testing.T) {
 	}
 
 	for i, tt := range loopInterruptTests {
-		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		statedb.CreateAccount(address)
 		statedb.SetCode(address, common.Hex2Bytes(tt))
 		statedb.Finalise(true)
 
-		evm := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, Config{})
+		evm := NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, Config{})
 
 		errChannel := make(chan error)
 		timeout := make(chan bool)
 
 		go func(evm *EVM) {
-			_, _, err := evm.Call(AccountRef(common.Address{}), address, nil, math.MaxUint64, new(uint256.Int))
+			_, _, err := evm.Call(common.Address{}, address, nil, math.MaxUint64, new(uint256.Int))
 			errChannel <- err
 		}(evm)
 
