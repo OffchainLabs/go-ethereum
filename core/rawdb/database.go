@@ -84,11 +84,11 @@ func (frdb *freezerdb) Freeze() error {
 	return nil
 }
 
-func (db *freezerdb) CreateDBSnapshot(dir string) error {
-	if err := db.KeyValueStore.CreateDBSnapshot(dir); err != nil {
+func (frdb *freezerdb) CreateDBSnapshot(dir string) error {
+	if err := frdb.KeyValueStore.CreateDBSnapshot(dir); err != nil {
 		return err
 	}
-	if err := db.AncientStore.CreateDBSnapshot(dir); err != nil {
+	if err := frdb.AncientStore.CreateDBSnapshot(dir); err != nil {
 		return err
 	}
 	return nil

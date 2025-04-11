@@ -34,7 +34,7 @@ type Database struct {
 	remote *rpc.Client
 }
 
-func (t *Database) CreateDBSnapshot(dir string) error {
+func (db *Database) CreateDBSnapshot(dir string) error {
 	return errors.New("createDBSnapshot method is not supported by remotedb")
 }
 

@@ -37,7 +37,7 @@ func NewTable(db ethdb.Database, prefix string) ethdb.Database {
 	}
 }
 
-func (db *table) CreateDBSnapshot(dir string) error {
+func (t *table) CreateDBSnapshot(dir string) error {
 	return errors.New("createDBSnapshot method is not supported")
 }
 
