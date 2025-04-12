@@ -38,7 +38,7 @@ type TxGasDimensionByOpcodeTracer struct {
 // usage for each opcode against the dimension of that opcode
 // takes a context, and json input for configuration parameters
 func NewTxGasDimensionByOpcodeLogger(
-	ctx *tracers.Context,
+	_ *tracers.Context,
 	_ json.RawMessage,
 	_ *params.ChainConfig,
 ) (*tracers.Tracer, error) {
@@ -247,11 +247,11 @@ func (t *TxGasDimensionByOpcodeTracer) Error() error { return t.err }
 // execution status, the amount of gas used and the return value
 type TxGasDimensionByOpcodeExecutionResult struct {
 	Gas           uint64                      `json:"gas"`
-	Failed        bool                        `json:"failed"`
-	Dimensions    map[string]GasesByDimension `json:"dimensions"`
-	TxHash        string                      `json:"txHash"`
-	BlockTimetamp uint64                      `json:"blockTimestamp"`
-	BlockNumber   *big.Int                    `json:"blockNumber"`
+	Failed        bool                        `json:"fail"`
+	Dimensions    map[string]GasesByDimension `json:"dim"`
+	TxHash        string                      `json:"hash"`
+	BlockTimetamp uint64                      `json:"btime"`
+	BlockNumber   *big.Int                    `json:"num"`
 }
 
 // produce json result for output from tracer
