@@ -286,11 +286,11 @@ func (t *TxGasDimensionLogger) Error() error { return t.err }
 // execution status, the amount of gas used and the return value
 type ExecutionResult struct {
 	Gas           uint64            `json:"gas"`
-	Failed        bool              `json:"failed"`
-	DimensionLogs []DimensionLogRes `json:"dimensionLogs"`
-	TxHash        string            `json:"txHash"`
-	BlockTimetamp uint64            `json:"blockTimestamp"`
-	BlockNumber   *big.Int          `json:"blockNumber"`
+	Failed        bool              `json:"fail"`
+	DimensionLogs []DimensionLogRes `json:"dim"`
+	TxHash        string            `json:"hash"`
+	BlockTimetamp uint64            `json:"time"`
+	BlockNumber   *big.Int          `json:"num"`
 }
 
 // produce json result for output from tracer
@@ -318,19 +318,19 @@ func (t *TxGasDimensionLogger) GetResult() (json.RawMessage, error) {
 type DimensionLogRes struct {
 	Pc                    uint64 `json:"pc"`
 	Op                    string `json:"op"`
-	Depth                 int    `json:"depth"`
-	OneDimensionalGasCost uint64 `json:"gasCost"`
-	Computation           uint64 `json:"cpu"`
-	StateAccess           uint64 `json:"access,omitempty"`
-	StateGrowth           uint64 `json:"growth,omitempty"`
-	HistoryGrowth         uint64 `json:"hist,omitempty"`
-	StateGrowthRefund     int64  `json:"refund,omitempty"`
-	CallRealGas           uint64 `json:"callRealGas,omitempty"`
-	CallExecutionCost     uint64 `json:"callExecutionCost,omitempty"`
-	CallMemoryExpansion   uint64 `json:"callMemoryExpansion,omitempty"`
-	CreateInitCodeCost    uint64 `json:"createInitCodeCost,omitempty"`
-	Create2HashCost       uint64 `json:"create2HashCost,omitempty"`
-	Err                   error  `json:"error,omitempty"`
+	Depth                 int    `json:"d"`
+	OneDimensionalGasCost uint64 `json:"cost"`
+	Computation           uint64 `json:"cpu,omitempty"`
+	StateAccess           uint64 `json:"rw,omitempty"`
+	StateGrowth           uint64 `json:"g,omitempty"`
+	HistoryGrowth         uint64 `json:"h,omitempty"`
+	StateGrowthRefund     int64  `json:"rf,omitempty"`
+	CallRealGas           uint64 `json:"crg,omitempty"`
+	CallExecutionCost     uint64 `json:"cec,omitempty"`
+	CallMemoryExpansion   uint64 `json:"cme,omitempty"`
+	CreateInitCodeCost    uint64 `json:"cic,omitempty"`
+	Create2HashCost       uint64 `json:"c2h,omitempty"`
+	Err                   error  `json:"err,omitempty"`
 }
 
 // formatLogs formats EVM returned structured logs for json output
