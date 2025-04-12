@@ -12,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	_vm "github.com/ethereum/go-ethereum/core/vm"
 )
 
 // initializer for the tracer
@@ -26,7 +27,7 @@ type txGasDimensionByOpcodeLiveTraceConfig struct {
 // gasDimensionTracer struct
 type TxGasDimensionByOpcodeLiveTracer struct {
 	Path               string `json:"path"` // Path to directory for output
-	GasDimensionTracer *tracers.Tracer
+	GasDimensionTracer *native.TxGasDimensionByOpcodeTracer
 }
 
 // gasDimensionTracer returns a new tracer that traces gas
@@ -67,12 +68,10 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnTxStart(
 		fmt.Println("Error seen in the gas dimension live tracer lifecycle!")
 	}
 
-	var err error
-	t.GasDimensionTracer, err = native.NewTxGasDimensionByOpcodeLogger(nil, nil, nil)
-	if err != nil {
-		fmt.Printf("Failed to create tx gas dimension tracer: %v\n", err)
-		t.GasDimensionTracer = nil
-		return
+	t.GasDimensionTracer = &native.TxGasDimensionByOpcodeTracer{
+		Depth:              1,
+		RefundAccumulated:  0,
+		OpcodeToDimensions: make(map[_vm.OpCode]native.GasesByDimension),
 	}
 	t.GasDimensionTracer.OnTxStart(vm, tx, from)
 }
@@ -100,29 +99,38 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnTxEnd(
 	// they can be skipped
 	if receipt.GasUsed != 0 {
 
+		// previously: json
 		// then get the json from the native tracer
-		executionResultJsonBytes, errGettingResult := t.GasDimensionTracer.GetResult()
-		if errGettingResult != nil {
-			errorJsonString := fmt.Sprintf("{\"errorGettingResult\": \"%s\"}", errGettingResult.Error())
-			fmt.Println(errorJsonString)
+		// executionResultJsonBytes, errGettingResult := t.GasDimensionTracer.GetResult()
+		// if errGettingResult != nil {
+		// 	errorJsonString := fmt.Sprintf("{\"errorGettingResult\": \"%s\"}", errGettingResult.Error())
+		// 	fmt.Println(errorJsonString)
+		// 	return
+		// }
+
+		// now: protobuf
+		executionResultBytes, err := t.GasDimensionTracer.GetProtobufResult()
+		if err != nil {
+			fmt.Printf("Failed to get protobuf result: %v\n", err)
 			return
 		}
 
 		blockNumber := receipt.BlockNumber.String()
 		txHashString := receipt.TxHash.Hex()
 
-		// Create the filename
-		filename := fmt.Sprintf("%s_%s.json", blockNumber, txHashString)
-		filepath := filepath.Join(t.Path, filename)
+		// Create the file path
+		filename := fmt.Sprintf("%s.pb", txHashString)
+		dirPath := filepath.Join(t.Path, blockNumber)
+		filepath := filepath.Join(dirPath, filename)
 
-		// Ensure the directory exists
-		if err := os.MkdirAll(t.Path, 0755); err != nil {
-			fmt.Printf("Failed to create directory %s: %v\n", t.Path, err)
+		// Ensure the directory exists (including block number subdirectory)
+		if err := os.MkdirAll(dirPath, 0755); err != nil {
+			fmt.Printf("Failed to create directory %s: %v\n", dirPath, err)
 			return
 		}
 
 		// Write the file
-		if err := os.WriteFile(filepath, executionResultJsonBytes, 0644); err != nil {
+		if err := os.WriteFile(filepath, executionResultBytes, 0644); err != nil {
 			fmt.Printf("Failed to write file %s: %v\n", filepath, err)
 			return
 		}
