@@ -56,15 +56,30 @@ func newTxGasDimensionLiveTraceLogger(cfg json.RawMessage) (*tracing.Hooks, erro
 	}, nil
 }
 
-func (t *txGasDimensionLiveTraceLogger) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (t *txGasDimensionLiveTraceLogger) OnTxStart(
+	vm *tracing.VMContext,
+	tx *types.Transaction,
+	from common.Address,
+) {
 	t.GasDimensionTracer.OnTxStart(vm, tx, from)
 }
 
-func (t *txGasDimensionLiveTraceLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *txGasDimensionLiveTraceLogger) OnOpcode(
+	pc uint64,
+	op byte,
+	gas, cost uint64,
+	scope tracing.OpContext,
+	rData []byte,
+	depth int,
+	err error,
+) {
 	t.GasDimensionTracer.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
 }
+func (t *txGasDimensionLiveTraceLogger) OnTxEnd(
+	receipt *types.Receipt,
+	err error,
+) {
 
-func (t *txGasDimensionLiveTraceLogger) OnTxEnd(receipt *types.Receipt, err error) {
 	// first call the native tracer's OnTxEnd
 	t.GasDimensionTracer.OnTxEnd(receipt, err)
 
@@ -97,9 +112,7 @@ func (t *txGasDimensionLiveTraceLogger) OnTxEnd(receipt *types.Receipt, err erro
 }
 
 func (t *txGasDimensionLiveTraceLogger) OnBlockStart(ev tracing.BlockEvent) {
-	fmt.Println("Live Tracer Seen: new block", ev.Block.Number())
 }
 
 func (t *txGasDimensionLiveTraceLogger) OnBlockEnd(err error) {
-	fmt.Println("Live Tracer Seen block end")
 }

@@ -11,12 +11,12 @@ import (
 // GasesByDimension is a type that represents the gas consumption for each dimension
 // for a given opcode.
 type GasesByDimension struct {
-	OneDimensionalGasCost uint64 `json:"total"`
+	OneDimensionalGasCost uint64 `json:"g1"`
 	Computation           uint64 `json:"cpu"`
-	StateAccess           uint64 `json:"access,omitempty"`
-	StateGrowth           uint64 `json:"growth,omitempty"`
-	HistoryGrowth         uint64 `json:"hist,omitempty"`
-	StateGrowthRefund     int64  `json:"refund,omitempty"`
+	StateAccess           uint64 `json:"rw,omitempty"`
+	StateGrowth           uint64 `json:"gr,omitempty"`
+	HistoryGrowth         uint64 `json:"h,omitempty"`
+	StateGrowthRefund     int64  `json:"rf,omitempty"`
 }
 
 // in the case of opcodes like CALL, STATICCALL, DELEGATECALL, etc,
