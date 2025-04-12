@@ -6,12 +6,15 @@ import (
 	"math/big"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/eth/tracers/native/proto"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
+	protobuf "google.golang.org/protobuf/proto"
 )
 
 // initializer for the tracer
@@ -23,12 +26,12 @@ func init() {
 type TxGasDimensionByOpcodeTracer struct {
 	env                *tracing.VMContext
 	txHash             common.Hash
-	opcodeToDimensions map[vm.OpCode]GasesByDimension
+	OpcodeToDimensions map[vm.OpCode]GasesByDimension
 	err                error
 	usedGas            uint64
 	callStack          CallGasDimensionStack
-	depth              int
-	refundAccumulated  uint64
+	Depth              int
+	RefundAccumulated  uint64
 
 	interrupt atomic.Bool // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption
@@ -44,9 +47,9 @@ func NewTxGasDimensionByOpcodeLogger(
 ) (*tracers.Tracer, error) {
 
 	t := &TxGasDimensionByOpcodeTracer{
-		depth:              1,
-		refundAccumulated:  0,
-		opcodeToDimensions: make(map[vm.OpCode]GasesByDimension),
+		Depth:              1,
+		RefundAccumulated:  0,
+		OpcodeToDimensions: make(map[vm.OpCode]GasesByDimension),
 	}
 
 	return &tracers.Tracer{
@@ -77,23 +80,23 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 	if t.interrupt.Load() {
 		return
 	}
-	if depth != t.depth && depth != t.depth-1 {
+	if depth != t.Depth && depth != t.Depth-1 {
 		t.interrupt.Store(true)
 		t.reason = fmt.Errorf(
 			"expected depth fell out of sync with actual depth: %d %d != %d, callStack: %v",
 			pc,
-			t.depth,
+			t.Depth,
 			depth,
 			t.callStack,
 		)
 		return
 	}
-	if t.depth != len(t.callStack)+1 {
+	if t.Depth != len(t.callStack)+1 {
 		t.interrupt.Store(true)
 		t.reason = fmt.Errorf(
 			"depth fell out of sync with callStack: %d %d != %d, callStack: %v",
 			pc,
-			t.depth,
+			t.Depth,
 			len(t.callStack),
 			t.callStack,
 		)
@@ -131,11 +134,11 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 				DimensionLogPosition: 0, //unused in this tracer
 				ExecutionCost:        0,
 			})
-		t.depth += 1
+		t.Depth += 1
 	} else {
 
 		// update the aggregrate map for this opcode
-		accumulatedDimensions := t.opcodeToDimensions[opcode]
+		accumulatedDimensions := t.OpcodeToDimensions[opcode]
 
 		accumulatedDimensions.OneDimensionalGasCost += gasesByDimension.OneDimensionalGasCost
 		accumulatedDimensions.Computation += gasesByDimension.Computation
@@ -144,19 +147,19 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 		accumulatedDimensions.HistoryGrowth += gasesByDimension.HistoryGrowth
 		accumulatedDimensions.StateGrowthRefund += gasesByDimension.StateGrowthRefund
 
-		t.opcodeToDimensions[opcode] = accumulatedDimensions
+		t.OpcodeToDimensions[opcode] = accumulatedDimensions
 
 		// if the opcode returns from the call stack depth, or
 		// if this is an opcode immediately after a call that did not increase the stack depth
 		// because it called an empty account or contract or wrong function signature,
 		// call the appropriate finishX function to write the gas dimensions
 		// for the call that increased the stack depth in the past
-		if depth < t.depth {
+		if depth < t.Depth {
 			stackInfo, ok := t.callStack.Pop()
 			// base case, stack is empty, do nothing
 			if !ok {
 				t.interrupt.Store(true)
-				t.reason = fmt.Errorf("call stack is unexpectedly empty %d %d %d", pc, depth, t.depth)
+				t.reason = fmt.Errorf("call stack is unexpectedly empty %d %d %d", pc, depth, t.Depth)
 				return
 			}
 			finishFunction := GetFinishCalcGasDimensionFunc(stackInfo.GasDimensionInfo.Op)
@@ -174,7 +177,7 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 			// you can't trust the `gas` field on the call itself. I wonder if the gas field is an estimation
 			gasUsedByCall := stackInfo.GasDimensionInfo.GasCounterAtTimeOfCall - gas
 			gasesByDimensionCall := finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
-			accumulatedDimensionsCall := t.opcodeToDimensions[stackInfo.GasDimensionInfo.Op]
+			accumulatedDimensionsCall := t.OpcodeToDimensions[stackInfo.GasDimensionInfo.Op]
 
 			accumulatedDimensionsCall.OneDimensionalGasCost += gasesByDimensionCall.OneDimensionalGasCost
 			accumulatedDimensionsCall.Computation += gasesByDimensionCall.Computation
@@ -183,8 +186,8 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 			accumulatedDimensionsCall.HistoryGrowth += gasesByDimensionCall.HistoryGrowth
 			accumulatedDimensionsCall.StateGrowthRefund += gasesByDimensionCall.StateGrowthRefund
 
-			t.opcodeToDimensions[stackInfo.GasDimensionInfo.Op] = accumulatedDimensionsCall
-			t.depth -= 1
+			t.OpcodeToDimensions[stackInfo.GasDimensionInfo.Op] = accumulatedDimensionsCall
+			t.Depth -= 1
 		}
 
 		// if we are in a call stack depth greater than 0,
@@ -228,11 +231,11 @@ func (t *TxGasDimensionByOpcodeTracer) GetOpRefund() uint64 {
 }
 
 func (t *TxGasDimensionByOpcodeTracer) GetRefundAccumulated() uint64 {
-	return t.refundAccumulated
+	return t.RefundAccumulated
 }
 
 func (t *TxGasDimensionByOpcodeTracer) SetRefundAccumulated(refund uint64) {
-	t.refundAccumulated = refund
+	t.RefundAccumulated = refund
 }
 
 // ############################################################################
@@ -273,10 +276,41 @@ func (t *TxGasDimensionByOpcodeTracer) GetResult() (json.RawMessage, error) {
 	})
 }
 
+// produce protobuf serialized result
+// for storing to file in compact format
+func (t *TxGasDimensionByOpcodeTracer) GetProtobufResult() ([]byte, error) {
+	if t.reason != nil {
+		return nil, t.reason
+	}
+	failed := t.err != nil
+
+	executionResult := &proto.TxGasDimensionByOpcodeExecutionResult{
+		Gas:            t.usedGas,
+		Failed:         failed,
+		Dimensions:     make(map[string]*proto.GasesByDimension),
+		TxHash:         t.txHash.Hex(),
+		BlockTimestamp: t.env.Time,
+		BlockNumber:    t.env.BlockNumber.String(),
+	}
+
+	for opcode, dimensions := range t.OpcodeToDimensions {
+		executionResult.Dimensions[opcode.String()] = &proto.GasesByDimension{
+			OneDimensionalGasCost: dimensions.OneDimensionalGasCost,
+			Computation:           dimensions.Computation,
+			StateAccess:           dimensions.StateAccess,
+			StateGrowth:           dimensions.StateGrowth,
+			HistoryGrowth:         dimensions.HistoryGrowth,
+			StateGrowthRefund:     dimensions.StateGrowthRefund,
+		}
+	}
+
+	return protobuf.Marshal(executionResult)
+}
+
 // stringify opcodes for dimension log output
 func (t *TxGasDimensionByOpcodeTracer) GetOpcodeDimensionSummary() map[string]GasesByDimension {
 	summary := make(map[string]GasesByDimension)
-	for opcode, dimensions := range t.opcodeToDimensions {
+	for opcode, dimensions := range t.OpcodeToDimensions {
 		summary[opcode.String()] = dimensions
 	}
 	return summary

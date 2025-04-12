@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package eth.tracers.native.proto;
+
+option go_package = "github.com/ethereum/go-ethereum/eth/tracers/native/proto";
+
+// GasesByDimension represents the gas consumption for each dimension
+message GasesByDimension {
+  uint64 one_dimensional_gas_cost = 1;
+  uint64 computation = 2;
+  uint64 state_access = 3;
+  uint64 state_growth = 4;
+  uint64 history_growth = 5;
+  int64 state_growth_refund = 6;
+}
+
+// TxGasDimensionByOpcodeExecutionResult represents the execution result
+message TxGasDimensionByOpcodeExecutionResult {
+  uint64 gas = 1;
+  bool failed = 2;
+  map<string, GasesByDimension> dimensions = 3;
+  string tx_hash = 4;
+  uint64 block_timestamp = 5;
+  string block_number = 6; // Using string to represent big.Int
+}
