@@ -390,7 +390,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 
 		blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
-		if config.IsPrague(b.header.Number, b.header.Time, blockContext.ArbOSVersion) || config.IsVerkle(b.header.Number, b.header.Time) {
+		if !config.IsArbitrum() && config.IsPrague(b.header.Number, b.header.Time, blockContext.ArbOSVersion) || config.IsVerkle(b.header.Number, b.header.Time) {
 			// EIP-2935
 			blockContext.Random = &common.Hash{} // enable post-merge instruction set
 			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
