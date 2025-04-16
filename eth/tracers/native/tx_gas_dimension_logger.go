@@ -137,7 +137,7 @@ func (t *TxGasDimensionLogger) OnOpcode(
 	}
 	opcode := vm.OpCode(op)
 
-	if WasCallOrCreate(opcode) && callStackInfo == nil || !WasCallOrCreate(opcode) && callStackInfo != nil {
+	if WasCallOrCreate(opcode) && callStackInfo == nil && err == nil || !WasCallOrCreate(opcode) && callStackInfo != nil {
 		t.interrupt.Store(true)
 		t.reason = fmt.Errorf(
 			"logic bug, calls/creates should always be accompanied by callStackInfo and non-calls should not have callStackInfo %d %s %v",
@@ -164,7 +164,7 @@ func (t *TxGasDimensionLogger) OnOpcode(
 	// if callStackInfo is not nil then we need to take a note of the index of the
 	// DimensionLog that represents this opcode and save the callStackInfo
 	// to call finishX after the call has returned
-	if WasCallOrCreate(opcode) {
+	if WasCallOrCreate(opcode) && err == nil {
 		opcodeLogIndex := len(t.logs) - 1 // minus 1 because we've already appended the log
 		t.callStack.Push(
 			CallGasDimensionStackInfo{
