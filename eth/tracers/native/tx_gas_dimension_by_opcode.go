@@ -287,14 +287,14 @@ func (t *TxGasDimensionByOpcodeTracer) GetProtobufResult() ([]byte, error) {
 	executionResult := &proto.TxGasDimensionByOpcodeExecutionResult{
 		Gas:            t.usedGas,
 		Failed:         failed,
-		Dimensions:     make(map[string]*proto.GasesByDimension),
+		Dimensions:     make(map[uint32]*proto.GasesByDimension),
 		TxHash:         t.txHash.Hex(),
 		BlockTimestamp: t.env.Time,
 		BlockNumber:    t.env.BlockNumber.String(),
 	}
 
 	for opcode, dimensions := range t.OpcodeToDimensions {
-		executionResult.Dimensions[opcode.String()] = &proto.GasesByDimension{
+		executionResult.Dimensions[uint32(opcode)] = &proto.GasesByDimension{
 			OneDimensionalGasCost: dimensions.OneDimensionalGasCost,
 			Computation:           dimensions.Computation,
 			StateAccess:           dimensions.StateAccess,
