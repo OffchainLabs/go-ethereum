@@ -105,10 +105,10 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 	// get the gas dimension function
 	// if it's not a call, directly calculate the gas dimensions for the opcode
 	f := GetCalcGasDimensionFunc(vm.OpCode(op))
-	gasesByDimension, callStackInfo, err := f(t, pc, op, gas, cost, scope, rData, depth, err)
-	if err != nil {
+	gasesByDimension, callStackInfo, fErr := f(t, pc, op, gas, cost, scope, rData, depth, err)
+	if fErr != nil {
 		t.interrupt.Store(true)
-		t.reason = err
+		t.reason = fErr
 		return
 	}
 	opcode := vm.OpCode(op)

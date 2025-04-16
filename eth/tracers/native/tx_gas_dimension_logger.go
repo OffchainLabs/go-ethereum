@@ -129,10 +129,10 @@ func (t *TxGasDimensionLogger) OnOpcode(
 	// get the gas dimension function
 	// if it's not a call, directly calculate the gas dimensions for the opcode
 	f := GetCalcGasDimensionFunc(vm.OpCode(op))
-	gasesByDimension, callStackInfo, err := f(t, pc, op, gas, cost, scope, rData, depth, err)
-	if err != nil {
+	gasesByDimension, callStackInfo, fErr := f(t, pc, op, gas, cost, scope, rData, depth, err)
+	if fErr != nil {
 		t.interrupt.Store(true)
-		t.reason = err
+		t.reason = fErr
 		return
 	}
 	opcode := vm.OpCode(op)
@@ -201,14 +201,14 @@ func (t *TxGasDimensionLogger) OnOpcode(
 			// is to subtract gas at time of call from gas at opcode AFTER return
 			// you can't trust the `gas` field on the call itself. I wonder if the gas field is an estimation
 			gasUsedByCall := stackInfo.GasDimensionInfo.GasCounterAtTimeOfCall - gas
-			gasesByDimension := finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
+			finishGasesByDimension := finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
 			callDimensionLog := t.logs[stackInfo.DimensionLogPosition]
-			callDimensionLog.OneDimensionalGasCost = gasesByDimension.OneDimensionalGasCost
-			callDimensionLog.Computation = gasesByDimension.Computation
-			callDimensionLog.StateAccess = gasesByDimension.StateAccess
-			callDimensionLog.StateGrowth = gasesByDimension.StateGrowth
-			callDimensionLog.HistoryGrowth = gasesByDimension.HistoryGrowth
-			callDimensionLog.StateGrowthRefund = gasesByDimension.StateGrowthRefund
+			callDimensionLog.OneDimensionalGasCost = finishGasesByDimension.OneDimensionalGasCost
+			callDimensionLog.Computation = finishGasesByDimension.Computation
+			callDimensionLog.StateAccess = finishGasesByDimension.StateAccess
+			callDimensionLog.StateGrowth = finishGasesByDimension.StateGrowth
+			callDimensionLog.HistoryGrowth = finishGasesByDimension.HistoryGrowth
+			callDimensionLog.StateGrowthRefund = finishGasesByDimension.StateGrowthRefund
 			callDimensionLog.CallRealGas = gasUsedByCall
 			callDimensionLog.CallExecutionCost = stackInfo.ExecutionCost
 			callDimensionLog.CallMemoryExpansion = stackInfo.GasDimensionInfo.MemoryExpansionCost
@@ -223,7 +223,7 @@ func (t *TxGasDimensionLogger) OnOpcode(
 		// of our own code so that when the call returns,
 		// we can write the gas dimensions for the call opcode itself
 		if len(t.callStack) > 0 {
-			t.callStack.UpdateExecutionCost(cost)
+			t.callStack.UpdateExecutionCost(gasesByDimension.OneDimensionalGasCost)
 		}
 	}
 }

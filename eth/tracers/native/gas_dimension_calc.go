@@ -185,6 +185,16 @@ func calcSimpleSingleDimensionGas(
 	depth int,
 	err error,
 ) (GasesByDimension, *CallGasDimensionInfo, error) {
+	if err != nil {
+		return GasesByDimension{
+			OneDimensionalGasCost: gas,
+			Computation:           gas,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
+		}, nil, nil
+	}
 	return GasesByDimension{
 		OneDimensionalGasCost: cost,
 		Computation:           cost,
@@ -224,7 +234,16 @@ func calcSimpleAddressAccessSetGas(
 	//
 	// Therefore, for these opcodes, we do a simple check based on the raw value
 	// and we can deduce the dimensions directly from that value.
-
+	if err != nil {
+		return GasesByDimension{
+			OneDimensionalGasCost: gas,
+			Computation:           gas,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
+		}, nil, nil
+	}
 	if cost == params.ColdAccountAccessCostEIP2929 {
 		return GasesByDimension{
 			OneDimensionalGasCost: cost,
@@ -260,6 +279,16 @@ func calcSLOADGas(
 	// we don't have access to StateDb.SlotInAccessList
 	// so we have to infer whether the slot was cold or warm based on the absolute cost
 	// and then deduce the dimensions from that
+	if err != nil {
+		return GasesByDimension{
+			OneDimensionalGasCost: gas,
+			Computation:           gas,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
+		}, nil, nil
+	}
 	if cost == params.ColdSloadCostEIP2929 {
 		accessCost := params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929
 		leftOver := cost - accessCost
@@ -309,7 +338,16 @@ func calcExtCodeCopyGas(
 	// 3*minimum_word_size is always state access
 	// if it is 2600, then have 2500 for state access.
 	// rest is computation.
-
+	if err != nil {
+		return GasesByDimension{
+			OneDimensionalGasCost: gas,
+			Computation:           gas,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
+		}, nil, nil
+	}
 	stack := scope.StackData()
 	lenStack := len(stack)
 	size := stack[lenStack-4].Uint64()   // size in stack position 4
@@ -356,6 +394,16 @@ func calcStateReadCallGas(
 	depth int,
 	err error,
 ) (GasesByDimension, *CallGasDimensionInfo, error) {
+	if err != nil {
+		return GasesByDimension{
+			OneDimensionalGasCost: gas,
+			Computation:           gas,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
+		}, nil, nil
+	}
 	stack := scope.StackData()
 	lenStack := len(stack)
 	// argsOffset in stack position 3 (1-indexed)
@@ -469,6 +517,16 @@ func calcLogGas(
 	// stored in the bloom filter in the history so at 8 gas per byte,
 	// 32 bytes per topic is 256 gas per topic.
 	// rest is computation (for the bloom filter computation, memory expansion, etc)
+	if err != nil {
+		return GasesByDimension{
+			OneDimensionalGasCost: gas,
+			Computation:           gas,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
+		}, nil, nil
+	}
 	numTopics := uint64(0)
 	switch vm.OpCode(op) {
 	case vm.LOG0:
@@ -522,6 +580,16 @@ func calcCreateGas(
 	// code_deposit_cost = 200 * deployed_code_size
 	// static_gas = 32000
 	// dynamic_gas = init_code_cost + memory_expansion_cost + deployment_code_execution_cost + code_deposit_cost
+	if err != nil {
+		return GasesByDimension{
+			OneDimensionalGasCost: gas,
+			Computation:           gas,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
+		}, nil, nil
+	}
 	stack := scope.StackData()
 	lenStack := len(stack)
 	// size is on stack position 3 (1-indexed)
@@ -602,6 +670,16 @@ func calcReadAndStoreCallGas(
 	depth int,
 	err error,
 ) (GasesByDimension, *CallGasDimensionInfo, error) {
+	if err != nil {
+		return GasesByDimension{
+			OneDimensionalGasCost: gas,
+			Computation:           gas,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
+		}, nil, nil
+	}
 	stack := scope.StackData()
 	lenStack := len(stack)
 	// value is in stack position 3
@@ -764,6 +842,16 @@ func calcSStoreGas(
 	// refunds are tracked in the statedb
 	// to find per-step changes, we track the accumulated refund
 	// and compare it to the current refund
+	if err != nil {
+		return GasesByDimension{
+			OneDimensionalGasCost: gas,
+			Computation:           gas,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
+		}, nil, nil
+	}
 	currentRefund := t.GetOpRefund()
 	accumulatedRefund := t.GetRefundAccumulated()
 	var diff int64 = 0
@@ -824,6 +912,16 @@ func calcSelfDestructGas(
 	// we consider the static cost of 5000 as a state read/write because selfdestruct,
 	// excepting 100 for the warm access set
 	// doesn't actually delete anything from disk, it just marks it as deleted.
+	if err != nil {
+		return GasesByDimension{
+			OneDimensionalGasCost: gas,
+			Computation:           gas,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
+		}, nil, nil
+	}
 	if cost == params.CreateBySelfdestructGas+params.SelfdestructGasEIP150 {
 		// warm but funds target empty
 		// 30000 gas total
