@@ -2,13 +2,8 @@ package native
 
 import (
 	"encoding/json"
-	"fmt"
-	"math/big"
-	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
@@ -47,33 +42,24 @@ func (d *DimensionLog) ErrorString() string {
 	return ""
 }
 
-// gasDimensionTracer struct
+// TxGasDimensionLogger struct
 type TxGasDimensionLogger struct {
-	env               *tracing.VMContext
-	txHash            common.Hash
-	logs              []DimensionLog
-	err               error
-	usedGas           uint64
-	callStack         CallGasDimensionStack
-	depth             int
-	refundAccumulated uint64
-
-	interrupt atomic.Bool // Atomic flag to signal execution interruption
-	reason    error       // Textual reason for the interruption
+	BaseGasDimensionTracer
+	logs []DimensionLog
 }
 
 // gasDimensionTracer returns a new tracer that traces gas
 // usage for each opcode against the dimension of that opcode
 // takes a context, and json input for configuration parameters
 func NewTxGasDimensionLogger(
-	ctx *tracers.Context,
+	_ *tracers.Context,
 	_ json.RawMessage,
 	_ *params.ChainConfig,
 ) (*tracers.Tracer, error) {
 
 	t := &TxGasDimensionLogger{
-		depth:             1,
-		refundAccumulated: 0,
+		BaseGasDimensionTracer: NewBaseGasDimensionTracer(),
+		logs:                   make([]DimensionLog, 0),
 	}
 
 	return &tracers.Tracer{
@@ -101,50 +87,10 @@ func (t *TxGasDimensionLogger) OnOpcode(
 	depth int,
 	err error,
 ) {
-	if t.interrupt.Load() {
-		return
-	}
-	if depth != t.depth && depth != t.depth-1 {
-		t.interrupt.Store(true)
-		t.reason = fmt.Errorf(
-			"expected depth fell out of sync with actual depth: %d %d != %d, callStack: %v",
-			pc,
-			t.depth,
-			depth,
-			t.callStack,
-		)
-		return
-	}
-	if t.depth != len(t.callStack)+1 {
-		t.interrupt.Store(true)
-		t.reason = fmt.Errorf(
-			"depth fell out of sync with callStack: %d %d != %d, callStack: %v",
-			pc,
-			t.depth,
-			len(t.callStack),
-			t.callStack,
-		)
-	}
-
-	// get the gas dimension function
-	// if it's not a call, directly calculate the gas dimensions for the opcode
-	f := GetCalcGasDimensionFunc(vm.OpCode(op))
-	gasesByDimension, callStackInfo, fErr := f(t, pc, op, gas, cost, scope, rData, depth, err)
-	if fErr != nil {
-		t.interrupt.Store(true)
-		t.reason = fErr
-		return
-	}
-	opcode := vm.OpCode(op)
-
-	if WasCallOrCreate(opcode) && callStackInfo == nil && err == nil || !WasCallOrCreate(opcode) && callStackInfo != nil {
-		t.interrupt.Store(true)
-		t.reason = fmt.Errorf(
-			"logic bug, calls/creates should always be accompanied by callStackInfo and non-calls should not have callStackInfo %d %s %v",
-			pc,
-			opcode.String(),
-			callStackInfo,
-		)
+	interrupted, gasesByDimension, callStackInfo, opcode := t.onOpcodeStart(pc, op, gas, cost, scope, rData, depth, err)
+	// if an error occured, it was stored in the tracer's reason field
+	// and we should return immediately
+	if interrupted {
 		return
 	}
 
@@ -165,43 +111,13 @@ func (t *TxGasDimensionLogger) OnOpcode(
 	// DimensionLog that represents this opcode and save the callStackInfo
 	// to call finishX after the call has returned
 	if WasCallOrCreate(opcode) && err == nil {
-		opcodeLogIndex := len(t.logs) - 1 // minus 1 because we've already appended the log
-		t.callStack.Push(
-			CallGasDimensionStackInfo{
-				GasDimensionInfo:     *callStackInfo,
-				DimensionLogPosition: opcodeLogIndex,
-				ExecutionCost:        0,
-			})
-		t.depth += 1
+		t.handleCallStackPush(callStackInfo)
 	} else {
-		// if the opcode returns from the call stack depth, or
-		// if this is an opcode immediately after a call that did not increase the stack depth
-		// because it called an empty account or contract or wrong function signature,
-		// call the appropriate finishX function to write the gas dimensions
-		// for the call that increased the stack depth in the past
 		if depth < t.depth {
-			stackInfo, ok := t.callStack.Pop()
-			// base case, stack is empty, do nothing
-			if !ok {
-				t.interrupt.Store(true)
-				t.reason = fmt.Errorf("call stack is unexpectedly empty %d %d %d", pc, depth, t.depth)
+			interrupted, gasUsedByCall, stackInfo, finishGasesByDimension := t.callFinishFunction(pc, depth, gas)
+			if interrupted {
 				return
 			}
-			finishFunction := GetFinishCalcGasDimensionFunc(stackInfo.GasDimensionInfo.Op)
-			if finishFunction == nil {
-				t.interrupt.Store(true)
-				t.reason = fmt.Errorf(
-					"no finish function found for opcode %s, call stack is messed up %d",
-					stackInfo.GasDimensionInfo.Op.String(),
-					pc,
-				)
-				return
-			}
-			// IMPORTANT NOTE: for some reason the only reliable way to actually get the gas cost of the call
-			// is to subtract gas at time of call from gas at opcode AFTER return
-			// you can't trust the `gas` field on the call itself. I wonder if the gas field is an estimation
-			gasUsedByCall := stackInfo.GasDimensionInfo.GasCounterAtTimeOfCall - gas
-			finishGasesByDimension := finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
 			callDimensionLog := t.logs[stackInfo.DimensionLogPosition]
 			callDimensionLog.OneDimensionalGasCost = finishGasesByDimension.OneDimensionalGasCost
 			callDimensionLog.Computation = finishGasesByDimension.Computation
@@ -215,60 +131,23 @@ func (t *TxGasDimensionLogger) OnOpcode(
 			callDimensionLog.CreateInitCodeCost = stackInfo.GasDimensionInfo.InitCodeCost
 			callDimensionLog.Create2HashCost = stackInfo.GasDimensionInfo.HashCost
 			t.logs[stackInfo.DimensionLogPosition] = callDimensionLog
+
 			t.depth -= 1
 		}
 
-		// if we are in a call stack depth greater than 0,
-		// then we need to track the execution gas
-		// of our own code so that when the call returns,
-		// we can write the gas dimensions for the call opcode itself
-		if len(t.callStack) > 0 {
-			t.callStack.UpdateExecutionCost(gasesByDimension.OneDimensionalGasCost)
-		}
+		t.updateExecutionCost(cost)
 	}
 }
 
-func (t *TxGasDimensionLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
-	t.env = env
-}
-
-func (t *TxGasDimensionLogger) OnTxEnd(receipt *types.Receipt, err error) {
-	if err != nil {
-		// Don't override vm error
-		if t.err == nil {
-			t.err = err
-		}
-		return
-	}
-	t.usedGas = receipt.GasUsed
-	t.txHash = receipt.TxHash
-}
-
-// signal the tracer to stop tracing, e.g. on timeout
-func (t *TxGasDimensionLogger) Stop(err error) {
-	t.reason = err
-	t.interrupt.Store(true)
-}
-
-// ############################################################################
-//                                HELPERS
-// ############################################################################
-
-// returns true if the opcode is a type of opcode that makes calls increasing the stack depth
-func WasCallOrCreate(opcode vm.OpCode) bool {
-	return opcode == vm.CALL || opcode == vm.CALLCODE || opcode == vm.DELEGATECALL || opcode == vm.STATICCALL || opcode == vm.CREATE || opcode == vm.CREATE2
-}
-
-func (t *TxGasDimensionLogger) GetOpRefund() uint64 {
-	return t.env.StateDB.GetRefund()
-}
-
-func (t *TxGasDimensionLogger) GetRefundAccumulated() uint64 {
-	return t.refundAccumulated
-}
-
-func (t *TxGasDimensionLogger) SetRefundAccumulated(refund uint64) {
-	t.refundAccumulated = refund
+func (t *TxGasDimensionLogger) handleCallStackPush(callStackInfo *CallGasDimensionInfo) {
+	opcodeLogIndex := len(t.logs) - 1 // minus 1 because we've already appended the log
+	t.callStack.Push(
+		CallGasDimensionStackInfo{
+			GasDimensionInfo:     *callStackInfo,
+			DimensionLogPosition: opcodeLogIndex,
+			ExecutionCost:        0,
+		})
+	t.depth += 1
 }
 
 // ############################################################################
@@ -278,37 +157,24 @@ func (t *TxGasDimensionLogger) SetRefundAccumulated(refund uint64) {
 // DimensionLogs returns the captured log entries.
 func (t *TxGasDimensionLogger) DimensionLogs() []DimensionLog { return t.logs }
 
-// Error returns the VM error captured by the trace.
-func (t *TxGasDimensionLogger) Error() error { return t.err }
-
 // ExecutionResult groups all dimension logs emitted by the EVM
 // while replaying a transaction in debug mode as well as transaction
 // execution status, the amount of gas used and the return value
 type ExecutionResult struct {
-	Gas           uint64            `json:"gas"`
-	Failed        bool              `json:"fail"`
+	BaseExecutionResult
 	DimensionLogs []DimensionLogRes `json:"dim"`
-	TxHash        string            `json:"hash"`
-	BlockTimetamp uint64            `json:"time"`
-	BlockNumber   *big.Int          `json:"num"`
 }
 
 // produce json result for output from tracer
 // this is what the end-user actually gets from the RPC endpoint
 func (t *TxGasDimensionLogger) GetResult() (json.RawMessage, error) {
-	// Tracing aborted
-	if t.reason != nil {
-		return nil, t.reason
+	baseResult, err := t.GetBaseExecutionResult()
+	if err != nil {
+		return nil, err
 	}
-	failed := t.err != nil
-
 	return json.Marshal(&ExecutionResult{
-		Gas:           t.usedGas,
-		Failed:        failed,
-		DimensionLogs: formatLogs(t.DimensionLogs()),
-		TxHash:        t.txHash.Hex(),
-		BlockTimetamp: t.env.Time,
-		BlockNumber:   t.env.BlockNumber,
+		BaseExecutionResult: baseResult,
+		DimensionLogs:       formatLogs(t.DimensionLogs()),
 	})
 }
 
