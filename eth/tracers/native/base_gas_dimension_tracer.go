@@ -254,10 +254,10 @@ func (t *BaseGasDimensionTracer) Error() error { return t.err }
 // BaseExecutionResult has shared fields for execution results
 type BaseExecutionResult struct {
 	Gas            uint64   `json:"gas"`
-	Failed         bool     `json:"fail"`
-	TxHash         string   `json:"hash"`
-	BlockTimestamp uint64   `json:"time"`
-	BlockNumber    *big.Int `json:"num"`
+	Failed         bool     `json:"failed"`
+	TxHash         string   `json:"txHash"`
+	BlockTimestamp uint64   `json:"blockTimestamp"`
+	BlockNumber    *big.Int `json:"blockNumber"`
 }
 
 // get the result of the transaction execution that we will hand to the json output

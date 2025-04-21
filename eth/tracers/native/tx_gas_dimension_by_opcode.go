@@ -127,7 +127,7 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 
 			t.depth -= 1
 		}
-		t.updateExecutionCost(cost)
+		t.updateExecutionCost(gasesByDimension.OneDimensionalGasCost)
 	}
 }
 
@@ -143,7 +143,7 @@ func (t *TxGasDimensionByOpcodeTracer) Error() error { return t.err }
 // execution status, the amount of gas used and the return value
 type TxGasDimensionByOpcodeExecutionResult struct {
 	BaseExecutionResult
-	Dimensions map[string]GasesByDimension `json:"dim"`
+	Dimensions map[string]GasesByDimension `json:"dimensions"`
 }
 
 // produce json result for output from tracer

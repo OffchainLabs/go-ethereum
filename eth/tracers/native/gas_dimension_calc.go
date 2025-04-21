@@ -65,12 +65,13 @@ func (c *CallGasDimensionStack) Pop() (CallGasDimensionStackInfo, bool) {
 // UpdateExecutionCost updates the execution cost for the top layer of the call stack
 // so that the call knows how much gas was consumed by child opcodes in that call depth
 func (c *CallGasDimensionStack) UpdateExecutionCost(executionCost uint64) {
-	if len(*c) == 0 {
+	stackLen := len(*c)
+	if stackLen == 0 {
 		return
 	}
-	top := (*c)[len(*c)-1]
+	top := (*c)[stackLen-1]
 	top.ExecutionCost += executionCost
-	(*c)[len(*c)-1] = top
+	(*c)[stackLen-1] = top
 }
 
 // define interface for a dimension tracer
@@ -738,7 +739,6 @@ func calcReadAndStoreCallGas(
 			InitCodeCost:           0,
 			HashCost:               0,
 		}, nil
-
 }
 
 // In order to calculate the gas dimensions for opcodes that
