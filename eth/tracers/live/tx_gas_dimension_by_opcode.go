@@ -69,9 +69,8 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnTxStart(
 	}
 
 	t.GasDimensionTracer = &native.TxGasDimensionByOpcodeTracer{
-		Depth:              1,
-		RefundAccumulated:  0,
-		OpcodeToDimensions: make(map[_vm.OpCode]native.GasesByDimension),
+		BaseGasDimensionTracer: native.NewBaseGasDimensionTracer(),
+		OpcodeToDimensions:     make(map[_vm.OpCode]native.GasesByDimension),
 	}
 	t.GasDimensionTracer.OnTxStart(vm, tx, from)
 }
@@ -98,17 +97,6 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnTxEnd(
 	// system transactions don't use any gas
 	// they can be skipped
 	if receipt.GasUsed != 0 {
-
-		// previously: json
-		// then get the json from the native tracer
-		// executionResultJsonBytes, errGettingResult := t.GasDimensionTracer.GetResult()
-		// if errGettingResult != nil {
-		// 	errorJsonString := fmt.Sprintf("{\"errorGettingResult\": \"%s\"}", errGettingResult.Error())
-		// 	fmt.Println(errorJsonString)
-		// 	return
-		// }
-
-		// now: protobuf
 		executionResultBytes, err := t.GasDimensionTracer.GetProtobufResult()
 		if err != nil {
 			fmt.Printf("Failed to get protobuf result: %v\n", err)

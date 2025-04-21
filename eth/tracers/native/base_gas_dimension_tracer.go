@@ -1,0 +1,278 @@
+package native
+
+import (
+	"fmt"
+	"math/big"
+	"sync/atomic"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+)
+
+// BaseGasDimensionTracer contains the shared functionality between different gas dimension tracers
+type BaseGasDimensionTracer struct {
+	// hold on to the context
+	env *tracing.VMContext
+	// the hash of the transactionh
+	txHash common.Hash
+	// the amount of gas used in the transaction
+	usedGas uint64
+	// the call stack for the transaction
+	callStack CallGasDimensionStack
+	// the depth at the current step of execution of the call stack
+	depth int
+	// the amount of refund accumulated at the current step of execution
+	refundAccumulated uint64
+	// whether the transaction had an error, like out of gas
+	err error
+	// whether the tracer itself was interrupted
+	interrupt atomic.Bool
+	// reason or error for the interruption in the tracer itself (as opposed to the transaction)
+	reason error
+}
+
+func NewBaseGasDimensionTracer() BaseGasDimensionTracer {
+	return BaseGasDimensionTracer{
+		depth:             1,
+		refundAccumulated: 0,
+	}
+}
+
+// OnOpcode handles the shared opcode execution logic
+// since this is so sensitive, we supply helper methods for
+// different parts of the logic but expect child tracers
+// to implement their own specific logic in their own
+// OnOpcode method
+func (t *BaseGasDimensionTracer) OnOpcode(
+	pc uint64,
+	op byte,
+	gas, cost uint64,
+	scope tracing.OpContext,
+	rData []byte,
+	depth int,
+	err error,
+) error {
+	return fmt.Errorf("OnOpcode not implemented")
+}
+
+// onOpcodeStart is a helper function that
+// implements the shared logic for the start of an OnOpcode function
+// between all of the gas dimension tracers
+func (t *BaseGasDimensionTracer) onOpcodeStart(
+	pc uint64,
+	op byte,
+	gas, cost uint64,
+	scope tracing.OpContext,
+	rData []byte,
+	depth int,
+	err error,
+) (
+	interrupted bool,
+	gasesByDimension GasesByDimension,
+	callStackInfo *CallGasDimensionInfo,
+	opcode vm.OpCode,
+) {
+	if t.interrupt.Load() {
+		return true, GasesByDimension{}, nil, vm.OpCode(op)
+	}
+	if depth != t.depth && depth != t.depth-1 {
+		t.interrupt.Store(true)
+		t.reason = fmt.Errorf(
+			"expected depth fell out of sync with actual depth: %d %d != %d, callStack: %v",
+			pc,
+			t.depth,
+			depth,
+			t.callStack,
+		)
+		return true, GasesByDimension{}, nil, vm.OpCode(op)
+	}
+	if t.depth != len(t.callStack)+1 {
+		t.interrupt.Store(true)
+		t.reason = fmt.Errorf(
+			"depth fell out of sync with callStack: %d %d != %d, callStack: %v",
+			pc,
+			t.depth,
+			len(t.callStack),
+			t.callStack,
+		)
+		return true, GasesByDimension{}, nil, vm.OpCode(op)
+	}
+
+	// get the gas dimension function
+	// if it's not a call, directly calculate the gas dimensions for the opcode
+	f := GetCalcGasDimensionFunc(vm.OpCode(op))
+	var fErr error = nil
+	gasesByDimension, callStackInfo, fErr = f(t, pc, op, gas, cost, scope, rData, depth, err)
+	if fErr != nil {
+		t.interrupt.Store(true)
+		t.reason = fErr
+		return true, GasesByDimension{}, nil, vm.OpCode(op)
+	}
+	opcode = vm.OpCode(op)
+
+	if WasCallOrCreate(opcode) && callStackInfo == nil && err == nil || !WasCallOrCreate(opcode) && callStackInfo != nil {
+		t.interrupt.Store(true)
+		t.reason = fmt.Errorf(
+			"logic bug, calls/creates should always be accompanied by callStackInfo and non-calls should not have callStackInfo %d %s %v",
+			pc,
+			opcode.String(),
+			callStackInfo,
+		)
+		return true, GasesByDimension{}, nil, vm.OpCode(op)
+	}
+	return false, gasesByDimension, callStackInfo, opcode
+}
+
+// handleCallStackPush is a helper function that
+// implements the shared logic for the push of a call stack
+// between all of the gas dimension tracers
+// some of the tracers will need to implement their own
+// because DimensionLogPosition is not used in all tracers
+func (t *BaseGasDimensionTracer) handleCallStackPush(callStackInfo *CallGasDimensionInfo) {
+	t.callStack.Push(
+		CallGasDimensionStackInfo{
+			GasDimensionInfo:     *callStackInfo,
+			DimensionLogPosition: 0, // unused in opcode tracer, other tracers should implement their own.
+			ExecutionCost:        0,
+		})
+	t.depth += 1
+}
+
+// if the opcode returns from the call stack depth, or
+// if this is an opcode immediately after a call that did not increase the stack depth
+// because it called an empty account or contract or wrong function signature,
+// call the appropriate finishX function to write the gas dimensions
+// for the call that increased the stack depth in the past
+func (t *BaseGasDimensionTracer) callFinishFunction(
+	pc uint64,
+	depth int,
+	gas uint64,
+) (
+	interrupted bool,
+	gasUsedByCall uint64,
+	stackInfo CallGasDimensionStackInfo,
+	finishGasesByDimension GasesByDimension,
+) {
+	stackInfo, ok := t.callStack.Pop()
+	// base case, stack is empty, do nothing
+	if !ok {
+		t.interrupt.Store(true)
+		t.reason = fmt.Errorf("call stack is unexpectedly empty %d %d %d", pc, depth, t.depth)
+		return true, 0, CallGasDimensionStackInfo{}, GasesByDimension{}
+	}
+	finishFunction := GetFinishCalcGasDimensionFunc(stackInfo.GasDimensionInfo.Op)
+	if finishFunction == nil {
+		t.interrupt.Store(true)
+		t.reason = fmt.Errorf(
+			"no finish function found for opcode %s, call stack is messed up %d",
+			stackInfo.GasDimensionInfo.Op.String(),
+			pc,
+		)
+		return true, 0, CallGasDimensionStackInfo{}, GasesByDimension{}
+	}
+	// IMPORTANT NOTE: for some reason the only reliable way to actually get the gas cost of the call
+	// is to subtract gas at time of call from gas at opcode AFTER return
+	// you can't trust the `gas` field on the call itself. I wonder if the gas field is an estimation
+	gasUsedByCall = stackInfo.GasDimensionInfo.GasCounterAtTimeOfCall - gas
+	finishGasesByDimension = finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
+	return false, gasUsedByCall, stackInfo, finishGasesByDimension
+}
+
+// if we are in a call stack depth greater than 0,
+// then we need to track the execution gas
+// of our own code so that when the call returns,
+// we can write the gas dimensions for the call opcode itself
+func (t *BaseGasDimensionTracer) updateExecutionCost(cost uint64) {
+	if len(t.callStack) > 0 {
+		t.callStack.UpdateExecutionCost(cost)
+	}
+}
+
+// OnTxStart handles transaction start
+func (t *BaseGasDimensionTracer) OnTxStart(env *tracing.VMContext, _ *types.Transaction, _ common.Address) {
+	t.env = env
+}
+
+// OnTxEnd handles transaction end
+func (t *BaseGasDimensionTracer) OnTxEnd(receipt *types.Receipt, err error) {
+	if err != nil {
+		// Don't override vm error
+		if t.err == nil {
+			t.err = err
+		}
+		return
+	}
+	t.usedGas = receipt.GasUsed
+	t.txHash = receipt.TxHash
+}
+
+// Stop signals the tracer to stop tracing
+func (t *BaseGasDimensionTracer) Stop(err error) {
+	t.reason = err
+	t.interrupt.Store(true)
+}
+
+// ############################################################################
+//                                HELPERS
+// ############################################################################
+
+// WasCallOrCreate returns true if the opcode is a type of opcode that makes calls increasing the stack depth
+func WasCallOrCreate(opcode vm.OpCode) bool {
+	return opcode == vm.CALL || opcode == vm.CALLCODE || opcode == vm.DELEGATECALL ||
+		opcode == vm.STATICCALL || opcode == vm.CREATE || opcode == vm.CREATE2
+}
+
+// GetOpRefund returns the current op refund
+func (t *BaseGasDimensionTracer) GetOpRefund() uint64 {
+	return t.env.StateDB.GetRefund()
+}
+
+// GetRefundAccumulated returns the accumulated refund
+func (t *BaseGasDimensionTracer) GetRefundAccumulated() uint64 {
+	return t.refundAccumulated
+}
+
+// SetRefundAccumulated sets the accumulated refund
+func (t *BaseGasDimensionTracer) SetRefundAccumulated(refund uint64) {
+	t.refundAccumulated = refund
+}
+
+// GetStateDB returns the state database
+func (t *BaseGasDimensionTracer) GetStateDB() tracing.StateDB {
+	return t.env.StateDB
+}
+
+// Error returns the VM error captured by the trace
+func (t *BaseGasDimensionTracer) Error() error { return t.err }
+
+// ############################################################################
+//                                OUTPUTS
+// ############################################################################
+
+// BaseExecutionResult has shared fields for execution results
+type BaseExecutionResult struct {
+	Gas            uint64   `json:"gas"`
+	Failed         bool     `json:"fail"`
+	TxHash         string   `json:"hash"`
+	BlockTimestamp uint64   `json:"time"`
+	BlockNumber    *big.Int `json:"num"`
+}
+
+// get the result of the transaction execution that we will hand to the json output
+func (t *BaseGasDimensionTracer) GetBaseExecutionResult() (BaseExecutionResult, error) {
+	// Tracing aborted
+	if t.reason != nil {
+		return BaseExecutionResult{}, t.reason
+	}
+	failed := t.err != nil
+
+	return BaseExecutionResult{
+		Gas:            t.usedGas,
+		Failed:         failed,
+		TxHash:         t.txHash.Hex(),
+		BlockTimestamp: t.env.Time,
+		BlockNumber:    t.env.BlockNumber,
+	}, nil
+}
