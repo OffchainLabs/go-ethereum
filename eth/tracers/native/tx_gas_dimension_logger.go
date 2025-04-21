@@ -135,10 +135,12 @@ func (t *TxGasDimensionLogger) OnOpcode(
 			t.depth -= 1
 		}
 
-		t.updateExecutionCost(cost)
+		t.updateExecutionCost(gasesByDimension.OneDimensionalGasCost)
 	}
 }
 
+// save the relevant information for the call stack when a call or create
+// is made that increases the stack depth
 func (t *TxGasDimensionLogger) handleCallStackPush(callStackInfo *CallGasDimensionInfo) {
 	opcodeLogIndex := len(t.logs) - 1 // minus 1 because we've already appended the log
 	t.callStack.Push(
@@ -184,18 +186,18 @@ func (t *TxGasDimensionLogger) GetResult() (json.RawMessage, error) {
 type DimensionLogRes struct {
 	Pc                    uint64 `json:"pc"`
 	Op                    string `json:"op"`
-	Depth                 int    `json:"d"`
+	Depth                 int    `json:"depth"`
 	OneDimensionalGasCost uint64 `json:"cost"`
 	Computation           uint64 `json:"cpu,omitempty"`
 	StateAccess           uint64 `json:"rw,omitempty"`
-	StateGrowth           uint64 `json:"g,omitempty"`
-	HistoryGrowth         uint64 `json:"h,omitempty"`
-	StateGrowthRefund     int64  `json:"rf,omitempty"`
-	CallRealGas           uint64 `json:"crg,omitempty"`
-	CallExecutionCost     uint64 `json:"cec,omitempty"`
-	CallMemoryExpansion   uint64 `json:"cme,omitempty"`
-	CreateInitCodeCost    uint64 `json:"cic,omitempty"`
-	Create2HashCost       uint64 `json:"c2h,omitempty"`
+	StateGrowth           uint64 `json:"growth,omitempty"`
+	HistoryGrowth         uint64 `json:"history,omitempty"`
+	StateGrowthRefund     int64  `json:"refund,omitempty"`
+	CallRealGas           uint64 `json:"callRealGas,omitempty"`
+	CallExecutionCost     uint64 `json:"callExecutionCost,omitempty"`
+	CallMemoryExpansion   uint64 `json:"callMemoryExpansion,omitempty"`
+	CreateInitCodeCost    uint64 `json:"createInitCodeCost,omitempty"`
+	Create2HashCost       uint64 `json:"create2HashCost,omitempty"`
 	Err                   error  `json:"err,omitempty"`
 }
 
