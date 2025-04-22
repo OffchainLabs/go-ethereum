@@ -137,6 +137,8 @@ func (t *TxGasDimensionLogger) OnOpcode(
 
 		t.updateExecutionCost(gasesByDimension.OneDimensionalGasCost)
 	}
+	addresses, slots := t.env.StateDB.GetAccessList()
+	t.updatePrevAccessList(addresses, slots)
 }
 
 // save the relevant information for the call stack when a call or create

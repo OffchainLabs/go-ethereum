@@ -1,8 +1,10 @@
 package native
 
 import (
+	"fmt"
 	"math"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
@@ -81,6 +83,7 @@ type DimensionTracer interface {
 	GetOpRefund() uint64
 	GetRefundAccumulated() uint64
 	SetRefundAccumulated(uint64)
+	GetPrevAccessList() (addresses map[common.Address]int, slots []map[common.Hash]struct{})
 }
 
 // calcGasDimensionFunc defines a type signature that takes the opcode
@@ -224,17 +227,6 @@ func calcSimpleAddressAccessSetGas(
 	depth int,
 	err error,
 ) (GasesByDimension, *CallGasDimensionInfo, error) {
-	// We do not have access to StateDb.AddressInAccessList and StateDb.SlotInAccessList
-	// to check cold storage access directly.
-	// Additionally, cold storage access for these address opcodes are handled differently
-	// than for other operations like SSTORE or SLOAD.
-	// for these opcodes, cold access cost is handled directly in the gas calculation
-	// through gasEip2929AccountCheck. This function adds the address to the access list
-	// and charges the cold access cost upfront as part of the initial gas calculation,
-	// rather than as a separate gas change event, so no OnGasChange event is fired.
-	//
-	// Therefore, for these opcodes, we do a simple check based on the raw value
-	// and we can deduce the dimensions directly from that value.
 	if err != nil {
 		return GasesByDimension{
 			OneDimensionalGasCost: gas,
@@ -245,20 +237,36 @@ func calcSimpleAddressAccessSetGas(
 			StateGrowthRefund:     0,
 		}, nil, nil
 	}
-	if cost == params.ColdAccountAccessCostEIP2929 {
-		return GasesByDimension{
-			OneDimensionalGasCost: cost,
-			Computation:           params.WarmStorageReadCostEIP2929,
-			StateAccess:           params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929,
-			StateGrowth:           0,
-			HistoryGrowth:         0,
-			StateGrowthRefund:     0,
-		}, nil, nil
+	// for all these opcodes the address being checked is in stack position 0
+	addressAsInt := scope.StackData()[len(scope.StackData())-1]
+	address := common.Address(addressAsInt.Bytes20())
+	accessListAddresses, _ := t.GetPrevAccessList()
+	_, addressInAccessList := accessListAddresses[address]
+	var computationCost uint64 = 0
+	var stateAccessCost uint64 = 0
+	if !addressInAccessList {
+		computationCost = params.WarmStorageReadCostEIP2929
+		stateAccessCost = params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
+	} else {
+		computationCost = params.WarmStorageReadCostEIP2929
+		stateAccessCost = 0
+	}
+	if cost != computationCost+stateAccessCost {
+		return GasesByDimension{}, nil, fmt.Errorf(
+			"unexpected gas cost mismatch: pc %d, op %d, depth %d, gas %d, cost %d != %d + %d",
+			pc,
+			op,
+			depth,
+			gas,
+			cost,
+			computationCost,
+			stateAccessCost,
+		)
 	}
 	return GasesByDimension{
 		OneDimensionalGasCost: cost,
-		Computation:           cost,
-		StateAccess:           0,
+		Computation:           computationCost,
+		StateAccess:           stateAccessCost,
 		StateGrowth:           0,
 		HistoryGrowth:         0,
 		StateGrowthRefund:     0,

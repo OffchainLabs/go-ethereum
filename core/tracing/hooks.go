@@ -55,6 +55,7 @@ type StateDB interface {
 	GetTransientState(common.Address, common.Hash) common.Hash
 	Exist(common.Address) bool
 	GetRefund() uint64
+	GetAccessList() (addresses map[common.Address]int, slots []map[common.Hash]struct{})
 }
 
 // VMContext provides the context for the EVM execution.
