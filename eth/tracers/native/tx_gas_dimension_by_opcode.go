@@ -129,6 +129,8 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 		}
 		t.updateExecutionCost(gasesByDimension.OneDimensionalGasCost)
 	}
+	addresses, slots := t.env.StateDB.GetAccessList()
+	t.updatePrevAccessList(addresses, slots)
 }
 
 // ############################################################################

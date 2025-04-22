@@ -23,6 +23,9 @@ type BaseGasDimensionTracer struct {
 	callStack CallGasDimensionStack
 	// the depth at the current step of execution of the call stack
 	depth int
+	// maintain an access list tracer to check previous access list statuses.
+	prevAccessListAddresses map[common.Address]int
+	prevAccessListSlots     []map[common.Hash]struct{}
 	// the amount of refund accumulated at the current step of execution
 	refundAccumulated uint64
 	// whether the transaction had an error, like out of gas
@@ -35,8 +38,10 @@ type BaseGasDimensionTracer struct {
 
 func NewBaseGasDimensionTracer() BaseGasDimensionTracer {
 	return BaseGasDimensionTracer{
-		depth:             1,
-		refundAccumulated: 0,
+		depth:                   1,
+		refundAccumulated:       0,
+		prevAccessListAddresses: map[common.Address]int{},
+		prevAccessListSlots:     []map[common.Hash]struct{}{},
 	}
 }
 
@@ -190,8 +195,20 @@ func (t *BaseGasDimensionTracer) updateExecutionCost(cost uint64) {
 	}
 }
 
+// at the end of each OnOpcode, update the previous access list, so that we can
+// use it should the next opcode need to check if an address is in the access list
+func (t *BaseGasDimensionTracer) updatePrevAccessList(addresses map[common.Address]int, slots []map[common.Hash]struct{}) {
+	if addresses == nil {
+		t.prevAccessListAddresses = map[common.Address]int{}
+		t.prevAccessListSlots = []map[common.Hash]struct{}{}
+		return
+	}
+	t.prevAccessListAddresses = addresses
+	t.prevAccessListSlots = slots
+}
+
 // OnTxStart handles transaction start
-func (t *BaseGasDimensionTracer) OnTxStart(env *tracing.VMContext, _ *types.Transaction, _ common.Address) {
+func (t *BaseGasDimensionTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
 }
 
@@ -242,6 +259,11 @@ func (t *BaseGasDimensionTracer) SetRefundAccumulated(refund uint64) {
 // GetStateDB returns the state database
 func (t *BaseGasDimensionTracer) GetStateDB() tracing.StateDB {
 	return t.env.StateDB
+}
+
+// GetPrevAccessList returns the previous access list
+func (t *BaseGasDimensionTracer) GetPrevAccessList() (addresses map[common.Address]int, slots []map[common.Hash]struct{}) {
+	return t.prevAccessListAddresses, t.prevAccessListSlots
 }
 
 // Error returns the VM error captured by the trace
