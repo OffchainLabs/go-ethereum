@@ -181,7 +181,13 @@ func (t *BaseGasDimensionTracer) callFinishFunction(
 	// is to subtract gas at time of call from gas at opcode AFTER return
 	// you can't trust the `gas` field on the call itself. I wonder if the gas field is an estimation
 	gasUsedByCall = stackInfo.GasDimensionInfo.GasCounterAtTimeOfCall - gas
-	finishGasesByDimension = finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
+	var finishErr error = nil
+	finishGasesByDimension, finishErr = finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
+	if finishErr != nil {
+		t.interrupt.Store(true)
+		t.reason = finishErr
+		return true, 0, CallGasDimensionStackInfo{}, GasesByDimension{}
+	}
 	return false, gasUsedByCall, stackInfo, finishGasesByDimension
 }
 
