@@ -2,7 +2,6 @@ package native
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/ethereum/go-ethereum/eth/tracers/native/proto"
 
@@ -93,28 +92,11 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 		// call the appropriate finishX function to write the gas dimensions
 		// for the call that increased the stack depth in the past
 		if depth < t.depth {
-			stackInfo, ok := t.callStack.Pop()
-			// base case, stack is empty, do nothing
-			if !ok {
-				t.interrupt.Store(true)
-				t.reason = fmt.Errorf("call stack is unexpectedly empty %d %d %d", pc, depth, t.depth)
+			interrupted, _, stackInfo, finishGasesByDimension := t.callFinishFunction(pc, depth, gas)
+			if interrupted {
 				return
 			}
-			finishFunction := GetFinishCalcGasDimensionFunc(stackInfo.GasDimensionInfo.Op)
-			if finishFunction == nil {
-				t.interrupt.Store(true)
-				t.reason = fmt.Errorf(
-					"no finish function found for opcode %s, call stack is messed up %d",
-					stackInfo.GasDimensionInfo.Op.String(),
-					pc,
-				)
-				return
-			}
-			// IMPORTANT NOTE: for some reason the only reliable way to actually get the gas cost of the call
-			// is to subtract gas at time of call from gas at opcode AFTER return
-			// you can't trust the `gas` field on the call itself. I wonder if the gas field is an estimation
-			gasUsedByCall := stackInfo.GasDimensionInfo.GasCounterAtTimeOfCall - gas
-			finishGasesByDimension := finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
+
 			accumulatedDimensionsCall := t.OpcodeToDimensions[stackInfo.GasDimensionInfo.Op]
 
 			accumulatedDimensionsCall.OneDimensionalGasCost += finishGasesByDimension.OneDimensionalGasCost
