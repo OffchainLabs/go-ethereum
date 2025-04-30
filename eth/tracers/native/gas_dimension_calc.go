@@ -808,7 +808,7 @@ func calcSStoreGas(
 		if accumulatedRefund < currentRefund {
 			diff = int64(currentRefund - accumulatedRefund)
 		} else {
-			diff = int64(accumulatedRefund - currentRefund)
+			diff = -1 * int64(accumulatedRefund-currentRefund)
 		}
 		t.SetRefundAccumulated(currentRefund)
 	}
