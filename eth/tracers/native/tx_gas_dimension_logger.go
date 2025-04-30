@@ -2,6 +2,7 @@ package native
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -201,6 +202,29 @@ type DimensionLogRes struct {
 	CreateInitCodeCost    uint64 `json:"createInitCodeCost,omitempty"`
 	Create2HashCost       uint64 `json:"create2HashCost,omitempty"`
 	Err                   error  `json:"err,omitempty"`
+}
+
+// DebugString returns a string
+// representation of the DimensionLogRes for debugging
+func (d *DimensionLogRes) DebugString() string {
+	return fmt.Sprintf(
+		"{Pc: %d, Op: %s, Depth: %d, OneDimensionalGasCost: %d, Computation: %d, StateAccess: %d, StateGrowth: %d, HistoryGrowth: %d, StateGrowthRefund: %d, CallRealGas: %d, CallExecutionCost: %d, CallMemoryExpansion: %d, CreateInitCodeCost: %d, Create2HashCost: %d, Err: %v}",
+		d.Pc,
+		d.Op,
+		d.Depth,
+		d.OneDimensionalGasCost,
+		d.Computation,
+		d.StateAccess,
+		d.StateGrowth,
+		d.HistoryGrowth,
+		d.StateGrowthRefund,
+		d.CallRealGas,
+		d.CallExecutionCost,
+		d.CallMemoryExpansion,
+		d.CreateInitCodeCost,
+		d.Create2HashCost,
+		d.Err,
+	)
 }
 
 // formatLogs formats EVM returned structured logs for json output
