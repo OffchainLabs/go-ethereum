@@ -819,17 +819,17 @@ func calcSStoreGas(
 		accessCost := cost - params.SstoreSetGas
 		ret = GasesByDimension{
 			OneDimensionalGasCost: cost,
-			Computation:           params.WarmStorageReadCostEIP2929,
+			Computation:           0,
 			StateAccess:           accessCost,
-			StateGrowth:           params.SstoreSetGas - params.WarmStorageReadCostEIP2929,
+			StateGrowth:           params.SstoreSetGas,
 			HistoryGrowth:         0,
 			StateGrowthRefund:     diff,
 		}
 	} else if cost > 0 {
 		ret = GasesByDimension{
 			OneDimensionalGasCost: cost,
-			Computation:           params.WarmStorageReadCostEIP2929,
-			StateAccess:           cost - params.WarmStorageReadCostEIP2929,
+			Computation:           0,
+			StateAccess:           cost,
 			StateGrowth:           0,
 			HistoryGrowth:         0,
 			StateGrowthRefund:     diff,
