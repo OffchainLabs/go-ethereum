@@ -22,6 +22,8 @@
 package remotedb
 
 import (
+	"errors"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -30,6 +32,10 @@ import (
 // Database is a key-value lookup for a remote database via debug_dbGet.
 type Database struct {
 	remote *rpc.Client
+}
+
+func (db *Database) CreateDBSnapshot(dir string) error {
+	return errors.New("createDBSnapshot method is not supported by remotedb")
 }
 
 func (db *Database) Has(key []byte) (bool, error) {
