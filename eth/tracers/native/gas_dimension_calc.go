@@ -565,8 +565,8 @@ func calcCreateGas(
 			AccessListComputationCost: 0,
 			AccessListStateAccessCost: 0,
 			IsValueSentWithCall:       false,
-			InitCodeCost:              0,
-			HashCost:                  0,
+			InitCodeCost:              initCodeCost,
+			HashCost:                  hashCost,
 		}, nil
 }
 
