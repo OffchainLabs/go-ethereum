@@ -46,15 +46,18 @@ const ArbosVersion_StylusChargingFixes = ArbosVersion_32
 const MaxArbosVersionSupported = ArbosVersion_41
 const MaxDebugArbosVersionSupported = ArbosVersion_41
 
+const NativeTokenOwnersEnableDelay = 60 * 60 * 24 * 7 // 7 days between enable NativeTokenOwn until it can be activated
+
 type ArbitrumChainParams struct {
-	EnableArbOS               bool
-	AllowDebugPrecompiles     bool
-	DataAvailabilityCommittee bool
-	InitialArbOSVersion       uint64
-	InitialChainOwner         common.Address
-	GenesisBlockNum           uint64
-	MaxCodeSize               uint64 `json:"MaxCodeSize,omitempty"`     // Maximum bytecode to permit for a contract. 0 value implies params.DefaultMaxCodeSize
-	MaxInitCodeSize           uint64 `json:"MaxInitCodeSize,omitempty"` // Maximum initcode to permit in a creation transaction and create instructions. 0 value implies params.DefaultMaxInitCodeSize
+	EnableArbOS                 bool
+	AllowDebugPrecompiles       bool
+	DataAvailabilityCommittee   bool
+	InitialArbOSVersion         uint64
+	InitialChainOwner           common.Address
+	GenesisBlockNum             uint64
+	MaxCodeSize                 uint64 `json:"MaxCodeSize,omitempty"`                 // Maximum bytecode to permit for a contract. 0 value implies params.DefaultMaxCodeSize
+	MaxInitCodeSize             uint64 `json:"MaxInitCodeSize,omitempty"`             // Maximum initcode to permit in a creation transaction and create instructions. 0 value implies params.DefaultMaxInitCodeSize
+	NativeTokenOwnersEnableFrom uint64 `json:"NativeTokenOwnersEnableFrom,omitempty"` // Timestamp to allow NativeToken owners
 }
 
 func (c *ChainConfig) IsArbitrum() bool {
@@ -79,11 +82,50 @@ func (c *ChainConfig) MaxInitCodeSize() uint64 {
 	return c.ArbitrumChainParams.MaxInitCodeSize
 }
 
+func (c *ChainConfig) ArbNativeTokenOwnerEnabled(timestamp uint64) bool {
+	if !c.IsArbitrum() {
+		return false
+	}
+	if c.ArbitrumChainParams.NativeTokenOwnersEnableFrom == 0 {
+		return false
+	}
+	if c.ArbitrumChainParams.NativeTokenOwnersEnableFrom < timestamp {
+		return true
+	}
+	return false
+}
+
 func (c *ChainConfig) DebugMode() bool {
 	return c.ArbitrumChainParams.AllowDebugPrecompiles
 }
 
-func (c *ChainConfig) checkArbitrumCompatible(newcfg *ChainConfig, head *big.Int) *ConfigCompatError {
+func (c *ChainConfig) checkNativeTokenOwnersEnableCompatible(stored uint64, new uint64, headTimestamp uint64) *ConfigCompatError {
+	if new == stored {
+		return nil
+	}
+	// turning it off is allowed but experimental, not enforcing delay
+	if new == 0 {
+		return nil
+	}
+	// currently enabled but for a different timestamp
+	if stored != 0 {
+		// other then turning off, cannot change the past
+		if stored <= headTimestamp {
+			return newTimestampCompatError("NativeTokenOwnersEnableFrom", &stored, &new)
+		}
+		// allowed to push forward (if in the future)
+		if new > stored {
+			return nil
+		}
+	}
+	minAllowed := headTimestamp + NativeTokenOwnersEnableDelay
+	if new < minAllowed {
+		return newTimestampCompatError("NativeTokenOwnersEnableFrom-Delay", &minAllowed, &new)
+	}
+	return nil
+}
+
+func (c *ChainConfig) checkArbitrumCompatible(newcfg *ChainConfig, headTimestamp uint64) *ConfigCompatError {
 	if c.IsArbitrum() != newcfg.IsArbitrum() {
 		// This difference applies to the entire chain, so report that the genesis block is where the difference appears.
 		return newBlockCompatError("isArbitrum", common.Big0, common.Big0)
@@ -96,7 +138,7 @@ func (c *ChainConfig) checkArbitrumCompatible(newcfg *ChainConfig, head *big.Int
 	if cArb.GenesisBlockNum != newArb.GenesisBlockNum {
 		return newBlockCompatError("genesisblocknum", new(big.Int).SetUint64(cArb.GenesisBlockNum), new(big.Int).SetUint64(newArb.GenesisBlockNum))
 	}
-	return nil
+	return c.checkNativeTokenOwnersEnableCompatible(cArb.NativeTokenOwnersEnableFrom, newArb.NativeTokenOwnersEnableFrom, headTimestamp)
 }
 
 func DisableArbitrumParams() ArbitrumChainParams {
