@@ -19,7 +19,6 @@ package vm
 import (
 	"math/big"
 
-	"github.com/holiman/uint256"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/state"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/stateless"
@@ -28,6 +27,7 @@ import (
 	"github.com/paxosglobal/go-ethereum-arbitrum/ethdb"
 	"github.com/paxosglobal/go-ethereum-arbitrum/params"
 	"github.com/paxosglobal/go-ethereum-arbitrum/trie/utils"
+	"github.com/holiman/uint256"
 )
 
 // StateDB is an EVM database for full state querying.
@@ -62,17 +62,19 @@ type StateDB interface {
 	CreateAccount(common.Address)
 	CreateContract(common.Address)
 
-	SubBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason)
-	AddBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason)
+	SubBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason) uint256.Int
+	AddBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason) uint256.Int
 	GetBalance(common.Address) *uint256.Int
 	ExpectBalanceBurn(*big.Int)
 
 	GetNonce(common.Address) uint64
-	SetNonce(common.Address, uint64)
+	SetNonce(common.Address, uint64, tracing.NonceChangeReason)
 
 	GetCodeHash(common.Address) common.Hash
 	GetCode(common.Address) []byte
-	SetCode(common.Address, []byte)
+
+	// SetCode sets the new code for the address, and returns the previous code, if any.
+	SetCode(common.Address, []byte) []byte
 	GetCodeSize(common.Address) int
 
 	AddRefund(uint64)
@@ -81,17 +83,22 @@ type StateDB interface {
 
 	GetCommittedState(common.Address, common.Hash) common.Hash
 	GetState(common.Address, common.Hash) common.Hash
-	SetState(common.Address, common.Hash, common.Hash)
+	SetState(common.Address, common.Hash, common.Hash) common.Hash
 	GetStorageRoot(addr common.Address) common.Hash
 
 	GetTransientState(addr common.Address, key common.Hash) common.Hash
 	SetTransientState(addr common.Address, key, value common.Hash)
 
-	SelfDestruct(common.Address)
+	SelfDestruct(common.Address) uint256.Int
 	HasSelfDestructed(common.Address) bool
 	GetSelfDestructs() []common.Address
 
-	Selfdestruct6780(common.Address)
+	// SelfDestruct6780 is post-EIP6780 selfdestruct, which means that it's a
+	// send-all-to-beneficiary, unless the contract was created in this same
+	// transaction, in which case it will be destructed.
+	// This method returns the prior balance, along with a boolean which is
+	// true iff the object was indeed destructed.
+	SelfDestruct6780(common.Address) (uint256.Int, bool)
 
 	// Exist reports whether the given account exists in state.
 	// Notably this should also return true for self-destructed accounts.
@@ -123,17 +130,13 @@ type StateDB interface {
 	GetCurrentTxLogs() []*types.Log
 
 	Witness() *stateless.Witness
-}
 
-// CallContext provides a basic interface for the EVM calling conventions. The EVM
-// depends on this context being implemented for doing subcalls and initialising new EVM contracts.
-type CallContext interface {
-	// Call calls another contract.
-	Call(env *EVM, me ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error)
-	// CallCode takes another contracts code and execute within our own context
-	CallCode(env *EVM, me ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error)
-	// DelegateCall is same as CallCode except sender and value is propagated from parent to child scope
-	DelegateCall(env *EVM, me ContractRef, addr common.Address, data []byte, gas *big.Int) ([]byte, error)
-	// Create creates a new contract
-	Create(env *EVM, me ContractRef, data []byte, gas, value *big.Int) ([]byte, common.Address, error)
+	AccessEvents() *state.AccessEvents
+
+	// Finalise must be invoked at the end of a transaction
+	Finalise(bool)
+
+	IntermediateRoot(bool) common.Hash
+
+	Reader() state.Reader
 }

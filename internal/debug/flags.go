@@ -27,12 +27,12 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
 	"github.com/paxosglobal/go-ethereum-arbitrum/internal/flags"
 	"github.com/paxosglobal/go-ethereum-arbitrum/log"
 	"github.com/paxosglobal/go-ethereum-arbitrum/metrics"
 	"github.com/paxosglobal/go-ethereum-arbitrum/metrics/exp"
+	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -136,8 +136,8 @@ var (
 		Category: flags.LoggingCategory,
 	}
 	traceFlag = &cli.StringFlag{
-		Name:     "trace",
-		Usage:    "Write execution trace to the given file",
+		Name:     "go-execution-trace",
+		Usage:    "Write Go execution trace to the given file",
 		Category: flags.LoggingCategory,
 	}
 )

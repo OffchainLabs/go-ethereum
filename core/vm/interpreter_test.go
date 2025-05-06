@@ -17,15 +17,15 @@
 package vm
 
 import (
+	"math"
 	"testing"
 	"time"
 
-	"github.com/holiman/uint256"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
-	"github.com/paxosglobal/go-ethereum-arbitrum/common/math"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/state"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
 	"github.com/paxosglobal/go-ethereum-arbitrum/params"
+	"github.com/holiman/uint256"
 )
 
 var loopInterruptTests = []string{
@@ -47,13 +47,13 @@ func TestLoopInterrupt(t *testing.T) {
 		statedb.SetCode(address, common.Hex2Bytes(tt))
 		statedb.Finalise(true)
 
-		evm := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, Config{})
+		evm := NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, Config{})
 
 		errChannel := make(chan error)
 		timeout := make(chan bool)
 
 		go func(evm *EVM) {
-			_, _, err := evm.Call(AccountRef(common.Address{}), address, nil, math.MaxUint64, new(uint256.Int))
+			_, _, err := evm.Call(common.Address{}, address, nil, math.MaxUint64, new(uint256.Int))
 			errChannel <- err
 		}(evm)
 

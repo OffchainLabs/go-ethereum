@@ -28,11 +28,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v4"
-	"github.com/gorilla/websocket"
 	"github.com/paxosglobal/go-ethereum-arbitrum/internal/testlog"
 	"github.com/paxosglobal/go-ethereum-arbitrum/log"
 	"github.com/paxosglobal/go-ethereum-arbitrum/rpc"
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -522,7 +522,6 @@ func TestGzipHandler(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			srv := httptest.NewServer(newGzipHandler(test.handler))
 			defer srv.Close()

@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/paxosglobal/go-ethereum-arbitrum/internal/version"
-	"github.com/paxosglobal/go-ethereum-arbitrum/params"
 	"github.com/urfave/cli/v2"
 )
 
@@ -73,7 +72,7 @@ func printVersion(ctx *cli.Context) error {
 	git, _ := version.VCS()
 
 	fmt.Println(strings.Title(clientIdentifier))
-	fmt.Println("Version:", params.VersionWithMeta)
+	fmt.Println("Version:", version.WithMeta)
 	if git.Commit != "" {
 		fmt.Println("Git Commit:", git.Commit)
 	}

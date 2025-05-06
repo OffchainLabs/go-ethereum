@@ -17,12 +17,12 @@
 package params
 
 import (
+	"math"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/paxosglobal/go-ethereum-arbitrum/common/math"
 	"github.com/stretchr/testify/require"
 )
 

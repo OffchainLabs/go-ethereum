@@ -26,8 +26,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/jedisct1/go-minisign"
 	"github.com/paxosglobal/go-ethereum-arbitrum/log"
+	"github.com/jedisct1/go-minisign"
 	"github.com/urfave/cli/v2"
 )
 

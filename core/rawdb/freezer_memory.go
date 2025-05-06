@@ -19,10 +19,10 @@ package rawdb
 import (
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
-	"github.com/paxosglobal/go-ethereum-arbitrum/common/math"
 	"github.com/paxosglobal/go-ethereum-arbitrum/ethdb"
 	"github.com/paxosglobal/go-ethereum-arbitrum/log"
 	"github.com/paxosglobal/go-ethereum-arbitrum/rlp"
@@ -418,4 +418,10 @@ func (f *MemoryFreezer) Reset() error {
 	f.tables = tables
 	f.items, f.tail = 0, 0
 	return nil
+}
+
+// AncientDatadir returns the path of the ancient store.
+// Since the memory freezer is ephemeral, an empty string is returned.
+func (f *MemoryFreezer) AncientDatadir() (string, error) {
+	return "", nil
 }

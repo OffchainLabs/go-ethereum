@@ -50,6 +50,7 @@ var bigZero = big.NewInt(0)
 func (tx *LegacyTx) skipNonceChecks() bool                  { return false }
 func (tx *AccessListTx) skipNonceChecks() bool              { return false }
 func (tx *DynamicFeeTx) skipNonceChecks() bool              { return false }
+func (tx *SetCodeTx) skipNonceChecks() bool                 { return false }
 func (tx *ArbitrumUnsignedTx) skipNonceChecks() bool        { return false }
 func (tx *ArbitrumContractTx) skipNonceChecks() bool        { return true }
 func (tx *ArbitrumRetryTx) skipNonceChecks() bool           { return true }
@@ -60,6 +61,7 @@ func (t *ArbitrumInternalTx) skipNonceChecks() bool         { return true }
 func (tx *LegacyTx) skipFromEOACheck() bool                  { return false }
 func (tx *AccessListTx) skipFromEOACheck() bool              { return false }
 func (tx *DynamicFeeTx) skipFromEOACheck() bool              { return false }
+func (tx *SetCodeTx) skipFromEOACheck() bool                 { return false }
 func (tx *ArbitrumUnsignedTx) skipFromEOACheck() bool        { return false }
 func (tx *ArbitrumContractTx) skipFromEOACheck() bool        { return true }
 func (tx *ArbitrumRetryTx) skipFromEOACheck() bool           { return true }

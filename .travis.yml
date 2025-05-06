@@ -9,14 +9,13 @@ jobs:
         - azure-osx
 
   include:
-    # These builders create the Docker sub-images for multi-arch push and each
-    # will attempt to push the multi-arch image if they are the last builder
+    # This builder create and push the Docker images for all architectures
     - stage: build
       if: type = push
       os: linux
       arch: amd64
       dist: focal
-      go: 1.23.x
+      go: 1.24.x
       env:
         - docker
       services:
@@ -26,24 +25,7 @@ jobs:
       before_install:
         - export DOCKER_CLI_EXPERIMENTAL=enabled
       script:
-        - go run build/ci.go docker -image -manifest amd64,arm64 -upload ethereum/client-go
-
-    - stage: build
-      if: type = push
-      os: linux
-      arch: arm64
-      dist: focal
-      go: 1.23.x
-      env:
-        - docker
-      services:
-        - docker
-      git:
-        submodules: false # avoid cloning ethereum/tests
-      before_install:
-        - export DOCKER_CLI_EXPERIMENTAL=enabled
-      script:
-        - go run build/ci.go docker -image -manifest amd64,arm64 -upload ethereum/client-go
+        - go run build/ci.go dockerx -platform "linux/amd64,linux/arm64,linux/riscv64" -hub ethereum/client-go -upload
 
     # This builder does the Linux Azure uploads
     - stage: build
@@ -51,7 +33,7 @@ jobs:
       os: linux
       dist: focal
       sudo: required
-      go: 1.23.x
+      go: 1.24.x
       env:
         - azure-linux
       git:
@@ -103,7 +85,7 @@ jobs:
       os: linux
       arch: amd64
       dist: focal
-      go: 1.23.x
+      go: 1.24.x
       script:
         - travis_wait 45 go run build/ci.go test $TEST_PACKAGES
 
@@ -111,7 +93,7 @@ jobs:
       if: type = push
       os: linux
       dist: focal
-      go: 1.22.x
+      go: 1.23.x
       script:
         - travis_wait 45 go run build/ci.go test $TEST_PACKAGES
 
@@ -120,7 +102,7 @@ jobs:
       if: type = cron || (type = push && tag ~= /^v[0-9]/)
       os: linux
       dist: focal
-      go: 1.23.x
+      go: 1.24.x
       env:
         - ubuntu-ppa
       git:
@@ -136,7 +118,7 @@ jobs:
       if: type = cron
       os: linux
       dist: focal
-      go: 1.23.x
+      go: 1.24.x
       env:
         - azure-purge
       git:
@@ -149,7 +131,7 @@ jobs:
       if: type = cron
       os: linux
       dist: focal
-      go: 1.23.x
+      go: 1.24.x
       env:
         - racetests
       script:

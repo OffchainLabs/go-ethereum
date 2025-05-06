@@ -9,7 +9,6 @@ import (
 	"github.com/paxosglobal/go-ethereum-arbitrum/core"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/txpool/blobpool"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/txpool/legacypool"
-	"github.com/paxosglobal/go-ethereum-arbitrum/eth/downloader"
 	"github.com/paxosglobal/go-ethereum-arbitrum/eth/gasprice"
 	"github.com/paxosglobal/go-ethereum-arbitrum/miner"
 )
@@ -19,7 +18,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	type Config struct {
 		Genesis                 *core.Genesis `toml:",omitempty"`
 		NetworkId               uint64
-		SyncMode                downloader.SyncMode
+		SyncMode                SyncMode
 		EthDiscoveryURLs        []string
 		SnapDiscoveryURLs       []string
 		NoPruning               bool
@@ -46,7 +45,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		EnablePreimageRecording bool
 		VMTrace                 string
 		VMTraceJsonConfig       string
-		DocRoot                 string `toml:"-"`
 		RPCGasCap               uint64
 		RPCEVMTimeout           time.Duration
 		RPCTxFeeCap             float64
@@ -83,7 +81,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.VMTrace = c.VMTrace
 	enc.VMTraceJsonConfig = c.VMTraceJsonConfig
-	enc.DocRoot = c.DocRoot
 	enc.RPCGasCap = c.RPCGasCap
 	enc.RPCEVMTimeout = c.RPCEVMTimeout
 	enc.RPCTxFeeCap = c.RPCTxFeeCap
@@ -97,7 +94,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	type Config struct {
 		Genesis                 *core.Genesis `toml:",omitempty"`
 		NetworkId               *uint64
-		SyncMode                *downloader.SyncMode
+		SyncMode                *SyncMode
 		EthDiscoveryURLs        []string
 		SnapDiscoveryURLs       []string
 		NoPruning               *bool
@@ -124,7 +121,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		EnablePreimageRecording *bool
 		VMTrace                 *string
 		VMTraceJsonConfig       *string
-		DocRoot                 *string `toml:"-"`
 		RPCGasCap               *uint64
 		RPCEVMTimeout           *time.Duration
 		RPCTxFeeCap             *float64
@@ -221,9 +217,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.VMTraceJsonConfig != nil {
 		c.VMTraceJsonConfig = *dec.VMTraceJsonConfig
-	}
-	if dec.DocRoot != nil {
-		c.DocRoot = *dec.DocRoot
 	}
 	if dec.RPCGasCap != nil {
 		c.RPCGasCap = *dec.RPCGasCap

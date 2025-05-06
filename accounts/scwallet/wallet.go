@@ -33,13 +33,13 @@ import (
 	"sync"
 	"time"
 
-	pcsc "github.com/gballet/go-libpcsclite"
 	"github.com/paxosglobal/go-ethereum-arbitrum"
 	"github.com/paxosglobal/go-ethereum-arbitrum/accounts"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
 	"github.com/paxosglobal/go-ethereum-arbitrum/crypto"
 	"github.com/paxosglobal/go-ethereum-arbitrum/log"
+	pcsc "github.com/gballet/go-libpcsclite"
 	"github.com/status-im/keycard-go/derivationpath"
 )
 

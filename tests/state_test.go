@@ -29,13 +29,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/holiman/uint256"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/rawdb"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/vm"
 	"github.com/paxosglobal/go-ethereum-arbitrum/eth/tracers/logger"
+	"github.com/holiman/uint256"
 )
 
 func initMatcher(st *testMatcher) {
@@ -108,7 +108,6 @@ func TestExecutionSpecState(t *testing.T) {
 
 func execStateTest(t *testing.T, st *testMatcher, test *StateTest) {
 	for _, subtest := range test.Subtests() {
-		subtest := subtest
 		key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
 
 		// If -short flag is used, we don't execute all four permutations, only
@@ -248,14 +247,12 @@ func runBenchmarkFile(b *testing.B, path string) {
 		return
 	}
 	for _, t := range m {
-		t := t
 		runBenchmark(b, &t)
 	}
 }
 
 func runBenchmark(b *testing.B, t *StateTest) {
 	for _, subtest := range t.Subtests() {
-		subtest := subtest
 		key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
 
 		b.Run(key, func(b *testing.B) {
@@ -306,14 +303,14 @@ func runBenchmark(b *testing.B, t *StateTest) {
 
 			// Prepare the EVM.
 			txContext := core.NewEVMTxContext(msg)
-			context := core.NewEVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
+			context := core.NewEVMBlockContext(block.Header(), &dummyChain{config: config}, &t.json.Env.Coinbase)
 			context.GetHash = vmTestBlockHash
 			context.BaseFee = baseFee
-			evm := vm.NewEVM(context, txContext, state.StateDB, config, vmconfig)
+			evm := vm.NewEVM(context, state.StateDB, config, vmconfig)
+			evm.SetTxContext(txContext)
 
 			// Create "contract" for sender to cache code analysis.
-			sender := vm.NewContract(vm.AccountRef(msg.From), vm.AccountRef(msg.From),
-				nil, 0)
+			sender := vm.NewContract(msg.From, msg.From, nil, 0, nil)
 
 			var (
 				gasUsed uint64
@@ -328,7 +325,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				start := time.Now()
 
 				// Execute the message.
-				_, leftOverGas, err := evm.Call(sender, *msg.To, msg.Data, msg.GasLimit, uint256.MustFromBig(msg.Value))
+				_, leftOverGas, err := evm.Call(sender.Address(), *msg.To, msg.Data, msg.GasLimit, uint256.MustFromBig(msg.Value))
 				if err != nil {
 					b.Error(err)
 					return

@@ -18,6 +18,7 @@ import (
 	"github.com/paxosglobal/go-ethereum-arbitrum/ethdb"
 	"github.com/paxosglobal/go-ethereum-arbitrum/log"
 	"github.com/paxosglobal/go-ethereum-arbitrum/metrics"
+	"github.com/paxosglobal/go-ethereum-arbitrum/params"
 	"github.com/paxosglobal/go-ethereum-arbitrum/rlp"
 	"github.com/paxosglobal/go-ethereum-arbitrum/triedb"
 	"github.com/paxosglobal/go-ethereum-arbitrum/triedb/hashdb"
@@ -42,6 +43,10 @@ func newRecordingKV(inner *triedb.Database, diskDb ethdb.KeyValueStore) *Recordi
 
 func (db *RecordingKV) Has(key []byte) (bool, error) {
 	return false, errors.New("recording KV doesn't support Has")
+}
+
+func (db *RecordingKV) DeleteRange(start, end []byte) error {
+	return errors.New("recording KV doesn't support DeleteRange")
 }
 
 // Get may be called concurrently with other Get calls
@@ -145,6 +150,10 @@ func (r *RecordingChainContext) Engine() consensus.Engine {
 	return r.bc.Engine()
 }
 
+func (r *RecordingChainContext) Config() *params.ChainConfig {
+	return r.bc.Config()
+}
+
 func (r *RecordingChainContext) GetHeader(hash common.Hash, num uint64) *types.Header {
 	if num < r.minBlockNumberAccessed {
 		r.minBlockNumberAccessed = num
@@ -227,7 +236,7 @@ func (r *RecordingDatabase) dereferenceRoot(root common.Hash) {
 func (r *RecordingDatabase) addStateVerify(statedb *state.StateDB, expected common.Hash, blockNumber uint64) (*state.StateDB, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	result, err := statedb.Commit(blockNumber, true)
+	result, err := statedb.Commit(blockNumber, true, false)
 	if err != nil {
 		return nil, err
 	}

@@ -26,8 +26,8 @@ import (
 	"errors"
 	"fmt"
 
-	pcsc "github.com/gballet/go-libpcsclite"
 	"github.com/paxosglobal/go-ethereum-arbitrum/crypto"
+	pcsc "github.com/gballet/go-libpcsclite"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/text/unicode/norm"
 )

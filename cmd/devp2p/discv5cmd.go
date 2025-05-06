@@ -19,11 +19,11 @@ package main
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/paxosglobal/go-ethereum-arbitrum/cmd/devp2p/internal/v5test"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
-	"github.com/paxosglobal/go-ethereum-arbitrum/internal/flags"
 	"github.com/paxosglobal/go-ethereum-arbitrum/p2p/discover"
 	"github.com/urfave/cli/v2"
 )
@@ -56,7 +56,7 @@ var (
 		Name:   "crawl",
 		Usage:  "Updates a nodes.json file with random nodes found in the DHT",
 		Action: discv5Crawl,
-		Flags: flags.Merge(discoveryNodeFlags, []cli.Flag{
+		Flags: slices.Concat(discoveryNodeFlags, []cli.Flag{
 			crawlTimeoutFlag,
 		}),
 	}

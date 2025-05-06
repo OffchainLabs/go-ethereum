@@ -19,11 +19,11 @@ package blobpool
 import (
 	"errors"
 
-	"github.com/holiman/billy"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
 	"github.com/paxosglobal/go-ethereum-arbitrum/log"
 	"github.com/paxosglobal/go-ethereum-arbitrum/rlp"
+	"github.com/holiman/billy"
 )
 
 // limboBlob is a wrapper around an opaque blobset that also contains the tx hash
@@ -48,7 +48,7 @@ type limbo struct {
 }
 
 // newLimbo opens and indexes a set of limboed blob transactions.
-func newLimbo(datadir string) (*limbo, error) {
+func newLimbo(datadir string, maxBlobsPerTransaction int) (*limbo, error) {
 	l := &limbo{
 		index:  make(map[common.Hash]uint64),
 		groups: make(map[uint64]map[uint64]common.Hash),
@@ -60,7 +60,7 @@ func newLimbo(datadir string) (*limbo, error) {
 			fails = append(fails, id)
 		}
 	}
-	store, err := billy.Open(billy.Options{Path: datadir, Repair: true}, newSlotter(), index)
+	store, err := billy.Open(billy.Options{Path: datadir, Repair: true}, newSlotter(maxBlobsPerTransaction), index)
 	if err != nil {
 		return nil, err
 	}

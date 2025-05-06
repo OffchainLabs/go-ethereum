@@ -17,9 +17,10 @@
 package vm
 
 import (
-	"github.com/holiman/uint256"
+	"math"
+
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
-	"github.com/paxosglobal/go-ethereum-arbitrum/common/math"
+	"github.com/holiman/uint256"
 )
 
 // calcMemSize64 calculates the required memory size, and returns

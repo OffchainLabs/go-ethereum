@@ -1,5 +1,3 @@
-//go:build integrationtests
-
 // Copyright 2023 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
@@ -16,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build integrationtests
+
 package main
 
 import (
@@ -25,9 +25,9 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/holiman/uint256"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 	"github.com/paxosglobal/go-ethereum-arbitrum/log"
+	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
 )
 

@@ -21,10 +21,9 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/holiman/uint256"
-	"github.com/paxosglobal/go-ethereum-arbitrum/core/state"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/tracing"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core/vm"
 	"github.com/paxosglobal/go-ethereum-arbitrum/params"
 )
 
@@ -74,7 +73,7 @@ func VerifyDAOHeaderExtraData(config *params.ChainConfig, header *types.Header) 
 // ApplyDAOHardFork modifies the state database according to the DAO hard-fork
 // rules, transferring all balances of a set of DAO accounts to a single refund
 // contract.
-func ApplyDAOHardFork(statedb *state.StateDB) {
+func ApplyDAOHardFork(statedb vm.StateDB) {
 	// Retrieve the contract to refund balances into
 	if !statedb.Exist(params.DAORefundContract) {
 		statedb.CreateAccount(params.DAORefundContract)
@@ -82,7 +81,8 @@ func ApplyDAOHardFork(statedb *state.StateDB) {
 
 	// Move every DAO account and extra-balance account funds into the refund contract
 	for _, addr := range params.DAODrainList() {
-		statedb.AddBalance(params.DAORefundContract, statedb.GetBalance(addr), tracing.BalanceIncreaseDaoContract)
-		statedb.SetBalance(addr, new(uint256.Int), tracing.BalanceDecreaseDaoAccount)
+		balance := statedb.GetBalance(addr)
+		statedb.AddBalance(params.DAORefundContract, balance, tracing.BalanceIncreaseDaoContract)
+		statedb.SubBalance(addr, balance, tracing.BalanceDecreaseDaoAccount)
 	}
 }

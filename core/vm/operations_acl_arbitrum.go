@@ -19,9 +19,9 @@ package vm
 import (
 	"fmt"
 
-	"github.com/holiman/uint256"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 	"github.com/paxosglobal/go-ethereum-arbitrum/params"
+	"github.com/holiman/uint256"
 )
 
 // Computes the cost of doing a state load in wasm

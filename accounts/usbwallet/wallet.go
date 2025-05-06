@@ -25,13 +25,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/karalabe/hid"
 	"github.com/paxosglobal/go-ethereum-arbitrum"
 	"github.com/paxosglobal/go-ethereum-arbitrum/accounts"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
 	"github.com/paxosglobal/go-ethereum-arbitrum/crypto"
 	"github.com/paxosglobal/go-ethereum-arbitrum/log"
+	"github.com/karalabe/hid"
 )
 
 // Maximum time between wallet health checks to detect USB unplugs.

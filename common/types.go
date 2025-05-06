@@ -487,6 +487,7 @@ func (b PrettyBytes) TerminalString() string {
 	return fmt.Sprintf("%#x...%x (%dB)", b[:3], b[len(b)-3:], len(b))
 }
 
+// BlockMetadata is a byte array representation of statuses of transactions in a block on whether they were timeboosted or not
 type BlockMetadata []byte
 
 // IsTxTimeboosted given a tx's index in the block returns whether the tx was timeboosted

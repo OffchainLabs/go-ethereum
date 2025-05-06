@@ -22,13 +22,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 
-	"github.com/ethereum/go-verkle"
 	"github.com/paxosglobal/go-ethereum-arbitrum/cmd/utils"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/rawdb"
-	"github.com/paxosglobal/go-ethereum-arbitrum/internal/flags"
 	"github.com/paxosglobal/go-ethereum-arbitrum/log"
+	"github.com/ethereum/go-verkle"
 	"github.com/urfave/cli/v2"
 )
 
@@ -45,7 +45,7 @@ var (
 				Usage:     "verify the conversion of a MPT into a verkle tree",
 				ArgsUsage: "<root>",
 				Action:    verifyVerkle,
-				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabaseFlags),
+				Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
 geth verkle verify <state-root>
 This command takes a root commitment and attempts to rebuild the tree.
@@ -56,7 +56,7 @@ This command takes a root commitment and attempts to rebuild the tree.
 				Usage:     "Dump a verkle tree to a DOT file",
 				ArgsUsage: "<root> <key1> [<key 2> ...]",
 				Action:    expandVerkle,
-				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabaseFlags),
+				Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
 geth verkle dump <state-root> <key 1> [<key 2> ...]
 This command will produce a dot file representing the tree, rooted at <root>.

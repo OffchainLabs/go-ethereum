@@ -33,6 +33,7 @@ import (
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/state"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/vm"
+	"github.com/paxosglobal/go-ethereum-arbitrum/ethdb/pebble"
 	"github.com/paxosglobal/go-ethereum-arbitrum/params"
 	"github.com/paxosglobal/go-ethereum-arbitrum/triedb"
 	"github.com/paxosglobal/go-ethereum-arbitrum/triedb/hashdb"
@@ -1968,13 +1969,13 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 	datadir := t.TempDir()
 	ancient := filepath.Join(datadir, "ancient")
 
-	db, err := rawdb.Open(rawdb.OpenOptions{
-		Directory:         datadir,
-		AncientsDirectory: ancient,
-		Ephemeral:         true,
-	})
+	pdb, err := pebble.New(datadir, 0, 0, "", false, nil)
 	if err != nil {
-		t.Fatalf("Failed to create persistent database: %v", err)
+		t.Fatalf("Failed to create persistent key-value database: %v", err)
+	}
+	db, err := rawdb.NewDatabaseWithFreezer(pdb, ancient, "", false)
+	if err != nil {
+		t.Fatalf("Failed to create persistent freezer database: %v", err)
 	}
 	defer db.Close()
 

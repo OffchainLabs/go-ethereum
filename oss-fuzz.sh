@@ -161,27 +161,11 @@ compile_fuzzer github.com/paxosglobal/go-ethereum-arbitrum/tests/fuzzers/bls1238
   $repo/tests/fuzzers/bls12381/bls12381_test.go
 
 compile_fuzzer github.com/paxosglobal/go-ethereum-arbitrum/tests/fuzzers/bls12381 \
-  FuzzCrossG1Mul fuzz_cross_g1_mul\
-  $repo/tests/fuzzers/bls12381/bls12381_test.go
-
-compile_fuzzer github.com/paxosglobal/go-ethereum-arbitrum/tests/fuzzers/bls12381 \
-  FuzzG1Mul fuzz_g1_mul\
-  $repo/tests/fuzzers/bls12381/bls12381_test.go
-
-compile_fuzzer github.com/paxosglobal/go-ethereum-arbitrum/tests/fuzzers/bls12381 \
   FuzzG1MultiExp fuzz_g1_multiexp \
   $repo/tests/fuzzers/bls12381/bls12381_test.go
 
 compile_fuzzer github.com/paxosglobal/go-ethereum-arbitrum/tests/fuzzers/bls12381 \
   FuzzG2Add fuzz_g2_add \
-  $repo/tests/fuzzers/bls12381/bls12381_test.go
-
-compile_fuzzer github.com/paxosglobal/go-ethereum-arbitrum/tests/fuzzers/bls12381 \
-  FuzzCrossG2Mul fuzz_cross_g2_mul\
-  $repo/tests/fuzzers/bls12381/bls12381_test.go
-
-compile_fuzzer github.com/paxosglobal/go-ethereum-arbitrum/tests/fuzzers/bls12381 \
-  FuzzG2Mul fuzz_g2_mul\
   $repo/tests/fuzzers/bls12381/bls12381_test.go
 
 compile_fuzzer github.com/paxosglobal/go-ethereum-arbitrum/tests/fuzzers/bls12381 \
@@ -232,8 +216,8 @@ compile_fuzzer github.com/paxosglobal/go-ethereum-arbitrum/tests/fuzzers/secp256
   Fuzz fuzzSecp256k1\
   $repo/tests/fuzzers/secp256k1/secp_test.go
 
+compile_fuzzer github.com/paxosglobal/go-ethereum-arbitrum/eth/protocols/eth \
+  FuzzEthProtocolHandlers fuzz_eth_protocol_handlers \
+  $repo/eth/protocols/eth/handler_test.go,$repo/eth/protocols/eth/peer_test.go
 
-#compile_fuzzer tests/fuzzers/vflux      FuzzClientPool fuzzClientPool
-#compile_fuzzer tests/fuzzers/difficulty Fuzz fuzzDifficulty
-#compile_fuzzer tests/fuzzers/les        Fuzz fuzzLes
 

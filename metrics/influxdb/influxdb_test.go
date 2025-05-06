@@ -27,13 +27,13 @@ import (
 	"strings"
 	"testing"
 
-	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/paxosglobal/go-ethereum-arbitrum/metrics"
 	"github.com/paxosglobal/go-ethereum-arbitrum/metrics/internal"
+	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 )
 
 func TestMain(m *testing.M) {
-	metrics.Enabled = true
+	metrics.Enable()
 	os.Exit(m.Run())
 }
 

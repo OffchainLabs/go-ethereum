@@ -26,9 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v4"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common/hexutil"
 	"github.com/paxosglobal/go-ethereum-arbitrum/rpc"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 type helloRPC string

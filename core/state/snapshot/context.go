@@ -20,10 +20,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"math"
 	"time"
 
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
-	"github.com/paxosglobal/go-ethereum-arbitrum/common/math"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/rawdb"
 	"github.com/paxosglobal/go-ethereum-arbitrum/ethdb"
 	"github.com/paxosglobal/go-ethereum-arbitrum/ethdb/memorydb"

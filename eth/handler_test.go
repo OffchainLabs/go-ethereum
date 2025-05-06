@@ -21,7 +21,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/holiman/uint256"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 	"github.com/paxosglobal/go-ethereum-arbitrum/consensus/ethash"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core"
@@ -30,10 +29,11 @@ import (
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/vm"
 	"github.com/paxosglobal/go-ethereum-arbitrum/crypto"
-	"github.com/paxosglobal/go-ethereum-arbitrum/eth/downloader"
+	"github.com/paxosglobal/go-ethereum-arbitrum/eth/ethconfig"
 	"github.com/paxosglobal/go-ethereum-arbitrum/ethdb"
 	"github.com/paxosglobal/go-ethereum-arbitrum/event"
 	"github.com/paxosglobal/go-ethereum-arbitrum/params"
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -80,7 +80,7 @@ func (p *testTxPool) Get(hash common.Hash) *types.Transaction {
 
 // Add appends a batch of transactions to the pool, and notifies any
 // listeners if the addition channel is non nil
-func (p *testTxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
+func (p *testTxPool) Add(txs []*types.Transaction, sync bool) []error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -164,7 +164,7 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 		Chain:      chain,
 		TxPool:     txpool,
 		Network:    1,
-		Sync:       downloader.SnapSync,
+		Sync:       ethconfig.SnapSync,
 		BloomCache: 1,
 	})
 	handler.Start(1000)

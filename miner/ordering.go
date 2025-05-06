@@ -20,10 +20,10 @@ import (
 	"container/heap"
 	"math/big"
 
-	"github.com/holiman/uint256"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/txpool"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
+	"github.com/holiman/uint256"
 )
 
 // txWithMinerFee wraps a transaction with its gas price or effective miner gasTipCap
