@@ -22,8 +22,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/holiman/uint256"
 	"github.com/paxosglobal/go-ethereum-arbitrum/rlp"
+	"github.com/holiman/uint256"
 )
 
 func decodeEncode(input []byte, val interface{}) error {

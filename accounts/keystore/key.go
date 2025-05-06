@@ -28,10 +28,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/paxosglobal/go-ethereum-arbitrum/accounts"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 	"github.com/paxosglobal/go-ethereum-arbitrum/crypto"
+	"github.com/google/uuid"
 )
 
 const (

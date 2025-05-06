@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !ios && !wasm
-// +build !ios,!wasm
+//go:build !ios && !wasm && !wasip1
+// +build !ios,!wasm,!wasip1
 
 package metrics
 

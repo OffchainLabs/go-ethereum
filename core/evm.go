@@ -19,13 +19,14 @@ package core
 import (
 	"math/big"
 
-	"github.com/holiman/uint256"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 	"github.com/paxosglobal/go-ethereum-arbitrum/consensus"
 	"github.com/paxosglobal/go-ethereum-arbitrum/consensus/misc/eip4844"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/tracing"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/vm"
+	"github.com/paxosglobal/go-ethereum-arbitrum/params"
+	"github.com/holiman/uint256"
 )
 
 // ChainContext supports retrieving headers and consensus parameters from the
@@ -36,6 +37,9 @@ type ChainContext interface {
 
 	// GetHeader returns the header corresponding to the hash/number argument pair.
 	GetHeader(common.Hash, uint64) *types.Header
+
+	// Config returns the chain's configuration.
+	Config() *params.ChainConfig
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.
@@ -57,7 +61,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		baseFee = new(big.Int).Set(header.BaseFee)
 	}
 	if header.ExcessBlobGas != nil {
-		blobBaseFee = eip4844.CalcBlobFee(*header.ExcessBlobGas)
+		blobBaseFee = eip4844.CalcBlobFee(chain.Config(), header)
 	}
 	if header.Difficulty.Sign() == 0 {
 		random = &header.MixDigest

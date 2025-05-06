@@ -44,7 +44,7 @@ type Backend interface {
 
 	// General Ethereum API
 	SyncProgress() ethereum.SyncProgress
-	SyncProgressMap() map[string]interface{}
+	SyncProgressMap(ctx context.Context) map[string]interface{}
 
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 	FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, []*big.Int, []float64, error)
@@ -67,16 +67,14 @@ type Backend interface {
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
 	BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error)
-	BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error)
+	BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error) // This queries SyncProgressBackend (execution's syncMonitor) to fetch blockMetadata for a given block number
 	StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error)
 	StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error)
 	Pending() (*types.Block, types.Receipts, *state.StateDB)
 	GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error)
-	GetTd(ctx context.Context, hash common.Hash) *big.Int
-	GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM
+	GetEVM(ctx context.Context, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
-	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
@@ -124,9 +122,6 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 		}, {
 			Namespace: "eth",
 			Service:   NewEthereumAccountAPI(apiBackend.AccountManager()),
-		}, {
-			Namespace: "personal",
-			Service:   NewPersonalAccountAPI(apiBackend, nonceLock),
 		},
 	}
 }

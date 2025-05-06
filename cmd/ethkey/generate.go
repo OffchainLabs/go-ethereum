@@ -22,10 +22,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/google/uuid"
 	"github.com/paxosglobal/go-ethereum-arbitrum/accounts/keystore"
 	"github.com/paxosglobal/go-ethereum-arbitrum/cmd/utils"
 	"github.com/paxosglobal/go-ethereum-arbitrum/crypto"
+	"github.com/google/uuid"
 	"github.com/urfave/cli/v2"
 )
 

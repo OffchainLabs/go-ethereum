@@ -24,9 +24,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/mattn/go-colorable"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 	"github.com/paxosglobal/go-ethereum-arbitrum/log"
+	"github.com/mattn/go-colorable"
 )
 
 func TestEncryption(t *testing.T) {

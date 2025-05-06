@@ -23,18 +23,18 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/holiman/uint256"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
-	"github.com/paxosglobal/go-ethereum-arbitrum/common/math"
 	"github.com/paxosglobal/go-ethereum-arbitrum/consensus"
 	"github.com/paxosglobal/go-ethereum-arbitrum/consensus/misc"
 	"github.com/paxosglobal/go-ethereum-arbitrum/consensus/misc/eip1559"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/state"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/tracing"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
+	"github.com/paxosglobal/go-ethereum-arbitrum/core/vm"
 	"github.com/paxosglobal/go-ethereum-arbitrum/params"
 	"github.com/paxosglobal/go-ethereum-arbitrum/rlp"
 	"github.com/paxosglobal/go-ethereum-arbitrum/trie"
+	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -481,7 +481,9 @@ func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 		expDiff := periodCount.Sub(periodCount, big2)
 		expDiff.Exp(big2, expDiff, nil)
 		diff.Add(diff, expDiff)
-		diff = math.BigMax(diff, params.MinimumDifficulty)
+		if diff.Cmp(params.MinimumDifficulty) < 0 {
+			diff = params.MinimumDifficulty
+		}
 	}
 	return diff
 }
@@ -503,7 +505,7 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 }
 
 // Finalize implements consensus.Engine, accumulating the block and uncle rewards.
-func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body) {
+func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body) {
 	// Accumulate any block and uncle rewards
 	accumulateRewards(chain.Config(), state, header, body.Uncles)
 }
@@ -566,7 +568,7 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 // accumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
-func accumulateRewards(config *params.ChainConfig, stateDB *state.StateDB, header *types.Header, uncles []*types.Header) {
+func accumulateRewards(config *params.ChainConfig, stateDB vm.StateDB, header *types.Header, uncles []*types.Header) {
 	// Select the correct block reward based on chain progression
 	blockReward := FrontierBlockReward
 	if config.IsByzantium(header.Number) {

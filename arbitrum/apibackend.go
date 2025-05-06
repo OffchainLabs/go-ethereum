@@ -120,8 +120,8 @@ func CreateFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.D
 }
 
 type SyncProgressBackend interface {
-	SyncProgressMap() map[string]interface{}
-	BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error)
+	SyncProgressMap(ctx context.Context) map[string]interface{}
+	BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error)
 }
 
 func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration) (*filters.FilterSystem, error) {
@@ -205,17 +205,17 @@ func (a *APIBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.B
 }
 
 // General Ethereum API
-func (a *APIBackend) SyncProgressMap() map[string]interface{} {
+func (a *APIBackend) SyncProgressMap(ctx context.Context) map[string]interface{} {
 	if a.sync == nil {
 		res := make(map[string]interface{})
 		res["error"] = "sync object not set in apibackend"
 		return res
 	}
-	return a.sync.SyncProgressMap()
+	return a.sync.SyncProgressMap(ctx)
 }
 
 func (a *APIBackend) SyncProgress() ethereum.SyncProgress {
-	progress := a.SyncProgressMap()
+	progress := a.SyncProgressMap(context.Background())
 
 	if len(progress) == 0 {
 		return ethereum.SyncProgress{}
@@ -351,7 +351,7 @@ func (a *APIBackend) FeeHistory(
 
 func (a *APIBackend) BlobBaseFee(ctx context.Context) *big.Int {
 	if excess := a.CurrentHeader().ExcessBlobGas; excess != nil {
-		return eip4844.CalcBlobFee(*excess)
+		return eip4844.CalcBlobFee(a.ChainConfig(), a.CurrentHeader())
 	}
 	return nil
 }
@@ -496,8 +496,8 @@ func (a *APIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
-func (a *APIBackend) BlockMetadataByNumber(blockNum uint64) (common.BlockMetadata, error) {
-	return a.sync.BlockMetadataByNumber(blockNum)
+func (a *APIBackend) BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error) {
+	return a.sync.BlockMetadataByNumber(ctx, blockNum)
 }
 
 func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *core.BlockChain, maxRecreateStateDepth int64, header *types.Header, err error) (*state.StateDB, *types.Header, error) {
@@ -617,25 +617,17 @@ func (a *APIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.R
 	return a.BlockChain().GetReceiptsByHash(hash), nil
 }
 
-func (a *APIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
-	if header := a.BlockChain().GetHeaderByHash(hash); header != nil {
-		return a.BlockChain().GetTd(hash, header.Number.Uint64())
-	}
-	return nil
-}
-
-func (a *APIBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
+func (a *APIBackend) GetEVM(ctx context.Context, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
 	if vmConfig == nil {
 		vmConfig = a.BlockChain().GetVMConfig()
 	}
-	txContext := core.NewEVMTxContext(msg)
 	var context vm.BlockContext
 	if blockCtx != nil {
 		context = *blockCtx
 	} else {
 		context = core.NewEVMBlockContext(header, a.BlockChain(), nil)
 	}
-	return vm.NewEVM(context, txContext, state, a.BlockChain().Config(), *vmConfig)
+	return vm.NewEVM(context, state, a.BlockChain().Config(), *vmConfig)
 }
 
 func (a *APIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
@@ -644,10 +636,6 @@ func (a *APIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscr
 
 func (a *APIBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return a.BlockChain().SubscribeChainHeadEvent(ch)
-}
-
-func (a *APIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
-	return a.BlockChain().SubscribeChainSideEvent(ch)
 }
 
 // Transaction pool API

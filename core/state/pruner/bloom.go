@@ -24,11 +24,11 @@ import (
 	"io"
 	"os"
 
-	bloomfilter "github.com/holiman/bloomfilter/v2"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/rawdb"
 	"github.com/paxosglobal/go-ethereum-arbitrum/log"
 	"github.com/paxosglobal/go-ethereum-arbitrum/rlp"
+	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
 // stateBloomHash is used to convert a trie hash or contract code hash into a 64 bit mini hash.

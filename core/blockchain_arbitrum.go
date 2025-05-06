@@ -19,6 +19,7 @@ package core
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"time"
 
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
@@ -28,6 +29,13 @@ import (
 	"github.com/paxosglobal/go-ethereum-arbitrum/log"
 	"github.com/paxosglobal/go-ethereum-arbitrum/rpc"
 )
+
+func (bc *BlockChain) generateGcprocRandOffset() time.Duration {
+	if bc.cacheConfig.TrieTimeLimitRandomOffset > 0 {
+		return time.Duration(rand.Int64N(int64(bc.cacheConfig.TrieTimeLimitRandomOffset)))
+	}
+	return 0
+}
 
 func (bc *BlockChain) FlushTrieDB(capLimit common.StorageSize) error {
 	if bc.triedb.Scheme() == rawdb.PathScheme {
@@ -53,6 +61,7 @@ func (bc *BlockChain) FlushTrieDB(capLimit common.StorageSize) error {
 			}
 
 			bc.gcproc = 0
+			bc.gcprocRandOffset = bc.generateGcprocRandOffset()
 			bc.lastWrite = blockNumber
 		}
 	}

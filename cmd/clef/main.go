@@ -35,8 +35,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
 	"github.com/paxosglobal/go-ethereum-arbitrum/accounts"
 	"github.com/paxosglobal/go-ethereum-arbitrum/accounts/keystore"
 	"github.com/paxosglobal/go-ethereum-arbitrum/cmd/utils"
@@ -56,6 +54,8 @@ import (
 	"github.com/paxosglobal/go-ethereum-arbitrum/signer/fourbyte"
 	"github.com/paxosglobal/go-ethereum-arbitrum/signer/rules"
 	"github.com/paxosglobal/go-ethereum-arbitrum/signer/storage"
+	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 )
 

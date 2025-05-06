@@ -19,8 +19,8 @@ package snap
 import (
 	"math/big"
 
-	"github.com/holiman/uint256"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
+	"github.com/holiman/uint256"
 )
 
 // hashRange is a utility to handle ranges of hashes, Split up the

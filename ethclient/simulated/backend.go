@@ -26,7 +26,6 @@ import (
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
 	"github.com/paxosglobal/go-ethereum-arbitrum/eth"
 	"github.com/paxosglobal/go-ethereum-arbitrum/eth/catalyst"
-	"github.com/paxosglobal/go-ethereum-arbitrum/eth/downloader"
 	"github.com/paxosglobal/go-ethereum-arbitrum/eth/ethconfig"
 	"github.com/paxosglobal/go-ethereum-arbitrum/eth/filters"
 	"github.com/paxosglobal/go-ethereum-arbitrum/ethclient"
@@ -85,7 +84,7 @@ func NewBackend(alloc types.GenesisAlloc, options ...func(nodeConf *node.Config,
 		GasLimit: ethconfig.Defaults.Miner.GasCeil,
 		Alloc:    alloc,
 	}
-	ethConf.SyncMode = downloader.FullSync
+	ethConf.SyncMode = ethconfig.FullSync
 	ethConf.TxPool.NoLocals = true
 
 	for _, option := range options {

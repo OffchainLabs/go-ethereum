@@ -27,11 +27,11 @@ import (
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/forkid"
-	"github.com/paxosglobal/go-ethereum-arbitrum/core/rawdb"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/txpool"
 	"github.com/paxosglobal/go-ethereum-arbitrum/core/types"
 	"github.com/paxosglobal/go-ethereum-arbitrum/crypto"
 	"github.com/paxosglobal/go-ethereum-arbitrum/eth/downloader"
+	"github.com/paxosglobal/go-ethereum-arbitrum/eth/ethconfig"
 	"github.com/paxosglobal/go-ethereum-arbitrum/eth/fetcher"
 	"github.com/paxosglobal/go-ethereum-arbitrum/eth/protocols/eth"
 	"github.com/paxosglobal/go-ethereum-arbitrum/eth/protocols/snap"
@@ -41,7 +41,6 @@ import (
 	"github.com/paxosglobal/go-ethereum-arbitrum/metrics"
 	"github.com/paxosglobal/go-ethereum-arbitrum/p2p"
 	"github.com/paxosglobal/go-ethereum-arbitrum/p2p/enode"
-	"github.com/paxosglobal/go-ethereum-arbitrum/triedb/pathdb"
 )
 
 const (
@@ -69,7 +68,7 @@ type txPool interface {
 	Get(hash common.Hash) *types.Transaction
 
 	// Add should add the given transactions to the pool.
-	Add(txs []*types.Transaction, local bool, sync bool) []error
+	Add(txs []*types.Transaction, sync bool) []error
 
 	// Pending should return pending transactions.
 	// The slice should be modifiable by the caller.
@@ -89,7 +88,7 @@ type handlerConfig struct {
 	Chain          *core.BlockChain       // Blockchain to serve data from
 	TxPool         txPool                 // Transaction pool to propagate from
 	Network        uint64                 // Network identifier to advertise
-	Sync           downloader.SyncMode    // Whether to snap or full sync
+	Sync           ethconfig.SyncMode     // Whether to snap or full sync
 	BloomCache     uint64                 // Megabytes to alloc for snap sync bloom
 	EventMux       *event.TypeMux         // Legacy event mux, deprecate for `feed`
 	RequiredBlocks map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
@@ -147,7 +146,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		handlerDoneCh:  make(chan struct{}),
 		handlerStartCh: make(chan struct{}),
 	}
-	if config.Sync == downloader.FullSync {
+	if config.Sync == ethconfig.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the snap
 		// block is ahead, so snap sync was enabled for this node at a certain point.
 		// The scenarios where this can happen is
@@ -190,7 +189,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return p.RequestTxs(hashes)
 	}
 	addTxs := func(txs []*types.Transaction) []error {
-		return h.txpool.Add(txs, false, false)
+		return h.txpool.Add(txs, false)
 	}
 	h.txFetcher = fetcher.NewTxFetcher(h.txpool.Has, addTxs, fetchTx, h.removePeer)
 	return h, nil
@@ -254,10 +253,9 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		head    = h.chain.CurrentHeader()
 		hash    = head.Hash()
 		number  = head.Number.Uint64()
-		td      = h.chain.GetTd(hash, number)
 	)
 	forkID := forkid.NewID(h.chain.Config(), genesis, number, head.Time)
-	if err := peer.Handshake(h.networkID, td, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
+	if err := peer.Handshake(h.networkID, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -367,7 +365,7 @@ func (h *handler) runSnapExtension(peer *snap.Peer, handler snap.Handler) error 
 	defer h.decHandlers()
 
 	if err := h.peers.registerSnapExtension(peer); err != nil {
-		if metrics.Enabled {
+		if metrics.Enabled() {
 			if peer.Inbound() {
 				snap.IngressRegistrationErrorMeter.Mark(1)
 			} else {
@@ -557,8 +555,5 @@ func (h *handler) enableSyncedFeatures() {
 	if h.snapSync.Load() {
 		log.Info("Snap sync complete, auto disabling")
 		h.snapSync.Store(false)
-	}
-	if h.chain.TrieDB().Scheme() == rawdb.PathScheme {
-		h.chain.TrieDB().SetBufferSize(pathdb.DefaultBufferSize)
 	}
 }

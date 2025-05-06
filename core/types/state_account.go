@@ -19,9 +19,9 @@ package types
 import (
 	"bytes"
 
-	"github.com/holiman/uint256"
 	"github.com/paxosglobal/go-ethereum-arbitrum/common"
 	"github.com/paxosglobal/go-ethereum-arbitrum/rlp"
+	"github.com/holiman/uint256"
 )
 
 //go:generate go run ../../rlp/rlpgen -type StateAccount -out gen_account_rlp.go
