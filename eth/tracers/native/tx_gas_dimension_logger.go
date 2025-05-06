@@ -28,7 +28,7 @@ type DimensionLog struct {
 	HistoryGrowth         uint64    `json:"historyGrowth"`
 	StateGrowthRefund     int64     `json:"stateGrowthRefund"`
 	CallRealGas           uint64    `json:"callRealGas"`
-	CallExecutionCost     uint64    `json:"callExecutionCost"`
+	ChildExecutionCost    uint64    `json:"callExecutionCost"`
 	CallMemoryExpansion   uint64    `json:"callMemoryExpansion"`
 	CreateInitCodeCost    uint64    `json:"createInitCodeCost"`
 	Create2HashCost       uint64    `json:"create2HashCost"`
@@ -55,11 +55,11 @@ type TxGasDimensionLogger struct {
 func NewTxGasDimensionLogger(
 	_ *tracers.Context,
 	_ json.RawMessage,
-	_ *params.ChainConfig,
+	chainConfig *params.ChainConfig,
 ) (*tracers.Tracer, error) {
 
 	t := &TxGasDimensionLogger{
-		BaseGasDimensionTracer: NewBaseGasDimensionTracer(),
+		BaseGasDimensionTracer: NewBaseGasDimensionTracer(chainConfig),
 		logs:                   make([]DimensionLog, 0),
 	}
 
@@ -127,7 +127,7 @@ func (t *TxGasDimensionLogger) OnOpcode(
 			callDimensionLog.HistoryGrowth = finishGasesByDimension.HistoryGrowth
 			callDimensionLog.StateGrowthRefund = finishGasesByDimension.StateGrowthRefund
 			callDimensionLog.CallRealGas = gasUsedByCall
-			callDimensionLog.CallExecutionCost = stackInfo.ExecutionCost
+			callDimensionLog.ChildExecutionCost = finishGasesByDimension.ChildExecutionCost
 			callDimensionLog.CallMemoryExpansion = stackInfo.GasDimensionInfo.MemoryExpansionCost
 			callDimensionLog.CreateInitCodeCost = stackInfo.GasDimensionInfo.InitCodeCost
 			callDimensionLog.Create2HashCost = stackInfo.GasDimensionInfo.HashCost
@@ -197,7 +197,7 @@ type DimensionLogRes struct {
 	HistoryGrowth         uint64 `json:"history,omitempty"`
 	StateGrowthRefund     int64  `json:"refund,omitempty"`
 	CallRealGas           uint64 `json:"callRealGas,omitempty"`
-	CallExecutionCost     uint64 `json:"callExecutionCost,omitempty"`
+	ChildExecutionCost    uint64 `json:"childExecutionCost,omitempty"`
 	CallMemoryExpansion   uint64 `json:"callMemoryExpansion,omitempty"`
 	CreateInitCodeCost    uint64 `json:"createInitCodeCost,omitempty"`
 	Create2HashCost       uint64 `json:"create2HashCost,omitempty"`
@@ -219,7 +219,7 @@ func (d *DimensionLogRes) DebugString() string {
 		d.HistoryGrowth,
 		d.StateGrowthRefund,
 		d.CallRealGas,
-		d.CallExecutionCost,
+		d.ChildExecutionCost,
 		d.CallMemoryExpansion,
 		d.CreateInitCodeCost,
 		d.Create2HashCost,
@@ -242,7 +242,7 @@ func formatLogs(logs []DimensionLog) []DimensionLogRes {
 			HistoryGrowth:         trace.HistoryGrowth,
 			StateGrowthRefund:     trace.StateGrowthRefund,
 			CallRealGas:           trace.CallRealGas,
-			CallExecutionCost:     trace.CallExecutionCost,
+			ChildExecutionCost:    trace.ChildExecutionCost,
 			CallMemoryExpansion:   trace.CallMemoryExpansion,
 			CreateInitCodeCost:    trace.CreateInitCodeCost,
 			Create2HashCost:       trace.Create2HashCost,

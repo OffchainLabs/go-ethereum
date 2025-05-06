@@ -19,6 +19,7 @@ type GasesByDimension struct {
 	StateGrowth           uint64 `json:"gr,omitempty"`
 	HistoryGrowth         uint64 `json:"h,omitempty"`
 	StateGrowthRefund     int64  `json:"rf,omitempty"`
+	ChildExecutionCost    uint64 `json:"exc,omitempty"`
 }
 
 // in the case of opcodes like CALL, STATICCALL, DELEGATECALL, etc,
@@ -202,6 +203,7 @@ func calcSimpleSingleDimensionGas(
 		StateGrowth:           0,
 		HistoryGrowth:         0,
 		StateGrowthRefund:     0,
+		ChildExecutionCost:    0,
 	}, nil, nil
 }
 
@@ -237,6 +239,7 @@ func calcSimpleAddressAccessSetGas(
 		StateGrowth:           0,
 		HistoryGrowth:         0,
 		StateGrowthRefund:     0,
+		ChildExecutionCost:    0,
 	}
 	if err := checkGasDimensionsEqualOneDimensionalGas(pc, op, depth, gas, cost, ret); err != nil {
 		return GasesByDimension{}, nil, err
@@ -270,6 +273,7 @@ func calcSLOADGas(
 		StateGrowth:           0,
 		HistoryGrowth:         0,
 		StateGrowthRefund:     0,
+		ChildExecutionCost:    0,
 	}
 	if err := checkGasDimensionsEqualOneDimensionalGas(pc, op, depth, gas, cost, ret); err != nil {
 		return GasesByDimension{}, nil, err
@@ -324,6 +328,7 @@ func calcExtCodeCopyGas(
 		StateGrowth:           0,
 		HistoryGrowth:         0,
 		StateGrowthRefund:     0,
+		ChildExecutionCost:    0,
 	}
 	if err := checkGasDimensionsEqualOneDimensionalGas(pc, op, depth, gas, cost, ret); err != nil {
 		return GasesByDimension{}, nil, err
@@ -405,6 +410,7 @@ func calcStateReadCallGas(
 			StateGrowth:           0,
 			HistoryGrowth:         0,
 			StateGrowthRefund:     0,
+			ChildExecutionCost:    0,
 		}, &CallGasDimensionInfo{
 			Pc:                        pc,
 			Op:                        vm.OpCode(op),
@@ -430,15 +436,17 @@ func finishCalcStateReadCallGas(
 	codeExecutionCost uint64,
 	callGasDimensionInfo CallGasDimensionInfo,
 ) (GasesByDimension, error) {
+	oneDimensionalGas := totalGasUsed - codeExecutionCost
 	computation := callGasDimensionInfo.AccessListComputationCost + callGasDimensionInfo.MemoryExpansionCost
 	stateAccess := callGasDimensionInfo.AccessListStateAccessCost
 	ret := GasesByDimension{
-		OneDimensionalGasCost: totalGasUsed,
+		OneDimensionalGasCost: oneDimensionalGas,
 		Computation:           computation,
 		StateAccess:           stateAccess,
 		StateGrowth:           0,
 		HistoryGrowth:         0,
 		StateGrowthRefund:     0,
+		ChildExecutionCost:    codeExecutionCost,
 	}
 	err := checkGasDimensionsEqualCallGas(
 		callGasDimensionInfo.Pc,
@@ -504,6 +512,7 @@ func calcLogGas(
 		StateGrowth:           0,
 		HistoryGrowth:         historyGrowthCost,
 		StateGrowthRefund:     0,
+		ChildExecutionCost:    0,
 	}, nil, nil
 }
 
@@ -557,6 +566,7 @@ func calcCreateGas(
 			StateGrowth:           0,
 			HistoryGrowth:         0,
 			StateGrowthRefund:     0,
+			ChildExecutionCost:    0,
 		}, &CallGasDimensionInfo{
 			Pc:                        pc,
 			Op:                        vm.OpCode(op),
@@ -577,6 +587,7 @@ func finishCalcCreateGas(
 	codeExecutionCost uint64,
 	callGasDimensionInfo CallGasDimensionInfo,
 ) (GasesByDimension, error) {
+	oneDimensionalGas := totalGasUsed - codeExecutionCost
 	// totalGasUsed = init_code_cost + memory_expansion_cost + deployment_code_execution_cost + code_deposit_cost
 	codeDepositCost := totalGasUsed - params.CreateGas - callGasDimensionInfo.InitCodeCost -
 		callGasDimensionInfo.MemoryExpansionCost - callGasDimensionInfo.HashCost - codeExecutionCost
@@ -588,12 +599,13 @@ func finishCalcCreateGas(
 	computeNonNewAccountCost := staticNonNewAccountCost / 2
 	growthNonNewAccountCost := staticNonNewAccountCost - computeNonNewAccountCost
 	ret := GasesByDimension{
-		OneDimensionalGasCost: totalGasUsed,
+		OneDimensionalGasCost: oneDimensionalGas,
 		Computation:           callGasDimensionInfo.InitCodeCost + callGasDimensionInfo.MemoryExpansionCost + callGasDimensionInfo.HashCost + computeNonNewAccountCost,
 		StateAccess:           0,
 		StateGrowth:           growthNonNewAccountCost + params.CallNewAccountGas + codeDepositCost,
 		HistoryGrowth:         0,
 		StateGrowthRefund:     0,
+		ChildExecutionCost:    codeExecutionCost,
 	}
 	err := checkGasDimensionsEqualCallGas(
 		callGasDimensionInfo.Pc,
@@ -677,6 +689,7 @@ func calcReadAndStoreCallGas(
 			StateGrowth:           0,
 			HistoryGrowth:         0,
 			StateGrowthRefund:     0,
+			ChildExecutionCost:    0,
 		}, &CallGasDimensionInfo{
 			Pc:                        pc,
 			Op:                        vm.OpCode(op),
@@ -702,6 +715,8 @@ func finishCalcStateReadAndStoreCallGas(
 	codeExecutionCost uint64,
 	callGasDimensionInfo CallGasDimensionInfo,
 ) (GasesByDimension, error) {
+	oneDimensionalGas := totalGasUsed - codeExecutionCost
+	fmt.Println("finishCalcStateReadAndStoreCallGas is called")
 	// the stipend is 2300 and it is not charged to the call itself but used in the execution cost
 	var positiveValueCostLessStipend uint64 = 0
 	if callGasDimensionInfo.IsValueSentWithCall {
@@ -716,44 +731,53 @@ func finishCalcStateReadAndStoreCallGas(
 	// and whatever was left over after that was address_access_cost
 	// callcode is the same as call except does not have value_to_empty_account_cost,
 	// so this code properly handles it coincidentally, too
+	fmt.Println("finishCalcStateReadAndStoreCallGas is continuing")
 	ret := GasesByDimension{
-		OneDimensionalGasCost: totalGasUsed,
+		OneDimensionalGasCost: oneDimensionalGas,
 		Computation:           callGasDimensionInfo.MemoryExpansionCost + params.WarmStorageReadCostEIP2929,
 		StateAccess:           positiveValueCostLessStipend,
 		StateGrowth:           0,
 		HistoryGrowth:         0,
 		StateGrowthRefund:     0,
+		ChildExecutionCost:    codeExecutionCost,
 	}
 	if leftOver > params.ColdAccountAccessCostEIP2929 { // there is a value being sent to an empty account
+		fmt.Println("leftOver > params.ColdAccountAccessCostEIP2929")
 		var coldCost uint64 = 0
 		if leftOver-params.CallNewAccountGas == params.ColdAccountAccessCostEIP2929 {
 			coldCost = params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
 		}
 		ret = GasesByDimension{
-			OneDimensionalGasCost: totalGasUsed,
+			OneDimensionalGasCost: oneDimensionalGas,
 			Computation:           callGasDimensionInfo.MemoryExpansionCost + params.WarmStorageReadCostEIP2929,
 			StateAccess:           coldCost + positiveValueCostLessStipend,
 			StateGrowth:           params.CallNewAccountGas,
 			HistoryGrowth:         0,
 			StateGrowthRefund:     0,
+			ChildExecutionCost:    codeExecutionCost,
 		}
 	} else if leftOver == params.ColdAccountAccessCostEIP2929 {
+		fmt.Println("leftOver == params.ColdAccountAccessCostEIP2929")
 		var coldCost uint64 = params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
 		ret = GasesByDimension{
-			OneDimensionalGasCost: totalGasUsed,
+			OneDimensionalGasCost: oneDimensionalGas,
 			Computation:           callGasDimensionInfo.MemoryExpansionCost + params.WarmStorageReadCostEIP2929,
 			StateAccess:           coldCost + positiveValueCostLessStipend,
 			StateGrowth:           0,
 			HistoryGrowth:         0,
 			StateGrowthRefund:     0,
+			ChildExecutionCost:    codeExecutionCost,
 		}
 	}
+	fmt.Println("finishCalcStateReadAndStoreCallGas is returning")
 	err := checkGasDimensionsEqualCallGas(
 		callGasDimensionInfo.Pc,
 		byte(callGasDimensionInfo.Op),
 		codeExecutionCost,
 		ret,
 	)
+	fmt.Println("End result: ", ret)
+	fmt.Println("End error: ", err)
 	return ret, err
 }
 
@@ -824,6 +848,7 @@ func calcSStoreGas(
 			StateGrowth:           params.SstoreSetGas,
 			HistoryGrowth:         0,
 			StateGrowthRefund:     diff,
+			ChildExecutionCost:    0,
 		}
 	} else if cost > 0 {
 		ret = GasesByDimension{
@@ -833,6 +858,7 @@ func calcSStoreGas(
 			StateGrowth:           0,
 			HistoryGrowth:         0,
 			StateGrowthRefund:     diff,
+			ChildExecutionCost:    0,
 		}
 	}
 	if err := checkGasDimensionsEqualOneDimensionalGas(pc, op, depth, gas, cost, ret); err != nil {
@@ -881,6 +907,7 @@ func calcSelfDestructGas(
 			StateGrowth:           params.CreateBySelfdestructGas,
 			HistoryGrowth:         0,
 			StateGrowthRefund:     0,
+			ChildExecutionCost:    0,
 		}, nil, nil
 	} else if cost == params.CreateBySelfdestructGas+params.SelfdestructGasEIP150+params.ColdAccountAccessCostEIP2929 {
 		// cold and funds target empty
@@ -895,6 +922,7 @@ func calcSelfDestructGas(
 			StateGrowth:           params.CreateBySelfdestructGas,
 			HistoryGrowth:         0,
 			StateGrowthRefund:     0,
+			ChildExecutionCost:    0,
 		}, nil, nil
 	} else if cost == params.SelfdestructGasEIP150+params.ColdAccountAccessCostEIP2929 {
 		// address lookup was cold but funds target has money already. Cost is 7600
@@ -908,6 +936,7 @@ func calcSelfDestructGas(
 			StateGrowth:           0,
 			HistoryGrowth:         0,
 			StateGrowthRefund:     0,
+			ChildExecutionCost:    0,
 		}, nil, nil
 	}
 	// if you reach here, then the cost was 5000
@@ -920,6 +949,7 @@ func calcSelfDestructGas(
 		StateGrowth:           0,
 		HistoryGrowth:         0,
 		StateGrowthRefund:     0,
+		ChildExecutionCost:    0,
 	}, nil, nil
 }
 
@@ -1086,12 +1116,13 @@ func checkGasDimensionsEqualCallGas(
 	codeExecutionCost uint64,
 	dim GasesByDimension,
 ) error {
-	if dim.OneDimensionalGasCost != codeExecutionCost+dim.Computation+dim.StateAccess+dim.StateGrowth+dim.HistoryGrowth {
+	if dim.OneDimensionalGasCost != dim.Computation+dim.StateAccess+dim.StateGrowth+dim.HistoryGrowth {
 		return fmt.Errorf(
-			"unexpected gas cost mismatch: pc %d, op %d, codeExecutionCost %d != %v",
+			"unexpected gas cost mismatch: pc %d, op %d, with codeExecutionCost %d, expected %d == %v",
 			pc,
 			op,
 			codeExecutionCost,
+			dim.OneDimensionalGasCost,
 			dim,
 		)
 	}

@@ -6,9 +6,11 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // BaseGasDimensionTracer contains the shared functionality between different gas dimension tracers
@@ -18,7 +20,13 @@ type BaseGasDimensionTracer struct {
 	// the hash of the transactionh
 	txHash common.Hash
 	// the amount of gas used in the transaction
-	usedGas uint64
+	gasUsed uint64
+	// the amount of gas used for L1 in the transaction
+	gasUsedForL1 uint64
+	// the amount of gas used for L2 in the transaction
+	gasUsedForL2 uint64
+	// the intrinsic gas of the transaction, the static cost + calldata bytes cost
+	intrinsicGas uint64
 	// the call stack for the transaction
 	callStack CallGasDimensionStack
 	// the depth at the current step of execution of the call stack
@@ -34,10 +42,13 @@ type BaseGasDimensionTracer struct {
 	interrupt atomic.Bool
 	// reason or error for the interruption in the tracer itself (as opposed to the transaction)
 	reason error
+	// cached chain config for use in hooks
+	chainConfig *params.ChainConfig
 }
 
-func NewBaseGasDimensionTracer() BaseGasDimensionTracer {
+func NewBaseGasDimensionTracer(chainConfig *params.ChainConfig) BaseGasDimensionTracer {
 	return BaseGasDimensionTracer{
+		chainConfig:             chainConfig,
 		depth:                   1,
 		refundAccumulated:       0,
 		prevAccessListAddresses: map[common.Address]int{},
@@ -216,6 +227,18 @@ func (t *BaseGasDimensionTracer) updatePrevAccessList(addresses map[common.Addre
 // OnTxStart handles transaction start
 func (t *BaseGasDimensionTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
+	isContractCreation := tx.To() == nil
+	rules := t.chainConfig.Rules(env.BlockNumber, env.Random != nil, env.Time, env.ArbOSVersion)
+	intrinsicGas, _ := core.IntrinsicGas(
+		tx.Data(),
+		tx.AccessList(),
+		tx.SetCodeAuthorizations(),
+		isContractCreation,
+		rules.IsHomestead,
+		rules.IsIstanbul,
+		rules.IsShanghai,
+	)
+	t.intrinsicGas = intrinsicGas
 }
 
 // OnTxEnd handles transaction end
@@ -227,7 +250,9 @@ func (t *BaseGasDimensionTracer) OnTxEnd(receipt *types.Receipt, err error) {
 		}
 		return
 	}
-	t.usedGas = receipt.GasUsed
+	t.gasUsed = receipt.GasUsed
+	t.gasUsedForL1 = receipt.GasUsedForL1
+	t.gasUsedForL2 = receipt.GasUsedForL2()
 	t.txHash = receipt.TxHash
 }
 
@@ -281,7 +306,10 @@ func (t *BaseGasDimensionTracer) Error() error { return t.err }
 
 // BaseExecutionResult has shared fields for execution results
 type BaseExecutionResult struct {
-	Gas            uint64   `json:"gas"`
+	GasUsed        uint64   `json:"gasUsed"`
+	GasUsedForL1   uint64   `json:"gasUsedForL1"`
+	GasUsedForL2   uint64   `json:"gasUsedForL2"`
+	IntrinsicGas   uint64   `json:"intrinsicGas"`
 	Failed         bool     `json:"failed"`
 	TxHash         string   `json:"txHash"`
 	BlockTimestamp uint64   `json:"blockTimestamp"`
@@ -297,7 +325,10 @@ func (t *BaseGasDimensionTracer) GetBaseExecutionResult() (BaseExecutionResult, 
 	failed := t.err != nil
 
 	return BaseExecutionResult{
-		Gas:            t.usedGas,
+		GasUsed:        t.gasUsed,
+		GasUsedForL1:   t.gasUsedForL1,
+		GasUsedForL2:   t.gasUsedForL2,
+		IntrinsicGas:   t.intrinsicGas,
 		Failed:         failed,
 		TxHash:         t.txHash.Hex(),
 		BlockTimestamp: t.env.Time,

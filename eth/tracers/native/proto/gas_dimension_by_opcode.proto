@@ -6,20 +6,41 @@ option go_package = "github.com/ethereum/go-ethereum/eth/tracers/native/proto";
 
 // GasesByDimension represents the gas consumption for each dimension
 message GasesByDimension {
+  // the total gas cost for the opcode, across all dimensions.
   uint64 one_dimensional_gas_cost = 1;
+  // how much of the gas was used for computation or local memory access, stack operations, etc.
   uint64 computation = 2;
+  // how much of the gas was used for state access, like reading or writing to the state.
   uint64 state_access = 3;
+  // how much of the gas was used for state growth, like creating new contracts or storage slots.
   uint64 state_growth = 4;
+  // how much of the gas was used for history growth, like writing to the history (event logs)
   uint64 history_growth = 5;
+  // how much gas was refunded for removing state, only applicable to SSTORE opcodes to zero.
   int64 state_growth_refund = 6;
+  // how much of the gas was used for child execution, for CALLs, CREATEs, etc.
+  uint64 child_execution_cost = 7;
 }
 
 // TxGasDimensionByOpcodeExecutionResult represents the execution result
 message TxGasDimensionByOpcodeExecutionResult {
-  uint64 gas = 1;
+  // the total amount of gas used in the transaction
+  uint64 gas_used = 1;
+  // the gas paid to post the compressed transaction to the L1 chain
+  uint64 gas_used_l1 = 7;
+  // the gas paid to execute the transaction on the L2 chain
+  uint64 gas_used_l2 = 8;
+  // the intrinsic gas of the transaction, the static cost + calldata bytes cost
+  uint64 intrinsic_gas = 9;
+  // whether the transaction had an revert or error, like out of gas
   bool failed = 2;
+  // a map of each opcode to the sum of the gas consumption categorized by dimension for that opcode
   map<uint32, GasesByDimension> dimensions = 3;
+  // the hash of the transaction
   string tx_hash = 4;
+  // the timestamp of the block
   uint64 block_timestamp = 5;
-  string block_number = 6; // Using string to represent big.Int
+  // the block number of the transaction
+  // Using string to represent big.Int
+  string block_number = 6; 
 }
