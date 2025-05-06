@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/native"
+	"github.com/ethereum/go-ethereum/params"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -21,12 +22,14 @@ func init() {
 }
 
 type txGasDimensionByOpcodeLiveTraceConfig struct {
-	Path string `json:"path"` // Path to directory for output
+	Path        string              `json:"path"` // Path to directory for output
+	ChainConfig *params.ChainConfig `json:"chainConfig"`
 }
 
 // gasDimensionTracer struct
 type TxGasDimensionByOpcodeLiveTracer struct {
 	Path               string `json:"path"` // Path to directory for output
+	ChainConfig        *params.ChainConfig
 	GasDimensionTracer *native.TxGasDimensionByOpcodeTracer
 }
 
@@ -45,8 +48,16 @@ func NewTxGasDimensionByOpcodeLogger(
 		return nil, fmt.Errorf("tx gas dimension live tracer path for output is required: %v", config)
 	}
 
+	// if you get stuck here, look at
+	// cmd/chaininfo/arbitrum_chain_info.json
+	// for a sample chain config
+	if config.ChainConfig == nil {
+		return nil, fmt.Errorf("tx gas dimension live tracer chain config is required: %v", config)
+	}
+
 	t := &TxGasDimensionByOpcodeLiveTracer{
 		Path:               config.Path,
+		ChainConfig:        config.ChainConfig,
 		GasDimensionTracer: nil,
 	}
 
@@ -69,7 +80,7 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnTxStart(
 	}
 
 	t.GasDimensionTracer = &native.TxGasDimensionByOpcodeTracer{
-		BaseGasDimensionTracer: native.NewBaseGasDimensionTracer(),
+		BaseGasDimensionTracer: native.NewBaseGasDimensionTracer(t.ChainConfig),
 		OpcodeToDimensions:     make(map[_vm.OpCode]native.GasesByDimension),
 	}
 	t.GasDimensionTracer.OnTxStart(vm, tx, from)
