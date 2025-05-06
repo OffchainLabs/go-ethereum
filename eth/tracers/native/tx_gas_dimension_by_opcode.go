@@ -14,7 +14,7 @@ import (
 
 // initializer for the tracer
 func init() {
-	tracers.DefaultDirectory.Register("txGasDimensionByOpcode", NewTxGasDimensionByOpcodeLogger, false)
+	tracers.DefaultDirectory.Register("txGasDimensionByOpcode", NewTxGasDimensionByOpcodeTracer, false)
 }
 
 // gasDimensionTracer struct
@@ -26,14 +26,14 @@ type TxGasDimensionByOpcodeTracer struct {
 // gasDimensionTracer returns a new tracer that traces gas
 // usage for each opcode against the dimension of that opcode
 // takes a context, and json input for configuration parameters
-func NewTxGasDimensionByOpcodeLogger(
+func NewTxGasDimensionByOpcodeTracer(
 	_ *tracers.Context,
 	_ json.RawMessage,
-	_ *params.ChainConfig,
+	chainConfig *params.ChainConfig,
 ) (*tracers.Tracer, error) {
 
 	t := &TxGasDimensionByOpcodeTracer{
-		BaseGasDimensionTracer: NewBaseGasDimensionTracer(),
+		BaseGasDimensionTracer: NewBaseGasDimensionTracer(chainConfig),
 		OpcodeToDimensions:     make(map[vm.OpCode]GasesByDimension),
 	}
 
@@ -153,7 +153,10 @@ func (t *TxGasDimensionByOpcodeTracer) GetProtobufResult() ([]byte, error) {
 	}
 
 	executionResult := &proto.TxGasDimensionByOpcodeExecutionResult{
-		Gas:            baseExecutionResult.Gas,
+		GasUsed:        baseExecutionResult.GasUsed,
+		GasUsedL1:      baseExecutionResult.GasUsedForL1,
+		GasUsedL2:      baseExecutionResult.GasUsedForL2,
+		IntrinsicGas:   baseExecutionResult.IntrinsicGas,
 		Failed:         baseExecutionResult.Failed,
 		Dimensions:     make(map[uint32]*proto.GasesByDimension),
 		TxHash:         baseExecutionResult.TxHash,
@@ -169,6 +172,7 @@ func (t *TxGasDimensionByOpcodeTracer) GetProtobufResult() ([]byte, error) {
 			StateGrowth:           dimensions.StateGrowth,
 			HistoryGrowth:         dimensions.HistoryGrowth,
 			StateGrowthRefund:     dimensions.StateGrowthRefund,
+			ChildExecutionCost:    dimensions.ChildExecutionCost,
 		}
 	}
 

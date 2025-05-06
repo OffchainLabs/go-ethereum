@@ -23,15 +23,23 @@ const (
 
 // GasesByDimension represents the gas consumption for each dimension
 type GasesByDimension struct {
-	state                 protoimpl.MessageState `protogen:"open.v1"`
-	OneDimensionalGasCost uint64                 `protobuf:"varint,1,opt,name=one_dimensional_gas_cost,json=oneDimensionalGasCost,proto3" json:"one_dimensional_gas_cost,omitempty"`
-	Computation           uint64                 `protobuf:"varint,2,opt,name=computation,proto3" json:"computation,omitempty"`
-	StateAccess           uint64                 `protobuf:"varint,3,opt,name=state_access,json=stateAccess,proto3" json:"state_access,omitempty"`
-	StateGrowth           uint64                 `protobuf:"varint,4,opt,name=state_growth,json=stateGrowth,proto3" json:"state_growth,omitempty"`
-	HistoryGrowth         uint64                 `protobuf:"varint,5,opt,name=history_growth,json=historyGrowth,proto3" json:"history_growth,omitempty"`
-	StateGrowthRefund     int64                  `protobuf:"varint,6,opt,name=state_growth_refund,json=stateGrowthRefund,proto3" json:"state_growth_refund,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// the total gas cost for the opcode, across all dimensions.
+	OneDimensionalGasCost uint64 `protobuf:"varint,1,opt,name=one_dimensional_gas_cost,json=oneDimensionalGasCost,proto3" json:"one_dimensional_gas_cost,omitempty"`
+	// how much of the gas was used for computation or local memory access, stack operations, etc.
+	Computation uint64 `protobuf:"varint,2,opt,name=computation,proto3" json:"computation,omitempty"`
+	// how much of the gas was used for state access, like reading or writing to the state.
+	StateAccess uint64 `protobuf:"varint,3,opt,name=state_access,json=stateAccess,proto3" json:"state_access,omitempty"`
+	// how much of the gas was used for state growth, like creating new contracts or storage slots.
+	StateGrowth uint64 `protobuf:"varint,4,opt,name=state_growth,json=stateGrowth,proto3" json:"state_growth,omitempty"`
+	// how much of the gas was used for history growth, like writing to the history (event logs)
+	HistoryGrowth uint64 `protobuf:"varint,5,opt,name=history_growth,json=historyGrowth,proto3" json:"history_growth,omitempty"`
+	// how much gas was refunded for removing state, only applicable to SSTORE opcodes to zero.
+	StateGrowthRefund int64 `protobuf:"varint,6,opt,name=state_growth_refund,json=stateGrowthRefund,proto3" json:"state_growth_refund,omitempty"`
+	// how much of the gas was used for child execution, for CALLs, CREATEs, etc.
+	ChildExecutionCost uint64 `protobuf:"varint,7,opt,name=child_execution_cost,json=childExecutionCost,proto3" json:"child_execution_cost,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *GasesByDimension) Reset() {
@@ -106,17 +114,37 @@ func (x *GasesByDimension) GetStateGrowthRefund() int64 {
 	return 0
 }
 
+func (x *GasesByDimension) GetChildExecutionCost() uint64 {
+	if x != nil {
+		return x.ChildExecutionCost
+	}
+	return 0
+}
+
 // TxGasDimensionByOpcodeExecutionResult represents the execution result
 type TxGasDimensionByOpcodeExecutionResult struct {
-	state          protoimpl.MessageState       `protogen:"open.v1"`
-	Gas            uint64                       `protobuf:"varint,1,opt,name=gas,proto3" json:"gas,omitempty"`
-	Failed         bool                         `protobuf:"varint,2,opt,name=failed,proto3" json:"failed,omitempty"`
-	Dimensions     map[uint32]*GasesByDimension `protobuf:"bytes,3,rep,name=dimensions,proto3" json:"dimensions,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	TxHash         string                       `protobuf:"bytes,4,opt,name=tx_hash,json=txHash,proto3" json:"tx_hash,omitempty"`
-	BlockTimestamp uint64                       `protobuf:"varint,5,opt,name=block_timestamp,json=blockTimestamp,proto3" json:"block_timestamp,omitempty"`
-	BlockNumber    string                       `protobuf:"bytes,6,opt,name=block_number,json=blockNumber,proto3" json:"block_number,omitempty"` // Using string to represent big.Int
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// the total amount of gas used in the transaction
+	GasUsed uint64 `protobuf:"varint,1,opt,name=gas_used,json=gasUsed,proto3" json:"gas_used,omitempty"`
+	// the gas paid to post the compressed transaction to the L1 chain
+	GasUsedL1 uint64 `protobuf:"varint,7,opt,name=gas_used_l1,json=gasUsedL1,proto3" json:"gas_used_l1,omitempty"`
+	// the gas paid to execute the transaction on the L2 chain
+	GasUsedL2 uint64 `protobuf:"varint,8,opt,name=gas_used_l2,json=gasUsedL2,proto3" json:"gas_used_l2,omitempty"`
+	// the intrinsic gas of the transaction, the static cost + calldata bytes cost
+	IntrinsicGas uint64 `protobuf:"varint,9,opt,name=intrinsic_gas,json=intrinsicGas,proto3" json:"intrinsic_gas,omitempty"`
+	// whether the transaction had an revert or error, like out of gas
+	Failed bool `protobuf:"varint,2,opt,name=failed,proto3" json:"failed,omitempty"`
+	// a map of each opcode to the sum of the gas consumption categorized by dimension for that opcode
+	Dimensions map[uint32]*GasesByDimension `protobuf:"bytes,3,rep,name=dimensions,proto3" json:"dimensions,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// the hash of the transaction
+	TxHash string `protobuf:"bytes,4,opt,name=tx_hash,json=txHash,proto3" json:"tx_hash,omitempty"`
+	// the timestamp of the block
+	BlockTimestamp uint64 `protobuf:"varint,5,opt,name=block_timestamp,json=blockTimestamp,proto3" json:"block_timestamp,omitempty"`
+	// the block number of the transaction
+	// Using string to represent big.Int
+	BlockNumber   string `protobuf:"bytes,6,opt,name=block_number,json=blockNumber,proto3" json:"block_number,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TxGasDimensionByOpcodeExecutionResult) Reset() {
@@ -149,9 +177,30 @@ func (*TxGasDimensionByOpcodeExecutionResult) Descriptor() ([]byte, []int) {
 	return file_eth_tracers_native_proto_gas_dimension_by_opcode_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *TxGasDimensionByOpcodeExecutionResult) GetGas() uint64 {
+func (x *TxGasDimensionByOpcodeExecutionResult) GetGasUsed() uint64 {
 	if x != nil {
-		return x.Gas
+		return x.GasUsed
+	}
+	return 0
+}
+
+func (x *TxGasDimensionByOpcodeExecutionResult) GetGasUsedL1() uint64 {
+	if x != nil {
+		return x.GasUsedL1
+	}
+	return 0
+}
+
+func (x *TxGasDimensionByOpcodeExecutionResult) GetGasUsedL2() uint64 {
+	if x != nil {
+		return x.GasUsedL2
+	}
+	return 0
+}
+
+func (x *TxGasDimensionByOpcodeExecutionResult) GetIntrinsicGas() uint64 {
+	if x != nil {
+		return x.IntrinsicGas
 	}
 	return 0
 }
@@ -195,16 +244,20 @@ var File_eth_tracers_native_proto_gas_dimension_by_opcode_proto protoreflect.Fil
 
 const file_eth_tracers_native_proto_gas_dimension_by_opcode_proto_rawDesc = "" +
 	"\n" +
-	"6eth/tracers/native/proto/gas_dimension_by_opcode.proto\x12\x18eth.tracers.native.proto\"\x8a\x02\n" +
+	"6eth/tracers/native/proto/gas_dimension_by_opcode.proto\x12\x18eth.tracers.native.proto\"\xbc\x02\n" +
 	"\x10GasesByDimension\x127\n" +
 	"\x18one_dimensional_gas_cost\x18\x01 \x01(\x04R\x15oneDimensionalGasCost\x12 \n" +
 	"\vcomputation\x18\x02 \x01(\x04R\vcomputation\x12!\n" +
 	"\fstate_access\x18\x03 \x01(\x04R\vstateAccess\x12!\n" +
 	"\fstate_growth\x18\x04 \x01(\x04R\vstateGrowth\x12%\n" +
 	"\x0ehistory_growth\x18\x05 \x01(\x04R\rhistoryGrowth\x12.\n" +
-	"\x13state_growth_refund\x18\x06 \x01(\x03R\x11stateGrowthRefund\"\x92\x03\n" +
-	"%TxGasDimensionByOpcodeExecutionResult\x12\x10\n" +
-	"\x03gas\x18\x01 \x01(\x04R\x03gas\x12\x16\n" +
+	"\x13state_growth_refund\x18\x06 \x01(\x03R\x11stateGrowthRefund\x120\n" +
+	"\x14child_execution_cost\x18\a \x01(\x04R\x12childExecutionCost\"\x80\x04\n" +
+	"%TxGasDimensionByOpcodeExecutionResult\x12\x19\n" +
+	"\bgas_used\x18\x01 \x01(\x04R\agasUsed\x12\x1e\n" +
+	"\vgas_used_l1\x18\a \x01(\x04R\tgasUsedL1\x12\x1e\n" +
+	"\vgas_used_l2\x18\b \x01(\x04R\tgasUsedL2\x12#\n" +
+	"\rintrinsic_gas\x18\t \x01(\x04R\fintrinsicGas\x12\x16\n" +
 	"\x06failed\x18\x02 \x01(\bR\x06failed\x12o\n" +
 	"\n" +
 	"dimensions\x18\x03 \x03(\v2O.eth.tracers.native.proto.TxGasDimensionByOpcodeExecutionResult.DimensionsEntryR\n" +
