@@ -65,7 +65,7 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 	}
 
 	backend.bloomIndexer.Start(backend.arb.BlockChain())
-	filterSystem, err := createRegisterAPIBackend(backend, filterConfig, config.ClassicRedirect, config.ClassicRedirectTimeout)
+	filterSystem, err := createRegisterAPIBackend(backend, filterConfig, config.ClassicRedirect, config.ClassicRedirectTimeout, config.ArchiveRedirects)
 	if err != nil {
 		return nil, nil, err
 	}

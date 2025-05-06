@@ -441,3 +441,7 @@ func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 func (b *EthAPIBackend) FallbackClient() types.FallbackClient {
 	return nil
 }
+
+func (b *EthAPIBackend) ArchiveFallbackClient(_ uint64) types.FallbackClient {
+	return nil
+}

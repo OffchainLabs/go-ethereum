@@ -1,6 +1,8 @@
 package arbitrum
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -39,6 +41,27 @@ type Config struct {
 	MaxRecreateStateDepth  int64         `koanf:"max-recreate-state-depth"`
 
 	AllowMethod []string `koanf:"allow-method"`
+
+	ArchiveRedirects     []ArchiveRedirectConfig `koanf:"archive-redirects"`
+	ArchiveRedirectsList string                  `koanf:"archive-redirects-list"`
+}
+
+type ArchiveRedirectConfig struct {
+	URL       string        `koanf:"url"`
+	Timeout   time.Duration `koanf:"timeout"`
+	LastBlock uint64        `koanf:"last-block"`
+}
+
+func (c *Config) Validate() error {
+	// ArchiveRedirectsList command line option overrides directly supplied ArchiveRedirects array of ArchiveRedirectConfig in the conf file
+	if c.ArchiveRedirectsList != "default" {
+		var archiveRedirects []ArchiveRedirectConfig
+		if err := json.Unmarshal([]byte(c.ArchiveRedirectsList), &archiveRedirects); err != nil {
+			return fmt.Errorf("failed to parse rpc archive-redirects-list string: %w", err)
+		}
+		c.ArchiveRedirects = archiveRedirects
+	}
+	return nil
 }
 
 type ArbDebugConfig struct {
@@ -63,6 +86,7 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 	arbDebug := DefaultConfig.ArbDebug
 	f.Uint64(prefix+".arbdebug.block-range-bound", arbDebug.BlockRangeBound, "bounds the number of blocks arbdebug calls may return")
 	f.Uint64(prefix+".arbdebug.timeout-queue-bound", arbDebug.TimeoutQueueBound, "bounds the length of timeout queues arbdebug calls may return")
+	f.String(prefix+".archive-redirects-list", DefaultConfig.ArchiveRedirectsList, "array of archive node configs to redirect requests given as a json string. time duration should be supplied in number indicating nanoseconds")
 }
 
 const (
@@ -89,4 +113,5 @@ var DefaultConfig = Config{
 		BlockRangeBound:   256,
 		TimeoutQueueBound: 512,
 	},
+	ArchiveRedirectsList: "default",
 }
