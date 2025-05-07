@@ -36,6 +36,11 @@ type BaseGasDimensionTracer struct {
 	prevAccessListSlots     []map[common.Hash]struct{}
 	// the amount of refund accumulated at the current step of execution
 	refundAccumulated uint64
+	// in order to calculate the refund adjusted, we need to know the total execution gas
+	// of just the opcodes of the transaction with no refunds
+	executionGasAccumulated uint64
+	// the amount of refund allowed at the end of the transaction, adjusted by EIP-3529
+	refundAdjusted uint64
 	// whether the transaction had an error, like out of gas
 	err error
 	// whether the tracer itself was interrupted
@@ -254,6 +259,7 @@ func (t *BaseGasDimensionTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	t.gasUsedForL1 = receipt.GasUsedForL1
 	t.gasUsedForL2 = receipt.GasUsedForL2()
 	t.txHash = receipt.TxHash
+	t.refundAdjusted = t.adjustRefund(t.executionGasAccumulated+t.intrinsicGas, t.GetRefundAccumulated())
 }
 
 // Stop signals the tracer to stop tracing
@@ -300,6 +306,26 @@ func (t *BaseGasDimensionTracer) GetPrevAccessList() (addresses map[common.Addre
 // Error returns the VM error captured by the trace
 func (t *BaseGasDimensionTracer) Error() error { return t.err }
 
+// Add to the execution gas accumulated, for tracking adjusted refund
+func (t *BaseGasDimensionTracer) AddToExecutionGasAccumulated(gas uint64) {
+	t.executionGasAccumulated += gas
+}
+
+// this function implements the EIP-3529 refund adjustment
+// this is a copy of the logic in the state transition function
+func (t *BaseGasDimensionTracer) adjustRefund(gasUsedByL2BeforeRefunds, refund uint64) uint64 {
+	var refundAdjusted uint64
+	if !t.chainConfig.IsLondon(t.env.BlockNumber) {
+		refundAdjusted = gasUsedByL2BeforeRefunds / params.RefundQuotient
+	} else {
+		refundAdjusted = gasUsedByL2BeforeRefunds / params.RefundQuotientEIP3529
+	}
+	if refundAdjusted > refund {
+		return refund
+	}
+	return refundAdjusted
+}
+
 // ############################################################################
 //                                OUTPUTS
 // ############################################################################
@@ -310,6 +336,7 @@ type BaseExecutionResult struct {
 	GasUsedForL1   uint64   `json:"gasUsedForL1"`
 	GasUsedForL2   uint64   `json:"gasUsedForL2"`
 	IntrinsicGas   uint64   `json:"intrinsicGas"`
+	AdjustedRefund uint64   `json:"adjustedRefund"`
 	Failed         bool     `json:"failed"`
 	TxHash         string   `json:"txHash"`
 	BlockTimestamp uint64   `json:"blockTimestamp"`
@@ -329,6 +356,7 @@ func (t *BaseGasDimensionTracer) GetBaseExecutionResult() (BaseExecutionResult, 
 		GasUsedForL1:   t.gasUsedForL1,
 		GasUsedForL2:   t.gasUsedForL2,
 		IntrinsicGas:   t.intrinsicGas,
+		AdjustedRefund: t.refundAdjusted,
 		Failed:         failed,
 		TxHash:         t.txHash.Hex(),
 		BlockTimestamp: t.env.Time,

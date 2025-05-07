@@ -32,6 +32,8 @@ message TxGasDimensionByOpcodeExecutionResult {
   uint64 gas_used_l2 = 8;
   // the intrinsic gas of the transaction, the static cost + calldata bytes cost
   uint64 intrinsic_gas = 9;
+  // the adjusted gas refund amount after EIP-3529
+  uint64 adjusted_refund = 10;
   // whether the transaction had an revert or error, like out of gas
   bool failed = 2;
   // a map of each opcode to the sum of the gas consumption categorized by dimension for that opcode
