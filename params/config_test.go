@@ -110,6 +110,65 @@ func TestCheckCompatible(t *testing.T) {
 				RewindToTime: 9,
 			},
 		},
+		{
+			stored:        &ChainConfig{ArbitrumChainParams: ArbitrumChainParams{EnableArbOS: true, NativeTokenOwnersEnableFrom: 10}},
+			new:           &ChainConfig{ArbitrumChainParams: ArbitrumChainParams{EnableArbOS: true, NativeTokenOwnersEnableFrom: 10}},
+			headTimestamp: 25,
+			// Passes because the stored value is the same as the new value
+			wantErr: nil,
+		},
+		{
+			stored:        &ChainConfig{ArbitrumChainParams: ArbitrumChainParams{EnableArbOS: true, NativeTokenOwnersEnableFrom: 10}},
+			new:           &ChainConfig{ArbitrumChainParams: ArbitrumChainParams{EnableArbOS: true, NativeTokenOwnersEnableFrom: 0}},
+			headTimestamp: 25,
+			// Passes because the new value is disabling the feauture
+			wantErr: nil,
+		},
+		{
+			stored:        &ChainConfig{ArbitrumChainParams: ArbitrumChainParams{EnableArbOS: true, NativeTokenOwnersEnableFrom: 10}},
+			new:           &ChainConfig{ArbitrumChainParams: ArbitrumChainParams{EnableArbOS: true, NativeTokenOwnersEnableFrom: 20}},
+			headTimestamp: 25,
+			// Fails because the stored value is in the past
+			wantErr: &ConfigCompatError{
+				What:         "NativeTokenOwnersEnableFrom",
+				StoredTime:   newUint64(10),
+				NewTime:      newUint64(20),
+				RewindToTime: 9,
+			},
+		},
+		{
+			stored:        &ChainConfig{ArbitrumChainParams: ArbitrumChainParams{EnableArbOS: true, NativeTokenOwnersEnableFrom: 30}},
+			new:           &ChainConfig{ArbitrumChainParams: ArbitrumChainParams{EnableArbOS: true, NativeTokenOwnersEnableFrom: 40}},
+			headTimestamp: 25,
+			// Passes because the new value is in the future, and it had not yet been enabled because the stored time has not passed.
+			wantErr: nil,
+		},
+		{
+			stored:        &ChainConfig{ArbitrumChainParams: ArbitrumChainParams{EnableArbOS: true, NativeTokenOwnersEnableFrom: 0}},
+			new:           &ChainConfig{ArbitrumChainParams: ArbitrumChainParams{EnableArbOS: true, NativeTokenOwnersEnableFrom: 604824}},
+			headTimestamp: 25,
+			// Fails because the feature was not enabled, and the new value is not far enough in the future.
+			wantErr: &ConfigCompatError{
+				What:         "NativeTokenOwnersEnableFrom-Delay",
+				StoredTime:   newUint64(604825),
+				NewTime:      newUint64(604824),
+				RewindToTime: 604823,
+			},
+		},
+		{
+			stored:        &ChainConfig{ArbitrumChainParams: ArbitrumChainParams{EnableArbOS: true, NativeTokenOwnersEnableFrom: 0}},
+			new:           &ChainConfig{ArbitrumChainParams: ArbitrumChainParams{EnableArbOS: true, NativeTokenOwnersEnableFrom: 604825}},
+			headTimestamp: 25,
+			// Passes because the feature was not enabled, and the new value is far enough in the future.
+			wantErr: nil,
+		},
+		{
+			stored:        &ChainConfig{ArbitrumChainParams: ArbitrumChainParams{EnableArbOS: true, NativeTokenOwnersEnableFrom: 0}},
+			new:           &ChainConfig{ArbitrumChainParams: ArbitrumChainParams{EnableArbOS: true, NativeTokenOwnersEnableFrom: 604826}},
+			headTimestamp: 25,
+			// Passes because the feature was not enabled, and the new value is far enough in the future.
+			wantErr: nil,
+		},
 	}
 
 	for _, test := range tests {
