@@ -132,6 +132,8 @@ type TxGasDimensionByOpcodeExecutionResult struct {
 	GasUsedL2 uint64 `protobuf:"varint,8,opt,name=gas_used_l2,json=gasUsedL2,proto3" json:"gas_used_l2,omitempty"`
 	// the intrinsic gas of the transaction, the static cost + calldata bytes cost
 	IntrinsicGas uint64 `protobuf:"varint,9,opt,name=intrinsic_gas,json=intrinsicGas,proto3" json:"intrinsic_gas,omitempty"`
+	// the adjusted gas refund amount after EIP-3529
+	AdjustedRefund uint64 `protobuf:"varint,10,opt,name=adjusted_refund,json=adjustedRefund,proto3" json:"adjusted_refund,omitempty"`
 	// whether the transaction had an revert or error, like out of gas
 	Failed bool `protobuf:"varint,2,opt,name=failed,proto3" json:"failed,omitempty"`
 	// a map of each opcode to the sum of the gas consumption categorized by dimension for that opcode
@@ -205,6 +207,13 @@ func (x *TxGasDimensionByOpcodeExecutionResult) GetIntrinsicGas() uint64 {
 	return 0
 }
 
+func (x *TxGasDimensionByOpcodeExecutionResult) GetAdjustedRefund() uint64 {
+	if x != nil {
+		return x.AdjustedRefund
+	}
+	return 0
+}
+
 func (x *TxGasDimensionByOpcodeExecutionResult) GetFailed() bool {
 	if x != nil {
 		return x.Failed
@@ -252,12 +261,14 @@ const file_eth_tracers_native_proto_gas_dimension_by_opcode_proto_rawDesc = "" +
 	"\fstate_growth\x18\x04 \x01(\x04R\vstateGrowth\x12%\n" +
 	"\x0ehistory_growth\x18\x05 \x01(\x04R\rhistoryGrowth\x12.\n" +
 	"\x13state_growth_refund\x18\x06 \x01(\x03R\x11stateGrowthRefund\x120\n" +
-	"\x14child_execution_cost\x18\a \x01(\x04R\x12childExecutionCost\"\x80\x04\n" +
+	"\x14child_execution_cost\x18\a \x01(\x04R\x12childExecutionCost\"\xa9\x04\n" +
 	"%TxGasDimensionByOpcodeExecutionResult\x12\x19\n" +
 	"\bgas_used\x18\x01 \x01(\x04R\agasUsed\x12\x1e\n" +
 	"\vgas_used_l1\x18\a \x01(\x04R\tgasUsedL1\x12\x1e\n" +
 	"\vgas_used_l2\x18\b \x01(\x04R\tgasUsedL2\x12#\n" +
-	"\rintrinsic_gas\x18\t \x01(\x04R\fintrinsicGas\x12\x16\n" +
+	"\rintrinsic_gas\x18\t \x01(\x04R\fintrinsicGas\x12'\n" +
+	"\x0fadjusted_refund\x18\n" +
+	" \x01(\x04R\x0eadjustedRefund\x12\x16\n" +
 	"\x06failed\x18\x02 \x01(\bR\x06failed\x12o\n" +
 	"\n" +
 	"dimensions\x18\x03 \x03(\v2O.eth.tracers.native.proto.TxGasDimensionByOpcodeExecutionResult.DimensionsEntryR\n" +

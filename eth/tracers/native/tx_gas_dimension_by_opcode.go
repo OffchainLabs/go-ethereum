@@ -73,6 +73,8 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 	if WasCallOrCreate(opcode) && err == nil {
 		t.handleCallStackPush(callStackInfo)
 	} else {
+		// track the execution gas of all opcodes (but not the opcodes that do calls)
+		t.AddToExecutionGasAccumulated(gasesByDimension.OneDimensionalGasCost)
 
 		// update the aggregrate map for this opcode
 		accumulatedDimensions := t.OpcodeToDimensions[opcode]
@@ -96,6 +98,9 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 			if interrupted {
 				return
 			}
+
+			// track the execution gas of all opcodes that do calls
+			t.AddToExecutionGasAccumulated(finishGasesByDimension.OneDimensionalGasCost)
 
 			accumulatedDimensionsCall := t.OpcodeToDimensions[stackInfo.GasDimensionInfo.Op]
 
@@ -157,6 +162,7 @@ func (t *TxGasDimensionByOpcodeTracer) GetProtobufResult() ([]byte, error) {
 		GasUsedL1:      baseExecutionResult.GasUsedForL1,
 		GasUsedL2:      baseExecutionResult.GasUsedForL2,
 		IntrinsicGas:   baseExecutionResult.IntrinsicGas,
+		AdjustedRefund: baseExecutionResult.AdjustedRefund,
 		Failed:         baseExecutionResult.Failed,
 		Dimensions:     make(map[uint32]*proto.GasesByDimension),
 		TxHash:         baseExecutionResult.TxHash,
