@@ -114,11 +114,15 @@ func (t *TxGasDimensionLogger) OnOpcode(
 	if WasCallOrCreate(opcode) && err == nil {
 		t.handleCallStackPush(callStackInfo)
 	} else {
+		// track the execution gas of all opcodes (but not the opcodes that do calls)
+		t.AddToExecutionGasAccumulated(gasesByDimension.OneDimensionalGasCost)
 		if depth < t.depth {
 			interrupted, gasUsedByCall, stackInfo, finishGasesByDimension := t.callFinishFunction(pc, depth, gas)
 			if interrupted {
 				return
 			}
+			// track the execution gas of all opcodes that do calls
+			t.AddToExecutionGasAccumulated(finishGasesByDimension.OneDimensionalGasCost)
 			callDimensionLog := t.logs[stackInfo.DimensionLogPosition]
 			callDimensionLog.OneDimensionalGasCost = finishGasesByDimension.OneDimensionalGasCost
 			callDimensionLog.Computation = finishGasesByDimension.Computation
