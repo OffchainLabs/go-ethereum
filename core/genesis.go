@@ -73,6 +73,9 @@ type Genesis struct {
 	BaseFee       *big.Int    `json:"baseFeePerGas"` // EIP-1559
 	ExcessBlobGas *uint64     `json:"excessBlobGas"` // EIP-4844
 	BlobGasUsed   *uint64     `json:"blobGasUsed"`   // EIP-4844
+
+	// Arbitrum
+	ArbOSInit *params.ArbOSInit `json:"arbOSInit,omitempty"`
 }
 
 // copy copies the genesis.
