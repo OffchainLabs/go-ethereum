@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -62,12 +63,21 @@ var (
 
 // Config contains the settings for database.
 type Config struct {
+	// Arbitrum:
+	IdealCapBatchSize    uint32 // write batch size threshold used during capping triedb size (if 0, ethdb.IdealBatchSize will be used)
+	IdealCommitBatchSize uint32 // write batch size threshold used during committing trie nodes to disk (if 0, ethdb.IdealBatchSize will be used)
+
 	CleanCacheSize int // Maximum memory allowance (in bytes) for caching clean nodes
 }
 
 // Defaults is the default setting for database if it's not specified.
 // Notably, clean cache is disabled explicitly,
 var Defaults = &Config{
+	// Arbitrum:
+	// default zeroes used to prevent need for correct initialization in all places used upstream
+	IdealCapBatchSize:    0, // 0 = ethdb.IdealBatchSize will be used
+	IdealCommitBatchSize: 0, // 0 = ethdb.IdealBatchSize will be used
+
 	// Explicitly set clean cache size to 0 to avoid creating fastcache,
 	// otherwise database must be closed when it's no longer needed to
 	// prevent memory leak.
@@ -78,6 +88,9 @@ var Defaults = &Config{
 // the disk database. The aim is to accumulate trie writes in-memory and only
 // periodically flush a couple tries to disk, garbage collecting the remainder.
 type Database struct {
+	// Arbitrum:
+	config *Config
+
 	diskdb  ethdb.Database              // Persistent storage for matured trie nodes
 	cleans  *fastcache.Cache            // GC friendly memory cache of clean node RLPs
 	dirties map[common.Hash]*cachedNode // Data and references relationships of dirty trie nodes
@@ -133,6 +146,8 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 		cleans = fastcache.New(config.CleanCacheSize)
 	}
 	return &Database{
+		config: config,
+
 		diskdb:  diskdb,
 		cleans:  cleans,
 		dirties: make(map[common.Hash]*cachedNode),
@@ -342,15 +357,35 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	size := db.dirtiesSize + common.StorageSize(len(db.dirties)*cachedNodeSize)
 	size += db.childrenSize
 
+	// Arbitrum:
+	idealBatchSize := uint(db.config.IdealCapBatchSize)
+	if idealBatchSize == 0 {
+		idealBatchSize = uint(ethdb.IdealBatchSize)
+	}
+
 	// Keep committing nodes from the flush-list until we're below allowance
 	oldest := db.oldest
 	for size > limit && oldest != (common.Hash{}) {
 		// Fetch the oldest referenced node and push into the batch
 		node := db.dirties[oldest]
-		rawdb.WriteLegacyTrieNode(batch, oldest, node.node)
+
+		err := rawdb.WriteLegacyTrieNodeWithError(batch, oldest, node.node)
+		if err != nil {
+			if errors.Is(err, pebble.ErrBatchTooLarge) {
+				log.Warn("Pebble batch limit reached in hashdb Cap operation, flushing batch.")
+				// flush batch & retry the write
+				if err = batch.Write(); err != nil {
+					return err
+				}
+				batch.Reset()
+				rawdb.WriteLegacyTrieNode(batch, oldest, node.node)
+			} else {
+				log.Crit("Failure in hashdb Cap operation", "err", err)
+			}
+		}
 
 		// If we exceeded the ideal batch size, commit and reset
-		if batch.ValueSize() >= ethdb.IdealBatchSize {
+		if uint(batch.ValueSize()) >= idealBatchSize {
 			if err := batch.Write(); err != nil {
 				log.Error("Failed to write flush list to disk", "err", err)
 				return err
@@ -474,8 +509,29 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 		return err
 	}
 	// If we've reached an optimal batch size, commit and start over
-	rawdb.WriteLegacyTrieNode(batch, hash, node.node)
-	if batch.ValueSize() >= ethdb.IdealBatchSize {
+	err = rawdb.WriteLegacyTrieNodeWithError(batch, hash, node.node)
+	if err != nil {
+		if errors.Is(err, pebble.ErrBatchTooLarge) {
+			log.Warn("Pebble batch limit reached in hashdb Commit operation, flushing batch.")
+			// flush batch & retry the write
+			if err = batch.Write(); err != nil {
+				return err
+			}
+			err = batch.Replay(uncacher)
+			if err != nil {
+				return err
+			}
+			batch.Reset()
+			rawdb.WriteLegacyTrieNode(batch, hash, node.node)
+		} else {
+			log.Crit("Failure in hashdb Commit operation", "err", err)
+		}
+	}
+	idealBatchSize := uint(db.config.IdealCommitBatchSize)
+	if idealBatchSize == 0 {
+		idealBatchSize = uint(ethdb.IdealBatchSize)
+	}
+	if uint(batch.ValueSize()) >= idealBatchSize {
 		if err := batch.Write(); err != nil {
 			return err
 		}
