@@ -46,9 +46,7 @@ const ArbosVersion_StylusChargingFixes = ArbosVersion_32
 const MaxArbosVersionSupported = ArbosVersion_40
 const MaxDebugArbosVersionSupported = ArbosVersion_41
 
-// 7 days between setting NativeTokenOwnersEnableFrom until it can be activated
-// This is a variable to allow for testing.
-const nativeTokenOwnersEnableDelay = 60 * 60 * 24 * 7
+const NativeTokenOwnersEnableDelay = 60 * 60 * 24 * 7 // 7 days between enable NativeTokenOwn until it can be activated
 
 type ArbitrumChainParams struct {
 	EnableArbOS                 bool
@@ -59,7 +57,7 @@ type ArbitrumChainParams struct {
 	GenesisBlockNum             uint64
 	MaxCodeSize                 uint64 `json:"MaxCodeSize,omitempty"`                 // Maximum bytecode to permit for a contract. 0 value implies params.DefaultMaxCodeSize
 	MaxInitCodeSize             uint64 `json:"MaxInitCodeSize,omitempty"`             // Maximum initcode to permit in a creation transaction and create instructions. 0 value implies params.DefaultMaxInitCodeSize
-	NativeTokenOwnersEnableFrom uint64 `json:"NativeTokenOwnersEnableFrom,omitempty"` // Timestamp at which to enable NativeToken precompile owners
+	NativeTokenOwnersEnableFrom uint64 `json:"NativeTokenOwnersEnableFrom,omitempty"` // Timestamp to allow NativeToken owners
 }
 
 func (c *ChainConfig) IsArbitrum() bool {
@@ -120,7 +118,7 @@ func (c *ChainConfig) checkNativeTokenOwnersEnableCompatible(stored uint64, new 
 			return nil
 		}
 	}
-	minAllowed := headTimestamp + nativeTokenOwnersEnableDelay
+	minAllowed := headTimestamp + NativeTokenOwnersEnableDelay
 	if new < minAllowed {
 		return newTimestampCompatError("NativeTokenOwnersEnableFrom-Delay", &minAllowed, &new)
 	}
