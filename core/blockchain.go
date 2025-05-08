@@ -387,7 +387,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 
 	bc.gcprocRandOffset = bc.generateGcprocRandOffset()
 
-	bc.genesisBlock = bc.GetBlockByNumber(0)
+	genesisHeader := bc.GetHeaderByNumber(0)
+	bc.genesisBlock = types.NewBlockWithHeader(genesisHeader)
 	if bc.genesisBlock == nil {
 		return nil, ErrNoGenesis
 	}
