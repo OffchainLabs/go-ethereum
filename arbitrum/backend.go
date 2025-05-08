@@ -2,12 +2,14 @@ package arbitrum
 
 import (
 	"context"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/arbitrum_types"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/filtermaps"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -27,8 +29,7 @@ type Backend struct {
 	txFeed event.Feed
 	scope  event.SubscriptionScope
 
-	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
-	bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
+	filterMaps *filtermaps.FilterMaps
 
 	shutdownTracker *shutdowncheck.ShutdownTracker
 
@@ -46,9 +47,6 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 		config:  config,
 		chainDb: chainDb,
 
-		bloomRequests: make(chan chan *bloombits.Retrieval),
-		bloomIndexer:  core.NewBloomIndexer(chainDb, config.BloomBitsBlocks, config.BloomConfirms),
-
 		shutdownTracker: shutdowncheck.NewShutdownTracker(chainDb),
 
 		chanTxs:      make(chan *types.Transaction, 100),
@@ -56,6 +54,24 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 		chanNewBlock: make(chan struct{}, 1),
 	}
 
+	scheme, err := rawdb.ParseStateScheme(config.StateScheme, chainDb)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Initialize filtermaps log index.
+	fmConfig := filtermaps.Config{
+		History:        config.LogHistory,
+		Disabled:       config.LogNoHistory,
+		ExportFileName: config.LogExportCheckpoints,
+		HashScheme:     scheme == rawdb.HashScheme,
+	}
+	chainView := backend.newChainView(backend.arb.BlockChain().CurrentBlock())
+	historyCutoff, _ := backend.arb.BlockChain().HistoryPruningCutoff()
+	var finalBlock uint64
+	if fb := backend.arb.BlockChain().CurrentFinalBlock(); fb != nil {
+		finalBlock = fb.Number.Uint64()
+	}
+	backend.filterMaps = filtermaps.NewFilterMaps(chainDb, chainView, historyCutoff, finalBlock, filtermaps.DefaultParams, fmConfig)
 	if len(config.AllowMethod) > 0 {
 		rpcFilter := make(map[string]bool)
 		for _, method := range config.AllowMethod {
@@ -64,7 +80,6 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 		backend.stack.ApplyAPIFilter(rpcFilter)
 	}
 
-	backend.bloomIndexer.Start(backend.arb.BlockChain())
 	filterSystem, err := createRegisterAPIBackend(backend, filterConfig, config.ClassicRedirect, config.ClassicRedirectTimeout)
 	if err != nil {
 		return nil, nil, err
@@ -72,13 +87,18 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 	backend.filterSystem = filterSystem
 	return backend, filterSystem, nil
 }
+func (b *Backend) newChainView(head *types.Header) *filtermaps.ChainView {
+	if head == nil {
+		return nil
+	}
+	return filtermaps.NewChainView(b.arb.BlockChain(), head.Number.Uint64(), head.Hash())
+}
 
 func (b *Backend) AccountManager() *accounts.Manager { return b.stack.AccountManager() }
 func (b *Backend) APIBackend() *APIBackend           { return b.apiBackend }
 func (b *Backend) APIs() []rpc.API                   { return b.apiBackend.GetAPIs(b.filterSystem) }
 func (b *Backend) ArbInterface() ArbInterface        { return b.arb }
 func (b *Backend) BlockChain() *core.BlockChain      { return b.arb.BlockChain() }
-func (b *Backend) BloomIndexer() *core.ChainIndexer  { return b.bloomIndexer }
 func (b *Backend) ChainDb() ethdb.Database           { return b.chainDb }
 func (b *Backend) Engine() consensus.Engine          { return b.arb.BlockChain().Engine() }
 func (b *Backend) Stack() *node.Node                 { return b.stack }
@@ -97,16 +117,68 @@ func (b *Backend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscri
 
 // TODO: this is used when registering backend as lifecycle in stack
 func (b *Backend) Start() error {
-	b.startBloomHandlers(b.config.BloomBitsBlocks)
+	b.filterMaps.Start()
 	b.shutdownTracker.MarkStartup()
 	b.shutdownTracker.Start()
-
+	go b.updateFilterMapsHeads()
 	return nil
+}
+
+func (b *Backend) updateFilterMapsHeads() {
+	headEventCh := make(chan core.ChainEvent, 10)
+	blockProcCh := make(chan bool, 10)
+	sub := b.arb.BlockChain().SubscribeChainEvent(headEventCh)
+	sub2 := b.arb.BlockChain().SubscribeBlockProcessingEvent(blockProcCh)
+	defer func() {
+		sub.Unsubscribe()
+		sub2.Unsubscribe()
+		for {
+			select {
+			case <-headEventCh:
+			case <-blockProcCh:
+			default:
+				return
+			}
+		}
+	}()
+
+	var head *types.Header
+	setHead := func(newHead *types.Header) {
+		if newHead == nil {
+			return
+		}
+		if head == nil || newHead.Hash() != head.Hash() {
+			head = newHead
+			chainView := b.newChainView(head)
+			historyCutoff, _ := b.arb.BlockChain().HistoryPruningCutoff()
+			var finalBlock uint64
+			if fb := b.arb.BlockChain().CurrentFinalBlock(); fb != nil {
+				finalBlock = fb.Number.Uint64()
+			}
+			b.filterMaps.SetTarget(chainView, historyCutoff, finalBlock)
+		}
+	}
+	setHead(b.arb.BlockChain().CurrentBlock())
+
+	for {
+		select {
+		case ev := <-headEventCh:
+			setHead(ev.Header)
+		case blockProc := <-blockProcCh:
+			b.filterMaps.SetBlockProcessing(blockProc)
+		case <-time.After(time.Second * 10):
+			setHead(b.arb.BlockChain().CurrentBlock())
+		case _, more := <-b.chanClose:
+			if !more {
+				return
+			}
+		}
+	}
 }
 
 func (b *Backend) Stop() error {
 	b.scope.Close()
-	b.bloomIndexer.Close()
+	b.filterMaps.Stop()
 	b.shutdownTracker.Stop()
 	b.chainDb.Close()
 	close(b.chanClose)
