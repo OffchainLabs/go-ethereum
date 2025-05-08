@@ -128,8 +128,8 @@ func (tt *TransactionTest) Run() error {
 			return UnsupportedForkError{Name: testcase.name}
 		}
 		var (
-			rules  = config.Rules(new(big.Int), testcase.isMerge, 0)
-			signer = types.MakeSigner(config, new(big.Int), 0)
+			rules  = config.Rules(new(big.Int), testcase.isMerge, 0, 0)
+			signer = types.MakeSigner(config, new(big.Int), 0, 0)
 		)
 		sender, hash, gas, err := validateTx(tt.Txbytes, signer, &rules)
 		if err != nil {

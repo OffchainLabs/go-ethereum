@@ -2672,7 +2672,8 @@ func (bc *BlockChain) reportBlock(block *types.Block, res *ProcessResult, err er
 // active. This is useful so operators know their client is ready for the fork.
 func (bc *BlockChain) logForkReadiness(block *types.Block) {
 	c := bc.Config()
-	current, last := c.LatestFork(block.Time()), c.LatestFork(math.MaxUint64)
+	arbosVersion := types.DeserializeHeaderExtraInformation(block.Header()).ArbOSFormatVersion
+	current, last := c.LatestFork(block.Time(), arbosVersion), c.LatestFork(math.MaxUint64, arbosVersion)
 	t := c.Timestamp(last)
 	if t == nil {
 		return

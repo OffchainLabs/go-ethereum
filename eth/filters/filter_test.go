@@ -435,7 +435,7 @@ func TestRangeLogs(t *testing.T) {
 	}
 	chain, _ := core.GenerateChain(gspec.Config, gspec.ToBlock(), ethash.NewFaker(), db, 1000, func(i int, gen *core.BlockGen) {})
 	var l uint64
-	bc, err := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, &l)
+	bc, err := core.NewBlockChain(db, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, &l)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4202,7 +4202,7 @@ func testChainReorgSnapSync(t *testing.T, ancientLimit uint64) {
 	db, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false)
 	defer db.Close()
 
-	chain, _ := NewBlockChain(db, DefaultCacheConfigWithScheme(rawdb.PathScheme), gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil)
+	chain, _ := NewBlockChain(db, DefaultCacheConfigWithScheme(rawdb.PathScheme), nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil)
 	defer chain.Stop()
 
 	if n, err := chain.InsertReceiptChain(blocks, receipts, ancientLimit); err != nil {
@@ -4317,7 +4317,7 @@ func testInsertChainWithCutoff(t *testing.T, cutoff uint64, ancientLimit uint64,
 
 	db, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false)
 	defer db.Close()
-	chain, _ := NewBlockChain(db, DefaultCacheConfigWithScheme(rawdb.PathScheme), genesis, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil)
+	chain, _ := NewBlockChain(db, DefaultCacheConfigWithScheme(rawdb.PathScheme), nil, genesis, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil)
 	defer chain.Stop()
 
 	var (
