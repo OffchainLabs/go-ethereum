@@ -79,7 +79,6 @@ func (t *txGasDimensionLiveTraceLogger) OnTxEnd(
 	receipt *types.Receipt,
 	err error,
 ) {
-
 	// first call the native tracer's OnTxEnd
 	t.GasDimensionTracer.OnTxEnd(receipt, err)
 

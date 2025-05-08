@@ -31,7 +31,6 @@ func NewTxGasDimensionByOpcodeTracer(
 	_ json.RawMessage,
 	chainConfig *params.ChainConfig,
 ) (*tracers.Tracer, error) {
-
 	t := &TxGasDimensionByOpcodeTracer{
 		BaseGasDimensionTracer: NewBaseGasDimensionTracer(chainConfig),
 		OpcodeToDimensions:     make(map[vm.OpCode]GasesByDimension),
@@ -114,7 +113,7 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 
 			t.depth -= 1
 		}
-		t.updateExecutionCost(gasesByDimension.OneDimensionalGasCost)
+		t.updateCallChildExecutionCost(gasesByDimension.OneDimensionalGasCost)
 	}
 	addresses, slots := t.env.StateDB.GetAccessList()
 	t.updatePrevAccessList(addresses, slots)
