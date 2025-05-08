@@ -45,7 +45,7 @@ func TestPebbleDB(t *testing.T) {
 	})
 }
 
-func TestPebbleBatch(t *testing.T) {
+func TestPebbleBatchBatchTooLargeError(t *testing.T) {
 	pebbleDb, err := pebble.Open("", &pebble.Options{
 		FS: vfs.NewMem(),
 	})
