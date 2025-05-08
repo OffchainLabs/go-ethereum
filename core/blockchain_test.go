@@ -2491,7 +2491,7 @@ func testSideImportPrunedBlocks(t *testing.T, scheme string) {
 	datadir := t.TempDir()
 	ancient := path.Join(datadir, "ancient")
 
-	pdb, err := pebble.New(datadir, 0, 0, "", false, nil)
+	pdb, err := pebble.New(datadir, 0, 0, "", false, true, nil)
 	if err != nil {
 		t.Fatalf("Failed to create persistent key-value database: %v", err)
 	}

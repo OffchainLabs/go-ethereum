@@ -633,7 +633,10 @@ func (b testBackend) SyncProgressMap(ctx context.Context) map[string]interface{}
 	return map[string]interface{}{}
 }
 
-func (b testBackend) HistoryPruningCutoff() uint64 { return b.chain.HistoryPruningCutoff() }
+func (b testBackend) HistoryPruningCutoff() uint64 {
+	bn, _ := b.chain.HistoryPruningCutoff()
+	return bn
+}
 
 func TestEstimateGas(t *testing.T) {
 	t.Parallel()
