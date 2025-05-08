@@ -57,7 +57,6 @@ func NewTxGasDimensionLogger(
 	_ json.RawMessage,
 	chainConfig *params.ChainConfig,
 ) (*tracers.Tracer, error) {
-
 	t := &TxGasDimensionLogger{
 		BaseGasDimensionTracer: NewBaseGasDimensionTracer(chainConfig),
 		logs:                   make([]DimensionLog, 0),
@@ -89,7 +88,7 @@ func (t *TxGasDimensionLogger) OnOpcode(
 	err error,
 ) {
 	interrupted, gasesByDimension, callStackInfo, opcode := t.onOpcodeStart(pc, op, gas, cost, scope, rData, depth, err)
-	// if an error occured, it was stored in the tracer's reason field
+	// if an error occurred, it was stored in the tracer's reason field
 	// and we should return immediately
 	if interrupted {
 		return
@@ -105,7 +104,14 @@ func (t *TxGasDimensionLogger) OnOpcode(
 		StateGrowth:           gasesByDimension.StateGrowth,
 		HistoryGrowth:         gasesByDimension.HistoryGrowth,
 		StateGrowthRefund:     gasesByDimension.StateGrowthRefund,
-		Err:                   err,
+		ChildExecutionCost:    gasesByDimension.ChildExecutionCost,
+		// the following are considered unknown at this point in the tracer lifecycle
+		// and are only filled in after the finish function is called
+		CallRealGas:         0,
+		CallMemoryExpansion: 0,
+		CreateInitCodeCost:  0,
+		Create2HashCost:     0,
+		Err:                 err,
 	})
 
 	// if callStackInfo is not nil then we need to take a note of the index of the
@@ -140,7 +146,7 @@ func (t *TxGasDimensionLogger) OnOpcode(
 			t.depth -= 1
 		}
 
-		t.updateExecutionCost(gasesByDimension.OneDimensionalGasCost)
+		t.updateCallChildExecutionCost(gasesByDimension.OneDimensionalGasCost)
 	}
 	addresses, slots := t.env.StateDB.GetAccessList()
 	t.updatePrevAccessList(addresses, slots)

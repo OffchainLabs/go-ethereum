@@ -58,6 +58,18 @@ func NewBaseGasDimensionTracer(chainConfig *params.ChainConfig) BaseGasDimension
 		refundAccumulated:       0,
 		prevAccessListAddresses: map[common.Address]int{},
 		prevAccessListSlots:     []map[common.Hash]struct{}{},
+		env:                     nil,
+		txHash:                  common.Hash{},
+		gasUsed:                 0,
+		gasUsedForL1:            0,
+		gasUsedForL2:            0,
+		intrinsicGas:            0,
+		callStack:               CallGasDimensionStack{},
+		executionGasAccumulated: 0,
+		refundAdjusted:          0,
+		err:                     nil,
+		interrupt:               atomic.Bool{},
+		reason:                  nil,
 	}
 }
 
@@ -96,7 +108,7 @@ func (t *BaseGasDimensionTracer) onOpcodeStart(
 	opcode vm.OpCode,
 ) {
 	if t.interrupt.Load() {
-		return true, GasesByDimension{}, nil, vm.OpCode(op)
+		return true, zeroGasesByDimension(), nil, vm.OpCode(op)
 	}
 	if depth != t.depth && depth != t.depth-1 {
 		t.interrupt.Store(true)
@@ -107,7 +119,7 @@ func (t *BaseGasDimensionTracer) onOpcodeStart(
 			depth,
 			t.callStack,
 		)
-		return true, GasesByDimension{}, nil, vm.OpCode(op)
+		return true, zeroGasesByDimension(), nil, vm.OpCode(op)
 	}
 	if t.depth != len(t.callStack)+1 {
 		t.interrupt.Store(true)
@@ -118,18 +130,18 @@ func (t *BaseGasDimensionTracer) onOpcodeStart(
 			len(t.callStack),
 			t.callStack,
 		)
-		return true, GasesByDimension{}, nil, vm.OpCode(op)
+		return true, zeroGasesByDimension(), nil, vm.OpCode(op)
 	}
 
 	// get the gas dimension function
 	// if it's not a call, directly calculate the gas dimensions for the opcode
 	f := GetCalcGasDimensionFunc(vm.OpCode(op))
-	var fErr error = nil
+	var fErr error
 	gasesByDimension, callStackInfo, fErr = f(t, pc, op, gas, cost, scope, rData, depth, err)
 	if fErr != nil {
 		t.interrupt.Store(true)
 		t.reason = fErr
-		return true, GasesByDimension{}, nil, vm.OpCode(op)
+		return true, zeroGasesByDimension(), nil, vm.OpCode(op)
 	}
 	opcode = vm.OpCode(op)
 
@@ -141,7 +153,7 @@ func (t *BaseGasDimensionTracer) onOpcodeStart(
 			opcode.String(),
 			callStackInfo,
 		)
-		return true, GasesByDimension{}, nil, vm.OpCode(op)
+		return true, zeroGasesByDimension(), nil, vm.OpCode(op)
 	}
 	return false, gasesByDimension, callStackInfo, opcode
 }
@@ -181,7 +193,7 @@ func (t *BaseGasDimensionTracer) callFinishFunction(
 	if !ok {
 		t.interrupt.Store(true)
 		t.reason = fmt.Errorf("call stack is unexpectedly empty %d %d %d", pc, depth, t.depth)
-		return true, 0, CallGasDimensionStackInfo{}, GasesByDimension{}
+		return true, 0, zeroCallGasDimensionStackInfo(), zeroGasesByDimension()
 	}
 	finishFunction := GetFinishCalcGasDimensionFunc(stackInfo.GasDimensionInfo.Op)
 	if finishFunction == nil {
@@ -191,18 +203,18 @@ func (t *BaseGasDimensionTracer) callFinishFunction(
 			stackInfo.GasDimensionInfo.Op.String(),
 			pc,
 		)
-		return true, 0, CallGasDimensionStackInfo{}, GasesByDimension{}
+		return true, 0, zeroCallGasDimensionStackInfo(), zeroGasesByDimension()
 	}
 	// IMPORTANT NOTE: for some reason the only reliable way to actually get the gas cost of the call
 	// is to subtract gas at time of call from gas at opcode AFTER return
 	// you can't trust the `gas` field on the call itself. I wonder if the gas field is an estimation
 	gasUsedByCall = stackInfo.GasDimensionInfo.GasCounterAtTimeOfCall - gas
-	var finishErr error = nil
+	var finishErr error
 	finishGasesByDimension, finishErr = finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
 	if finishErr != nil {
 		t.interrupt.Store(true)
 		t.reason = finishErr
-		return true, 0, CallGasDimensionStackInfo{}, GasesByDimension{}
+		return true, 0, zeroCallGasDimensionStackInfo(), zeroGasesByDimension()
 	}
 	return false, gasUsedByCall, stackInfo, finishGasesByDimension
 }
@@ -211,7 +223,7 @@ func (t *BaseGasDimensionTracer) callFinishFunction(
 // then we need to track the execution gas
 // of our own code so that when the call returns,
 // we can write the gas dimensions for the call opcode itself
-func (t *BaseGasDimensionTracer) updateExecutionCost(cost uint64) {
+func (t *BaseGasDimensionTracer) updateCallChildExecutionCost(cost uint64) {
 	if len(t.callStack) > 0 {
 		t.callStack.UpdateExecutionCost(cost)
 	}
@@ -324,6 +336,43 @@ func (t *BaseGasDimensionTracer) adjustRefund(gasUsedByL2BeforeRefunds, refund u
 		return refund
 	}
 	return refundAdjusted
+}
+
+// zeroGasesByDimension returns a GasesByDimension struct with all fields set to zero
+func zeroGasesByDimension() GasesByDimension {
+	return GasesByDimension{
+		OneDimensionalGasCost: 0,
+		Computation:           0,
+		StateAccess:           0,
+		StateGrowth:           0,
+		HistoryGrowth:         0,
+		StateGrowthRefund:     0,
+		ChildExecutionCost:    0,
+	}
+}
+
+// zeroCallGasDimensionInfo returns a CallGasDimensionInfo struct with all fields set to zero
+func zeroCallGasDimensionInfo() CallGasDimensionInfo {
+	return CallGasDimensionInfo{
+		Pc:                        0,
+		Op:                        0,
+		GasCounterAtTimeOfCall:    0,
+		MemoryExpansionCost:       0,
+		AccessListComputationCost: 0,
+		AccessListStateAccessCost: 0,
+		IsValueSentWithCall:       false,
+		InitCodeCost:              0,
+		HashCost:                  0,
+	}
+}
+
+// zeroCallGasDimensionStackInfo returns a CallGasDimensionStackInfo struct with all fields set to zero
+func zeroCallGasDimensionStackInfo() CallGasDimensionStackInfo {
+	return CallGasDimensionStackInfo{
+		GasDimensionInfo:     zeroCallGasDimensionInfo(),
+		ExecutionCost:        0,
+		DimensionLogPosition: 0,
+	}
 }
 
 // ############################################################################

@@ -61,7 +61,7 @@ func (c *CallGasDimensionStack) Push(info CallGasDimensionStackInfo) { // gasDim
 // Pop a CallGasDimensionStackInfo from the stack, returning false if the stack is empty
 func (c *CallGasDimensionStack) Pop() (CallGasDimensionStackInfo, bool) {
 	if len(*c) == 0 {
-		return CallGasDimensionStackInfo{}, false
+		return zeroCallGasDimensionStackInfo(), false
 	}
 	last := (*c)[len(*c)-1]
 	*c = (*c)[:len(*c)-1]
@@ -389,8 +389,8 @@ func calcStateReadCallGas(
 	}
 
 	var memExpansionCost uint64 = 0
-	var memErr error = nil
 	if memExpansionOffset+memExpansionSize != 0 {
+		var memErr error
 		memExpansionCost, memErr = memoryExpansionCost(scope.MemoryData(), memExpansionOffset, memExpansionSize)
 		if memErr != nil {
 			return GasesByDimension{}, nil, memErr
@@ -668,8 +668,8 @@ func calcReadAndStoreCallGas(
 	}
 
 	var memExpansionCost uint64 = 0
-	var memErr error = nil
 	if memExpansionOffset+memExpansionSize != 0 {
+		var memErr error
 		memExpansionCost, memErr = memoryExpansionCost(scope.MemoryData(), memExpansionOffset, memExpansionSize)
 		if memErr != nil {
 			return GasesByDimension{}, nil, memErr
@@ -836,9 +836,8 @@ func calcSStoreGas(
 		}
 		t.SetRefundAccumulated(currentRefund)
 	}
-	ret := GasesByDimension{
-		OneDimensionalGasCost: cost,
-	}
+	ret := zeroGasesByDimension()
+	ret.OneDimensionalGasCost = cost
 	if cost >= params.SstoreSetGas { // 22100 case and 20000 case
 		accessCost := cost - params.SstoreSetGas
 		ret = GasesByDimension{
@@ -1138,5 +1137,6 @@ func outOfGas(gas uint64) (GasesByDimension, *CallGasDimensionInfo, error) {
 		StateGrowth:           0,
 		HistoryGrowth:         0,
 		StateGrowthRefund:     0,
+		ChildExecutionCost:    0,
 	}, nil, nil
 }
