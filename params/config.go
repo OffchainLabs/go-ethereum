@@ -814,7 +814,7 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 		return newBlockCompatError("EIP158 chain ID", c.EIP158Block, newcfg.EIP158Block)
 	}
 
-	if err := c.checkArbitrumCompatible(newcfg, headTimestamp); err != nil {
+	if err := c.checkArbitrumCompatible(newcfg, headNumber); err != nil {
 		return err
 	}
 	if isForkBlockIncompatible(c.ByzantiumBlock, newcfg.ByzantiumBlock, headNumber) {
