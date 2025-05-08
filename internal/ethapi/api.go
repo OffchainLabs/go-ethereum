@@ -723,7 +723,9 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 		if err != nil {
 			return nil, err
 		}
-		gp.AddGas(postingGas)
+		if gp.Gas() < gomath.MaxUint64-postingGas {
+			gp.AddGas(postingGas)
+		}
 	}
 	if msg.GasLimit > gp.Gas() {
 		gp.SetGas(msg.GasLimit)

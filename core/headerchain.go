@@ -597,6 +597,13 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 				rawdb.DeleteHeader(batch, hash, num)
 			}
 			rawdb.DeleteCanonicalHash(batch, num)
+
+			// flush after each deleted header and its side forks
+			// on the first iteration (when origin==true) len(nums) can be considerable
+			if batch.ValueSize() >= ethdb.IdealBatchSize {
+				batch.Write()
+				batch.Reset()
+			}
 		}
 	}
 	// Flush all accumulated deletions.
