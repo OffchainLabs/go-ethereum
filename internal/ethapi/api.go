@@ -724,7 +724,7 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 		if gp.Gas() < gomath.MaxUint64-postingGas {
 			gp.AddGas(postingGas)
 		} else {
-			log.Warn("gas pool overflow", "gpGas", gp.Gas(), "baseFee", header.BaseFee, "postingGas", postingGas, "msgDataLen", len(msg.Data))
+			log.Debug("gas pool overflow", "gpGas", gp.Gas(), "baseFee", header.BaseFee, "postingGas", postingGas, "msgDataLen", len(msg.Data))
 			gp.SetGas(gomath.MaxUint64)
 		}
 	}
