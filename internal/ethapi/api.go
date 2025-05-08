@@ -869,8 +869,7 @@ func (api *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockN
 		}
 		return nil, err
 	}
-	// If the result contains a revert reason, try to unpack and return it.
-	if len(result.Revert()) > 0 {
+	if errors.Is(result.Err, vm.ErrExecutionReverted) {
 		return nil, newRevertError(result.Revert())
 	}
 	gasUsedEthCallGauge.Inc(int64(result.UsedGas))
@@ -965,7 +964,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 
 	estimate, revert, err := gasestimator.Estimate(ctx, call, opts, gasCap)
 	if err != nil {
-		if len(revert) > 0 {
+		if errors.Is(err, vm.ErrExecutionReverted) {
 			return 0, newRevertError(revert)
 		}
 		return 0, err
