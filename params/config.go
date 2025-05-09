@@ -347,18 +347,7 @@ var NetworkNames = map[string]string{
 // Arbitrum
 // ArbOSInit defines some initialization values for ArbOS state.
 type ArbOSInit struct {
-	// The time from which the NativeToken management feature of Arbitrum should
-	// be enabled. When setting this time with genesis.json, any non-zero value
-	// will be interpreted as a timestamp in seconds since the Unix epoch, and
-	// if it is in the past, the feature will be enabled immediately.
-	//
-	// However, when setting this time via the ArbOwner.setNativeTokenEnabledTime
-	// precompile, the value must be at least 7 days in the future, to move the
-	// state of the feature from disabled to enabled. This is a security measure
-	// to prevent a compromised ArbOwner from enabling the feature immediately.
-	//
-	// If the time is set to 0, the feature will be disabled immediately.
-	NativeTokenEnabledTime *uint64 `json:"nativeTokenEnabledTime"`
+	NativeTokenSupplyManagementEnabled bool `json:"nativeTokenSupplyManagementEnabled"`
 }
 
 // ChainConfig is the core config which determines the blockchain settings.
