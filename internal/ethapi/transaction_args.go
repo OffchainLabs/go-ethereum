@@ -149,6 +149,10 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 				gas = hexutil.Uint64(math.MaxUint64 / 2)
 			}
 			args.Gas = &gas
+			if args.SkipL1Charging == nil {
+				skipCharging := true
+				args.SkipL1Charging = &skipCharging
+			}
 		} else { // Estimate the gas usage otherwise.
 			// These fields are immutable during the estimation, safe to
 			// pass the pointer directly.
