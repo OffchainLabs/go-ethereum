@@ -450,6 +450,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if endTxNow {
 		return &ExecutionResult{
 			UsedGas:       startHookUsedGas,
+			MaxUsedGas:    startHookUsedGas,
 			Err:           err,
 			ReturnData:    returnData,
 			ScheduledTxes: st.evm.ProcessingHook.ScheduledTxes(),
