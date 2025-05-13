@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/eth/tracers"
@@ -62,11 +63,12 @@ func NewTxGasDimensionByOpcodeLogger(
 	}
 
 	return &tracing.Hooks{
-		OnOpcode:     t.OnOpcode,
-		OnTxStart:    t.OnTxStart,
-		OnTxEnd:      t.OnTxEnd,
-		OnBlockStart: t.OnBlockStart,
-		OnBlockEnd:   t.OnBlockEnd,
+		OnOpcode:          t.OnOpcode,
+		OnTxStart:         t.OnTxStart,
+		OnTxEnd:           t.OnTxEnd,
+		OnBlockStart:      t.OnBlockStart,
+		OnBlockEnd:        t.OnBlockEnd,
+		OnBlockEndMetrics: t.OnBlockEndMetrics,
 	}, nil
 }
 
@@ -143,4 +145,25 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockStart(ev tracing.BlockEvent) {
 }
 
 func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockEnd(err error) {
+}
+
+func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockEndMetrics(blockNumber uint64, blockInsertDuration time.Duration) {
+	filename := fmt.Sprintf("%d.txt", blockNumber)
+	dirPath := filepath.Join(t.Path, "blocks")
+	filepath := filepath.Join(dirPath, filename)
+
+	// Ensure the directory exists
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		fmt.Printf("Failed to create directory %s: %v\n", dirPath, err)
+		return
+	}
+
+	// the output is the duration in nanoseconds
+	var outData int64 = blockInsertDuration.Nanoseconds()
+
+	// Write the file
+	if err := os.WriteFile(filepath, fmt.Appendf(nil, "%d", outData), 0644); err != nil {
+		fmt.Printf("Failed to write file %s: %v\n", filepath, err)
+		return
+	}
 }
