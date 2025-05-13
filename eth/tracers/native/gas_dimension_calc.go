@@ -716,7 +716,6 @@ func finishCalcStateReadAndStoreCallGas(
 	callGasDimensionInfo CallGasDimensionInfo,
 ) (GasesByDimension, error) {
 	oneDimensionalGas := totalGasUsed - codeExecutionCost
-	fmt.Println("finishCalcStateReadAndStoreCallGas is called")
 	// the stipend is 2300 and it is not charged to the call itself but used in the execution cost
 	var positiveValueCostLessStipend uint64 = 0
 	if callGasDimensionInfo.IsValueSentWithCall {
@@ -731,7 +730,6 @@ func finishCalcStateReadAndStoreCallGas(
 	// and whatever was left over after that was address_access_cost
 	// callcode is the same as call except does not have value_to_empty_account_cost,
 	// so this code properly handles it coincidentally, too
-	fmt.Println("finishCalcStateReadAndStoreCallGas is continuing")
 	ret := GasesByDimension{
 		OneDimensionalGasCost: oneDimensionalGas,
 		Computation:           callGasDimensionInfo.MemoryExpansionCost + params.WarmStorageReadCostEIP2929,
@@ -742,7 +740,6 @@ func finishCalcStateReadAndStoreCallGas(
 		ChildExecutionCost:    codeExecutionCost,
 	}
 	if leftOver > params.ColdAccountAccessCostEIP2929 { // there is a value being sent to an empty account
-		fmt.Println("leftOver > params.ColdAccountAccessCostEIP2929")
 		var coldCost uint64 = 0
 		if leftOver-params.CallNewAccountGas == params.ColdAccountAccessCostEIP2929 {
 			coldCost = params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
@@ -757,7 +754,6 @@ func finishCalcStateReadAndStoreCallGas(
 			ChildExecutionCost:    codeExecutionCost,
 		}
 	} else if leftOver == params.ColdAccountAccessCostEIP2929 {
-		fmt.Println("leftOver == params.ColdAccountAccessCostEIP2929")
 		var coldCost uint64 = params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
 		ret = GasesByDimension{
 			OneDimensionalGasCost: oneDimensionalGas,
@@ -769,15 +765,12 @@ func finishCalcStateReadAndStoreCallGas(
 			ChildExecutionCost:    codeExecutionCost,
 		}
 	}
-	fmt.Println("finishCalcStateReadAndStoreCallGas is returning")
 	err := checkGasDimensionsEqualCallGas(
 		callGasDimensionInfo.Pc,
 		byte(callGasDimensionInfo.Op),
 		codeExecutionCost,
 		ret,
 	)
-	fmt.Println("End result: ", ret)
-	fmt.Println("End error: ", err)
 	return ret, err
 }
 
