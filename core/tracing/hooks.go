@@ -26,6 +26,7 @@ package tracing
 
 import (
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -137,6 +138,9 @@ type (
 	// BlockEndHook is called after executing a block.
 	BlockEndHook = func(err error)
 
+	// BlockEndMetricsHook is called after executing a block and calculating the metrics timers
+	BlockEndMetricsHook = func(blockNumber uint64, blockInsertDuration time.Duration)
+
 	// SkippedBlockHook indicates a block was skipped during processing
 	// due to it being known previously. This can happen e.g. when recovering
 	// from a crash.
@@ -211,6 +215,7 @@ type Hooks struct {
 	OnClose             CloseHook
 	OnBlockStart        BlockStartHook
 	OnBlockEnd          BlockEndHook
+	OnBlockEndMetrics   BlockEndMetricsHook
 	OnSkippedBlock      SkippedBlockHook
 	OnGenesisBlock      GenesisBlockHook
 	OnSystemCallStart   OnSystemCallStartHook
