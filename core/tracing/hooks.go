@@ -307,6 +307,9 @@ const (
 	// Stylus
 	BalanceChangeTransferActivationFee
 	BalanceChangeTransferActivationReimburse
+	// Native token minting and burning
+	BalanceIncreaseMintNativeToken
+	BalanceDecreaseBurnNativeToken
 )
 
 // Str gives the arbitrum specific string for the corresponding BalanceChangeReason
