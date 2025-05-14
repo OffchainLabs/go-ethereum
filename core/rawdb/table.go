@@ -40,12 +40,8 @@ func (t *table) Close() error {
 	return nil
 }
 
-func (t *table) WasmDataBase() (ethdb.KeyValueStore, uint32) {
+func (t *table) WasmDataBase() ethdb.KeyValueStore {
 	return t.db.WasmDataBase()
-}
-
-func (t *table) WasmTargets() []ethdb.WasmTarget {
-	return t.db.WasmTargets()
 }
 
 // Has retrieves if a prefixed version of a key is present in the database.
