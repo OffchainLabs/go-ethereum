@@ -48,8 +48,9 @@ type APIBackend struct {
 
 	dbForAPICalls ethdb.Database
 
-	fallbackClient types.FallbackClient
-	sync           SyncProgressBackend
+	fallbackClient        types.FallbackClient
+	archiveClientsManager *archiveFallbackClientsManager
+	sync                  SyncProgressBackend
 }
 
 type errorFilteredFallbackClient struct {
@@ -79,11 +80,11 @@ func (c *timeoutFallbackClient) CallContext(ctxIn context.Context, result interf
 	return c.impl.CallContext(ctx, result, method, args...)
 }
 
-func CreateFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.Duration) (types.FallbackClient, error) {
+func CreateFallbackClient(fallbackClientUrl string, fallbackClientTimeout time.Duration, isArchiveNode bool) (types.FallbackClient, error) {
 	if fallbackClientUrl == "" {
 		return nil, nil
 	}
-	if strings.HasPrefix(fallbackClientUrl, "error:") {
+	if !isArchiveNode && strings.HasPrefix(fallbackClientUrl, "error:") {
 		fields := strings.Split(fallbackClientUrl, ":")[1:]
 		errNumber, convErr := strconv.ParseInt(fields[0], 0, 0)
 		if convErr == nil {
@@ -124,8 +125,8 @@ type SyncProgressBackend interface {
 	BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error)
 }
 
-func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration) (*filters.FilterSystem, error) {
-	fallbackClient, err := CreateFallbackClient(fallbackClientUrl, fallbackClientTimeout)
+func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration, archiveRedirects []BlockRedirectConfig) (*filters.FilterSystem, error) {
+	fallbackClient, err := CreateFallbackClient(fallbackClientUrl, fallbackClientTimeout, false)
 	if err != nil {
 		return nil, err
 	}
@@ -135,10 +136,18 @@ func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fal
 	if tag != 0 || len(backend.chainDb.WasmTargets()) > 1 {
 		dbForAPICalls = rawdb.WrapDatabaseWithWasm(backend.chainDb, wasmStore, 0, []ethdb.WasmTarget{rawdb.LocalTarget()})
 	}
+	var archiveClientsManager *archiveFallbackClientsManager
+	if len(archiveRedirects) != 0 {
+		archiveClientsManager, err = newArchiveFallbackClientsManager(archiveRedirects)
+		if err != nil {
+			return nil, err
+		}
+	}
 	backend.apiBackend = &APIBackend{
-		b:              backend,
-		dbForAPICalls:  dbForAPICalls,
-		fallbackClient: fallbackClient,
+		b:                     backend,
+		dbForAPICalls:         dbForAPICalls,
+		fallbackClient:        fallbackClient,
+		archiveClientsManager: archiveClientsManager,
 	}
 	filterSystem := filters.NewFilterSystem(backend.apiBackend, filterConfig)
 	backend.stack.RegisterAPIs(backend.apiBackend.GetAPIs(filterSystem))
@@ -500,7 +509,7 @@ func (a *APIBackend) BlockMetadataByNumber(ctx context.Context, blockNum uint64)
 	return a.sync.BlockMetadataByNumber(ctx, blockNum)
 }
 
-func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *core.BlockChain, maxRecreateStateDepth int64, header *types.Header, err error) (*state.StateDB, *types.Header, error) {
+func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *core.BlockChain, maxRecreateStateDepth int64, header *types.Header, err error, archiveClientsManager *archiveFallbackClientsManager) (*state.StateDB, *types.Header, error) {
 	if err != nil {
 		return nil, header, err
 	}
@@ -509,6 +518,9 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 	}
 	if !bc.Config().IsArbitrumNitro(header.Number) {
 		return nil, header, types.ErrUseFallback
+	}
+	if archiveClientsManager != nil && header.Number.Uint64() <= archiveClientsManager.lastAvailableBlock() {
+		return nil, header, &types.ErrUseArchiveFallback{BlockNum: header.Number.Uint64()}
 	}
 	stateFor := func(db state.Database, snapshots *snapshot.Tree) func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
 		return func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
@@ -583,7 +595,7 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 
 func (a *APIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	header, err := a.HeaderByNumber(ctx, number)
-	return StateAndHeaderFromHeader(ctx, a.ChainDb(), a.b.arb.BlockChain(), a.b.config.MaxRecreateStateDepth, header, err)
+	return StateAndHeaderFromHeader(ctx, a.ChainDb(), a.b.arb.BlockChain(), a.b.config.MaxRecreateStateDepth, header, err, a.archiveClientsManager)
 }
 
 func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
@@ -594,7 +606,7 @@ func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOr
 	if ishash && header != nil && header.Number.Cmp(bc.CurrentBlock().Number) > 0 && bc.GetCanonicalHash(header.Number.Uint64()) != hash {
 		return nil, nil, errors.New("requested block ahead of current block and the hash is not currently canonical")
 	}
-	return StateAndHeaderFromHeader(ctx, a.ChainDb(), a.b.arb.BlockChain(), a.b.config.MaxRecreateStateDepth, header, err)
+	return StateAndHeaderFromHeader(ctx, a.ChainDb(), a.b.arb.BlockChain(), a.b.config.MaxRecreateStateDepth, header, err, a.archiveClientsManager)
 }
 
 func (a *APIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
@@ -729,4 +741,8 @@ func (a *APIBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
 
 func (a *APIBackend) FallbackClient() types.FallbackClient {
 	return a.fallbackClient
+}
+
+func (a *APIBackend) ArchiveFallbackClient(blockNum uint64) types.FallbackClient {
+	return a.archiveClientsManager.fallbackClient(blockNum)
 }
