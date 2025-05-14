@@ -291,7 +291,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 	if err != nil {
 		return nil, err
 	}
-	logs := filterLogs(cached.logs, nil, nil, f.addresses, f.topics)
+	logs := FilterLogs(cached.logs, nil, nil, f.addresses, f.topics)
 	if len(logs) == 0 {
 		return nil, nil
 	}
@@ -313,8 +313,8 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 	return logs, nil
 }
 
-// filterLogs creates a slice of logs matching the given criteria.
-func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.Log {
+// FilterLogs creates a slice of logs matching the given criteria.
+func FilterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.Log {
 	var check = func(log *types.Log) bool {
 		if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > log.BlockNumber {
 			return false
