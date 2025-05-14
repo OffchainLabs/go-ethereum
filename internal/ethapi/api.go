@@ -699,35 +699,30 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
 	defer cancel()
+	return applyMessage(ctx, b, args, state, header, timeout, globalGasCap, &blockCtx, &vm.Config{NoBaseFee: true}, precompiles, true, runMode)
+}
+
+func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, timeout time.Duration, globalGasCap uint64, blockContext *vm.BlockContext, vmConfig *vm.Config, precompiles vm.PrecompiledContracts, skipChecks bool, runMode core.MessageRunMode) (*core.ExecutionResult, error) {
+	// Get a new instance of the EVM.
 	gp := new(core.GasPool)
-	if globalGasCap == 0 {
+
+	if b.ChainConfig().IsArbitrum() {
+		gp.AddGas(1 << 50) // Arbitrum: static high gas pool limit to pay for l1gas
+	} else if globalGasCap == 0 {
 		gp.AddGas(gomath.MaxUint64)
 	} else {
 		gp.AddGas(globalGasCap)
 	}
-	return applyMessage(ctx, b, args, state, header, timeout, gp, &blockCtx, &vm.Config{NoBaseFee: true}, precompiles, true, runMode)
-}
 
-func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, timeout time.Duration, gp *core.GasPool, blockContext *vm.BlockContext, vmConfig *vm.Config, precompiles vm.PrecompiledContracts, skipChecks bool, runMode core.MessageRunMode) (*core.ExecutionResult, error) {
-	// Get a new instance of the EVM.
 	if err := args.CallDefaults(gp.Gas(), blockContext.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return nil, err
 	}
-	msg := args.ToMessage(blockContext.BaseFee, gp.Gas(), header, state, runMode, skipChecks, skipChecks)
+	msg := args.ToMessage(blockContext.BaseFee, globalGasCap, header, state, runMode, skipChecks, skipChecks)
 
-	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
-	if gp.Gas() > 0 {
-		postingGas, err := core.RPCPostingGasHook(msg, header, state)
-		if err != nil {
-			return nil, err
-		}
-		if gp.Gas() < gomath.MaxUint64-postingGas {
-			gp.AddGas(postingGas)
-		}
-	}
-	if msg.GasLimit > gp.Gas() {
+	if b.ChainConfig().IsArbitrum() && msg.GasLimit > gp.Gas() { // Arbitrum: gas limit is counted inside the message and not in the gas-pool
 		gp.SetGas(msg.GasLimit)
 	}
+
 	// Arbitrum: support NodeInterface.sol by swapping out the message if needed
 	var res *core.ExecutionResult
 	var err error
