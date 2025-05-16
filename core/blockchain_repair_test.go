@@ -1765,7 +1765,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	datadir := t.TempDir()
 	ancient := filepath.Join(datadir, "ancient")
 
-	pdb, err := pebble.New(datadir, 0, 0, "", false, nil)
+	pdb, err := pebble.New(datadir, 0, 0, "", false, true, nil)
 	if err != nil {
 		t.Fatalf("Failed to create persistent key-value database: %v", err)
 	}
@@ -1854,7 +1854,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repair leads us
-	pdb, err = pebble.New(datadir, 0, 0, "", false, nil)
+	pdb, err = pebble.New(datadir, 0, 0, "", false, true, nil)
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent key-value database: %v", err)
 	}
@@ -1919,7 +1919,7 @@ func testIssue23496(t *testing.T, scheme string) {
 	datadir := t.TempDir()
 	ancient := filepath.Join(datadir, "ancient")
 
-	pdb, err := pebble.New(datadir, 0, 0, "", false, nil)
+	pdb, err := pebble.New(datadir, 0, 0, "", false, true, nil)
 	if err != nil {
 		t.Fatalf("Failed to create persistent key-value database: %v", err)
 	}
@@ -1977,7 +1977,7 @@ func testIssue23496(t *testing.T, scheme string) {
 	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repair leads us
-	pdb, err = pebble.New(datadir, 0, 0, "", false, nil)
+	pdb, err = pebble.New(datadir, 0, 0, "", false, true, nil)
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent key-value database: %v", err)
 	}

@@ -37,6 +37,11 @@ type OpenOptions struct {
 	Handles           int    // number of files to be open simultaneously
 	ReadOnly          bool
 
+	// Ephemeral means that filesystem sync operations should be avoided:
+	// data integrity in the face of a crash is not important. This option
+	// should typically be used in tests.
+	Ephemeral bool
+
 	PebbleExtraOptions *pebble.ExtraOptions
 }
 
@@ -80,7 +85,7 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 	}
 	if o.Type == rawdb.DBPebble || existingDb == rawdb.DBPebble {
 		log.Info("Using pebble as the backing database")
-		return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.PebbleExtraOptions)
+		return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.Ephemeral, o.PebbleExtraOptions)
 	}
 	if o.Type == rawdb.DBLeveldb || existingDb == rawdb.DBLeveldb {
 		log.Info("Using leveldb as the backing database")
@@ -88,7 +93,7 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 	}
 	// No pre-existing database, no user-requested one either. Default to Pebble.
 	log.Info("Defaulting to pebble as the backing database")
-	return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.PebbleExtraOptions)
+	return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.Ephemeral, o.PebbleExtraOptions)
 }
 
 // NewLevelDBDatabase creates a persistent key-value database without a freezer
@@ -104,8 +109,8 @@ func NewLevelDBDatabase(file string, cache int, handles int, namespace string, r
 
 // NewPebbleDBDatabase creates a persistent key-value database without a freezer
 // moving immutable chain segments into cold storage.
-func NewPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly bool, extraOptions *pebble.ExtraOptions) (ethdb.Database, error) {
-	db, err := pebble.New(file, cache, handles, namespace, readonly, extraOptions)
+func NewPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly bool, ephemeral bool, extraOptions *pebble.ExtraOptions) (ethdb.Database, error) {
+	db, err := pebble.New(file, cache, handles, namespace, readonly, ephemeral, extraOptions)
 	if err != nil {
 		return nil, err
 	}
