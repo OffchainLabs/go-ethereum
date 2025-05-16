@@ -37,13 +37,14 @@ const ArbosVersion_30 = uint64(30)
 const ArbosVersion_31 = uint64(31)
 const ArbosVersion_32 = uint64(32)
 const ArbosVersion_40 = uint64(40)
+const ArbosVersion_41 = uint64(41)
 
 const ArbosVersion_FixRedeemGas = ArbosVersion_11
 const ArbosVersion_Stylus = ArbosVersion_30
 const ArbosVersion_StylusFixes = ArbosVersion_31
 const ArbosVersion_StylusChargingFixes = ArbosVersion_32
 const MaxArbosVersionSupported = ArbosVersion_40
-const MaxDebugArbosVersionSupported = ArbosVersion_40
+const MaxDebugArbosVersionSupported = ArbosVersion_41
 
 type ArbitrumChainParams struct {
 	EnableArbOS               bool
