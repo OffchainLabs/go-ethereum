@@ -25,10 +25,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/common/math"
+	"github.com/curtis0505/arbitrum/core/types"
+	"github.com/curtis0505/arbitrum/params"
 )
 
 type diffTest struct {

@@ -25,12 +25,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/crypto"
+	"github.com/curtis0505/arbitrum/log"
+	"github.com/curtis0505/arbitrum/p2p"
+	"github.com/curtis0505/arbitrum/p2p/enode"
+	"github.com/curtis0505/arbitrum/rpc"
 )
 
 const (

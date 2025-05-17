@@ -26,10 +26,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/internal/testlog"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/core/types"
+	"github.com/curtis0505/arbitrum/internal/testlog"
+	"github.com/curtis0505/arbitrum/log"
 )
 
 // Tests whether remote HTTP servers are correctly notified of new work.

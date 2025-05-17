@@ -22,12 +22,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/curtis0505/arbitrum/internal/ethapi"
+	"github.com/curtis0505/arbitrum/internal/jsre/deps"
+	"github.com/curtis0505/arbitrum/log"
+	"github.com/curtis0505/arbitrum/signer/core"
+	"github.com/curtis0505/arbitrum/signer/storage"
 	"github.com/dop251/goja"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/internal/jsre/deps"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/signer/core"
-	"github.com/ethereum/go-ethereum/signer/storage"
 )
 
 // consoleOutput is an override for the console.log and console.error methods to

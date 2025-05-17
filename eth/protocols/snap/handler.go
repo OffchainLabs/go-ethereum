@@ -21,17 +21,17 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/core"
+	"github.com/curtis0505/arbitrum/core/types"
+	"github.com/curtis0505/arbitrum/light"
+	"github.com/curtis0505/arbitrum/log"
+	"github.com/curtis0505/arbitrum/metrics"
+	"github.com/curtis0505/arbitrum/p2p"
+	"github.com/curtis0505/arbitrum/p2p/enode"
+	"github.com/curtis0505/arbitrum/p2p/enr"
+	"github.com/curtis0505/arbitrum/rlp"
+	"github.com/curtis0505/arbitrum/trie"
 )
 
 const (

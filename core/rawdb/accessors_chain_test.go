@@ -26,11 +26,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/core/types"
+	"github.com/curtis0505/arbitrum/crypto"
+	"github.com/curtis0505/arbitrum/params"
+	"github.com/curtis0505/arbitrum/rlp"
 	"golang.org/x/crypto/sha3"
 )
 

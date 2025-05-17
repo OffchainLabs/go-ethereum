@@ -19,16 +19,16 @@ package core
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/consensus"
+	"github.com/curtis0505/arbitrum/core/rawdb"
+	"github.com/curtis0505/arbitrum/core/state"
+	"github.com/curtis0505/arbitrum/core/state/snapshot"
+	"github.com/curtis0505/arbitrum/core/types"
+	"github.com/curtis0505/arbitrum/core/vm"
+	"github.com/curtis0505/arbitrum/event"
+	"github.com/curtis0505/arbitrum/params"
+	"github.com/curtis0505/arbitrum/rlp"
 )
 
 // CurrentHeader retrieves the current head header of the canonical chain. The

@@ -21,12 +21,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/core/state"
+	"github.com/curtis0505/arbitrum/crypto"
+	"github.com/curtis0505/arbitrum/ethdb"
+	"github.com/curtis0505/arbitrum/log"
+	"github.com/curtis0505/arbitrum/trie"
 	"golang.org/x/crypto/sha3"
 )
 

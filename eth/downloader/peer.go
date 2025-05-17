@@ -25,11 +25,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/msgrate"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/eth/protocols/eth"
+	"github.com/curtis0505/arbitrum/event"
+	"github.com/curtis0505/arbitrum/log"
+	"github.com/curtis0505/arbitrum/p2p/msgrate"
 )
 
 const (

@@ -23,7 +23,7 @@ package leveldb
 import (
 	"errors"
 
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/curtis0505/arbitrum/ethdb"
 )
 
 type Database struct {

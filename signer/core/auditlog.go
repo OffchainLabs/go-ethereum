@@ -20,11 +20,11 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/signer/core/apitypes"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/common/hexutil"
+	"github.com/curtis0505/arbitrum/internal/ethapi"
+	"github.com/curtis0505/arbitrum/log"
+	"github.com/curtis0505/arbitrum/signer/core/apitypes"
 )
 
 type AuditLogger struct {

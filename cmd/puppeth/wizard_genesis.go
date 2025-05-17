@@ -28,10 +28,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/core"
+	"github.com/curtis0505/arbitrum/log"
+	"github.com/curtis0505/arbitrum/params"
 )
 
 // makeGenesis creates a new genesis struct based on some user input.

@@ -19,11 +19,11 @@ package core
 import (
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/curtis0505/arbitrum/consensus"
+	"github.com/curtis0505/arbitrum/core/state"
+	"github.com/curtis0505/arbitrum/core/types"
+	"github.com/curtis0505/arbitrum/core/vm"
+	"github.com/curtis0505/arbitrum/params"
 )
 
 // statePrefetcher is a basic Prefetcher, which blindly executes a block on top

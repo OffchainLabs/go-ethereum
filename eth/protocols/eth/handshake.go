@@ -21,9 +21,9 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/core/forkid"
+	"github.com/curtis0505/arbitrum/p2p"
 )
 
 const (

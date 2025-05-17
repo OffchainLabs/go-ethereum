@@ -34,12 +34,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/curtis0505/arbitrum/log"
+	"github.com/curtis0505/arbitrum/node"
+	"github.com/curtis0505/arbitrum/p2p"
+	"github.com/curtis0505/arbitrum/p2p/enode"
+	"github.com/curtis0505/arbitrum/rpc"
 	"github.com/docker/docker/pkg/reexec"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
 )
 

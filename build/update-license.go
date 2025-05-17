@@ -79,7 +79,7 @@ var (
 		"signer/rules/deps",
 
 		// skip special licenses
-		"crypto/secp256k1", // Relicensed to BSD-3 via https://github.com/ethereum/go-ethereum/pull/17225
+		"crypto/secp256k1", // Relicensed to BSD-3 via https://github.com/curtis0505/arbitrum/pull/17225
 	}
 
 	// paths with this prefix are licensed as GPL. all other files are LGPL.

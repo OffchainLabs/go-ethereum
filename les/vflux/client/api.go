@@ -19,9 +19,9 @@ package client
 import (
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/les/utils"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/curtis0505/arbitrum/common/mclock"
+	"github.com/curtis0505/arbitrum/les/utils"
+	"github.com/curtis0505/arbitrum/p2p/enode"
 )
 
 // PrivateClientAPI implements the vflux client side API

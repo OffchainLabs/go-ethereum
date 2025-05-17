@@ -27,13 +27,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/contracts/checkpointoracle/contract"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/curtis0505/arbitrum/accounts/abi/bind"
+	"github.com/curtis0505/arbitrum/accounts/abi/bind/backends"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/contracts/checkpointoracle/contract"
+	"github.com/curtis0505/arbitrum/core"
+	"github.com/curtis0505/arbitrum/crypto"
+	"github.com/curtis0505/arbitrum/params"
 )
 
 var (

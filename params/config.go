@@ -23,7 +23,7 @@ import (
 
 	"golang.org/x/crypto/sha3"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/curtis0505/arbitrum/common"
 )
 
 // Genesis hashes to enforce below configs on.

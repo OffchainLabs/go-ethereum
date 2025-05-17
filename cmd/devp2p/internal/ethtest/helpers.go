@@ -23,14 +23,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/core/types"
+	"github.com/curtis0505/arbitrum/crypto"
+	"github.com/curtis0505/arbitrum/eth/protocols/eth"
+	"github.com/curtis0505/arbitrum/internal/utesting"
+	"github.com/curtis0505/arbitrum/p2p"
+	"github.com/curtis0505/arbitrum/p2p/rlpx"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/internal/utesting"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/rlpx"
 )
 
 var (

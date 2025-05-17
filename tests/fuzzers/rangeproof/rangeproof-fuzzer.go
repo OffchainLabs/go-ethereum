@@ -23,10 +23,10 @@ import (
 	"io"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/core/rawdb"
+	"github.com/curtis0505/arbitrum/ethdb/memorydb"
+	"github.com/curtis0505/arbitrum/trie"
 )
 
 type kv struct {
@@ -181,8 +181,10 @@ func (f *fuzzer) fuzz() int {
 
 // The function must return
 // 1 if the fuzzer should increase priority of the
-//   given input during subsequent fuzzing (for example, the input is lexically
-//   correct and was parsed successfully);
+//
+//	given input during subsequent fuzzing (for example, the input is lexically
+//	correct and was parsed successfully);
+//
 // -1 if the input must not be added to corpus even if gives new coverage; and
 // 0 otherwise; other values are reserved for future use.
 func Fuzz(input []byte) int {

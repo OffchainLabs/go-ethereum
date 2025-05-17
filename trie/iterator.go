@@ -21,8 +21,8 @@ import (
 	"container/heap"
 	"errors"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/ethdb"
 )
 
 // Iterator is a key-value trie iterator that traverses a Trie.

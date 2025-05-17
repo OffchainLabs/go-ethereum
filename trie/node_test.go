@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/curtis0505/arbitrum/rlp"
 )
 
 func newTestFullNode(v []byte) []interface{} {

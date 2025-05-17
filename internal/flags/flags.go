@@ -26,8 +26,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/urfave/cli/v2"
+	"github.com/curtis0505/arbitrum/common/math"
 )
 
 // DirectoryString is custom type which is registered in the flags library which cli uses for

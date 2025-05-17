@@ -24,14 +24,11 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/metrics/exp"
+	"github.com/curtis0505/arbitrum/internal/flags"
+	"github.com/curtis0505/arbitrum/log"
+	"github.com/curtis0505/arbitrum/metrics"
+	"github.com/curtis0505/arbitrum/metrics/exp"
 	"github.com/fjl/memsize/memsizeui"
-	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
-	"github.com/urfave/cli/v2"
 )
 
 var Memsize memsizeui.Handler

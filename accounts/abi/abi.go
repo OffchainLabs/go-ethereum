@@ -23,8 +23,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/crypto"
 )
 
 // The ABI holds information about a contract's context and available

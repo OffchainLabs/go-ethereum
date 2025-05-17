@@ -20,7 +20,7 @@ import (
 	"math/bits"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/curtis0505/arbitrum/crypto"
 )
 
 func TestJumpDestAnalysis(t *testing.T) {

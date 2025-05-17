@@ -22,9 +22,8 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
-	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/urfave/cli/v2"
+	"github.com/curtis0505/arbitrum/cmd/evm/internal/t8ntool"
+	"github.com/curtis0505/arbitrum/internal/flags"
 )
 
 var (

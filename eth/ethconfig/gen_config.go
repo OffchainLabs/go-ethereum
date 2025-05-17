@@ -6,13 +6,13 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/consensus/ethash"
+	"github.com/curtis0505/arbitrum/core"
+	"github.com/curtis0505/arbitrum/eth/downloader"
+	"github.com/curtis0505/arbitrum/eth/gasprice"
+	"github.com/curtis0505/arbitrum/miner"
+	"github.com/curtis0505/arbitrum/params"
 )
 
 // MarshalTOML marshals as TOML.

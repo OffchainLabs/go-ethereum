@@ -29,8 +29,8 @@ import (
 	"testing/quick"
 	"time"
 
+	"github.com/curtis0505/arbitrum/metrics"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/stretchr/testify/require"
 )
 

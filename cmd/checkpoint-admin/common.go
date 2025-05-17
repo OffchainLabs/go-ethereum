@@ -19,16 +19,15 @@ package main
 import (
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/accounts/external"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/contracts/checkpointoracle"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/urfave/cli/v2"
+	"github.com/curtis0505/arbitrum/accounts"
+	"github.com/curtis0505/arbitrum/accounts/abi/bind"
+	"github.com/curtis0505/arbitrum/accounts/external"
+	"github.com/curtis0505/arbitrum/cmd/utils"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/contracts/checkpointoracle"
+	"github.com/curtis0505/arbitrum/ethclient"
+	"github.com/curtis0505/arbitrum/params"
+	"github.com/curtis0505/arbitrum/rpc"
 )
 
 // newClient creates a client with specified remote URL.

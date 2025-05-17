@@ -22,13 +22,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers/logger"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/tests"
-
-	"github.com/urfave/cli/v2"
+	"github.com/curtis0505/arbitrum/core/state"
+	"github.com/curtis0505/arbitrum/core/vm"
+	"github.com/curtis0505/arbitrum/eth/tracers/logger"
+	"github.com/curtis0505/arbitrum/log"
+	"github.com/curtis0505/arbitrum/tests"
 )
 
 var stateTestCommand = &cli.Command{

@@ -21,12 +21,12 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/les/downloader"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/core/rawdb"
+	"github.com/curtis0505/arbitrum/les/downloader"
+	"github.com/curtis0505/arbitrum/light"
+	"github.com/curtis0505/arbitrum/log"
+	"github.com/curtis0505/arbitrum/params"
 )
 
 var errInvalidCheckpoint = errors.New("invalid advertised checkpoint")

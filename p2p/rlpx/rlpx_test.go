@@ -28,11 +28,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/curtis0505/arbitrum/crypto"
+	"github.com/curtis0505/arbitrum/crypto/ecies"
+	"github.com/curtis0505/arbitrum/p2p/simulations/pipes"
+	"github.com/curtis0505/arbitrum/rlp"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/ecies"
-	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 )
 

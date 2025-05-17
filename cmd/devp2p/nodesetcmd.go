@@ -25,11 +25,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/urfave/cli/v2"
+	"github.com/curtis0505/arbitrum/core/forkid"
+	"github.com/curtis0505/arbitrum/p2p/enr"
+	"github.com/curtis0505/arbitrum/params"
+	"github.com/curtis0505/arbitrum/rlp"
 )
 
 var (

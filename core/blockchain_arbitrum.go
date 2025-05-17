@@ -20,9 +20,9 @@ package core
 import (
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/curtis0505/arbitrum/core/state"
+	"github.com/curtis0505/arbitrum/core/types"
+	"github.com/curtis0505/arbitrum/rpc"
 )
 
 // WriteBlockAndSetHeadWithTime also counts processTime, which will cause intermittent TrieDirty cache writes

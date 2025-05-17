@@ -24,13 +24,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/curtis0505/arbitrum/accounts/scwallet"
+	"github.com/curtis0505/arbitrum/accounts/usbwallet"
+	"github.com/curtis0505/arbitrum/common/hexutil"
+	"github.com/curtis0505/arbitrum/console/prompt"
+	"github.com/curtis0505/arbitrum/internal/jsre"
+	"github.com/curtis0505/arbitrum/rpc"
 	"github.com/dop251/goja"
-	"github.com/ethereum/go-ethereum/accounts/scwallet"
-	"github.com/ethereum/go-ethereum/accounts/usbwallet"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/internal/jsre"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // bridge is a collection of JavaScript utility methods to bride the .js runtime

@@ -19,9 +19,9 @@ package downloader
 import (
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/curtis0505/arbitrum/common"
+	"github.com/curtis0505/arbitrum/eth/protocols/eth"
+	"github.com/curtis0505/arbitrum/log"
 )
 
 // headerQueue implements typedQueue and is a type adapter between the generic

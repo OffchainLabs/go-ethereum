@@ -24,17 +24,17 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/ethstats"
-	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/les"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/curtis0505/arbitrum/core"
+	"github.com/curtis0505/arbitrum/eth/downloader"
+	"github.com/curtis0505/arbitrum/eth/ethconfig"
+	"github.com/curtis0505/arbitrum/ethclient"
+	"github.com/curtis0505/arbitrum/ethstats"
+	"github.com/curtis0505/arbitrum/internal/debug"
+	"github.com/curtis0505/arbitrum/les"
+	"github.com/curtis0505/arbitrum/node"
+	"github.com/curtis0505/arbitrum/p2p"
+	"github.com/curtis0505/arbitrum/p2p/nat"
+	"github.com/curtis0505/arbitrum/params"
 )
 
 // NodeConfig represents the collection of configuration values to fine tune the Geth
