@@ -479,6 +479,13 @@ func (s *StateDB) ExpectBalanceBurn(amount *big.Int) {
 	s.arbExtraData.unexpectedBalanceDelta.Add(s.arbExtraData.unexpectedBalanceDelta, amount)
 }
 
+func (s *StateDB) ExpectBalanceMint(amount *big.Int) {
+	if amount.Sign() < 0 {
+		panic(fmt.Sprintf("ExpectBalanceMint called with negative amount %v", amount))
+	}
+	s.arbExtraData.unexpectedBalanceDelta.Sub(s.arbExtraData.unexpectedBalanceDelta, amount)
+}
+
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64, reason tracing.NonceChangeReason) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
