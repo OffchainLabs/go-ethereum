@@ -362,6 +362,10 @@ func (s *hookedStateDB) ExpectBalanceBurn(b *big.Int) {
 	s.inner.ExpectBalanceBurn(b)
 }
 
+func (s *hookedStateDB) ExpectBalanceMint(b *big.Int) {
+	s.inner.ExpectBalanceMint(b)
+}
+
 func (s *hookedStateDB) GetSelfDestructs() []common.Address {
 	return s.inner.GetSelfDestructs()
 }
