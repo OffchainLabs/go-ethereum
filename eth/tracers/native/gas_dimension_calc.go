@@ -194,7 +194,7 @@ func calcSimpleSingleDimensionGas(
 	err error,
 ) (GasesByDimension, *CallGasDimensionInfo, error) {
 	if err != nil {
-		return outOfGas(gas)
+		return consumeAllRemainingGas(gas)
 	}
 	return GasesByDimension{
 		OneDimensionalGasCost: cost,
@@ -226,7 +226,7 @@ func calcSimpleAddressAccessSetGas(
 	err error,
 ) (GasesByDimension, *CallGasDimensionInfo, error) {
 	if err != nil {
-		return outOfGas(gas)
+		return consumeAllRemainingGas(gas)
 	}
 	// for all these opcodes the address being checked is in stack position 0
 	addressAsInt := scope.StackData()[len(scope.StackData())-1]
@@ -260,7 +260,7 @@ func calcSLOADGas(
 	err error,
 ) (GasesByDimension, *CallGasDimensionInfo, error) {
 	if err != nil {
-		return outOfGas(gas)
+		return consumeAllRemainingGas(gas)
 	}
 	stackData := scope.StackData()
 	stackLen := len(stackData)
@@ -304,7 +304,7 @@ func calcExtCodeCopyGas(
 	// if state access is 2600, then have 2500 for state access
 	// rest is computation.
 	if err != nil {
-		return outOfGas(gas)
+		return consumeAllRemainingGas(gas)
 	}
 	stack := scope.StackData()
 	lenStack := len(stack)
@@ -356,7 +356,7 @@ func calcStateReadCallGas(
 	err error,
 ) (GasesByDimension, *CallGasDimensionInfo, error) {
 	if err != nil {
-		return outOfGas(gas)
+		return consumeAllRemainingGas(gas)
 	}
 	stack := scope.StackData()
 	lenStack := len(stack)
@@ -480,7 +480,7 @@ func calcLogGas(
 	// 32 bytes per topic is 256 gas per topic.
 	// rest is computation (for the bloom filter computation, memory expansion, etc)
 	if err != nil {
-		return outOfGas(gas)
+		return consumeAllRemainingGas(gas)
 	}
 	numTopics := uint64(0)
 	switch vm.OpCode(op) {
@@ -537,7 +537,7 @@ func calcCreateGas(
 	// static_gas = 32000
 	// dynamic_gas = init_code_cost + memory_expansion_cost + deployment_code_execution_cost + code_deposit_cost
 	if err != nil {
-		return outOfGas(gas)
+		return consumeAllRemainingGas(gas)
 	}
 	stack := scope.StackData()
 	lenStack := len(stack)
@@ -633,7 +633,7 @@ func calcReadAndStoreCallGas(
 	err error,
 ) (GasesByDimension, *CallGasDimensionInfo, error) {
 	if err != nil {
-		return outOfGas(gas)
+		return consumeAllRemainingGas(gas)
 	}
 	stack := scope.StackData()
 	lenStack := len(stack)
@@ -816,7 +816,7 @@ func calcSStoreGas(
 	// to find per-step changes, we track the accumulated refund
 	// and compare it to the current refund
 	if err != nil {
-		return outOfGas(gas)
+		return consumeAllRemainingGas(gas)
 	}
 	currentRefund := t.GetOpRefund()
 	accumulatedRefund := t.GetRefundAccumulated()
@@ -884,7 +884,7 @@ func calcSelfDestructGas(
 	// excepting 100 for the warm access set
 	// doesn't actually delete anything from disk, it just marks it as deleted.
 	if err != nil {
-		return outOfGas(gas)
+		return consumeAllRemainingGas(gas)
 	}
 	if cost == params.CreateBySelfdestructGas+params.SelfdestructGasEIP150 {
 		// warm but funds target empty
@@ -1122,7 +1122,7 @@ func checkGasDimensionsEqualCallGas(
 }
 
 // helper function that purely makes the golang prettier for the out of gas case
-func outOfGas(gas uint64) (GasesByDimension, *CallGasDimensionInfo, error) {
+func consumeAllRemainingGas(gas uint64) (GasesByDimension, *CallGasDimensionInfo, error) {
 	return GasesByDimension{
 		OneDimensionalGasCost: gas,
 		Computation:           gas,

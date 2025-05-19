@@ -41,6 +41,7 @@ func NewTxGasDimensionByOpcodeTracer(
 			OnOpcode:  t.OnOpcode,
 			OnTxStart: t.OnTxStart,
 			OnTxEnd:   t.OnTxEnd,
+			OnFault:   t.OnFault,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
@@ -119,6 +120,37 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 	t.updatePrevAccessList(addresses, slots)
 }
 
+// if there is an error in the evm, e.g. invalid jump,
+// out of gas, max call depth exceeded, etc, this hook is called
+func (t *TxGasDimensionByOpcodeTracer) OnFault(
+	pc uint64,
+	op byte,
+	gas, cost uint64,
+	scope tracing.OpContext,
+	depth int,
+	err error,
+) {
+	// if opcode is a revert, do not modify the gas dimension
+	// they are already right since reverts return gas to the caller
+	if vm.OpCode(op) == vm.REVERT {
+		return
+	}
+	// if there was an error, go get the opcode that caused the error
+	// Then since errors consume all gas, add the gas
+	// to the one dimensional and computation gas cost of the affected opcode
+	// note we only do this for the last depth in the call stack
+	// because if an error happens inside a call, the gas for the call opcode
+	//  will capture the excess gas consumed by the error/revert
+	if depth == 1 {
+		opcode := vm.OpCode(op)
+		accumulatedDimensions := t.OpcodeToDimensions[opcode]
+		gasAfterOpcode := gas - cost // don't double charge the cost of the opcode itself
+		accumulatedDimensions.OneDimensionalGasCost += gasAfterOpcode
+		accumulatedDimensions.Computation += gasAfterOpcode
+		t.OpcodeToDimensions[opcode] = accumulatedDimensions
+	}
+}
+
 // ############################################################################
 //                        JSON OUTPUT PRODUCTION
 // ############################################################################
@@ -163,6 +195,7 @@ func (t *TxGasDimensionByOpcodeTracer) GetProtobufResult() ([]byte, error) {
 		IntrinsicGas:   baseExecutionResult.IntrinsicGas,
 		AdjustedRefund: baseExecutionResult.AdjustedRefund,
 		Failed:         baseExecutionResult.Failed,
+		Status:         baseExecutionResult.Status,
 		Dimensions:     make(map[uint32]*proto.GasesByDimension),
 		TxHash:         baseExecutionResult.TxHash,
 		BlockTimestamp: baseExecutionResult.BlockTimestamp,

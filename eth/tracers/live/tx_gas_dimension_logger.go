@@ -50,6 +50,7 @@ func newTxGasDimensionLiveTraceLogger(cfg json.RawMessage) (*tracing.Hooks, erro
 	return &tracing.Hooks{
 		OnOpcode:     t.OnOpcode,
 		OnTxStart:    t.OnTxStart,
+		OnFault:      t.OnFault,
 		OnTxEnd:      t.OnTxEnd,
 		OnBlockStart: t.OnBlockStart,
 		OnBlockEnd:   t.OnBlockEnd,
@@ -75,6 +76,18 @@ func (t *txGasDimensionLiveTraceLogger) OnOpcode(
 ) {
 	t.GasDimensionTracer.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
 }
+
+func (t *txGasDimensionLiveTraceLogger) OnFault(
+	pc uint64,
+	op byte,
+	gas, cost uint64,
+	scope tracing.OpContext,
+	depth int,
+	err error,
+) {
+	t.GasDimensionTracer.OnFault(pc, op, gas, cost, scope, depth, err)
+}
+
 func (t *txGasDimensionLiveTraceLogger) OnTxEnd(
 	receipt *types.Receipt,
 	err error,

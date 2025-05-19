@@ -34,8 +34,11 @@ message TxGasDimensionByOpcodeExecutionResult {
   uint64 intrinsic_gas = 9;
   // the adjusted gas refund amount after EIP-3529
   uint64 adjusted_refund = 10;
-  // whether the transaction had an revert or error, like out of gas
+  // whether the transaction broke the rules of the VM and was rejected
   bool failed = 2;
+  // the status of the transaction, for a valid transaction that followed the rules,
+  // but could have still failed for reasons inside the rules, like reverts, out of gas, etc.
+  uint64 status = 11;
   // a map of each opcode to the sum of the gas consumption categorized by dimension for that opcode
   map<uint32, GasesByDimension> dimensions = 3;
   // the hash of the transaction
