@@ -1,6 +1,7 @@
 package arbitrum
 
 import (
+	"math/rand"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -44,10 +45,22 @@ func (a *archiveFallbackClientsManager) lastAvailableBlock() uint64 {
 }
 
 func (a *archiveFallbackClientsManager) fallbackClient(blockNum uint64) types.FallbackClient {
+	var possibleClients []types.FallbackClient
+	var chosenLastBlock uint64
 	for _, lastBlockAndClient := range a.lastBlockAndClients {
-		if blockNum <= lastBlockAndClient.lastBlock {
-			return lastBlockAndClient.client
+		if chosenLastBlock == 0 && blockNum <= lastBlockAndClient.lastBlock {
+			chosenLastBlock = lastBlockAndClient.lastBlock
 		}
+		if chosenLastBlock != 0 {
+			if lastBlockAndClient.lastBlock == chosenLastBlock {
+				possibleClients = append(possibleClients, lastBlockAndClient.client)
+			} else {
+				break
+			}
+		}
+	}
+	if len(possibleClients) != 0 {
+		return possibleClients[rand.Intn(len(possibleClients))]
 	}
 	return nil
 }
