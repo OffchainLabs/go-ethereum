@@ -66,6 +66,7 @@ func NewTxGasDimensionLogger(
 		Hooks: &tracing.Hooks{
 			OnOpcode:  t.OnOpcode,
 			OnTxStart: t.OnTxStart,
+			OnFault:   t.OnFault,
 			OnTxEnd:   t.OnTxEnd,
 		},
 		GetResult: t.GetResult,
@@ -88,7 +89,8 @@ func (t *TxGasDimensionLogger) OnOpcode(
 	err error,
 ) {
 	interrupted, gasesByDimension, callStackInfo, opcode := t.onOpcodeStart(pc, op, gas, cost, scope, rData, depth, err)
-	// if an error occurred, it was stored in the tracer's reason field
+	// If an error occurred in the tracer itself (not in the transaction),
+	// it was stored in the tracer's reason field (t.reason)
 	// and we should return immediately
 	if interrupted {
 		return
@@ -111,7 +113,8 @@ func (t *TxGasDimensionLogger) OnOpcode(
 		CallMemoryExpansion: 0,
 		CreateInitCodeCost:  0,
 		Create2HashCost:     0,
-		Err:                 err,
+		// VM err is stored in each log as the Err field
+		Err: err,
 	})
 
 	// if callStackInfo is not nil then we need to take a note of the index of the
@@ -150,6 +153,38 @@ func (t *TxGasDimensionLogger) OnOpcode(
 	}
 	addresses, slots := t.env.StateDB.GetAccessList()
 	t.updatePrevAccessList(addresses, slots)
+}
+
+// if there is an error in the evm, e.g. invalid jump,
+// out of gas, max call depth exceeded, etc, this hook is called
+func (t *TxGasDimensionLogger) OnFault(
+	pc uint64,
+	op byte,
+	gas, cost uint64,
+	scope tracing.OpContext,
+	depth int,
+	err error,
+) {
+	// if opcode is a revert, do not modify the gas dimension
+	// they are already right since reverts return gas to the caller
+	if vm.OpCode(op) == vm.REVERT {
+		return
+	}
+	// if there was an error, go backwards through the logs until we find the log
+	// with the affected opcode. Then since errors consume all gas, add the gas
+	// to the one dimensional and computation gas cost of the affected opcode
+	// note we only do this for the last depth in the call stack
+	// because if an error happens inside a call, the gas for the call opcode
+	//  will capture the excess gas consumed by the error/revert
+	if depth == 1 {
+		for i := len(t.logs) - 1; i >= 0; i-- {
+			if t.logs[i].Pc == pc {
+				gasLeft := gas - cost
+				t.logs[i].OneDimensionalGasCost += gasLeft
+				t.logs[i].Computation += gasLeft
+			}
+		}
+	}
 }
 
 // save the relevant information for the call stack when a call or create

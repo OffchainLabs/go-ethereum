@@ -41,8 +41,11 @@ type BaseGasDimensionTracer struct {
 	executionGasAccumulated uint64
 	// the amount of refund allowed at the end of the transaction, adjusted by EIP-3529
 	refundAdjusted uint64
-	// whether the transaction had an error, like out of gas
+	// whether the transaction should be rejected for not following the rules of the VM
 	err error
+	// the transactions status, for a valid transaction that followed the rules,
+	// but could have still failed for reasons inside the rules, like reverts, out of gas, etc.
+	status uint64
 	// whether the tracer itself was interrupted
 	interrupt atomic.Bool
 	// reason or error for the interruption in the tracer itself (as opposed to the transaction)
@@ -107,9 +110,12 @@ func (t *BaseGasDimensionTracer) onOpcodeStart(
 	callStackInfo *CallGasDimensionInfo,
 	opcode vm.OpCode,
 ) {
+	// First check if tracer has been interrupted
 	if t.interrupt.Load() {
 		return true, zeroGasesByDimension(), nil, vm.OpCode(op)
 	}
+
+	// Depth validation - if depth doesn't match expectations, this is a tracer error
 	if depth != t.depth && depth != t.depth-1 {
 		t.interrupt.Store(true)
 		t.reason = fmt.Errorf(
@@ -133,11 +139,13 @@ func (t *BaseGasDimensionTracer) onOpcodeStart(
 		return true, zeroGasesByDimension(), nil, vm.OpCode(op)
 	}
 
-	// get the gas dimension function
-	// if it's not a call, directly calculate the gas dimensions for the opcode
+	// Get the gas dimension function
+	// If it's not a call, directly calculate the gas dimensions for the opcode
 	f := GetCalcGasDimensionFunc(vm.OpCode(op))
 	var fErr error
 	gasesByDimension, callStackInfo, fErr = f(t, pc, op, gas, cost, scope, rData, depth, err)
+
+	// If there's a problem with our dimension calculation function, this is a tracer error
 	if fErr != nil {
 		t.interrupt.Store(true)
 		t.reason = fErr
@@ -145,6 +153,7 @@ func (t *BaseGasDimensionTracer) onOpcodeStart(
 	}
 	opcode = vm.OpCode(op)
 
+	// Logic validation check - another potential tracer error
 	if WasCallOrCreate(opcode) && callStackInfo == nil && err == nil || !WasCallOrCreate(opcode) && callStackInfo != nil {
 		t.interrupt.Store(true)
 		t.reason = fmt.Errorf(
@@ -271,6 +280,7 @@ func (t *BaseGasDimensionTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	t.gasUsedForL1 = receipt.GasUsedForL1
 	t.gasUsedForL2 = receipt.GasUsedForL2()
 	t.txHash = receipt.TxHash
+	t.status = receipt.Status
 	t.refundAdjusted = t.adjustRefund(t.executionGasAccumulated+t.intrinsicGas, t.GetRefundAccumulated())
 }
 
@@ -315,8 +325,15 @@ func (t *BaseGasDimensionTracer) GetPrevAccessList() (addresses map[common.Addre
 	return t.prevAccessListAddresses, t.prevAccessListSlots
 }
 
-// Error returns the VM error captured by the trace
+// Error returns the EVM execution error captured by the trace
 func (t *BaseGasDimensionTracer) Error() error { return t.err }
+
+// Status returns the status of the transaction, e.g. 0 for failure, 1 for success
+// a transaction can revert, fail, and still be mined and included in a block
+func (t *BaseGasDimensionTracer) Status() uint64 { return t.status }
+
+// Reason returns any errors that occurred in the tracer itself
+func (t *BaseGasDimensionTracer) Reason() error { return t.reason }
 
 // Add to the execution gas accumulated, for tracking adjusted refund
 func (t *BaseGasDimensionTracer) AddToExecutionGasAccumulated(gas uint64) {
@@ -390,6 +407,7 @@ type BaseExecutionResult struct {
 	TxHash         string   `json:"txHash"`
 	BlockTimestamp uint64   `json:"blockTimestamp"`
 	BlockNumber    *big.Int `json:"blockNumber"`
+	Status         uint64   `json:"status"`
 }
 
 // get the result of the transaction execution that we will hand to the json output
@@ -410,5 +428,6 @@ func (t *BaseGasDimensionTracer) GetBaseExecutionResult() (BaseExecutionResult, 
 		TxHash:         t.txHash.Hex(),
 		BlockTimestamp: t.env.Time,
 		BlockNumber:    t.env.BlockNumber,
+		Status:         t.status,
 	}, nil
 }
