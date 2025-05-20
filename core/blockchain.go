@@ -1555,6 +1555,11 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 	return nil
 }
 
+func (bc *BlockChain) TimeBeforeFlush() time.Duration {
+	flushInterval := time.Duration(bc.flushInterval.Load())
+	return flushInterval - (bc.gcproc + bc.gcprocRandOffset)
+}
+
 // writeBlockWithState writes block, metadata and corresponding state data to the
 // database.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, statedb *state.StateDB) error {
