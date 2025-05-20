@@ -1555,9 +1555,14 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 	return nil
 }
 
-func (bc *BlockChain) TimeBeforeFlush() time.Duration {
+func (bc *BlockChain) TimeBeforeFlush() (time.Duration, error) {
+	if !bc.chainmu.TryLock() {
+		return 0, errChainStopped
+	}
+	defer bc.chainmu.Unlock()
+
 	flushInterval := time.Duration(bc.flushInterval.Load())
-	return flushInterval - (bc.gcproc + bc.gcprocRandOffset)
+	return flushInterval - (bc.gcproc + bc.gcprocRandOffset), nil
 }
 
 // writeBlockWithState writes block, metadata and corresponding state data to the
