@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/native"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type txGasDimensionLiveTraceLogger struct {
@@ -36,6 +37,9 @@ func newTxGasDimensionLiveTraceLogger(cfg json.RawMessage) (*tracing.Hooks, erro
 	if config.Path == "" {
 		return nil, fmt.Errorf("gas dimension live tracer path for output is required: %v", config)
 	}
+
+	// be sure path exists
+	os.MkdirAll(config.Path, 0755)
 
 	gasDimensionTracer, err := native.NewTxGasDimensionLogger(nil, nil, nil)
 	if err != nil {
@@ -98,8 +102,7 @@ func (t *txGasDimensionLiveTraceLogger) OnTxEnd(
 	// then get the json from the native tracer
 	executionResultJsonBytes, errGettingResult := t.GasDimensionTracer.GetResult()
 	if errGettingResult != nil {
-		errorJsonString := fmt.Sprintf("{\"errorGettingResult\": \"%s\"}", errGettingResult.Error())
-		fmt.Println(errorJsonString)
+		log.Error("Failed to get result", "error", errGettingResult)
 		return
 	}
 
@@ -112,13 +115,13 @@ func (t *txGasDimensionLiveTraceLogger) OnTxEnd(
 
 	// Ensure the directory exists
 	if err := os.MkdirAll(t.Path, 0755); err != nil {
-		fmt.Printf("Failed to create directory %s: %v\n", t.Path, err)
+		log.Error("Failed to create directory", "path", t.Path, "error", err)
 		return
 	}
 
 	// Write the file
 	if err := os.WriteFile(filepath, executionResultJsonBytes, 0644); err != nil {
-		fmt.Printf("Failed to write file %s: %v\n", filepath, err)
+		log.Error("Failed to write file", "path", filepath, "error", err)
 		return
 	}
 }
