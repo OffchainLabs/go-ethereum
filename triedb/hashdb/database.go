@@ -372,7 +372,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		err := rawdb.WriteLegacyTrieNodeWithError(batch, oldest, node.node)
 		if err != nil {
 			if errors.Is(err, pebble.ErrBatchTooLarge) {
-				log.Warn("Pebble batch limit reached in hashdb Cap operation, flushing batch.")
+				log.Warn("Pebble batch limit reached in hashdb Cap operation, flushing batch. Consider setting ideal cap batch size to a lower value.", "pebbleError", err)
 				// flush batch & retry the write
 				if err = batch.Write(); err != nil {
 					return err
@@ -512,7 +512,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	err = rawdb.WriteLegacyTrieNodeWithError(batch, hash, node.node)
 	if err != nil {
 		if errors.Is(err, pebble.ErrBatchTooLarge) {
-			log.Warn("Pebble batch limit reached in hashdb Commit operation, flushing batch.")
+			log.Warn("Pebble batch limit reached in hashdb Commit operation, flushing batch. Consider setting ideal commit batch size to a lower value.", "pebbleError", err)
 			// flush batch & retry the write
 			if err = batch.Write(); err != nil {
 				return err
