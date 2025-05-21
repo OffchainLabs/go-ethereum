@@ -66,6 +66,7 @@ type StateDB interface {
 	AddBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason) uint256.Int
 	GetBalance(common.Address) *uint256.Int
 	ExpectBalanceBurn(*big.Int)
+	ExpectBalanceMint(*big.Int)
 
 	GetNonce(common.Address) uint64
 	SetNonce(common.Address, uint64, tracing.NonceChangeReason)

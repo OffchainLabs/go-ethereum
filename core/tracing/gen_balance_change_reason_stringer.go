@@ -24,15 +24,44 @@ func _() {
 	_ = x[BalanceDecreaseSelfdestruct-13]
 	_ = x[BalanceDecreaseSelfdestructBurn-14]
 	_ = x[BalanceChangeRevert-15]
+	_ = x[BalanceChangeDuringEVMExecution-128]
+	_ = x[BalanceIncreaseDeposit-129]
+	_ = x[BalanceDecreaseWithdrawToL1-130]
+	_ = x[BalanceIncreaseL1PosterFee-131]
+	_ = x[BalanceIncreaseInfraFee-132]
+	_ = x[BalanceIncreaseNetworkFee-133]
+	_ = x[BalanceChangeTransferInfraRefund-134]
+	_ = x[BalanceChangeTransferNetworkRefund-135]
+	_ = x[BalanceIncreasePrepaid-136]
+	_ = x[BalanceDecreaseUndoRefund-137]
+	_ = x[BalanceChangeEscrowTransfer-138]
+	_ = x[BalanceChangeTransferBatchposterReward-139]
+	_ = x[BalanceChangeTransferBatchposterRefund-140]
+	_ = x[BalanceChangeTransferRetryableExcessRefund-141]
+	_ = x[BalanceChangeTransferActivationFee-142]
+	_ = x[BalanceChangeTransferActivationReimburse-143]
+	_ = x[BalanceIncreaseMintNativeToken-144]
+	_ = x[BalanceDecreaseBurnNativeToken-145]
 }
 
-const _BalanceChangeReason_name = "UnspecifiedBalanceIncreaseRewardMineUncleBalanceIncreaseRewardMineBlockBalanceIncreaseWithdrawalBalanceIncreaseGenesisBalanceBalanceIncreaseRewardTransactionFeeBalanceDecreaseGasBuyBalanceIncreaseGasReturnBalanceIncreaseDaoContractBalanceDecreaseDaoAccountTransferTouchAccountBalanceIncreaseSelfdestructBalanceDecreaseSelfdestructBalanceDecreaseSelfdestructBurnRevert"
+const (
+	_BalanceChangeReason_name_0 = "UnspecifiedBalanceIncreaseRewardMineUncleBalanceIncreaseRewardMineBlockBalanceIncreaseWithdrawalBalanceIncreaseGenesisBalanceBalanceIncreaseRewardTransactionFeeBalanceDecreaseGasBuyBalanceIncreaseGasReturnBalanceIncreaseDaoContractBalanceDecreaseDaoAccountTransferTouchAccountBalanceIncreaseSelfdestructBalanceDecreaseSelfdestructBalanceDecreaseSelfdestructBurnRevert"
+	_BalanceChangeReason_name_1 = "DuringEVMExecutionBalanceIncreaseDepositBalanceDecreaseWithdrawToL1BalanceIncreaseL1PosterFeeBalanceIncreaseInfraFeeBalanceIncreaseNetworkFeeTransferInfraRefundTransferNetworkRefundBalanceIncreasePrepaidBalanceDecreaseUndoRefundEscrowTransferTransferBatchposterRewardTransferBatchposterRefundTransferRetryableExcessRefundTransferActivationFeeTransferActivationReimburseBalanceIncreaseMintNativeTokenBalanceDecreaseBurnNativeToken"
+)
 
-var _BalanceChangeReason_index = [...]uint16{0, 11, 41, 71, 96, 125, 160, 181, 205, 231, 256, 264, 276, 303, 330, 361, 367}
+var (
+	_BalanceChangeReason_index_0 = [...]uint16{0, 11, 41, 71, 96, 125, 160, 181, 205, 231, 256, 264, 276, 303, 330, 361, 367}
+	_BalanceChangeReason_index_1 = [...]uint16{0, 18, 40, 67, 93, 116, 141, 160, 181, 203, 228, 242, 267, 292, 321, 342, 369, 399, 429}
+)
 
 func (i BalanceChangeReason) String() string {
-	if i >= BalanceChangeReason(len(_BalanceChangeReason_index)-1) {
+	switch {
+	case i <= 15:
+		return _BalanceChangeReason_name_0[_BalanceChangeReason_index_0[i]:_BalanceChangeReason_index_0[i+1]]
+	case 128 <= i && i <= 145:
+		i -= 128
+		return _BalanceChangeReason_name_1[_BalanceChangeReason_index_1[i]:_BalanceChangeReason_index_1[i+1]]
+	default:
 		return "BalanceChangeReason(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _BalanceChangeReason_name[_BalanceChangeReason_index[i]:_BalanceChangeReason_index[i+1]]
 }

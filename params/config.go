@@ -344,6 +344,12 @@ var NetworkNames = map[string]string{
 	HoleskyChainConfig.ChainID.String(): "holesky",
 }
 
+// Arbitrum
+// ArbOSInit defines some initialization values for ArbOS state.
+type ArbOSInit struct {
+	NativeTokenSupplyManagementEnabled bool `json:"nativeTokenSupplyManagementEnabled"`
+}
+
 // ChainConfig is the core config which determines the blockchain settings.
 //
 // ChainConfig is stored in the database on a per block basis. This means
