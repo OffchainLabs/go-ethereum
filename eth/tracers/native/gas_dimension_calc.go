@@ -1087,9 +1087,9 @@ func checkGasDimensionsEqualOneDimensionalGas(
 ) error {
 	if cost != dim.Computation+dim.StateAccess+dim.StateGrowth+dim.HistoryGrowth {
 		return fmt.Errorf(
-			"unexpected gas cost mismatch: pc %d, op %d, depth %d, gas %d, cost %d != %v",
+			"unexpected one-dim gas cost mismatch: pc %d, op %s, depth %d, gas %d, cost %d != %v",
 			pc,
-			op,
+			vm.OpCode(op).String(),
 			depth,
 			gas,
 			cost,
@@ -1110,9 +1110,9 @@ func checkGasDimensionsEqualCallGas(
 ) error {
 	if dim.OneDimensionalGasCost != dim.Computation+dim.StateAccess+dim.StateGrowth+dim.HistoryGrowth {
 		return fmt.Errorf(
-			"unexpected gas cost mismatch: pc %d, op %d, with codeExecutionCost %d, expected %d == %v",
+			"unexpected call gas cost mismatch: pc %d, op %s, with codeExecutionCost %d, expected %d == %v",
 			pc,
-			op,
+			vm.OpCode(op).String(),
 			codeExecutionCost,
 			dim.OneDimensionalGasCost,
 			dim,

@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	_vm "github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // initializer for the tracer
@@ -29,9 +30,24 @@ type txGasDimensionByOpcodeLiveTraceConfig struct {
 
 // gasDimensionTracer struct
 type TxGasDimensionByOpcodeLiveTracer struct {
-	Path               string `json:"path"` // Path to directory for output
-	ChainConfig        *params.ChainConfig
-	GasDimensionTracer *native.TxGasDimensionByOpcodeTracer
+	Path                    string                               `json:"path"` // Path to directory for output
+	ChainConfig             *params.ChainConfig                  // chain config, needed for the tracer
+	skip                    bool                                 // skip hooking system transactions
+	nativeGasByOpcodeTracer *native.TxGasDimensionByOpcodeTracer // the native tracer that does all the actual work
+}
+
+// an struct to capture information about errors in tracer execution
+type TxGasDimensionByOpcodeLiveTraceErrorInfo struct {
+	TxHash       string      `json:"txHash"`
+	BlockNumber  string      `json:"blockNumber"`
+	Error        string      `json:"error"`
+	TracerError  string      `json:"tracerError,omitempty"`
+	Status       uint64      `json:"status"`
+	GasUsed      uint64      `json:"gasUsed"`
+	GasUsedForL1 uint64      `json:"gasUsedForL1"`
+	GasUsedForL2 uint64      `json:"gasUsedForL2"`
+	IntrinsicGas uint64      `json:"intrinsicGas"`
+	Dimensions   interface{} `json:"dimensions,omitempty"`
 }
 
 // gasDimensionTracer returns a new tracer that traces gas
@@ -48,6 +64,8 @@ func NewTxGasDimensionByOpcodeLogger(
 	if config.Path == "" {
 		return nil, fmt.Errorf("tx gas dimension live tracer path for output is required: %v", config)
 	}
+	// be sure path exists
+	os.MkdirAll(config.Path, 0755)
 
 	// if you get stuck here, look at
 	// cmd/chaininfo/arbitrum_chain_info.json
@@ -57,9 +75,10 @@ func NewTxGasDimensionByOpcodeLogger(
 	}
 
 	t := &TxGasDimensionByOpcodeLiveTracer{
-		Path:               config.Path,
-		ChainConfig:        config.ChainConfig,
-		GasDimensionTracer: nil,
+		Path:                    config.Path,
+		ChainConfig:             config.ChainConfig,
+		skip:                    false,
+		nativeGasByOpcodeTracer: nil,
 	}
 
 	return &tracing.Hooks{
@@ -78,15 +97,21 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnTxStart(
 	tx *types.Transaction,
 	from common.Address,
 ) {
-	if t.GasDimensionTracer != nil {
-		fmt.Println("Error seen in the gas dimension live tracer lifecycle!")
+	if t.nativeGasByOpcodeTracer != nil {
+		log.Error("Error seen in the gas dimension live tracer lifecycle!")
 	}
 
-	t.GasDimensionTracer = &native.TxGasDimensionByOpcodeTracer{
+	// we skip internal / system transactions
+	if tx.Type() == types.ArbitrumInternalTxType {
+		t.skip = true
+		return
+	}
+
+	t.nativeGasByOpcodeTracer = &native.TxGasDimensionByOpcodeTracer{
 		BaseGasDimensionTracer: native.NewBaseGasDimensionTracer(t.ChainConfig),
 		OpcodeToDimensions:     make(map[_vm.OpCode]native.GasesByDimension),
 	}
-	t.GasDimensionTracer.OnTxStart(vm, tx, from)
+	t.nativeGasByOpcodeTracer.OnTxStart(vm, tx, from)
 }
 
 func (t *TxGasDimensionByOpcodeLiveTracer) OnFault(
@@ -97,7 +122,10 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnFault(
 	depth int,
 	err error,
 ) {
-	t.GasDimensionTracer.OnFault(pc, op, gas, cost, scope, depth, err)
+	if t.skip {
+		return
+	}
+	t.nativeGasByOpcodeTracer.OnFault(pc, op, gas, cost, scope, depth, err)
 }
 
 func (t *TxGasDimensionByOpcodeLiveTracer) OnOpcode(
@@ -109,103 +137,37 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnOpcode(
 	depth int,
 	err error,
 ) {
-	t.GasDimensionTracer.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
+	if t.skip {
+		return
+	}
+	t.nativeGasByOpcodeTracer.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
 }
 
 func (t *TxGasDimensionByOpcodeLiveTracer) OnTxEnd(
 	receipt *types.Receipt,
 	err error,
 ) {
+	// If we skipped this transaction, just reset and return
+	if t.skip {
+		t.nativeGasByOpcodeTracer = nil
+		t.skip = false
+		return
+	}
+
 	// first call the native tracer's OnTxEnd
-	t.GasDimensionTracer.OnTxEnd(receipt, err)
+	t.nativeGasByOpcodeTracer.OnTxEnd(receipt, err)
 
-	blockNumber := receipt.BlockNumber.String()
-	txHashString := receipt.TxHash.Hex()
+	tracerErr := t.nativeGasByOpcodeTracer.Reason()
 
-	// Handle errors by saving them to a separate errors directory
-	// Note: We only consider errors in the tracing process itself, not transaction reverts
-	tracerErr := t.GasDimensionTracer.Reason()
-	if tracerErr != nil || err != nil {
-		// Create error directory path
-		errorDirPath := filepath.Join(t.Path, "errors", blockNumber)
-		if err := os.MkdirAll(errorDirPath, 0755); err != nil {
-			fmt.Printf("Failed to create error directory %s: %v\n", errorDirPath, err)
-			return
-		}
-
-		// Create error info structure
-		errorInfo := struct {
-			TxHash       string      `json:"txHash"`
-			BlockNumber  string      `json:"blockNumber"`
-			Error        string      `json:"error"`
-			TracerError  string      `json:"tracerError,omitempty"`
-			GasUsed      uint64      `json:"gasUsed"`
-			GasUsedForL1 uint64      `json:"gasUsedForL1"`
-			GasUsedForL2 uint64      `json:"gasUsedForL2"`
-			IntrinsicGas uint64      `json:"intrinsicGas"`
-			Dimensions   interface{} `json:"dimensions,omitempty"`
-		}{
-			TxHash:       txHashString,
-			BlockNumber:  blockNumber,
-			Error:        err.Error(),
-			GasUsed:      receipt.GasUsed,
-			GasUsedForL1: receipt.GasUsedForL1,
-			GasUsedForL2: receipt.GasUsedForL2(),
-		}
-
-		// Add tracer error if present
-		if tracerErr != nil {
-			errorInfo.TracerError = tracerErr.Error()
-		}
-
-		// Try to get any available gas dimension data
-		dimensions := t.GasDimensionTracer.GetOpcodeDimensionSummary()
-		errorInfo.Dimensions = dimensions
-
-		// Marshal error info to JSON
-		errorData, err := json.MarshalIndent(errorInfo, "", "  ")
-		if err != nil {
-			fmt.Printf("Failed to marshal error info: %v\n", err)
-			return
-		}
-
-		// Write error file
-		errorFilepath := filepath.Join(errorDirPath, fmt.Sprintf("%s.json", txHashString))
-		if err := os.WriteFile(errorFilepath, errorData, 0644); err != nil {
-			fmt.Printf("Failed to write error file %s: %v\n", errorFilepath, err)
-			return
-		}
-	} else {
-		// system transactions don't use any gas
-		// they can be skipped
-		if receipt.GasUsed != 0 {
-			executionResultBytes, err := t.GasDimensionTracer.GetProtobufResult()
-			if err != nil {
-				fmt.Printf("Failed to get protobuf result: %v\n", err)
-				return
-			}
-
-			// Create the file path
-			filename := fmt.Sprintf("%s.pb", txHashString)
-			dirPath := filepath.Join(t.Path, blockNumber)
-			filepath := filepath.Join(dirPath, filename)
-
-			// Ensure the directory exists (including block number subdirectory)
-			if err := os.MkdirAll(dirPath, 0755); err != nil {
-				fmt.Printf("Failed to create directory %s: %v\n", dirPath, err)
-				return
-			}
-
-			// Write the file
-			if err := os.WriteFile(filepath, executionResultBytes, 0644); err != nil {
-				fmt.Printf("Failed to write file %s: %v\n", filepath, err)
-				return
-			}
-		}
+	if tracerErr != nil || err != nil || receipt == nil {
+		writeTxErrorToFile(t, receipt, err, tracerErr)
+	} else { // tx did not have any errors
+		writeTxSuccessToFile(t, receipt)
 	}
 
 	// reset the tracer
-	t.GasDimensionTracer = nil
+	t.nativeGasByOpcodeTracer = nil
+	t.skip = false
 }
 
 func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockStart(ev tracing.BlockEvent) {
@@ -221,7 +183,7 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockEndMetrics(blockNumber uint64,
 
 	// Ensure the directory exists
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
-		fmt.Printf("Failed to create directory %s: %v\n", dirPath, err)
+		log.Error("Failed to create directory", "path", dirPath, "error", err)
 		return
 	}
 
@@ -230,7 +192,120 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockEndMetrics(blockNumber uint64,
 
 	// Write the file
 	if err := os.WriteFile(filepath, fmt.Appendf(nil, "%d", outData), 0644); err != nil {
-		fmt.Printf("Failed to write file %s: %v\n", filepath, err)
+		log.Error("Failed to write file", "path", filepath, "error", err)
 		return
+	}
+}
+
+// if the transaction has any kind of error, try to get as much information
+// as you can out of it, and then write that out to a file underneath
+// Path/errors/blocknumber/blocknumber_txhash.json
+func writeTxErrorToFile(t *TxGasDimensionByOpcodeLiveTracer, receipt *types.Receipt, err error, tracerError error) {
+	var txHashStr string = "no-tx-hash"
+	var blockNumberStr string = "no-block-number"
+	var errorInfo TxGasDimensionByOpcodeLiveTraceErrorInfo
+
+	var errStr string = ""
+	var tracerErrStr string = ""
+	if err != nil {
+		errStr = err.Error()
+	}
+	if tracerError != nil {
+		tracerErrStr = tracerError.Error()
+	}
+	// dimensions should not error, just return empty if there is no data
+	dimensions := t.nativeGasByOpcodeTracer.GetOpcodeDimensionSummary()
+
+	if receipt == nil {
+		// we need something to use as a name for the error file,
+		// and we have no tx to hash
+		txHashStr += time.Now().String()
+		outErrString := fmt.Sprintf("receipt is nil, err: %s", errStr)
+		errorInfo = TxGasDimensionByOpcodeLiveTraceErrorInfo{
+			Error:       outErrString,
+			TracerError: tracerErrStr,
+			Dimensions:  dimensions,
+		}
+	} else {
+		// if we errored in the tracer because we had an unexpected gas cost mismatch
+		blockNumberStr = receipt.BlockNumber.String()
+		txHashStr = receipt.TxHash.Hex()
+
+		var intrinsicGas uint64 = 0
+		baseExecutionResult, err := t.nativeGasByOpcodeTracer.GetBaseExecutionResult()
+		if err == nil {
+			intrinsicGas = baseExecutionResult.IntrinsicGas
+		}
+
+		errorInfo = TxGasDimensionByOpcodeLiveTraceErrorInfo{
+			TxHash:       txHashStr,
+			BlockNumber:  blockNumberStr,
+			Error:        errStr,
+			TracerError:  tracerErrStr,
+			Status:       receipt.Status,
+			GasUsed:      receipt.GasUsed,
+			GasUsedForL1: receipt.GasUsedForL1,
+			GasUsedForL2: receipt.GasUsedForL2(),
+			IntrinsicGas: intrinsicGas,
+			Dimensions:   dimensions,
+		}
+	}
+
+	// Create error directory path
+	errorDirPath := filepath.Join(t.Path, "errors", blockNumberStr)
+	if err := os.MkdirAll(errorDirPath, 0755); err != nil {
+		log.Error("Failed to create error directory", "path", errorDirPath, "error", err)
+		return
+	}
+	// Marshal error info to JSON
+	errorData, err := json.MarshalIndent(errorInfo, "", "  ")
+	if err != nil {
+		log.Error("Failed to marshal error info", "error", err)
+		return
+	}
+
+	// Write error file
+	errorFilepath := filepath.Join(errorDirPath, fmt.Sprintf("%s_%s.json", blockNumberStr, txHashStr))
+	if err := os.WriteFile(errorFilepath, errorData, 0644); err != nil {
+		log.Error("Failed to write error file", "path", errorFilepath, "error", err)
+		return
+	}
+}
+
+// if the transaction is a non-erroring transaction, write it out to
+// the path specified when the tracer was created, under a folder organized by
+// every 1000 blocks (this avoids making a huge number of directories,
+// which makes analysis iteration over the entire dataset faster)
+// the individual filenames are where the filename is blocknumber_txhash.pb
+// so you have Path/block_group/blocknumber_txhash.pb
+// e.g. Path/1000/1890_0x123abc.pb
+func writeTxSuccessToFile(t *TxGasDimensionByOpcodeLiveTracer, receipt *types.Receipt) {
+	// system transactions don't use any gas
+	// they can be skipped
+	if receipt.GasUsed != 0 {
+		txHashString := receipt.TxHash.Hex()
+		blockNumber := receipt.BlockNumber
+		executionResultBytes, err := t.nativeGasByOpcodeTracer.GetProtobufResult()
+		if err != nil {
+			log.Error("Failed to get protobuf result", "error", err)
+			return
+		}
+
+		blockGroup := (blockNumber.Uint64() / 1000) * 1000
+		dirPath := filepath.Join(t.Path, fmt.Sprintf("%d", blockGroup))
+		filename := fmt.Sprintf("%s_%s.pb", blockNumber.String(), txHashString)
+		filepath := filepath.Join(dirPath, filename)
+
+		// Ensure the directory exists (including block number subdirectory)
+		if err := os.MkdirAll(dirPath, 0755); err != nil {
+			log.Error("Failed to create directory", "path", dirPath, "error", err)
+			return
+		}
+
+		// Write the file
+		if err := os.WriteFile(filepath, executionResultBytes, 0644); err != nil {
+			log.Error("Failed to write file", "path", filepath, "error", err)
+			return
+		}
 	}
 }
