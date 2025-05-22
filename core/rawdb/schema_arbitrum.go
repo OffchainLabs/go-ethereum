@@ -33,7 +33,8 @@ type WasmPrefix = [WasmPrefixLen]byte
 type WasmKey = [WasmKeyLen]byte
 
 var (
-	wasmSchemaVersionKey = []byte("WasmSchemaVersion")
+	wasmSchemaVersionKey      = []byte("WasmSchemaVersion")
+	wasmerSerializeVersionKey = []byte("WasmerSerializeVersion")
 
 	// 0x00 prefix to avoid conflicts when wasmdb is not separate database
 	activatedAsmWavmPrefix = WasmPrefix{0x00, 'w', 'w'} // (prefix, moduleHash) -> stylus module (wavm)
