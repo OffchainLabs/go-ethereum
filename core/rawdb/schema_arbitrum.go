@@ -43,6 +43,14 @@ var (
 	activatedAsmHostPrefix = WasmPrefix{0x00, 'w', 'h'} // (prefix, moduleHash) -> stylus asm for system other then ARM and x86
 )
 
+func WasmPrefixesExceptWavm() [][]byte {
+	prefixes, _ := DeprecatedPrefixesV0()
+	prefixes = append(prefixes, activatedAsmArmPrefix[:])
+	prefixes = append(prefixes, activatedAsmX86Prefix[:])
+	prefixes = append(prefixes, activatedAsmHostPrefix[:])
+	return prefixes
+}
+
 func DeprecatedPrefixesV0() (keyPrefixes [][]byte, keyLength int) {
 	return [][]byte{
 		// deprecated prefixes, used in version 0x00, purged in version 0x01
