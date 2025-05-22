@@ -1555,7 +1555,7 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 	return nil
 }
 
-func (bc *BlockChain) TimeBeforeFlush() (time.Duration, error) {
+func (bc *BlockChain) ProcTimeBeforeFlush() (time.Duration, error) {
 	if !bc.chainmu.TryLock() {
 		return 0, errChainStopped
 	}
