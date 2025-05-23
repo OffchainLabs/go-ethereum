@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
@@ -37,6 +38,8 @@ type CallGasDimensionInfo struct {
 	IsValueSentWithCall       bool
 	InitCodeCost              uint64
 	HashCost                  uint64
+	isPrecompile              bool
+	isStylusContract          bool
 }
 
 // CallGasDimensionStackInfo is a struct that contains the gas dimension info
@@ -88,6 +91,8 @@ type DimensionTracer interface {
 	GetRefundAccumulated() uint64
 	SetRefundAccumulated(uint64)
 	GetPrevAccessList() (addresses map[common.Address]int, slots []map[common.Hash]struct{})
+	GetPrecompileAddressList() []common.Address
+	GetStateDB() tracing.StateDB
 }
 
 // calcGasDimensionFunc defines a type signature that takes the opcode
@@ -366,6 +371,10 @@ func calcStateReadCallGas(
 	argsSize := stack[lenStack-4].Uint64()
 	// address in stack position 2
 	address := stack[lenStack-2].Bytes20()
+
+	isPrecompile := isPrecompile(t, address)
+	isStylusContract := isStylusContract(t, address)
+
 	// Note that opcodes with a byte size parameter of 0 will not trigger memory expansion, regardless of their offset parameters
 	if argsSize == 0 {
 		argsOffset = 0
@@ -421,6 +430,8 @@ func calcStateReadCallGas(
 			IsValueSentWithCall:       false,
 			InitCodeCost:              0,
 			HashCost:                  0,
+			isPrecompile:              isPrecompile,
+			isStylusContract:          isStylusContract,
 		}, nil
 }
 
@@ -577,6 +588,8 @@ func calcCreateGas(
 			IsValueSentWithCall:       false,
 			InitCodeCost:              initCodeCost,
 			HashCost:                  hashCost,
+			isPrecompile:              false,
+			isStylusContract:          false,
 		}, nil
 }
 
@@ -658,6 +671,9 @@ func calcReadAndStoreCallGas(
 		returnDataOffset = 0
 	}
 
+	isPrecompile := isPrecompile(t, address)
+	isStylusContract := isStylusContract(t, address)
+
 	// to figure out memory expansion cost, take the bigger of the two memory writes
 	// which will determine how big memory is expanded to
 	var memExpansionOffset uint64 = argsOffset
@@ -700,6 +716,8 @@ func calcReadAndStoreCallGas(
 			IsValueSentWithCall:       valueSentWithCall > 0,
 			InitCodeCost:              0,
 			HashCost:                  0,
+			isPrecompile:              isPrecompile,
+			isStylusContract:          isStylusContract,
 		}, nil
 }
 
@@ -1132,4 +1150,25 @@ func consumeAllRemainingGas(gas uint64) (GasesByDimension, *CallGasDimensionInfo
 		StateGrowthRefund:     0,
 		ChildExecutionCost:    0,
 	}, nil, nil
+}
+
+// helper function that returns whether an address is a precompile
+func isPrecompile(t DimensionTracer, address common.Address) bool {
+	precompileAddressList := t.GetPrecompileAddressList()
+	for _, precompileAddress := range precompileAddressList {
+		if precompileAddress == address {
+			return true
+		}
+	}
+	return false
+}
+
+// check if address is a stylus contract by getting the code and using IsStylusProgram
+func isStylusContract(t DimensionTracer, address common.Address) bool {
+	contractCode := t.GetStateDB().GetCode(address)
+	isStylusContract := false
+	if len(contractCode) > 0 {
+		isStylusContract = state.IsStylusProgram(contractCode)
+	}
+	return isStylusContract
 }

@@ -62,6 +62,9 @@ func NewTxGasDimensionLogger(
 		logs:                   make([]DimensionLog, 0),
 	}
 
+	// todo add a configuration flag somewhere somehow that disables checks
+	// for debugging the tracer itself
+
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
 			OnOpcode:  t.OnOpcode,
