@@ -220,9 +220,6 @@ func (t *BaseGasDimensionTracer) callFinishFunction(
 	gasUsedByCall = stackInfo.GasDimensionInfo.GasCounterAtTimeOfCall - gas
 	var finishErr error
 
-	fmt.Println("precompile: ", stackInfo.GasDimensionInfo.isPrecompile)
-	fmt.Println("stylus contract: ", stackInfo.GasDimensionInfo.isStylusContract)
-
 	finishGasesByDimension, finishErr = finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
 	if finishErr != nil {
 		t.interrupt.Store(true)

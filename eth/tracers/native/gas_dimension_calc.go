@@ -360,6 +360,7 @@ func calcStateReadCallGas(
 	depth int,
 	err error,
 ) (GasesByDimension, *CallGasDimensionInfo, error) {
+	fmt.Println("calcStateReadCallGas")
 	if err != nil {
 		return consumeAllRemainingGas(gas)
 	}
@@ -374,6 +375,10 @@ func calcStateReadCallGas(
 
 	isPrecompile := isPrecompile(t, address)
 	isStylusContract := isStylusContract(t, address)
+	if isPrecompile || isStylusContract {
+		fmt.Println("isPrecompile: ", isPrecompile)
+		fmt.Println("isStylusContract: ", isStylusContract)
+	}
 
 	// Note that opcodes with a byte size parameter of 0 will not trigger memory expansion, regardless of their offset parameters
 	if argsSize == 0 {
