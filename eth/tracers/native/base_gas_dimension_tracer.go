@@ -3,6 +3,7 @@ package native
 import (
 	"fmt"
 	"math/big"
+	"slices"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -31,6 +32,11 @@ type BaseGasDimensionTracer struct {
 	callStack CallGasDimensionStack
 	// the depth at the current step of execution of the call stack
 	depth int
+	// whether the root of the call stack is a precompile
+	rootIsPrecompile bool
+	// an adjustment must be made to the gas value of the transaction
+	// if the root is a precompile
+	rootIsPrecompileAdjustment uint64
 	// maintain an access list tracer to check previous access list statuses.
 	prevAccessListAddresses map[common.Address]int
 	prevAccessListSlots     []map[common.Hash]struct{}
@@ -52,27 +58,33 @@ type BaseGasDimensionTracer struct {
 	reason error
 	// cached chain config for use in hooks
 	chainConfig *params.ChainConfig
+	// for debugging it's sometimes useful to know the order in which opcodes were seen / count
+	opCount uint64
 }
 
 func NewBaseGasDimensionTracer(chainConfig *params.ChainConfig) BaseGasDimensionTracer {
 	return BaseGasDimensionTracer{
-		chainConfig:             chainConfig,
-		depth:                   1,
-		refundAccumulated:       0,
-		prevAccessListAddresses: map[common.Address]int{},
-		prevAccessListSlots:     []map[common.Hash]struct{}{},
-		env:                     nil,
-		txHash:                  common.Hash{},
-		gasUsed:                 0,
-		gasUsedForL1:            0,
-		gasUsedForL2:            0,
-		intrinsicGas:            0,
-		callStack:               CallGasDimensionStack{},
-		executionGasAccumulated: 0,
-		refundAdjusted:          0,
-		err:                     nil,
-		interrupt:               atomic.Bool{},
-		reason:                  nil,
+		chainConfig:                chainConfig,
+		depth:                      1,
+		refundAccumulated:          0,
+		prevAccessListAddresses:    map[common.Address]int{},
+		prevAccessListSlots:        []map[common.Hash]struct{}{},
+		env:                        nil,
+		txHash:                     common.Hash{},
+		gasUsed:                    0,
+		gasUsedForL1:               0,
+		gasUsedForL2:               0,
+		intrinsicGas:               0,
+		callStack:                  CallGasDimensionStack{},
+		rootIsPrecompile:           false,
+		rootIsPrecompileAdjustment: 0,
+		executionGasAccumulated:    0,
+		refundAdjusted:             0,
+		err:                        nil,
+		status:                     0,
+		interrupt:                  atomic.Bool{},
+		reason:                     nil,
+		opCount:                    0,
 	}
 }
 
@@ -110,8 +122,10 @@ func (t *BaseGasDimensionTracer) onOpcodeStart(
 	callStackInfo *CallGasDimensionInfo,
 	opcode vm.OpCode,
 ) {
+	t.opCount++
 	// First check if tracer has been interrupted
 	if t.interrupt.Load() {
+		fmt.Printf("Interrupted: %d %s\n", t.opCount, vm.OpCode(op).String())
 		return true, zeroGasesByDimension(), nil, vm.OpCode(op)
 	}
 
@@ -143,6 +157,7 @@ func (t *BaseGasDimensionTracer) onOpcodeStart(
 	// If it's not a call, directly calculate the gas dimensions for the opcode
 	f := GetCalcGasDimensionFunc(vm.OpCode(op))
 	var fErr error
+	fmt.Printf("Weird: pc: %d, t.opCount: %d, op: %s, cost: %d, gas: %d, depth: %d\n", pc, t.opCount, vm.OpCode(op).String(), cost, gas, depth)
 	gasesByDimension, callStackInfo, fErr = f(t, pc, op, gas, cost, scope, rData, depth, err)
 
 	// If there's a problem with our dimension calculation function, this is a tracer error
@@ -219,6 +234,7 @@ func (t *BaseGasDimensionTracer) callFinishFunction(
 	// you can't trust the `gas` field on the call itself. I wonder if the gas field is an estimation
 	gasUsedByCall = stackInfo.GasDimensionInfo.GasCounterAtTimeOfCall - gas
 	var finishErr error
+
 	finishGasesByDimension, finishErr = finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
 	if finishErr != nil {
 		t.interrupt.Store(true)
@@ -265,6 +281,12 @@ func (t *BaseGasDimensionTracer) OnTxStart(env *tracing.VMContext, tx *types.Tra
 		rules.IsShanghai,
 	)
 	t.intrinsicGas = intrinsicGas
+	t.rootIsPrecompile = false
+	t.rootIsPrecompileAdjustment = 0
+	precompileAddressList := t.GetPrecompileAddressList()
+	if tx.To() != nil {
+		t.rootIsPrecompile = slices.Contains(precompileAddressList, *tx.To())
+	}
 }
 
 // OnTxEnd handles transaction end
@@ -282,6 +304,11 @@ func (t *BaseGasDimensionTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	t.txHash = receipt.TxHash
 	t.status = receipt.Status
 	t.refundAdjusted = t.adjustRefund(t.executionGasAccumulated+t.intrinsicGas, t.GetRefundAccumulated())
+	// if the root is a precompile then we need to separately account for the gas used by the
+	// precompile itself, which is not exposed to the opcode tracing
+	if t.rootIsPrecompile {
+		t.rootIsPrecompileAdjustment = t.gasUsedForL2 - (t.executionGasAccumulated + t.intrinsicGas)
+	}
 }
 
 // Stop signals the tracer to stop tracing
@@ -320,9 +347,30 @@ func (t *BaseGasDimensionTracer) GetStateDB() tracing.StateDB {
 	return t.env.StateDB
 }
 
+// GetCallStack returns the call stack
+func (t *BaseGasDimensionTracer) GetCallStack() CallGasDimensionStack {
+	return t.callStack
+}
+
+// GetOpCount returns the op count
+func (t *BaseGasDimensionTracer) GetOpCount() uint64 {
+	return t.opCount
+}
+
+// GetRootIsPrecompile returns whether the root of the call stack is a precompile
+func (t *BaseGasDimensionTracer) GetRootIsPrecompile() bool {
+	return t.rootIsPrecompile
+}
+
 // GetPrevAccessList returns the previous access list
 func (t *BaseGasDimensionTracer) GetPrevAccessList() (addresses map[common.Address]int, slots []map[common.Hash]struct{}) {
 	return t.prevAccessListAddresses, t.prevAccessListSlots
+}
+
+// GetPrecompileAddressList returns the list of precompile addresses
+func (t *BaseGasDimensionTracer) GetPrecompileAddressList() []common.Address {
+	rules := t.chainConfig.Rules(t.env.BlockNumber, t.env.Random != nil, t.env.Time, t.env.ArbOSVersion)
+	return vm.ActivePrecompiles(rules)
 }
 
 // Error returns the EVM execution error captured by the trace
@@ -380,6 +428,8 @@ func zeroCallGasDimensionInfo() CallGasDimensionInfo {
 		IsValueSentWithCall:       false,
 		InitCodeCost:              0,
 		HashCost:                  0,
+		isTargetPrecompile:        false,
+		isTargetStylusContract:    false,
 	}
 }
 
@@ -398,16 +448,18 @@ func zeroCallGasDimensionStackInfo() CallGasDimensionStackInfo {
 
 // BaseExecutionResult has shared fields for execution results
 type BaseExecutionResult struct {
-	GasUsed        uint64   `json:"gasUsed"`
-	GasUsedForL1   uint64   `json:"gasUsedForL1"`
-	GasUsedForL2   uint64   `json:"gasUsedForL2"`
-	IntrinsicGas   uint64   `json:"intrinsicGas"`
-	AdjustedRefund uint64   `json:"adjustedRefund"`
-	Failed         bool     `json:"failed"`
-	TxHash         string   `json:"txHash"`
-	BlockTimestamp uint64   `json:"blockTimestamp"`
-	BlockNumber    *big.Int `json:"blockNumber"`
-	Status         uint64   `json:"status"`
+	GasUsed                    uint64   `json:"gasUsed"`
+	GasUsedForL1               uint64   `json:"gasUsedForL1"`
+	GasUsedForL2               uint64   `json:"gasUsedForL2"`
+	IntrinsicGas               uint64   `json:"intrinsicGas"`
+	AdjustedRefund             uint64   `json:"adjustedRefund"`
+	RootIsPrecompile           bool     `json:"rootIsPrecompile"`
+	RootIsPrecompileAdjustment uint64   `json:"rootIsPrecompileAdjustment"`
+	Failed                     bool     `json:"failed"`
+	TxHash                     string   `json:"txHash"`
+	BlockTimestamp             uint64   `json:"blockTimestamp"`
+	BlockNumber                *big.Int `json:"blockNumber"`
+	Status                     uint64   `json:"status"`
 }
 
 // get the result of the transaction execution that we will hand to the json output
@@ -419,15 +471,17 @@ func (t *BaseGasDimensionTracer) GetBaseExecutionResult() (BaseExecutionResult, 
 	failed := t.err != nil
 
 	return BaseExecutionResult{
-		GasUsed:        t.gasUsed,
-		GasUsedForL1:   t.gasUsedForL1,
-		GasUsedForL2:   t.gasUsedForL2,
-		IntrinsicGas:   t.intrinsicGas,
-		AdjustedRefund: t.refundAdjusted,
-		Failed:         failed,
-		TxHash:         t.txHash.Hex(),
-		BlockTimestamp: t.env.Time,
-		BlockNumber:    t.env.BlockNumber,
-		Status:         t.status,
+		GasUsed:                    t.gasUsed,
+		GasUsedForL1:               t.gasUsedForL1,
+		GasUsedForL2:               t.gasUsedForL2,
+		IntrinsicGas:               t.intrinsicGas,
+		AdjustedRefund:             t.refundAdjusted,
+		RootIsPrecompile:           t.rootIsPrecompile,
+		RootIsPrecompileAdjustment: t.rootIsPrecompileAdjustment,
+		Failed:                     failed,
+		TxHash:                     t.txHash.Hex(),
+		BlockTimestamp:             t.env.Time,
+		BlockNumber:                t.env.BlockNumber,
+		Status:                     t.status,
 	}, nil
 }

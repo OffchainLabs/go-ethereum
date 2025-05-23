@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
@@ -37,6 +38,9 @@ type CallGasDimensionInfo struct {
 	IsValueSentWithCall       bool
 	InitCodeCost              uint64
 	HashCost                  uint64
+	isTargetPrecompile        bool
+	isTargetStylusContract    bool
+	inPrecompile              bool
 }
 
 // CallGasDimensionStackInfo is a struct that contains the gas dimension info
@@ -68,6 +72,14 @@ func (c *CallGasDimensionStack) Pop() (CallGasDimensionStackInfo, bool) {
 	return last, true
 }
 
+// Peek the top layer of the call stack, returning false if the stack is empty
+func (c *CallGasDimensionStack) Peek() (CallGasDimensionStackInfo, bool) {
+	if len(*c) == 0 {
+		return zeroCallGasDimensionStackInfo(), false
+	}
+	return (*c)[len(*c)-1], true
+}
+
 // UpdateExecutionCost updates the execution cost for the top layer of the call stack
 // so that the call knows how much gas was consumed by child opcodes in that call depth
 func (c *CallGasDimensionStack) UpdateExecutionCost(executionCost uint64) {
@@ -88,6 +100,11 @@ type DimensionTracer interface {
 	GetRefundAccumulated() uint64
 	SetRefundAccumulated(uint64)
 	GetPrevAccessList() (addresses map[common.Address]int, slots []map[common.Hash]struct{})
+	GetPrecompileAddressList() []common.Address
+	GetStateDB() tracing.StateDB
+	GetCallStack() CallGasDimensionStack
+	GetOpCount() uint64
+	GetRootIsPrecompile() bool
 }
 
 // calcGasDimensionFunc defines a type signature that takes the opcode
@@ -133,7 +150,7 @@ func GetCalcGasDimensionFunc(op vm.OpCode) CalcGasDimensionFunc {
 	case vm.BALANCE, vm.EXTCODESIZE, vm.EXTCODEHASH:
 		return calcSimpleAddressAccessSetGas
 	case vm.SLOAD:
-		return calcSLOADGas
+		return calcSloadGas
 	case vm.EXTCODECOPY:
 		return calcExtCodeCopyGas
 	case vm.DELEGATECALL, vm.STATICCALL:
@@ -247,9 +264,9 @@ func calcSimpleAddressAccessSetGas(
 	return ret, nil, nil
 }
 
-// calcSLOADGas returns the gas used for the `SLOAD` opcode
+// calcSloadGas returns the gas used for the `SLOAD` opcode
 // SLOAD reads a slot from the state. It cannot expand the state
-func calcSLOADGas(
+func calcSloadGas(
 	t DimensionTracer,
 	pc uint64,
 	op byte,
@@ -274,6 +291,14 @@ func calcSLOADGas(
 		HistoryGrowth:         0,
 		StateGrowthRefund:     0,
 		ChildExecutionCost:    0,
+	}
+	// Precompiles in nitro fire "artificial" OnOpcode events
+	// with 0 gas. The sloads will always be "hot" and we've
+	// decided that we don't charge gas for them.
+	inPrecompile, _ := inPrecompileOrStylusCall(t, depth, t.GetCallStack())
+	if inPrecompile {
+		ret.Computation = 0
+		ret.StateAccess = 0
 	}
 	if err := checkGasDimensionsEqualOneDimensionalGas(pc, op, depth, gas, cost, ret); err != nil {
 		return GasesByDimension{}, nil, err
@@ -366,6 +391,11 @@ func calcStateReadCallGas(
 	argsSize := stack[lenStack-4].Uint64()
 	// address in stack position 2
 	address := stack[lenStack-2].Bytes20()
+
+	isTargetPrecompile := isPrecompile(t, depth, address)
+	isTargetStylusContract := isStylusContract(t, address)
+	inPrecompile, _ := inPrecompileOrStylusCall(t, depth, t.GetCallStack())
+
 	// Note that opcodes with a byte size parameter of 0 will not trigger memory expansion, regardless of their offset parameters
 	if argsSize == 0 {
 		argsOffset = 0
@@ -421,6 +451,9 @@ func calcStateReadCallGas(
 			IsValueSentWithCall:       false,
 			InitCodeCost:              0,
 			HashCost:                  0,
+			isTargetPrecompile:        isTargetPrecompile,
+			isTargetStylusContract:    isTargetStylusContract,
+			inPrecompile:              inPrecompile,
 		}, nil
 }
 
@@ -436,6 +469,8 @@ func finishCalcStateReadCallGas(
 	codeExecutionCost uint64,
 	callGasDimensionInfo CallGasDimensionInfo,
 ) (GasesByDimension, error) {
+	fmt.Printf("totalGasUsed: %d, codeExecutionCost: %d\n", totalGasUsed, codeExecutionCost)
+	fmt.Printf("callGasDimensionInfo: %+v\n", callGasDimensionInfo)
 	oneDimensionalGas := totalGasUsed - codeExecutionCost
 	computation := callGasDimensionInfo.AccessListComputationCost + callGasDimensionInfo.MemoryExpansionCost
 	stateAccess := callGasDimensionInfo.AccessListStateAccessCost
@@ -447,6 +482,22 @@ func finishCalcStateReadCallGas(
 		HistoryGrowth:         0,
 		StateGrowthRefund:     0,
 		ChildExecutionCost:    codeExecutionCost,
+	}
+	if callGasDimensionInfo.isTargetPrecompile {
+		err := checkGasDimensionsPrecompileAdjustment(
+			callGasDimensionInfo.Pc,
+			byte(callGasDimensionInfo.Op),
+			codeExecutionCost,
+			ret,
+		)
+		if err != nil {
+			return ret, err
+		}
+		// if there are no issues with the gas dimensions for the call
+		// itself, we can take the excess and assume it is computation
+		// for a precompile.
+		precompileAdjustmentGas := oneDimensionalGas - (ret.Computation + ret.StateAccess + ret.StateGrowth + ret.HistoryGrowth)
+		ret.Computation += precompileAdjustmentGas
 	}
 	err := checkGasDimensionsEqualCallGas(
 		callGasDimensionInfo.Pc,
@@ -557,6 +608,7 @@ func calcCreateGas(
 	if memErr != nil {
 		return GasesByDimension{}, nil, memErr
 	}
+	inPrecompile, _ := inPrecompileOrStylusCall(t, depth, t.GetCallStack())
 	// at this point we know everything except deployment_code_execution_cost and code_deposit_cost
 	// so we can get those from the finishCalcCreateGas function
 	return GasesByDimension{
@@ -577,6 +629,9 @@ func calcCreateGas(
 			IsValueSentWithCall:       false,
 			InitCodeCost:              initCodeCost,
 			HashCost:                  hashCost,
+			isTargetPrecompile:        false,
+			isTargetStylusContract:    false,
+			inPrecompile:              inPrecompile,
 		}, nil
 }
 
@@ -606,6 +661,10 @@ func finishCalcCreateGas(
 		HistoryGrowth:         0,
 		StateGrowthRefund:     0,
 		ChildExecutionCost:    codeExecutionCost,
+	}
+	// it should be impossible to call a precompile from the deployment init code
+	if callGasDimensionInfo.isTargetPrecompile {
+		return ret, fmt.Errorf("precompile called from deployment init code")
 	}
 	err := checkGasDimensionsEqualCallGas(
 		callGasDimensionInfo.Pc,
@@ -657,6 +716,39 @@ func calcReadAndStoreCallGas(
 	if returnDataSize == 0 {
 		returnDataOffset = 0
 	}
+	isTargetPrecompile := isPrecompile(t, depth, address)
+	isTargetStylusContract := isStylusContract(t, address)
+	// CALLs happening from inside precompiles out
+	// are not charged for their non-execution gas
+	inPrecompile, _ := inPrecompileOrStylusCall(t, depth, t.GetCallStack())
+	if cost == 0 {
+		fmt.Printf("Weird2: pc: %d, t.opCount: %d, op: %s, cost: %d, gas: %d, depth: %d\n", pc, t.GetOpCount(), vm.OpCode(op).String(), cost, gas, depth)
+		fmt.Printf("Weird2: address: %s\n", common.Address(address).Hex())
+		fmt.Printf("Weird2: valueSentWithCall: %d\n", valueSentWithCall)
+		fmt.Printf("Weird2: inPrecompile: %v\n", inPrecompile)
+	}
+	if inPrecompile {
+		return GasesByDimension{
+				OneDimensionalGasCost: 0,
+				Computation:           0,
+				StateAccess:           0,
+				StateGrowth:           0,
+				HistoryGrowth:         0,
+			}, &CallGasDimensionInfo{
+				Pc:                        pc,
+				Op:                        vm.OpCode(op),
+				GasCounterAtTimeOfCall:    gas,
+				AccessListComputationCost: 0,
+				AccessListStateAccessCost: 0,
+				MemoryExpansionCost:       0,
+				IsValueSentWithCall:       valueSentWithCall > 0,
+				InitCodeCost:              0,
+				HashCost:                  0,
+				isTargetPrecompile:        isTargetPrecompile,
+				isTargetStylusContract:    isTargetStylusContract,
+				inPrecompile:              inPrecompile,
+			}, nil
+	}
 
 	// to figure out memory expansion cost, take the bigger of the two memory writes
 	// which will determine how big memory is expanded to
@@ -700,6 +792,9 @@ func calcReadAndStoreCallGas(
 			IsValueSentWithCall:       valueSentWithCall > 0,
 			InitCodeCost:              0,
 			HashCost:                  0,
+			isTargetPrecompile:        isTargetPrecompile,
+			isTargetStylusContract:    isTargetStylusContract,
+			inPrecompile:              inPrecompile,
 		}, nil
 }
 
@@ -715,7 +810,32 @@ func finishCalcStateReadAndStoreCallGas(
 	codeExecutionCost uint64,
 	callGasDimensionInfo CallGasDimensionInfo,
 ) (GasesByDimension, error) {
+	if codeExecutionCost > totalGasUsed {
+		return GasesByDimension{}, fmt.Errorf("CALL's totalGasUsed should never be greater than the codeExecutionCost, totalGasUsed: %d, codeExecutionCost: %d", totalGasUsed, codeExecutionCost)
+	}
 	oneDimensionalGas := totalGasUsed - codeExecutionCost
+	// precompiles are assumed to always have warm caches
+	// and the state access is free
+	if callGasDimensionInfo.isTargetPrecompile {
+		return GasesByDimension{
+			OneDimensionalGasCost: oneDimensionalGas,
+			Computation:           oneDimensionalGas,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+		}, nil
+	}
+	// in some cases inside precompiles
+	// fire "fake" calls from inside the precompile that charge no gas
+	if callGasDimensionInfo.inPrecompile && totalGasUsed == 0 {
+		return GasesByDimension{
+			OneDimensionalGasCost: 0,
+			Computation:           0,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+		}, nil
+	}
 	// the stipend is 2300 and it is not charged to the call itself but used in the execution cost
 	var positiveValueCostLessStipend uint64 = 0
 	if callGasDimensionInfo.IsValueSentWithCall {
@@ -764,6 +884,22 @@ func finishCalcStateReadAndStoreCallGas(
 			StateGrowthRefund:     0,
 			ChildExecutionCost:    codeExecutionCost,
 		}
+	}
+	if callGasDimensionInfo.isTargetPrecompile {
+		err := checkGasDimensionsPrecompileAdjustment(
+			callGasDimensionInfo.Pc,
+			byte(callGasDimensionInfo.Op),
+			codeExecutionCost,
+			ret,
+		)
+		if err != nil {
+			return ret, err
+		}
+		// if there are no issues with the gas dimensions for the call
+		// itself, we can take the excess and assume it is computation
+		// for a precompile.
+		precompileAdjustmentGas := oneDimensionalGas - (ret.Computation + ret.StateAccess + ret.StateGrowth + ret.HistoryGrowth)
+		ret.Computation += precompileAdjustmentGas
 	}
 	err := checkGasDimensionsEqualCallGas(
 		callGasDimensionInfo.Pc,
@@ -1121,6 +1257,28 @@ func checkGasDimensionsEqualCallGas(
 	return nil
 }
 
+// if the call is inside of a precompile, the gas checks are less
+// strict but they should still check that the one dimensional gas
+// cost is greater than the sum of the other dimensions
+func checkGasDimensionsPrecompileAdjustment(
+	pc uint64,
+	op byte,
+	codeExecutionCost uint64,
+	dim GasesByDimension,
+) error {
+	if !(dim.OneDimensionalGasCost > dim.Computation+dim.StateAccess+dim.StateGrowth+dim.HistoryGrowth) {
+		return fmt.Errorf(
+			"unexpected precompile adjustment gas cost mismatch: pc %d, op %s, with codeExecutionCost %d, expected %d > %v",
+			pc,
+			vm.OpCode(op).String(),
+			codeExecutionCost,
+			dim.OneDimensionalGasCost,
+			dim,
+		)
+	}
+	return nil
+}
+
 // helper function that purely makes the golang prettier for the out of gas case
 func consumeAllRemainingGas(gas uint64) (GasesByDimension, *CallGasDimensionInfo, error) {
 	return GasesByDimension{
@@ -1132,4 +1290,47 @@ func consumeAllRemainingGas(gas uint64) (GasesByDimension, *CallGasDimensionInfo
 		StateGrowthRefund:     0,
 		ChildExecutionCost:    0,
 	}, nil, nil
+}
+
+// helper function that returns whether an address is a precompile
+func isPrecompile(t DimensionTracer, depth int, address common.Address) bool {
+	if depth == 1 && t.GetRootIsPrecompile() {
+		return true
+	}
+	precompileAddressList := t.GetPrecompileAddressList()
+	for _, precompileAddress := range precompileAddressList {
+		if precompileAddress == address {
+			return true
+		}
+	}
+	return false
+}
+
+// check if address is a stylus contract by getting the code and using IsStylusProgram
+func isStylusContract(t DimensionTracer, address common.Address) bool {
+	contractCode := t.GetStateDB().GetCode(address)
+	isStylusContract := false
+	if len(contractCode) > 0 {
+		isStylusContract = state.IsStylusProgram(contractCode)
+	}
+	return isStylusContract
+}
+
+// are we inside a call at this point in time, and if we are,
+// is that call a precompile call?
+func inPrecompileOrStylusCall(t DimensionTracer, depth int, callStack CallGasDimensionStack) (
+	inPrecompile bool,
+	inStylus bool,
+) {
+	// if we are not inside a call but at the root level
+	if depth == 1 {
+		if t.GetRootIsPrecompile() {
+			return true, false
+		}
+	}
+	callStackInfo, callStackNotEmpty := callStack.Peek()
+	if callStackNotEmpty {
+		return callStackInfo.GasDimensionInfo.isTargetPrecompile, callStackInfo.GasDimensionInfo.isTargetStylusContract
+	}
+	return false, false
 }

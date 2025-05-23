@@ -133,12 +133,15 @@ type TxGasDimensionByOpcodeExecutionResult struct {
 	// the intrinsic gas of the transaction, the static cost + calldata bytes cost
 	IntrinsicGas uint64 `protobuf:"varint,9,opt,name=intrinsic_gas,json=intrinsicGas,proto3" json:"intrinsic_gas,omitempty"`
 	// the adjusted gas refund amount after EIP-3529
-	AdjustedRefund uint64 `protobuf:"varint,10,opt,name=adjusted_refund,json=adjustedRefund,proto3" json:"adjusted_refund,omitempty"`
+	AdjustedRefund *uint64 `protobuf:"varint,10,opt,name=adjusted_refund,json=adjustedRefund,proto3,oneof" json:"adjusted_refund,omitempty"`
+	// the adjustment to the gas used for the root of the transaction if it is a precompile
+	RootIsPrecompileAdjustment *uint64 `protobuf:"varint,12,opt,name=root_is_precompile_adjustment,json=rootIsPrecompileAdjustment,proto3,oneof" json:"root_is_precompile_adjustment,omitempty"`
 	// whether the transaction broke the rules of the VM and was rejected
-	Failed bool `protobuf:"varint,2,opt,name=failed,proto3" json:"failed,omitempty"`
+	Failed *bool `protobuf:"varint,2,opt,name=failed,proto3,oneof" json:"failed,omitempty"`
 	// the status of the transaction, for a valid transaction that followed the rules,
 	// but could have still failed for reasons inside the rules, like reverts, out of gas, etc.
-	Status uint64 `protobuf:"varint,11,opt,name=status,proto3" json:"status,omitempty"`
+	// uint64 status = 11; // replaced by optional transaction_reverted which is more space efficient
+	TransactionReverted *bool `protobuf:"varint,13,opt,name=transaction_reverted,json=transactionReverted,proto3,oneof" json:"transaction_reverted,omitempty"`
 	// a map of each opcode to the sum of the gas consumption categorized by dimension for that opcode
 	Dimensions map[uint32]*GasesByDimension `protobuf:"bytes,3,rep,name=dimensions,proto3" json:"dimensions,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// the hash of the transaction
@@ -211,24 +214,31 @@ func (x *TxGasDimensionByOpcodeExecutionResult) GetIntrinsicGas() uint64 {
 }
 
 func (x *TxGasDimensionByOpcodeExecutionResult) GetAdjustedRefund() uint64 {
-	if x != nil {
-		return x.AdjustedRefund
+	if x != nil && x.AdjustedRefund != nil {
+		return *x.AdjustedRefund
+	}
+	return 0
+}
+
+func (x *TxGasDimensionByOpcodeExecutionResult) GetRootIsPrecompileAdjustment() uint64 {
+	if x != nil && x.RootIsPrecompileAdjustment != nil {
+		return *x.RootIsPrecompileAdjustment
 	}
 	return 0
 }
 
 func (x *TxGasDimensionByOpcodeExecutionResult) GetFailed() bool {
-	if x != nil {
-		return x.Failed
+	if x != nil && x.Failed != nil {
+		return *x.Failed
 	}
 	return false
 }
 
-func (x *TxGasDimensionByOpcodeExecutionResult) GetStatus() uint64 {
-	if x != nil {
-		return x.Status
+func (x *TxGasDimensionByOpcodeExecutionResult) GetTransactionReverted() bool {
+	if x != nil && x.TransactionReverted != nil {
+		return *x.TransactionReverted
 	}
-	return 0
+	return false
 }
 
 func (x *TxGasDimensionByOpcodeExecutionResult) GetDimensions() map[uint32]*GasesByDimension {
@@ -271,16 +281,17 @@ const file_eth_tracers_native_proto_gas_dimension_by_opcode_proto_rawDesc = "" +
 	"\fstate_growth\x18\x04 \x01(\x04R\vstateGrowth\x12%\n" +
 	"\x0ehistory_growth\x18\x05 \x01(\x04R\rhistoryGrowth\x12.\n" +
 	"\x13state_growth_refund\x18\x06 \x01(\x03R\x11stateGrowthRefund\x120\n" +
-	"\x14child_execution_cost\x18\a \x01(\x04R\x12childExecutionCost\"\xc1\x04\n" +
+	"\x14child_execution_cost\x18\a \x01(\x04R\x12childExecutionCost\"\x8d\x06\n" +
 	"%TxGasDimensionByOpcodeExecutionResult\x12\x19\n" +
 	"\bgas_used\x18\x01 \x01(\x04R\agasUsed\x12\x1e\n" +
 	"\vgas_used_l1\x18\a \x01(\x04R\tgasUsedL1\x12\x1e\n" +
 	"\vgas_used_l2\x18\b \x01(\x04R\tgasUsedL2\x12#\n" +
-	"\rintrinsic_gas\x18\t \x01(\x04R\fintrinsicGas\x12'\n" +
+	"\rintrinsic_gas\x18\t \x01(\x04R\fintrinsicGas\x12,\n" +
 	"\x0fadjusted_refund\x18\n" +
-	" \x01(\x04R\x0eadjustedRefund\x12\x16\n" +
-	"\x06failed\x18\x02 \x01(\bR\x06failed\x12\x16\n" +
-	"\x06status\x18\v \x01(\x04R\x06status\x12o\n" +
+	" \x01(\x04H\x00R\x0eadjustedRefund\x88\x01\x01\x12F\n" +
+	"\x1droot_is_precompile_adjustment\x18\f \x01(\x04H\x01R\x1arootIsPrecompileAdjustment\x88\x01\x01\x12\x1b\n" +
+	"\x06failed\x18\x02 \x01(\bH\x02R\x06failed\x88\x01\x01\x126\n" +
+	"\x14transaction_reverted\x18\r \x01(\bH\x03R\x13transactionReverted\x88\x01\x01\x12o\n" +
 	"\n" +
 	"dimensions\x18\x03 \x03(\v2O.eth.tracers.native.proto.TxGasDimensionByOpcodeExecutionResult.DimensionsEntryR\n" +
 	"dimensions\x12\x17\n" +
@@ -289,7 +300,11 @@ const file_eth_tracers_native_proto_gas_dimension_by_opcode_proto_rawDesc = "" +
 	"\fblock_number\x18\x06 \x01(\tR\vblockNumber\x1ai\n" +
 	"\x0fDimensionsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12@\n" +
-	"\x05value\x18\x02 \x01(\v2*.eth.tracers.native.proto.GasesByDimensionR\x05value:\x028\x01B:Z8github.com/ethereum/go-ethereum/eth/tracers/native/protob\x06proto3"
+	"\x05value\x18\x02 \x01(\v2*.eth.tracers.native.proto.GasesByDimensionR\x05value:\x028\x01B\x12\n" +
+	"\x10_adjusted_refundB \n" +
+	"\x1e_root_is_precompile_adjustmentB\t\n" +
+	"\a_failedB\x17\n" +
+	"\x15_transaction_revertedB:Z8github.com/ethereum/go-ethereum/eth/tracers/native/protob\x06proto3"
 
 var (
 	file_eth_tracers_native_proto_gas_dimension_by_opcode_proto_rawDescOnce sync.Once
@@ -324,6 +339,7 @@ func file_eth_tracers_native_proto_gas_dimension_by_opcode_proto_init() {
 	if File_eth_tracers_native_proto_gas_dimension_by_opcode_proto != nil {
 		return
 	}
+	file_eth_tracers_native_proto_gas_dimension_by_opcode_proto_msgTypes[1].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
