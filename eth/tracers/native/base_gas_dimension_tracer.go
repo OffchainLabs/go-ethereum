@@ -219,6 +219,10 @@ func (t *BaseGasDimensionTracer) callFinishFunction(
 	// you can't trust the `gas` field on the call itself. I wonder if the gas field is an estimation
 	gasUsedByCall = stackInfo.GasDimensionInfo.GasCounterAtTimeOfCall - gas
 	var finishErr error
+
+	fmt.Println("precompile: ", stackInfo.GasDimensionInfo.isPrecompile)
+	fmt.Println("stylus contract: ", stackInfo.GasDimensionInfo.isStylusContract)
+
 	finishGasesByDimension, finishErr = finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
 	if finishErr != nil {
 		t.interrupt.Store(true)
@@ -323,6 +327,12 @@ func (t *BaseGasDimensionTracer) GetStateDB() tracing.StateDB {
 // GetPrevAccessList returns the previous access list
 func (t *BaseGasDimensionTracer) GetPrevAccessList() (addresses map[common.Address]int, slots []map[common.Hash]struct{}) {
 	return t.prevAccessListAddresses, t.prevAccessListSlots
+}
+
+// GetPrecompileAddressList returns the list of precompile addresses
+func (t *BaseGasDimensionTracer) GetPrecompileAddressList() []common.Address {
+	rules := t.chainConfig.Rules(t.env.BlockNumber, t.env.Random != nil, t.env.Time, t.env.ArbOSVersion)
+	return vm.ActivePrecompiles(rules)
 }
 
 // Error returns the EVM execution error captured by the trace
