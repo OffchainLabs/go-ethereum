@@ -9,6 +9,7 @@ on:
 
 jobs:
   lint:
+    if: false # not supported on OffchainLabs fork, ci.yml is used instead
     name: Lint
     runs-on: self-hosted
     steps:
