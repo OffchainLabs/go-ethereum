@@ -147,6 +147,14 @@ func WriteLegacyTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte)
 	}
 }
 
+// Arbitrum: version of WriteLegacyTrieNode that returns error instead of os.Exit in log.Crit
+func WriteLegacyTrieNodeWithError(db ethdb.KeyValueWriter, hash common.Hash, node []byte) error {
+	if err := db.Put(hash.Bytes(), node); err != nil {
+		return fmt.Errorf("Failed to store legacy trie node, err: %w", err)
+	}
+	return nil
+}
+
 // DeleteLegacyTrieNode deletes the specified legacy trie node from database.
 func DeleteLegacyTrieNode(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(hash.Bytes()); err != nil {
