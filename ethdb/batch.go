@@ -16,6 +16,10 @@
 
 package ethdb
 
+import "errors"
+
+var ErrBatchTooLarge = errors.New("batch too large")
+
 // IdealBatchSize defines the size of the data batches should ideally add in one
 // write.
 const IdealBatchSize = 100 * 1024

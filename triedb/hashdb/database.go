@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -371,7 +370,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 
 		err := rawdb.WriteLegacyTrieNodeWithError(batch, oldest, node.node)
 		if err != nil {
-			if errors.Is(err, pebble.ErrBatchTooLarge) {
+			if errors.Is(err, ethdb.ErrBatchTooLarge) {
 				log.Warn("Pebble batch limit reached in hashdb Cap operation, flushing batch. Consider setting ideal cap batch size to a lower value.", "pebbleError", err)
 				// flush batch & retry the write
 				if err = batch.Write(); err != nil {
@@ -511,7 +510,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	// If we've reached an optimal batch size, commit and start over
 	err = rawdb.WriteLegacyTrieNodeWithError(batch, hash, node.node)
 	if err != nil {
-		if errors.Is(err, pebble.ErrBatchTooLarge) {
+		if errors.Is(err, ethdb.ErrBatchTooLarge) {
 			log.Warn("Pebble batch limit reached in hashdb Commit operation, flushing batch. Consider setting ideal commit batch size to a lower value.", "pebbleError", err)
 			// flush batch & retry the write
 			if err = batch.Write(); err != nil {

@@ -61,7 +61,7 @@ func TestPebbleBatchBatchTooLargeError(t *testing.T) {
 	if err == nil {
 		t.Fatal("batch.Delete shouldn't succeed")
 	}
-	if !errors.Is(err, ErrBatchTooLarge) {
+	if !errors.Is(err, ethdb.ErrBatchTooLarge) {
 		t.Fatalf("batch.Delete returned unexpected error: %v", err)
 	}
 	data = data[:len(data)-binary.MaxVarintLen32]
@@ -69,7 +69,7 @@ func TestPebbleBatchBatchTooLargeError(t *testing.T) {
 	if err == nil {
 		t.Fatal("batch.Put shouldn't succeed")
 	}
-	if !errors.Is(err, ErrBatchTooLarge) {
+	if !errors.Is(err, ethdb.ErrBatchTooLarge) {
 		t.Fatalf("batch.Put returned unexpected error: %v", err)
 	}
 }
