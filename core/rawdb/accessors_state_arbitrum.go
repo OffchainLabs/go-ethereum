@@ -17,6 +17,7 @@
 package rawdb
 
 import (
+	"encoding/binary"
 	"fmt"
 	"runtime"
 
@@ -108,4 +109,21 @@ func WriteWasmSchemaVersion(db ethdb.KeyValueWriter) {
 // Retrieves wasm schema version
 func ReadWasmSchemaVersion(db ethdb.KeyValueReader) ([]byte, error) {
 	return db.Get(wasmSchemaVersionKey)
+}
+
+// Stores wasmer serialize version
+func WriteWasmerSerializeVersion(db ethdb.KeyValueWriter, wasmerSerializeVersion uint32) error {
+	buf := make([]byte, 32)
+	binary.BigEndian.PutUint32(buf, wasmerSerializeVersion)
+	return db.Put(wasmerSerializeVersionKey, buf)
+}
+
+// Retrieves wasmer serialize version
+func ReadWasmerSerializeVersion(db ethdb.KeyValueReader) (uint32, error) {
+	buf, err := db.Get(wasmerSerializeVersionKey)
+	if err != nil {
+		return 0, err
+	}
+	version := binary.BigEndian.Uint32(buf)
+	return version, nil
 }

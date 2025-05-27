@@ -33,7 +33,8 @@ type WasmPrefix = [WasmPrefixLen]byte
 type WasmKey = [WasmKeyLen]byte
 
 var (
-	wasmSchemaVersionKey = []byte("WasmSchemaVersion")
+	wasmSchemaVersionKey      = []byte("WasmSchemaVersion")
+	wasmerSerializeVersionKey = []byte("WasmerSerializeVersion")
 
 	// 0x00 prefix to avoid conflicts when wasmdb is not separate database
 	activatedAsmWavmPrefix = WasmPrefix{0x00, 'w', 'w'} // (prefix, moduleHash) -> stylus module (wavm)
@@ -41,6 +42,14 @@ var (
 	activatedAsmX86Prefix  = WasmPrefix{0x00, 'w', 'x'} // (prefix, moduleHash) -> stylus asm for x86 system
 	activatedAsmHostPrefix = WasmPrefix{0x00, 'w', 'h'} // (prefix, moduleHash) -> stylus asm for system other then ARM and x86
 )
+
+func WasmPrefixesExceptWavm() [][]byte {
+	prefixes, _ := DeprecatedPrefixesV0()
+	prefixes = append(prefixes, activatedAsmArmPrefix[:])
+	prefixes = append(prefixes, activatedAsmX86Prefix[:])
+	prefixes = append(prefixes, activatedAsmHostPrefix[:])
+	return prefixes
+}
 
 func DeprecatedPrefixesV0() (keyPrefixes [][]byte, keyLength int) {
 	return [][]byte{
