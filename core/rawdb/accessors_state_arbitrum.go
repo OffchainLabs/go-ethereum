@@ -112,12 +112,10 @@ func ReadWasmSchemaVersion(db ethdb.KeyValueReader) ([]byte, error) {
 }
 
 // Stores wasmer serialize version
-func WriteWasmerSerializeVersion(db ethdb.KeyValueWriter, wasmerSerializeVersion uint32) {
+func WriteWasmerSerializeVersion(db ethdb.KeyValueWriter, wasmerSerializeVersion uint32) error {
 	buf := make([]byte, 32)
 	binary.BigEndian.PutUint32(buf, wasmerSerializeVersion)
-	if err := db.Put(wasmerSerializeVersionKey, buf); err != nil {
-		log.Crit("Failed to store wasmer serialize version", "err", err)
-	}
+	return db.Put(wasmerSerializeVersionKey, buf)
 }
 
 // Retrieves wasmer serialize version
