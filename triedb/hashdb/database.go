@@ -407,8 +407,15 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 		// There's no data to commit in this node
 		return nil
 	}
-	db.lock.Lock()
-	defer db.lock.Unlock()
+	// acquire read lock only, as commit doesn't modify dirties
+	// that allows concurrent node reads e.g. performed by rpc handlers
+	db.lock.RLock()
+	rLocked := true
+	defer func() {
+		if rLocked {
+			db.lock.RUnlock()
+		}
+	}()
 
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
@@ -418,9 +425,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	batch := db.diskdb.NewBatch()
 
 	// Move the trie itself into the batch, flushing if enough data is accumulated
-	nodes, storage := len(db.dirties), db.dirtiesSize
-
-	uncacher := &cleaner{db}
+	uncacher := newDelayedCleaner(db)
 	if err := db.commit(node, batch, uncacher); err != nil {
 		log.Error("Failed to commit trie from trie database", "err", err)
 		return err
@@ -435,6 +440,18 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 		return err
 	}
 	batch.Reset()
+
+	// prevent RUnlock in defer and RUnlock the lock
+	rLocked = false
+	db.lock.RUnlock()
+
+	// acquire write lock for the uncacher to remove commited nodes from dirties
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	nodes, storage := len(db.dirties), db.dirtiesSize
+
+	uncacher.Clean()
 
 	// Reset the storage counters and bumped metrics
 	memcacheCommitTimeTimer.Update(time.Since(start))
@@ -456,7 +473,8 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 }
 
 // commit is the private locked version of Commit.
-func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner) error {
+// note: commit must not modify dirties as it should only require read lock held
+func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *delayedCleaner) error {
 	// If the node does not exist, it's a previously committed node
 	node, ok := db.dirties[hash]
 	if !ok {
