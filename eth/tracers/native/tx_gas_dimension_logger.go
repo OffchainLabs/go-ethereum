@@ -96,7 +96,11 @@ func (t *TxGasDimensionLogger) OnOpcode(
 	// it was stored in the tracer's reason field (t.reason)
 	// and we should return immediately
 	if interrupted {
+		fmt.Printf("Interrupted %d: address: %s, op: %s\n", t.opCount, scope.Address(), vm.OpCode(op).String())
 		return
+	} else {
+		fmt.Printf("Clear %d: address: %s, op: %s\n", t.opCount, scope.Address(), vm.OpCode(op).String())
+		t.opCount++
 	}
 
 	t.logs = append(t.logs, DimensionLog{

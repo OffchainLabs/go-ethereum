@@ -3,6 +3,7 @@ package native
 import (
 	"fmt"
 	"math/big"
+	"slices"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -31,6 +32,8 @@ type BaseGasDimensionTracer struct {
 	callStack CallGasDimensionStack
 	// the depth at the current step of execution of the call stack
 	depth int
+	// whether the root of the call stack is a precompile
+	rootIsPrecompile bool
 	// maintain an access list tracer to check previous access list statuses.
 	prevAccessListAddresses map[common.Address]int
 	prevAccessListSlots     []map[common.Hash]struct{}
@@ -52,6 +55,8 @@ type BaseGasDimensionTracer struct {
 	reason error
 	// cached chain config for use in hooks
 	chainConfig *params.ChainConfig
+	// for debugging it's sometimes useful to know the order in which opcodes were seen / count
+	opCount uint64
 }
 
 func NewBaseGasDimensionTracer(chainConfig *params.ChainConfig) BaseGasDimensionTracer {
@@ -68,11 +73,14 @@ func NewBaseGasDimensionTracer(chainConfig *params.ChainConfig) BaseGasDimension
 		gasUsedForL2:            0,
 		intrinsicGas:            0,
 		callStack:               CallGasDimensionStack{},
+		rootIsPrecompile:        false,
 		executionGasAccumulated: 0,
 		refundAdjusted:          0,
 		err:                     nil,
+		status:                  0,
 		interrupt:               atomic.Bool{},
 		reason:                  nil,
+		opCount:                 0,
 	}
 }
 
@@ -110,6 +118,7 @@ func (t *BaseGasDimensionTracer) onOpcodeStart(
 	callStackInfo *CallGasDimensionInfo,
 	opcode vm.OpCode,
 ) {
+	t.opCount++
 	// First check if tracer has been interrupted
 	if t.interrupt.Load() {
 		return true, zeroGasesByDimension(), nil, vm.OpCode(op)
@@ -266,6 +275,12 @@ func (t *BaseGasDimensionTracer) OnTxStart(env *tracing.VMContext, tx *types.Tra
 		rules.IsShanghai,
 	)
 	t.intrinsicGas = intrinsicGas
+	t.rootIsPrecompile = false
+	precompileAddressList := t.GetPrecompileAddressList()
+	if tx.To() != nil {
+		t.rootIsPrecompile = slices.Contains(precompileAddressList, *tx.To())
+	}
+	fmt.Println("rootIsPrecompile", t.rootIsPrecompile)
 }
 
 // OnTxEnd handles transaction end
@@ -319,6 +334,21 @@ func (t *BaseGasDimensionTracer) SetRefundAccumulated(refund uint64) {
 // GetStateDB returns the state database
 func (t *BaseGasDimensionTracer) GetStateDB() tracing.StateDB {
 	return t.env.StateDB
+}
+
+// GetCallStack returns the call stack
+func (t *BaseGasDimensionTracer) GetCallStack() CallGasDimensionStack {
+	return t.callStack
+}
+
+// GetOpCount returns the op count
+func (t *BaseGasDimensionTracer) GetOpCount() uint64 {
+	return t.opCount
+}
+
+// GetRootIsPrecompile returns whether the root of the call stack is a precompile
+func (t *BaseGasDimensionTracer) GetRootIsPrecompile() bool {
+	return t.rootIsPrecompile
 }
 
 // GetPrevAccessList returns the previous access list
@@ -387,6 +417,8 @@ func zeroCallGasDimensionInfo() CallGasDimensionInfo {
 		IsValueSentWithCall:       false,
 		InitCodeCost:              0,
 		HashCost:                  0,
+		isPrecompile:              false,
+		isStylusContract:          false,
 	}
 }
 
