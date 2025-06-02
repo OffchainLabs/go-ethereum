@@ -60,5 +60,4 @@ func (t *blockInsertTimes) OnBlockEndMetrics(blockNumber uint64, blockInsertDura
 		fmt.Printf("Failed to write file %s: %v\n", filepath, err)
 		return
 	}
-
 }
