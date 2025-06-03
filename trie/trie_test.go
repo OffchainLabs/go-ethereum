@@ -822,6 +822,9 @@ type spongeDb struct {
 	values  map[string]string
 }
 
+func (s *spongeDb) CreateDBSnapshot(dir string) error {
+	return errors.New("createDBSnapshot method is not supported by spongeDb")
+}
 func (s *spongeDb) Has(key []byte) (bool, error)             { panic("implement me") }
 func (s *spongeDb) Get(key []byte) ([]byte, error)           { return nil, errors.New("no such elem") }
 func (s *spongeDb) Delete(key []byte) error                  { panic("implement me") }
