@@ -445,7 +445,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	rLocked = false
 	db.lock.RUnlock()
 
-	// acquire write lock for the uncacher to remove commited nodes from dirties
+	// acquire write lock for the uncacher to remove committed nodes from dirties
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
