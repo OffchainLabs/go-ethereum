@@ -1,6 +1,8 @@
 package arbitrum
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -43,6 +45,27 @@ type Config struct {
 	MaxRecreateStateDepth  int64         `koanf:"max-recreate-state-depth"`
 
 	AllowMethod []string `koanf:"allow-method"`
+
+	BlockRedirects     []BlockRedirectConfig `koanf:"block-redirects"`
+	BlockRedirectsList string                `koanf:"block-redirects-list"`
+}
+
+type BlockRedirectConfig struct {
+	URL       string        `koanf:"url"`
+	Timeout   time.Duration `koanf:"timeout"`
+	LastBlock uint64        `koanf:"last-block"`
+}
+
+func (c *Config) Validate() error {
+	// BlockRedirectsList command line option overrides directly supplied BlockRedirects array of BlockRedirectConfig in the conf file
+	if c.BlockRedirectsList != "default" {
+		var blockRedirects []BlockRedirectConfig
+		if err := json.Unmarshal([]byte(c.BlockRedirectsList), &blockRedirects); err != nil {
+			return fmt.Errorf("failed to parse rpc block-redirects-list string: %w", err)
+		}
+		c.BlockRedirects = blockRedirects
+	}
+	return nil
 }
 
 type ArbDebugConfig struct {
@@ -69,6 +92,7 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 	arbDebug := DefaultConfig.ArbDebug
 	f.Uint64(prefix+".arbdebug.block-range-bound", arbDebug.BlockRangeBound, "bounds the number of blocks arbdebug calls may return")
 	f.Uint64(prefix+".arbdebug.timeout-queue-bound", arbDebug.TimeoutQueueBound, "bounds the length of timeout queues arbdebug calls may return")
+	f.String(prefix+".block-redirects-list", DefaultConfig.BlockRedirectsList, "array of node configs to redirect block requests given as a json string. time duration should be supplied in number indicating nanoseconds")
 }
 
 const (
@@ -94,4 +118,5 @@ var DefaultConfig = Config{
 		BlockRangeBound:   256,
 		TimeoutQueueBound: 512,
 	},
+	BlockRedirectsList: "default",
 }

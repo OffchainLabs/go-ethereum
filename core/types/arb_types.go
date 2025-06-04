@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -40,6 +41,14 @@ func (f fallbackError) ErrorCode() int { return fallbackErrorCode }
 func (f fallbackError) Error() string  { return fallbackErrorMsg }
 
 var ErrUseFallback = fallbackError{}
+
+type ErrUseArchiveFallback struct {
+	BlockNum uint64
+}
+
+func (e *ErrUseArchiveFallback) Error() string {
+	return fmt.Sprintf("use archive fallback client for block %d", e.BlockNum)
+}
 
 type FallbackClient interface {
 	CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error

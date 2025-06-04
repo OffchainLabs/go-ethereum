@@ -637,6 +637,11 @@ func (b testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 func (b testBackend) FallbackClient() types.FallbackClient {
 	return nil
 }
+
+func (b testBackend) ArchiveFallbackClient(_ uint64) types.FallbackClient {
+	return nil
+}
+
 func (b testBackend) SyncProgressMap(ctx context.Context) map[string]interface{} {
 	return map[string]interface{}{}
 }

@@ -41,6 +41,7 @@ import (
 // both full and light clients) with access to necessary functions.
 type Backend interface {
 	FallbackClient() types.FallbackClient
+	ArchiveFallbackClient(blockNum uint64) types.FallbackClient
 
 	// General Ethereum API
 	SyncProgress(ctx context.Context) ethereum.SyncProgress
