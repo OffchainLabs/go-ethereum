@@ -412,7 +412,6 @@ func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
 			Difficulty:       header.Difficulty,
 			GasLimit:         header.GasLimit,
 			MixDigest:        header.MixDigest,
-			BaseFee:          header.BaseFee,
 			Extra:            header.Extra,
 			WithdrawalsHash:  withdrawalsHash,
 			ParentBeaconRoot: parentBeaconRoot,
