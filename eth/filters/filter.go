@@ -23,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/melfilters"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -290,7 +289,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 	if err != nil {
 		return nil, err
 	}
-	logs := melfilters.FilterLogs(cached.logs, nil, nil, f.addresses, f.topics)
+	logs := types.FilterLogs(cached.logs, nil, nil, f.addresses, f.topics)
 	if len(logs) == 0 {
 		return nil, nil
 	}
