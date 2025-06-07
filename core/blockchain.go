@@ -2125,7 +2125,11 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 	triedbCommitTimer.Update(statedb.TrieDBCommits)     // Trie database commits are complete, we can mark them
 
 	blockWriteTimer.Update(time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.SnapshotCommits - statedb.TrieDBCommits)
-	blockInsertTimer.UpdateSince(start)
+	insertDuration := time.Since(start)
+	blockInsertTimer.Update(insertDuration)
+	if bc.logger != nil && bc.logger.OnBlockEndMetrics != nil {
+		bc.logger.OnBlockEndMetrics(block.NumberU64(), insertDuration)
+	}
 
 	return &blockProcessingResult{usedGas: res.GasUsed, procTime: proctime, status: status}, nil
 }
