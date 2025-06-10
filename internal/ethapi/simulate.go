@@ -493,6 +493,8 @@ func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
 			Coinbase:         header.Coinbase,
 			Difficulty:       header.Difficulty,
 			GasLimit:         header.GasLimit,
+			MixDigest:        header.MixDigest,
+			Extra:            header.Extra,
 			WithdrawalsHash:  withdrawalsHash,
 			ParentBeaconRoot: parentBeaconRoot,
 		})
