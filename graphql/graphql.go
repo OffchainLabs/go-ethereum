@@ -27,6 +27,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ccoveille/go-safecast"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -59,7 +61,8 @@ func (b *Long) UnmarshalGraphQL(input interface{}) error {
 		if strings.HasPrefix(input, "0x") {
 			// apply leniency and support hex representations of longs.
 			value, err := hexutil.DecodeUint64(input)
-			*b = Long(value)
+			valueInt64, err := safecast.ToInt64(value)
+			*b = Long(valueInt64)
 			return err
 		} else {
 			value, err := strconv.ParseInt(input, 10, 64)
