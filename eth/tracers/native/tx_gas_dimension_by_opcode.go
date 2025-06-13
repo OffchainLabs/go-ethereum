@@ -188,18 +188,49 @@ func (t *TxGasDimensionByOpcodeTracer) GetProtobufResult() ([]byte, error) {
 		return nil, err
 	}
 
+	// handle optional fields, set to nil
+	// for "not present" values, such as zero or false
+	var adjustedRefund *uint64 = nil
+	var rootIsPrecompileAdjustment *uint64 = nil
+	var rootIsStylusAdjustment *uint64 = nil
+	var failed *bool = nil
+	var transactionReverted *bool = nil
+
+	if baseExecutionResult.AdjustedRefund != 0 {
+		adjustedRefund = &baseExecutionResult.AdjustedRefund
+	}
+	if baseExecutionResult.RootIsPrecompile {
+		if baseExecutionResult.RootIsPrecompileAdjustment != 0 {
+			rootIsPrecompileAdjustment = &baseExecutionResult.RootIsPrecompileAdjustment
+		}
+	}
+	if baseExecutionResult.RootIsStylus {
+		if baseExecutionResult.RootIsStylusAdjustment != 0 {
+			rootIsStylusAdjustment = &baseExecutionResult.RootIsStylusAdjustment
+		}
+	}
+	if baseExecutionResult.Failed {
+		failed = &baseExecutionResult.Failed
+	}
+	if baseExecutionResult.Status != 0 {
+		var trueBool bool = true
+		transactionReverted = &trueBool
+	}
+
 	executionResult := &proto.TxGasDimensionByOpcodeExecutionResult{
-		GasUsed:        baseExecutionResult.GasUsed,
-		GasUsedL1:      baseExecutionResult.GasUsedForL1,
-		GasUsedL2:      baseExecutionResult.GasUsedForL2,
-		IntrinsicGas:   baseExecutionResult.IntrinsicGas,
-		AdjustedRefund: baseExecutionResult.AdjustedRefund,
-		Failed:         baseExecutionResult.Failed,
-		Status:         baseExecutionResult.Status,
-		Dimensions:     make(map[uint32]*proto.GasesByDimension),
-		TxHash:         baseExecutionResult.TxHash,
-		BlockTimestamp: baseExecutionResult.BlockTimestamp,
-		BlockNumber:    baseExecutionResult.BlockNumber.String(),
+		GasUsed:                    baseExecutionResult.GasUsed,
+		GasUsedL1:                  baseExecutionResult.GasUsedForL1,
+		GasUsedL2:                  baseExecutionResult.GasUsedForL2,
+		IntrinsicGas:               baseExecutionResult.IntrinsicGas,
+		AdjustedRefund:             adjustedRefund,
+		RootIsPrecompileAdjustment: rootIsPrecompileAdjustment,
+		RootIsStylusAdjustment:     rootIsStylusAdjustment,
+		Failed:                     failed,
+		TransactionReverted:        transactionReverted,
+		Dimensions:                 make(map[uint32]*proto.GasesByDimension),
+		TxHash:                     baseExecutionResult.TxHash,
+		BlockTimestamp:             baseExecutionResult.BlockTimestamp,
+		BlockNumber:                baseExecutionResult.BlockNumber.String(),
 	}
 
 	for opcode, dimensions := range t.OpcodeToDimensions {
