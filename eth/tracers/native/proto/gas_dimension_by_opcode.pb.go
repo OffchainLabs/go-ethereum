@@ -136,6 +136,8 @@ type TxGasDimensionByOpcodeExecutionResult struct {
 	AdjustedRefund *uint64 `protobuf:"varint,10,opt,name=adjusted_refund,json=adjustedRefund,proto3,oneof" json:"adjusted_refund,omitempty"`
 	// the adjustment to the gas used for the root of the transaction if it is a precompile
 	RootIsPrecompileAdjustment *uint64 `protobuf:"varint,12,opt,name=root_is_precompile_adjustment,json=rootIsPrecompileAdjustment,proto3,oneof" json:"root_is_precompile_adjustment,omitempty"`
+	// the adjustment to the gas used for the root of the transaction if it is a stylus contract
+	RootIsStylusAdjustment *uint64 `protobuf:"varint,14,opt,name=root_is_stylus_adjustment,json=rootIsStylusAdjustment,proto3,oneof" json:"root_is_stylus_adjustment,omitempty"`
 	// whether the transaction broke the rules of the VM and was rejected
 	Failed *bool `protobuf:"varint,2,opt,name=failed,proto3,oneof" json:"failed,omitempty"`
 	// the status of the transaction, for a valid transaction that followed the rules,
@@ -227,6 +229,13 @@ func (x *TxGasDimensionByOpcodeExecutionResult) GetRootIsPrecompileAdjustment() 
 	return 0
 }
 
+func (x *TxGasDimensionByOpcodeExecutionResult) GetRootIsStylusAdjustment() uint64 {
+	if x != nil && x.RootIsStylusAdjustment != nil {
+		return *x.RootIsStylusAdjustment
+	}
+	return 0
+}
+
 func (x *TxGasDimensionByOpcodeExecutionResult) GetFailed() bool {
 	if x != nil && x.Failed != nil {
 		return *x.Failed
@@ -281,7 +290,7 @@ const file_eth_tracers_native_proto_gas_dimension_by_opcode_proto_rawDesc = "" +
 	"\fstate_growth\x18\x04 \x01(\x04R\vstateGrowth\x12%\n" +
 	"\x0ehistory_growth\x18\x05 \x01(\x04R\rhistoryGrowth\x12.\n" +
 	"\x13state_growth_refund\x18\x06 \x01(\x03R\x11stateGrowthRefund\x120\n" +
-	"\x14child_execution_cost\x18\a \x01(\x04R\x12childExecutionCost\"\x8d\x06\n" +
+	"\x14child_execution_cost\x18\a \x01(\x04R\x12childExecutionCost\"\xeb\x06\n" +
 	"%TxGasDimensionByOpcodeExecutionResult\x12\x19\n" +
 	"\bgas_used\x18\x01 \x01(\x04R\agasUsed\x12\x1e\n" +
 	"\vgas_used_l1\x18\a \x01(\x04R\tgasUsedL1\x12\x1e\n" +
@@ -289,9 +298,10 @@ const file_eth_tracers_native_proto_gas_dimension_by_opcode_proto_rawDesc = "" +
 	"\rintrinsic_gas\x18\t \x01(\x04R\fintrinsicGas\x12,\n" +
 	"\x0fadjusted_refund\x18\n" +
 	" \x01(\x04H\x00R\x0eadjustedRefund\x88\x01\x01\x12F\n" +
-	"\x1droot_is_precompile_adjustment\x18\f \x01(\x04H\x01R\x1arootIsPrecompileAdjustment\x88\x01\x01\x12\x1b\n" +
-	"\x06failed\x18\x02 \x01(\bH\x02R\x06failed\x88\x01\x01\x126\n" +
-	"\x14transaction_reverted\x18\r \x01(\bH\x03R\x13transactionReverted\x88\x01\x01\x12o\n" +
+	"\x1droot_is_precompile_adjustment\x18\f \x01(\x04H\x01R\x1arootIsPrecompileAdjustment\x88\x01\x01\x12>\n" +
+	"\x19root_is_stylus_adjustment\x18\x0e \x01(\x04H\x02R\x16rootIsStylusAdjustment\x88\x01\x01\x12\x1b\n" +
+	"\x06failed\x18\x02 \x01(\bH\x03R\x06failed\x88\x01\x01\x126\n" +
+	"\x14transaction_reverted\x18\r \x01(\bH\x04R\x13transactionReverted\x88\x01\x01\x12o\n" +
 	"\n" +
 	"dimensions\x18\x03 \x03(\v2O.eth.tracers.native.proto.TxGasDimensionByOpcodeExecutionResult.DimensionsEntryR\n" +
 	"dimensions\x12\x17\n" +
@@ -302,7 +312,8 @@ const file_eth_tracers_native_proto_gas_dimension_by_opcode_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12@\n" +
 	"\x05value\x18\x02 \x01(\v2*.eth.tracers.native.proto.GasesByDimensionR\x05value:\x028\x01B\x12\n" +
 	"\x10_adjusted_refundB \n" +
-	"\x1e_root_is_precompile_adjustmentB\t\n" +
+	"\x1e_root_is_precompile_adjustmentB\x1c\n" +
+	"\x1a_root_is_stylus_adjustmentB\t\n" +
 	"\a_failedB\x17\n" +
 	"\x15_transaction_revertedB:Z8github.com/ethereum/go-ethereum/eth/tracers/native/protob\x06proto3"
 

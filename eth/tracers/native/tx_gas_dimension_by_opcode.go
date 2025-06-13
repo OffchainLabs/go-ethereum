@@ -192,6 +192,7 @@ func (t *TxGasDimensionByOpcodeTracer) GetProtobufResult() ([]byte, error) {
 	// for "not present" values, such as zero or false
 	var adjustedRefund *uint64 = nil
 	var rootIsPrecompileAdjustment *uint64 = nil
+	var rootIsStylusAdjustment *uint64 = nil
 	var failed *bool = nil
 	var transactionReverted *bool = nil
 
@@ -201,6 +202,11 @@ func (t *TxGasDimensionByOpcodeTracer) GetProtobufResult() ([]byte, error) {
 	if baseExecutionResult.RootIsPrecompile {
 		if baseExecutionResult.RootIsPrecompileAdjustment != 0 {
 			rootIsPrecompileAdjustment = &baseExecutionResult.RootIsPrecompileAdjustment
+		}
+	}
+	if baseExecutionResult.RootIsStylus {
+		if baseExecutionResult.RootIsStylusAdjustment != 0 {
+			rootIsStylusAdjustment = &baseExecutionResult.RootIsStylusAdjustment
 		}
 	}
 	if baseExecutionResult.Failed {
@@ -218,6 +224,7 @@ func (t *TxGasDimensionByOpcodeTracer) GetProtobufResult() ([]byte, error) {
 		IntrinsicGas:               baseExecutionResult.IntrinsicGas,
 		AdjustedRefund:             adjustedRefund,
 		RootIsPrecompileAdjustment: rootIsPrecompileAdjustment,
+		RootIsStylusAdjustment:     rootIsStylusAdjustment,
 		Failed:                     failed,
 		TransactionReverted:        transactionReverted,
 		Dimensions:                 make(map[uint32]*proto.GasesByDimension),

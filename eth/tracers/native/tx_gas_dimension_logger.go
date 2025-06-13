@@ -62,9 +62,6 @@ func NewTxGasDimensionLogger(
 		logs:                   make([]DimensionLog, 0),
 	}
 
-	// todo add a configuration flag somewhere somehow that disables checks
-	// for debugging the tracer itself
-
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
 			OnOpcode:  t.OnOpcode,
@@ -96,10 +93,7 @@ func (t *TxGasDimensionLogger) OnOpcode(
 	// it was stored in the tracer's reason field (t.reason)
 	// and we should return immediately
 	if interrupted {
-		//	fmt.Printf("Interrupted %d: address: %s, op: %s\n", t.opCount, scope.Address(), vm.OpCode(op).String())
 		return
-	} else {
-		//	fmt.Printf("Clear %d: address: %s, op: %s\n", t.opCount, scope.Address(), vm.OpCode(op).String())
 	}
 
 	t.logs = append(t.logs, DimensionLog{

@@ -105,6 +105,7 @@ type DimensionTracer interface {
 	GetCallStack() CallGasDimensionStack
 	GetOpCount() uint64
 	GetRootIsPrecompile() bool
+	GetRootIsStylus() bool
 }
 
 // calcGasDimensionFunc defines a type signature that takes the opcode
@@ -295,8 +296,8 @@ func calcSloadGas(
 	// Precompiles in nitro fire "artificial" OnOpcode events
 	// with 0 gas. The sloads will always be "hot" and we've
 	// decided that we don't charge gas for them.
-	inPrecompile, _ := inPrecompileOrStylusCall(t, depth, t.GetCallStack())
-	if inPrecompile {
+	inPrecompile, inStylus := inPrecompileOrStylusCall(t, depth, t.GetCallStack())
+	if inPrecompile || inStylus {
 		ret.Computation = 0
 		ret.StateAccess = 0
 	}
@@ -469,22 +470,18 @@ func finishCalcStateReadCallGas(
 	codeExecutionCost uint64,
 	callGasDimensionInfo CallGasDimensionInfo,
 ) (GasesByDimension, error) {
-	fmt.Printf("totalGasUsed: %d, codeExecutionCost: %d\n", totalGasUsed, codeExecutionCost)
-	fmt.Printf("callGasDimensionInfo: %+v\n", callGasDimensionInfo)
 	oneDimensionalGas := totalGasUsed - codeExecutionCost
-	computation := callGasDimensionInfo.AccessListComputationCost + callGasDimensionInfo.MemoryExpansionCost
-	stateAccess := callGasDimensionInfo.AccessListStateAccessCost
-	ret := GasesByDimension{
-		OneDimensionalGasCost: oneDimensionalGas,
-		Computation:           computation,
-		StateAccess:           stateAccess,
-		StateGrowth:           0,
-		HistoryGrowth:         0,
-		StateGrowthRefund:     0,
-		ChildExecutionCost:    codeExecutionCost,
-	}
-	if callGasDimensionInfo.isTargetPrecompile {
-		err := checkGasDimensionsPrecompileAdjustment(
+	if callGasDimensionInfo.isTargetPrecompile || callGasDimensionInfo.isTargetStylusContract {
+		ret := GasesByDimension{
+			OneDimensionalGasCost: oneDimensionalGas,
+			Computation:           oneDimensionalGas,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
+			ChildExecutionCost:    codeExecutionCost,
+		}
+		err := checkOneDimGreaterThanMultiDimGas(
 			callGasDimensionInfo.Pc,
 			byte(callGasDimensionInfo.Op),
 			codeExecutionCost,
@@ -495,9 +492,26 @@ func finishCalcStateReadCallGas(
 		}
 		// if there are no issues with the gas dimensions for the call
 		// itself, we can take the excess and assume it is computation
-		// for a precompile.
-		precompileAdjustmentGas := oneDimensionalGas - (ret.Computation + ret.StateAccess + ret.StateGrowth + ret.HistoryGrowth)
-		ret.Computation += precompileAdjustmentGas
+		// for a precompile or stylus execution.
+		if callGasDimensionInfo.isTargetPrecompile {
+			precompileAdjustmentGas := oneDimensionalGas - (ret.Computation + ret.StateAccess + ret.StateGrowth + ret.HistoryGrowth)
+			ret.Computation += precompileAdjustmentGas
+		} else {
+			stylusAdjustmentGas := oneDimensionalGas - (ret.Computation + ret.StateAccess + ret.StateGrowth + ret.HistoryGrowth)
+			ret.Computation += stylusAdjustmentGas
+		}
+		return ret, nil
+	}
+	computation := callGasDimensionInfo.AccessListComputationCost + callGasDimensionInfo.MemoryExpansionCost
+	stateAccess := callGasDimensionInfo.AccessListStateAccessCost
+	ret := GasesByDimension{
+		OneDimensionalGasCost: oneDimensionalGas,
+		Computation:           computation,
+		StateAccess:           stateAccess,
+		StateGrowth:           0,
+		HistoryGrowth:         0,
+		StateGrowthRefund:     0,
+		ChildExecutionCost:    codeExecutionCost,
 	}
 	err := checkGasDimensionsEqualCallGas(
 		callGasDimensionInfo.Pc,
@@ -721,12 +735,6 @@ func calcReadAndStoreCallGas(
 	// CALLs happening from inside precompiles out
 	// are not charged for their non-execution gas
 	inPrecompile, _ := inPrecompileOrStylusCall(t, depth, t.GetCallStack())
-	if cost == 0 {
-		fmt.Printf("Weird2: pc: %d, t.opCount: %d, op: %s, cost: %d, gas: %d, depth: %d\n", pc, t.GetOpCount(), vm.OpCode(op).String(), cost, gas, depth)
-		fmt.Printf("Weird2: address: %s\n", common.Address(address).Hex())
-		fmt.Printf("Weird2: valueSentWithCall: %d\n", valueSentWithCall)
-		fmt.Printf("Weird2: inPrecompile: %v\n", inPrecompile)
-	}
 	if inPrecompile {
 		return GasesByDimension{
 				OneDimensionalGasCost: 0,
@@ -836,6 +844,19 @@ func finishCalcStateReadAndStoreCallGas(
 			HistoryGrowth:         0,
 		}, nil
 	}
+	// stylus contracts don't follow the same rules about
+	// call gas going to state growth as EVM does.
+	// so we just assign everything to computation that isn't already
+	// explicitly accounted for in the codeExecutionCost
+	if callGasDimensionInfo.isTargetStylusContract {
+		return GasesByDimension{
+			OneDimensionalGasCost: oneDimensionalGas,
+			Computation:           oneDimensionalGas,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+		}, nil
+	}
 	// the stipend is 2300 and it is not charged to the call itself but used in the execution cost
 	var positiveValueCostLessStipend uint64 = 0
 	if callGasDimensionInfo.IsValueSentWithCall {
@@ -885,8 +906,8 @@ func finishCalcStateReadAndStoreCallGas(
 			ChildExecutionCost:    codeExecutionCost,
 		}
 	}
-	if callGasDimensionInfo.isTargetPrecompile {
-		err := checkGasDimensionsPrecompileAdjustment(
+	if callGasDimensionInfo.isTargetPrecompile || callGasDimensionInfo.isTargetStylusContract {
+		err := checkOneDimGreaterThanMultiDimGas(
 			callGasDimensionInfo.Pc,
 			byte(callGasDimensionInfo.Op),
 			codeExecutionCost,
@@ -897,9 +918,14 @@ func finishCalcStateReadAndStoreCallGas(
 		}
 		// if there are no issues with the gas dimensions for the call
 		// itself, we can take the excess and assume it is computation
-		// for a precompile.
-		precompileAdjustmentGas := oneDimensionalGas - (ret.Computation + ret.StateAccess + ret.StateGrowth + ret.HistoryGrowth)
-		ret.Computation += precompileAdjustmentGas
+		// for a precompile or stylus execution
+		if callGasDimensionInfo.isTargetPrecompile {
+			precompileAdjustmentGas := oneDimensionalGas - (ret.Computation + ret.StateAccess + ret.StateGrowth + ret.HistoryGrowth)
+			ret.Computation += precompileAdjustmentGas
+		} else {
+			stylusAdjustmentGas := oneDimensionalGas - (ret.Computation + ret.StateAccess + ret.StateGrowth + ret.HistoryGrowth)
+			ret.Computation += stylusAdjustmentGas
+		}
 	}
 	err := checkGasDimensionsEqualCallGas(
 		callGasDimensionInfo.Pc,
@@ -1260,21 +1286,34 @@ func checkGasDimensionsEqualCallGas(
 // if the call is inside of a precompile, the gas checks are less
 // strict but they should still check that the one dimensional gas
 // cost is greater than the sum of the other dimensions
-func checkGasDimensionsPrecompileAdjustment(
+func checkOneDimGreaterThanMultiDimGas(
 	pc uint64,
 	op byte,
 	codeExecutionCost uint64,
 	dim GasesByDimension,
 ) error {
-	if !(dim.OneDimensionalGasCost > dim.Computation+dim.StateAccess+dim.StateGrowth+dim.HistoryGrowth) {
-		return fmt.Errorf(
-			"unexpected precompile adjustment gas cost mismatch: pc %d, op %s, with codeExecutionCost %d, expected %d > %v",
-			pc,
-			vm.OpCode(op).String(),
-			codeExecutionCost,
-			dim.OneDimensionalGasCost,
-			dim,
-		)
+	if codeExecutionCost == 0 {
+		if !(dim.OneDimensionalGasCost == dim.Computation+dim.StateAccess+dim.StateGrowth+dim.HistoryGrowth) {
+			return fmt.Errorf(
+				"unexpected unequal precompile adjustment gas cost mismatch: pc %d, op %s, with codeExecutionCost %d, expected %d == %v",
+				pc,
+				vm.OpCode(op).String(),
+				codeExecutionCost,
+				dim.OneDimensionalGasCost,
+				dim,
+			)
+		}
+	} else {
+		if !(dim.OneDimensionalGasCost > dim.Computation+dim.StateAccess+dim.StateGrowth+dim.HistoryGrowth) {
+			return fmt.Errorf(
+				"unexpected precompile adjustment gas cost mismatch: pc %d, op %s, with codeExecutionCost %d, expected %d > %v",
+				pc,
+				vm.OpCode(op).String(),
+				codeExecutionCost,
+				dim.OneDimensionalGasCost,
+				dim,
+			)
+		}
 	}
 	return nil
 }
@@ -1326,6 +1365,9 @@ func inPrecompileOrStylusCall(t DimensionTracer, depth int, callStack CallGasDim
 	if depth == 1 {
 		if t.GetRootIsPrecompile() {
 			return true, false
+		}
+		if t.GetRootIsStylus() {
+			return false, true
 		}
 	}
 	callStackInfo, callStackNotEmpty := callStack.Peek()

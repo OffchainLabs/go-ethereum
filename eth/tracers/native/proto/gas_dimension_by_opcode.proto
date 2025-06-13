@@ -36,6 +36,8 @@ message TxGasDimensionByOpcodeExecutionResult {
   optional uint64 adjusted_refund = 10;
   // the adjustment to the gas used for the root of the transaction if it is a precompile
   optional uint64 root_is_precompile_adjustment = 12;
+  // the adjustment to the gas used for the root of the transaction if it is a stylus contract
+  optional uint64 root_is_stylus_adjustment = 14;
   // whether the transaction broke the rules of the VM and was rejected
   optional bool failed = 2;
   // the status of the transaction, for a valid transaction that followed the rules,

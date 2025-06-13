@@ -37,6 +37,11 @@ type BaseGasDimensionTracer struct {
 	// an adjustment must be made to the gas value of the transaction
 	// if the root is a precompile
 	rootIsPrecompileAdjustment uint64
+	// whether the root of the call stack is a stylus contract
+	rootIsStylus bool
+	// an adjustment must be made to the gas value of the transaction
+	// if the root is a stylus contract
+	rootIsStylusAdjustment uint64
 	// maintain an access list tracer to check previous access list statuses.
 	prevAccessListAddresses map[common.Address]int
 	prevAccessListSlots     []map[common.Hash]struct{}
@@ -78,6 +83,8 @@ func NewBaseGasDimensionTracer(chainConfig *params.ChainConfig) BaseGasDimension
 		callStack:                  CallGasDimensionStack{},
 		rootIsPrecompile:           false,
 		rootIsPrecompileAdjustment: 0,
+		rootIsStylus:               false,
+		rootIsStylusAdjustment:     0,
 		executionGasAccumulated:    0,
 		refundAdjusted:             0,
 		err:                        nil,
@@ -125,7 +132,6 @@ func (t *BaseGasDimensionTracer) onOpcodeStart(
 	t.opCount++
 	// First check if tracer has been interrupted
 	if t.interrupt.Load() {
-		fmt.Printf("Interrupted: %d %s\n", t.opCount, vm.OpCode(op).String())
 		return true, zeroGasesByDimension(), nil, vm.OpCode(op)
 	}
 
@@ -157,7 +163,6 @@ func (t *BaseGasDimensionTracer) onOpcodeStart(
 	// If it's not a call, directly calculate the gas dimensions for the opcode
 	f := GetCalcGasDimensionFunc(vm.OpCode(op))
 	var fErr error
-	fmt.Printf("Weird: pc: %d, t.opCount: %d, op: %s, cost: %d, gas: %d, depth: %d\n", pc, t.opCount, vm.OpCode(op).String(), cost, gas, depth)
 	gasesByDimension, callStackInfo, fErr = f(t, pc, op, gas, cost, scope, rData, depth, err)
 
 	// If there's a problem with our dimension calculation function, this is a tracer error
@@ -283,9 +288,12 @@ func (t *BaseGasDimensionTracer) OnTxStart(env *tracing.VMContext, tx *types.Tra
 	t.intrinsicGas = intrinsicGas
 	t.rootIsPrecompile = false
 	t.rootIsPrecompileAdjustment = 0
+	t.rootIsStylus = false
+	t.rootIsStylusAdjustment = 0
 	precompileAddressList := t.GetPrecompileAddressList()
 	if tx.To() != nil {
 		t.rootIsPrecompile = slices.Contains(precompileAddressList, *tx.To())
+		t.rootIsStylus = isStylusContract(t, *tx.To())
 	}
 }
 
@@ -308,6 +316,9 @@ func (t *BaseGasDimensionTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	// precompile itself, which is not exposed to the opcode tracing
 	if t.rootIsPrecompile {
 		t.rootIsPrecompileAdjustment = t.gasUsedForL2 - (t.executionGasAccumulated + t.intrinsicGas)
+	}
+	if t.rootIsStylus {
+		t.rootIsStylusAdjustment = t.gasUsedForL2 - (t.executionGasAccumulated + t.intrinsicGas)
 	}
 }
 
@@ -360,6 +371,11 @@ func (t *BaseGasDimensionTracer) GetOpCount() uint64 {
 // GetRootIsPrecompile returns whether the root of the call stack is a precompile
 func (t *BaseGasDimensionTracer) GetRootIsPrecompile() bool {
 	return t.rootIsPrecompile
+}
+
+// GetRootIsStylus returns whether the root of the call stack is a stylus contract
+func (t *BaseGasDimensionTracer) GetRootIsStylus() bool {
+	return t.rootIsStylus
 }
 
 // GetPrevAccessList returns the previous access list
@@ -455,6 +471,8 @@ type BaseExecutionResult struct {
 	AdjustedRefund             uint64   `json:"adjustedRefund"`
 	RootIsPrecompile           bool     `json:"rootIsPrecompile"`
 	RootIsPrecompileAdjustment uint64   `json:"rootIsPrecompileAdjustment"`
+	RootIsStylus               bool     `json:"rootIsStylus"`
+	RootIsStylusAdjustment     uint64   `json:"rootIsStylusAdjustment"`
 	Failed                     bool     `json:"failed"`
 	TxHash                     string   `json:"txHash"`
 	BlockTimestamp             uint64   `json:"blockTimestamp"`
@@ -478,6 +496,8 @@ func (t *BaseGasDimensionTracer) GetBaseExecutionResult() (BaseExecutionResult, 
 		AdjustedRefund:             t.refundAdjusted,
 		RootIsPrecompile:           t.rootIsPrecompile,
 		RootIsPrecompileAdjustment: t.rootIsPrecompileAdjustment,
+		RootIsStylus:               t.rootIsStylus,
+		RootIsStylusAdjustment:     t.rootIsStylusAdjustment,
 		Failed:                     failed,
 		TxHash:                     t.txHash.Hex(),
 		BlockTimestamp:             t.env.Time,
