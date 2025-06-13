@@ -33,9 +33,9 @@ import (
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
 	// Arbitrum: manage Stylus wasms
-	ActivateWasm(moduleHash common.Hash, asmMap map[ethdb.WasmTarget][]byte)
+	ActivateWasm(moduleHash common.Hash, asmMap map[ethdb.WasmTarget][]byte) error
 	TryGetActivatedAsm(target ethdb.WasmTarget, moduleHash common.Hash) (asm []byte, err error)
-	TryGetActivatedAsmMap(targets []ethdb.WasmTarget, moduleHash common.Hash) (asmMap map[ethdb.WasmTarget][]byte, err error)
+	TryGetActivatedAsmMap(targets []ethdb.WasmTarget, moduleHash common.Hash) (asmMap map[ethdb.WasmTarget][]byte, missingTargets []ethdb.WasmTarget, err error)
 	RecordCacheWasm(wasm state.CacheWasm)
 	RecordEvictWasm(wasm state.EvictWasm)
 	GetRecentWasms() state.RecentWasms
