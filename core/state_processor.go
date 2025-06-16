@@ -86,7 +86,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
-	if p.config.IsPrague(block.Number(), block.Time(), context.ArbOSVersion) || p.config.IsVerkle(block.Number(), block.Time()) {
+	// We do not need to process the parent block hash if we are on Arbitrum.
+	// This is taken care of in the while we process the arbitrum internal transaction.
+	if !p.config.IsArbitrum() && (p.config.IsPrague(block.Number(), block.Time(), context.ArbOSVersion) || p.config.IsVerkle(block.Number(), block.Time())) {
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 

@@ -157,7 +157,9 @@ type CacheConfig struct {
 	StateHistory        uint64        // Number of blocks from head whose state histories are reserved.
 	StateScheme         string        // Scheme used to store ethereum states and merkle tree nodes on top
 
+	// Arbitrum: configure head rewinding limits
 	SnapshotRestoreMaxGas uint64 // Rollback up to this much gas to restore snapshot (otherwise snapshot recalculated from nothing)
+	HeadRewindBlocksLimit uint64 // Rollback up to this many blocks to restore chain head (0 = preserve default upstream behaviour), only for HashScheme
 
 	// Arbitrum: configure GC window
 	TriesInMemory             uint64        // Height difference before which a trie may not be garbage-collected
@@ -202,6 +204,11 @@ func (c *CacheConfig) triedbConfig(isVerkle bool) *triedb.Config {
 var defaultCacheConfig = &CacheConfig{
 
 	// Arbitrum Config Options
+	// note: some of the defaults are overwritten by nitro side config defaults
+
+	SnapshotRestoreMaxGas: 0,
+	HeadRewindBlocksLimit: 0,
+
 	TriesInMemory:                      state.DefaultTriesInMemory,
 	TrieRetention:                      30 * time.Minute,
 	TrieTimeLimitRandomOffset:          0,
@@ -691,7 +698,7 @@ func (bc *BlockChain) SetSafe(header *types.Header) {
 }
 
 // rewindHashHead implements the logic of rewindHead in the context of hash scheme.
-func (bc *BlockChain) rewindHashHead(head *types.Header, root common.Hash, rewindLimit uint64) (*types.Header, uint64, bool) {
+func (bc *BlockChain) rewindHashHead(head *types.Header, root common.Hash, rewindGasLimit uint64) (*types.Header, uint64, bool) {
 	var (
 		limit      uint64                             // The oldest block that will be searched for this rewinding
 		rootFound  = root == common.Hash{}            // Flag whether we're beyond the requested root (no root, always true)
@@ -718,6 +725,12 @@ func (bc *BlockChain) rewindHashHead(head *types.Header, root common.Hash, rewin
 	} else if head.Number.Uint64() > params.FullImmutabilityThreshold {
 		limit = head.Number.Uint64() - params.FullImmutabilityThreshold
 	}
+
+	// arbitrum: overwrite the oldest block limit if pivot block is not available and HeadRewindBlocksLimit is configured
+	if pivot == nil && bc.cacheConfig.HeadRewindBlocksLimit > 0 && head.Number.Uint64() > bc.cacheConfig.HeadRewindBlocksLimit {
+		limit = head.Number.Uint64() - bc.cacheConfig.HeadRewindBlocksLimit
+	}
+
 	lastFullBlock := uint64(0)
 	lastFullBlockHash := common.Hash{}
 	gasRolledBack := uint64(0)
@@ -729,7 +742,7 @@ func (bc *BlockChain) rewindHashHead(head *types.Header, root common.Hash, rewin
 		}
 		logger("Block state missing, rewinding further", "number", head.Number, "hash", head.Hash(), "elapsed", common.PrettyDuration(time.Since(start)))
 
-		if rewindLimit > 0 && lastFullBlock != 0 {
+		if rewindGasLimit > 0 && lastFullBlock != 0 {
 			// Arbitrum: track the amount of gas rolled back and stop the rollback early if necessary
 			gasUsedInBlock := head.GasUsed
 			if bc.chainConfig.IsArbitrum() {
@@ -739,7 +752,7 @@ func (bc *BlockChain) rewindHashHead(head *types.Header, root common.Hash, rewin
 				}
 			}
 			gasRolledBack += gasUsedInBlock
-			if gasRolledBack >= rewindLimit {
+			if gasRolledBack >= rewindGasLimit {
 				rootNumber = lastFullBlock
 				head = bc.GetHeader(lastFullBlockHash, lastFullBlock)
 				log.Debug("Rewound to block with state but not snapshot", "number", head.Number.Uint64(), "hash", head.Hash())
@@ -873,17 +886,17 @@ func (bc *BlockChain) rewindPathHead(head *types.Header, root common.Hash) (*typ
 // representing the state corresponding to snapshot disk layer, is deemed impassable,
 // then block number zero is returned, indicating that snapshot recovery is disabled
 // and the whole snapshot should be auto-generated in case of head mismatch.
-func (bc *BlockChain) rewindHead(head *types.Header, root common.Hash, rewindLimit uint64) (*types.Header, uint64, bool) {
+func (bc *BlockChain) rewindHead(head *types.Header, root common.Hash, rewindGasLimit uint64) (*types.Header, uint64, bool) {
 	if bc.triedb.Scheme() == rawdb.PathScheme {
 		newHead, rootNumber := bc.rewindPathHead(head, root)
 		return newHead, rootNumber, head.Number.Uint64() != 0
 	}
-	return bc.rewindHashHead(head, root, rewindLimit)
+	return bc.rewindHashHead(head, root, rewindGasLimit)
 }
 
 // setHeadBeyondRoot rewinds the local chain to a new head with the extra condition
 // that the rewind must pass the specified state root. The extra condition is
-// ignored if it causes rolling back more than rewindLimit Gas (0 meaning infinte).
+// ignored if it causes rolling back more than rewindGasLimit Gas (0 meaning infinte).
 // If the limit was hit, rewind to last block with state. This method is meant to be
 // used when rewinding with snapshots enabled to ensure that we go back further than
 // persistent disk layer. Depending on whether the node was snap synced or full, and
@@ -895,7 +908,7 @@ func (bc *BlockChain) rewindHead(head *types.Header, root common.Hash, rewindLim
 // requested time. If both `head` and `time` is 0, the chain is rewound to genesis.
 //
 // The method returns the block number where the requested root cap was found.
-func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Hash, repair bool, rewindLimit uint64) (uint64, bool, error) {
+func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Hash, repair bool, rewindGasLimit uint64) (uint64, bool, error) {
 	if !bc.chainmu.TryLock() {
 		return 0, false, errChainStopped
 	}
@@ -915,7 +928,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 		// chain reparation mechanism without deleting any data!
 		if currentBlock := bc.CurrentBlock(); currentBlock != nil && header.Number.Uint64() <= currentBlock.Number.Uint64() {
 			var newHeadBlock *types.Header
-			newHeadBlock, blockNumber, rootFound = bc.rewindHead(header, root, rewindLimit)
+			newHeadBlock, blockNumber, rootFound = bc.rewindHead(header, root, rewindGasLimit)
 			rawdb.WriteHeadBlockHash(db, newHeadBlock.Hash())
 
 			// Degrade the chain markers if they are explicitly reverted.

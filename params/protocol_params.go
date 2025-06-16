@@ -204,7 +204,12 @@ var (
 
 	// EIP-2935 - Serve historical block hashes from state
 	HistoryStorageAddress = common.HexToAddress("0x0000F90827F1C53a10cb7A02335B175320002935")
-	HistoryStorageCode    = common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe14604857602036036044575f356001430381116044576205ffd0814303116044576205ffd09006545f5260205ff35b5f5ffd5b5f356205ffd060014303065500")
+	HistoryStorageCode    = common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe14604657602036036042575f35600143038111604257611fff81430311604257611fff9006545f5260205ff35b5f5ffd5b5f35611fff60014303065500")
+	// EIP-2935 - Serve historical block hashes from state (Arbitrum), majorly differ from the original in two aspects:
+	// 1. The buffer size is 393168 blocks instead of 8191.
+	// 2. Instead of using number (L1 block number), it uses arb_block_num (L2 block number).
+	// https://github.com/OffchainLabs/sys-asm/blob/main/src/execution_hash/main.eas
+	HistoryStorageCodeArbitrum = common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe1460605760203603605c575f3563a3b1b31d5f5260205f6004601c60645afa15605c575f51600181038211605c57816205ffd0910311605c576205ffd09006545f5260205ff35b5f5ffd5b5f356205ffd0600163a3b1b31d5f5260205f6004601c60645afa15605c575f5103065500")
 
 	// EIP-7002 - Execution layer triggerable withdrawals
 	WithdrawalQueueAddress = common.HexToAddress("0x00000961Ef480Eb55e80D19ad83579A64c007002")

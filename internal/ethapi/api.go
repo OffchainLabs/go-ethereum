@@ -57,10 +57,14 @@ var (
 )
 
 func fallbackClientFor(b Backend, err error) types.FallbackClient {
-	if !errors.Is(err, types.ErrUseFallback) {
-		return nil
+	if errors.Is(err, types.ErrUseFallback) {
+		return b.FallbackClient()
 	}
-	return b.FallbackClient()
+	var archiveErr *types.ErrUseArchiveFallback
+	if errors.As(err, &archiveErr) {
+		return b.ArchiveFallbackClient(archiveErr.BlockNum)
+	}
+	return nil
 }
 
 // EthereumAPI provides an API to access Ethereum related information.
@@ -721,7 +725,12 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 		if err != nil {
 			return nil, err
 		}
-		gp.AddGas(postingGas)
+		if gp.Gas() < gomath.MaxUint64-postingGas {
+			gp.AddGas(postingGas)
+		} else {
+			log.Debug("gas pool overflow", "gpGas", gp.Gas(), "baseFee", header.BaseFee, "postingGas", postingGas, "msgDataLen", len(msg.Data))
+			gp.SetGas(gomath.MaxUint64)
+		}
 	}
 	if msg.GasLimit > gp.Gas() {
 		gp.SetGas(msg.GasLimit)

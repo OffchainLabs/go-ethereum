@@ -208,7 +208,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
-	if sim.chainConfig.IsPrague(header.Number, header.Time, parentArbOSVersion) || sim.chainConfig.IsVerkle(header.Number, header.Time) {
+	if !sim.chainConfig.IsArbitrum() && sim.chainConfig.IsPrague(header.Number, header.Time, parentArbOSVersion) || sim.chainConfig.IsVerkle(header.Number, header.Time) {
 		core.ProcessParentBlockHash(header.ParentHash, evm)
 	}
 	var allLogs []*types.Log
@@ -411,6 +411,8 @@ func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
 			Coinbase:         header.Coinbase,
 			Difficulty:       header.Difficulty,
 			GasLimit:         header.GasLimit,
+			MixDigest:        header.MixDigest,
+			Extra:            header.Extra,
 			WithdrawalsHash:  withdrawalsHash,
 			ParentBeaconRoot: parentBeaconRoot,
 		})

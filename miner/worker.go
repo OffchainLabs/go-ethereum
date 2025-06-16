@@ -230,7 +230,7 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 	if header.ParentBeaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, env.evm)
 	}
-	if miner.chainConfig.IsPrague(header.Number, header.Time, prevArbosVersion) {
+	if !miner.chainConfig.IsArbitrum() && miner.chainConfig.IsPrague(header.Number, header.Time, prevArbosVersion) {
 		core.ProcessParentBlockHash(header.ParentHash, env.evm)
 	}
 	return env, nil
