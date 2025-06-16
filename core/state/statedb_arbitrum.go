@@ -74,15 +74,45 @@ func NewStylusPrefix(dictionary byte) []byte {
 	return append(prefix, dictionary)
 }
 
-func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarget][]byte) {
+// AcitvateWasm adds asmMap to newly activated wasms map under moduleHash key, but only if the key doesn't already exist in the map.
+// If the asmMap is added to the newly activated wasms, then wasmActivation is added to the journal so the operation can be reverted and the new entry removed in StateDB.RevertToSnapshot.
+// note: all ActivateWasm calls in given StateDB cycle (cycle reset by statedb commit) requires that the asmMap contain entries for the same targets as the first asmMap passed to ActivateWasm in the cycle. This is assumed in other parts of the code.
+func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarget][]byte) error {
+	// check consistency of targets with any previous activation
+	// that should be impossible if the ActivateWasm is used correctly, but check for early bug detection
+	for _, previouslyActivated := range s.arbExtraData.activatedWasms {
+		inconsistent := len(asmMap) != len(previouslyActivated)
+		if !inconsistent {
+			for target, _ := range previouslyActivated {
+				if _, ok := asmMap[target]; !ok {
+					inconsistent = true
+					break
+				}
+			}
+		}
+		if inconsistent {
+			var previousTargets, newTargets []rawdb.WasmTarget
+			for target, _ := range previouslyActivated {
+				previousTargets = append(previousTargets, target)
+			}
+			for target, _ := range asmMap {
+				previousTargets = append(previousTargets, target)
+			}
+			log.Error("Inconsistent stylus compile targets used with StateDB, previously activated module with different target list", "moduleHash", moduleHash, "previousTargets", previousTargets, "newTargets", newTargets)
+			return errors.New("inconsistent stylus compile targets")
+		}
+		// we need to check consistency only with one previous entry
+		break
+	}
 	_, exists := s.arbExtraData.activatedWasms[moduleHash]
 	if exists {
-		return
+		return nil
 	}
 	s.arbExtraData.activatedWasms[moduleHash] = asmMap
 	s.journal.append(wasmActivation{
 		moduleHash: moduleHash,
 	})
+	return nil
 }
 
 func (s *StateDB) TryGetActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) ([]byte, error) {
@@ -95,27 +125,39 @@ func (s *StateDB) TryGetActivatedAsm(target rawdb.WasmTarget, moduleHash common.
 	return s.db.ActivatedAsm(target, moduleHash)
 }
 
-func (s *StateDB) TryGetActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash common.Hash) (map[rawdb.WasmTarget][]byte, error) {
+// TryGetActivatedAsmMap tries to read asm map (map from target to assembly binary) from newly activated wasms (StateDB.activatedWasm) first, then if not found tries to read the asm map from wasmdb.
+// Returns:
+//   - the asm map of activated assembly binaries found
+//   - list of missing targets (not found, but requested)
+//   - error (nil also when some targets are not found)
+//
+// In case of an inconsistent activatedWasms (when newly activated asmMap is found for the module hash, but it doesn't contain asms for all targets)
+// nil asm map, all targets as missing and an error is returned.
+//
+// Similarly, in case of a database error other then "not found" nil asm map, all targets as missing and an error is returned.
+func (s *StateDB) TryGetActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash common.Hash) (map[rawdb.WasmTarget][]byte, []rawdb.WasmTarget, error) {
 	asmMap := s.arbExtraData.activatedWasms[moduleHash]
 	if asmMap != nil {
 		for _, target := range targets {
 			if _, exists := asmMap[target]; !exists {
-				return nil, fmt.Errorf("newly activated wasms for module %v exist, but they don't contain asm for target %v", moduleHash, target)
+				return nil, targets, fmt.Errorf("newly activated wasms for module %v exist, but they don't contain asm for target %v", moduleHash, target)
 			}
 		}
-		return asmMap, nil
+		return asmMap, nil, nil
 	}
-	var err error
 	asmMap = make(map[rawdb.WasmTarget][]byte, len(targets))
+	var missingTargets []rawdb.WasmTarget
 	for _, target := range targets {
-		asm, dbErr := s.db.ActivatedAsm(target, moduleHash)
-		if dbErr == nil {
+		asm, err := s.db.ActivatedAsm(target, moduleHash)
+		if err == nil {
 			asmMap[target] = asm
+		} else if rawdb.IsDbErrNotFound(err) {
+			missingTargets = append(missingTargets, target)
 		} else {
-			err = errors.Join(fmt.Errorf("failed to read activated asm from database for target %v and module %v: %w", target, moduleHash, dbErr), err)
+			return nil, targets, fmt.Errorf("failed to read activated asm from database for target %v and module %v: %w", target, moduleHash, err)
 		}
 	}
-	return asmMap, err
+	return asmMap, missingTargets, nil
 }
 
 func (s *StateDB) GetStylusPages() (uint16, uint16) {
@@ -272,9 +314,9 @@ func (s *StateDB) RecordProgram(targets []rawdb.WasmTarget, moduleHash common.Ha
 		// nothing to record
 		return
 	}
-	asmMap, err := s.TryGetActivatedAsmMap(targets, moduleHash)
-	if err != nil {
-		log.Crit("can't find activated wasm while recording", "modulehash", moduleHash, "err", err)
+	asmMap, missingTargets, err := s.TryGetActivatedAsmMap(targets, moduleHash)
+	if err != nil || len(missingTargets) > 0 {
+		log.Crit("can't find activated wasm while recording", "modulehash", moduleHash, "err", err, "missingTargets", missingTargets)
 	}
 	if s.arbExtraData.userWasms != nil {
 		s.arbExtraData.userWasms[moduleHash] = asmMap

@@ -278,8 +278,8 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 	}
 }
 
-func (s *hookedStateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarget][]byte) {
-	s.inner.ActivateWasm(moduleHash, asmMap)
+func (s *hookedStateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarget][]byte) error {
+	return s.inner.ActivateWasm(moduleHash, asmMap)
 }
 
 func (s *hookedStateDB) Reader() Reader {
@@ -294,7 +294,7 @@ func (s *hookedStateDB) TryGetActivatedAsm(target rawdb.WasmTarget, moduleHash c
 	return s.inner.TryGetActivatedAsm(target, moduleHash)
 }
 
-func (s *hookedStateDB) TryGetActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash common.Hash) (asmMap map[rawdb.WasmTarget][]byte, err error) {
+func (s *hookedStateDB) TryGetActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash common.Hash) (asmMap map[rawdb.WasmTarget][]byte, missingTargets []rawdb.WasmTarget, err error) {
 	return s.inner.TryGetActivatedAsmMap(targets, moduleHash)
 }
 

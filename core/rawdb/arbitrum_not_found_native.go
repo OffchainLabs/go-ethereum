@@ -27,6 +27,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-func isDbErrNotFound(err error) bool {
+func IsDbErrNotFound(err error) bool {
 	return errors.Is(err, leveldb.ErrNotFound) || errors.Is(err, pebble.ErrNotFound) || errors.Is(err, memorydb.ErrMemorydbNotFound)
 }

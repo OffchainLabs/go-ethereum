@@ -25,6 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
-func isDbErrNotFound(err error) bool {
+func IsDbErrNotFound(err error) bool {
 	return errors.Is(err, memorydb.ErrMemorydbNotFound)
 }
