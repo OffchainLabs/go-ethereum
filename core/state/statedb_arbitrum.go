@@ -83,7 +83,7 @@ func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarg
 	for _, previouslyActivated := range s.arbExtraData.activatedWasms {
 		inconsistent := len(asmMap) != len(previouslyActivated)
 		if !inconsistent {
-			for target, _ := range previouslyActivated {
+			for target := range previouslyActivated {
 				if _, ok := asmMap[target]; !ok {
 					inconsistent = true
 					break
@@ -92,10 +92,10 @@ func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarg
 		}
 		if inconsistent {
 			var previousTargets, newTargets []rawdb.WasmTarget
-			for target, _ := range previouslyActivated {
+			for target := range previouslyActivated {
 				previousTargets = append(previousTargets, target)
 			}
-			for target, _ := range asmMap {
+			for target := range asmMap {
 				previousTargets = append(previousTargets, target)
 			}
 			log.Error("Inconsistent stylus compile targets used with StateDB, previously activated module with different target list", "moduleHash", moduleHash, "previousTargets", previousTargets, "newTargets", newTargets)
