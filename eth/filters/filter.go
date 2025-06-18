@@ -20,8 +20,6 @@ import (
 	"context"
 	"errors"
 	"math"
-	"math/big"
-	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -410,7 +408,7 @@ func (f *Filter) rangeLogs(ctx context.Context, firstBlock, lastBlock uint64) ([
 func (f *Filter) indexedLogs(ctx context.Context, mb filtermaps.MatcherBackend, begin, end uint64) ([]*types.Log, error) {
 	start := time.Now()
 	potentialMatches, err := filtermaps.GetPotentialMatches(ctx, mb, begin, end, f.addresses, f.topics)
-	matches := FilterLogs(potentialMatches, nil, nil, f.addresses, f.topics)
+	matches := types.FilterLogs(potentialMatches, nil, nil, f.addresses, f.topics)
 	log.Trace("Performed indexed log search", "begin", begin, "end", end, "true matches", len(matches), "false positives", len(potentialMatches)-len(matches), "elapsed", common.PrettyDuration(time.Since(start)))
 	return matches, err
 }
