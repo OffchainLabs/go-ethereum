@@ -681,7 +681,7 @@ func (context *ChainContext) Config() *params.ChainConfig {
 	return context.b.ChainConfig()
 }
 
-func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, overrides *override.StateOverride, blockOverrides *override.BlockOverrides, timeout time.Duration, globalGasCap uint64, runMode core.MessageRunMode) (*core.ExecutionResult, error) {
+func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, overrides *override.StateOverride, blockOverrides *override.BlockOverrides, timeout time.Duration, globalGasCap uint64, runCtx *core.MessageRunContext) (*core.ExecutionResult, error) {
 	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
 	if blockOverrides != nil {
 		blockOverrides.Apply(&blockCtx)
@@ -709,15 +709,15 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 	} else {
 		gp.AddGas(globalGasCap)
 	}
-	return applyMessage(ctx, b, args, state, header, timeout, gp, &blockCtx, &vm.Config{NoBaseFee: true}, precompiles, true, runMode)
+	return applyMessage(ctx, b, args, state, header, timeout, gp, &blockCtx, &vm.Config{NoBaseFee: true}, precompiles, true, runCtx)
 }
 
-func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, timeout time.Duration, gp *core.GasPool, blockContext *vm.BlockContext, vmConfig *vm.Config, precompiles vm.PrecompiledContracts, skipChecks bool, runMode core.MessageRunMode) (*core.ExecutionResult, error) {
+func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, timeout time.Duration, gp *core.GasPool, blockContext *vm.BlockContext, vmConfig *vm.Config, precompiles vm.PrecompiledContracts, skipChecks bool, runCtx *core.MessageRunContext) (*core.ExecutionResult, error) {
 	// Get a new instance of the EVM.
 	if err := args.CallDefaults(gp.Gas(), blockContext.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return nil, err
 	}
-	msg := args.ToMessage(blockContext.BaseFee, gp.Gas(), header, state, runMode, skipChecks, skipChecks)
+	msg := args.ToMessage(blockContext.BaseFee, gp.Gas(), header, state, runCtx, skipChecks, skipChecks)
 
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	if gp.Gas() > 0 {
@@ -784,7 +784,7 @@ func applyMessageWithEVM(ctx context.Context, evm *vm.EVM, msg *core.Message, st
 	}
 
 	// Arbitrum: a tx can schedule another (see retryables)
-	result, err = runScheduledTxes(ctx, b, state, header, blockContext, core.MessageGasEstimationMode, result)
+	result, err = runScheduledTxes(ctx, b, state, header, blockContext, msg.TxRunContext, result)
 	if err != nil {
 		return nil, err
 	}
@@ -792,11 +792,11 @@ func applyMessageWithEVM(ctx context.Context, evm *vm.EVM, msg *core.Message, st
 	return result, nil
 }
 
-func runScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, state *state.StateDB, header *types.Header, blockCtx vm.BlockContext, runMode core.MessageRunMode, result *core.ExecutionResult) (*core.ExecutionResult, error) {
+func runScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, state *state.StateDB, header *types.Header, blockCtx vm.BlockContext, runCtx *core.MessageRunContext, result *core.ExecutionResult) (*core.ExecutionResult, error) {
 	scheduled := result.ScheduledTxes
-	for runMode == core.MessageGasEstimationMode && len(scheduled) > 0 {
+	for runCtx.IsGasEstimation() && len(scheduled) > 0 {
 		// This will panic if the scheduled tx is signed, but we only schedule unsigned ones
-		msg, err := core.TransactionToMessage(scheduled[0], types.NewArbitrumSigner(nil), header.BaseFee, runMode)
+		msg, err := core.TransactionToMessage(scheduled[0], types.NewArbitrumSigner(nil), header.BaseFee, runCtx)
 		if err != nil {
 			return nil, err
 		}
@@ -847,7 +847,7 @@ func updateHeaderForPendingBlocks(blockNrOrHash rpc.BlockNumberOrHash, header *t
 	return header
 }
 
-func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *override.StateOverride, blockOverrides *override.BlockOverrides, timeout time.Duration, globalGasCap uint64, runMode core.MessageRunMode) (*core.ExecutionResult, error) {
+func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *override.StateOverride, blockOverrides *override.BlockOverrides, timeout time.Duration, globalGasCap uint64, runCtx *core.MessageRunContext) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
@@ -855,7 +855,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 		return nil, err
 	}
 	header = updateHeaderForPendingBlocks(blockNrOrHash, header)
-	return doCall(ctx, b, args, state, header, overrides, blockOverrides, timeout, globalGasCap, runMode)
+	return doCall(ctx, b, args, state, header, overrides, blockOverrides, timeout, globalGasCap, runCtx)
 }
 
 // Call executes the given transaction on the state for the given block number.
@@ -869,7 +869,7 @@ func (api *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockN
 		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		blockNrOrHash = &latest
 	}
-	result, err := DoCall(ctx, api.b, args, *blockNrOrHash, overrides, blockOverrides, api.b.RPCEVMTimeout(), api.b.RPCGasCap(), core.MessageEthcallMode)
+	result, err := DoCall(ctx, api.b, args, *blockNrOrHash, overrides, blockOverrides, api.b.RPCEVMTimeout(), api.b.RPCGasCap(), core.NewMessageEthcallContext())
 	if err != nil {
 		if client := fallbackClientFor(api.b, err); client != nil {
 			var res hexutil.Bytes
@@ -961,7 +961,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	// Run the gas estimation and wrap any revertals into a custom return
 	// Arbitrum: this also appropriately recursively calls another args.ToMessage with increased gasCap by posterCostInL2Gas amount
-	call := args.ToMessage(header.BaseFee, gasCap, header, state, core.MessageGasEstimationMode, true, true)
+	call := args.ToMessage(header.BaseFee, gasCap, header, state, core.NewMessageGasEstimationContext(), true, true)
 
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	if gasCap > 0 {
@@ -1411,6 +1411,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	if args.AccessList != nil {
 		prevTracer = logger.NewAccessListTracer(*args.AccessList, args.from(), to, precompiles)
 	}
+	runCtx := core.NewMessageEthcallContext()
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, 0, nil, err
@@ -1423,7 +1424,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		statedb := db.Copy()
 		// Set the accesslist to the last al
 		args.AccessList = &accessList
-		msg := args.ToMessage(header.BaseFee, b.RPCGasCap(), header, statedb, core.MessageEthcallMode, true, true)
+		msg := args.ToMessage(header.BaseFee, b.RPCGasCap(), header, statedb, runCtx, true, true)
 
 		// Apply the transaction with the access list tracer
 		tracer := logger.NewAccessListTracer(accessList, args.from(), to, precompiles)
