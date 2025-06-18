@@ -59,6 +59,12 @@
     "0x82211934c340b29561381392348d48413e15adc8": {
       "balance": "0x6abd7a808913ed2",
       "nonce": 64
+    },
+    "0x0000f90827f1c53a10cb7a02335b175320002935":{
+      "balance":"0x0"
+    },
+    "0xa4b05fffffffffffffffffffffffffffffffffff":{
+      "balance":"0x0"
     }
   }
 }
