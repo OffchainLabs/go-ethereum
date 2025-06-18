@@ -17,7 +17,8 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/filtermaps"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -207,10 +208,14 @@ func (a *APIBackend) GetArbitrumNode() interface{} {
 }
 
 func (a *APIBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
-	if body := a.BlockChain().GetBody(hash); body != nil {
-		return body, nil
+	body := a.BlockChain().GetBody(hash)
+	if body == nil {
+		if uint64(number) < a.HistoryPruningCutoff() {
+			return nil, &history.PrunedHistoryError{}
+		}
+		return nil, errors.New("block body not found")
 	}
-	return nil, errors.New("block body not found")
+	return body, nil
 }
 
 // General Ethereum API
@@ -223,7 +228,7 @@ func (a *APIBackend) SyncProgressMap(ctx context.Context) map[string]interface{}
 	return a.sync.SyncProgressMap(ctx)
 }
 
-func (a *APIBackend) SyncProgress() ethereum.SyncProgress {
+func (a *APIBackend) SyncProgress(ctx context.Context) ethereum.SyncProgress {
 	progress := a.SyncProgressMap(context.Background())
 
 	if len(progress) == 0 {
@@ -385,6 +390,14 @@ func (a *APIBackend) RPCTxFeeCap() float64 {
 	return a.b.config.RPCTxFeeCap
 }
 
+func (a *APIBackend) CurrentView() *filtermaps.ChainView {
+	head := a.BlockChain().CurrentBlock()
+	if head == nil {
+		return nil
+	}
+	return filtermaps.NewChainView(a.BlockChain(), head.Number.Uint64(), head.Hash())
+}
+
 func (a *APIBackend) RPCEVMTimeout() time.Duration {
 	return a.b.config.RPCEVMTimeout
 }
@@ -431,6 +444,9 @@ func (a *APIBackend) blockNumberToUint(ctx context.Context, number rpc.BlockNumb
 			return 0, errors.New("finalized block not found")
 		}
 		return currentFinalizedBlock.Number.Uint64(), nil
+	}
+	if number == rpc.EarliestBlockNumber {
+		return a.HistoryPruningCutoff(), nil
 	}
 	if number < 0 {
 		return 0, errors.New("block number not supported")
@@ -486,11 +502,23 @@ func (a *APIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) 
 	if err != nil {
 		return nil, err
 	}
-	return a.BlockChain().GetBlockByNumber(numUint), nil
+	block := a.BlockChain().GetBlockByNumber(numUint)
+	if block == nil && numUint < a.HistoryPruningCutoff() {
+		return nil, &history.PrunedHistoryError{}
+	}
+	return block, nil
 }
 
 func (a *APIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return a.BlockChain().GetBlockByHash(hash), nil
+	number := a.BlockChain().GetBlockNumber(hash)
+	if number == nil {
+		return nil, nil
+	}
+	block := a.BlockChain().GetBlock(hash, *number)
+	if block == nil && *number < a.HistoryPruningCutoff() {
+		return nil, &history.PrunedHistoryError{}
+	}
+	return block, nil
 }
 
 func (a *APIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
@@ -507,6 +535,10 @@ func (a *APIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 
 func (a *APIBackend) BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error) {
 	return a.sync.BlockMetadataByNumber(ctx, blockNum)
+}
+
+func (a *APIBackend) NewMatcherBackend() filtermaps.MatcherBackend {
+	return a.b.filterMaps.NewMatcherBackend()
 }
 
 func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *core.BlockChain, maxRecreateStateDepth int64, header *types.Header, err error, archiveClientsManager *archiveFallbackClientsManager) (*state.StateDB, *types.Header, error) {
@@ -625,6 +657,11 @@ func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block,
 	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtTransaction(ctx, block, txIndex, reexec)
 }
 
+func (a *APIBackend) HistoryPruningCutoff() uint64 {
+	bn, _ := a.BlockChain().HistoryPruningCutoff()
+	return bn
+}
+
 func (a *APIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	return a.BlockChain().GetReceiptsByHash(hash), nil
 }
@@ -659,9 +696,13 @@ func (a *APIBackend) SendConditionalTx(ctx context.Context, signedTx *types.Tran
 	return a.b.EnqueueL2Message(ctx, signedTx, options)
 }
 
-func (a *APIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
+func (a *APIBackend) GetTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64) {
 	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(a.b.chainDb, txHash)
-	return tx != nil, tx, blockHash, blockNumber, index, nil
+	return tx != nil, tx, blockHash, blockNumber, index
+}
+
+func (a *APIBackend) TxIndexDone() bool {
+	return a.BlockChain().TxIndexDone()
 }
 
 func (a *APIBackend) GetPoolTransactions() (types.Transactions, error) {
@@ -699,19 +740,9 @@ func (a *APIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subs
 }
 
 // Filter API
-func (a *APIBackend) BloomStatus() (uint64, uint64) {
-	sections, _, _ := a.b.bloomIndexer.Sections()
-	return a.b.config.BloomBitsBlocks, sections
-}
 
 func (a *APIBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {
 	return rawdb.ReadLogs(a.ChainDb(), hash, number), nil
-}
-
-func (a *APIBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
-	for i := 0; i < bloomFilterThreads; i++ {
-		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, a.b.bloomRequests)
-	}
 }
 
 func (a *APIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {

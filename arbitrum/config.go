@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/params"
 	flag "github.com/spf13/pflag"
 )
 
@@ -23,9 +22,14 @@ type Config struct {
 	// RPCEVMTimeout is the global timeout for eth-call.
 	RPCEVMTimeout time.Duration `koanf:"evm-timeout"`
 
-	// Parameters for the bloom indexer
-	BloomBitsBlocks uint64 `koanf:"bloom-bits-blocks"`
-	BloomConfirms   uint64 `koanf:"bloom-confirms"`
+	LogHistory           uint64 `koanf:"log-history"`            // The maximum number of blocks from head where a log search index is maintained.
+	LogNoHistory         bool   `koanf:"log-no-history"`         // No log search index is maintained.
+	LogExportCheckpoints string `koanf:"log-export-checkpoints"` // export log index checkpoints to file
+
+	// State scheme represents the scheme used to store states and trie
+	// nodes on top. It can be 'hash', 'path', or none which means use the scheme
+	// consistent with persistent state.
+	StateScheme string `koanf:"state-scheme"`
 
 	// Parameters for the filter system
 	FilterLogCacheSize int           `koanf:"filter-log-cache-size"`
@@ -74,8 +78,10 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.Float64(prefix+".tx-fee-cap", DefaultConfig.RPCTxFeeCap, "cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)")
 	f.Bool(prefix+".tx-allow-unprotected", DefaultConfig.TxAllowUnprotected, "allow transactions that aren't EIP-155 replay protected to be submitted over the RPC")
 	f.Duration(prefix+".evm-timeout", DefaultConfig.RPCEVMTimeout, "timeout used for eth_call (0=infinite)")
-	f.Uint64(prefix+".bloom-bits-blocks", DefaultConfig.BloomBitsBlocks, "number of blocks a single bloom bit section vector holds")
-	f.Uint64(prefix+".bloom-confirms", DefaultConfig.BloomConfirms, "number of confirmation blocks before a bloom section is considered final")
+	f.Uint64(prefix+".log-history", DefaultConfig.LogHistory, "maximum number of blocks from head where a log search index is maintained")
+	f.Bool(prefix+".log-no-history", DefaultConfig.LogNoHistory, "no log search index is maintained")
+	f.String(prefix+".log-export-checkpoints", DefaultConfig.LogExportCheckpoints, "export log index checkpoints to file")
+	f.String(prefix+".state-scheme", DefaultConfig.StateScheme, "state scheme used to store states and trie nodes on top")
 	f.Uint64(prefix+".feehistory-max-block-count", DefaultConfig.FeeHistoryMaxBlockCount, "max number of blocks a fee history request may cover")
 	f.String(prefix+".classic-redirect", DefaultConfig.ClassicRedirect, "url to redirect classic requests, use \"error:[CODE:]MESSAGE\" to return specified error instead of redirecting")
 	f.Duration(prefix+".classic-redirect-timeout", DefaultConfig.ClassicRedirectTimeout, "timeout for forwarded classic requests, where 0 = no timeout")
@@ -100,9 +106,8 @@ var DefaultConfig = Config{
 	RPCGasCap:               ethconfig.Defaults.RPCGasCap,   // 50,000,000
 	RPCTxFeeCap:             ethconfig.Defaults.RPCTxFeeCap, // 1 ether
 	TxAllowUnprotected:      true,
-	RPCEVMTimeout:           ethconfig.Defaults.RPCEVMTimeout, // 5 seconds
-	BloomBitsBlocks:         params.BloomBitsBlocks * 4,       // we generally have smaller blocks
-	BloomConfirms:           params.BloomConfirms,
+	RPCEVMTimeout:           ethconfig.Defaults.RPCEVMTimeout,  // 5 seconds
+	LogHistory:              ethconfig.Defaults.LogHistory * 4, // we generally have smaller blocks
 	FilterLogCacheSize:      32,
 	FilterTimeout:           5 * time.Minute,
 	FeeHistoryMaxBlockCount: 1024,
