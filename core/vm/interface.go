@@ -34,8 +34,8 @@ import (
 type StateDB interface {
 	// Arbitrum: manage Stylus wasms
 	ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarget][]byte) error
-	TryGetActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) (asm []byte, err error)
-	TryGetActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash common.Hash) (asmMap map[rawdb.WasmTarget][]byte, missingTargets []rawdb.WasmTarget, err error)
+	ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) []byte
+	ActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash common.Hash) (asmMap map[rawdb.WasmTarget][]byte, missingTargets []rawdb.WasmTarget, err error)
 	RecordCacheWasm(wasm state.CacheWasm)
 	RecordEvictWasm(wasm state.EvictWasm)
 	GetRecentWasms() state.RecentWasms

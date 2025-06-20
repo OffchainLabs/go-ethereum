@@ -290,12 +290,12 @@ func (s *hookedStateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	return s.inner.IntermediateRoot(deleteEmptyObjects)
 }
 
-func (s *hookedStateDB) TryGetActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) (asm []byte, err error) {
-	return s.inner.TryGetActivatedAsm(target, moduleHash)
+func (s *hookedStateDB) ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) []byte {
+	return s.inner.ActivatedAsm(target, moduleHash)
 }
 
-func (s *hookedStateDB) TryGetActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash common.Hash) (asmMap map[rawdb.WasmTarget][]byte, missingTargets []rawdb.WasmTarget, err error) {
-	return s.inner.TryGetActivatedAsmMap(targets, moduleHash)
+func (s *hookedStateDB) ActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash common.Hash) (asmMap map[rawdb.WasmTarget][]byte, missingTargets []rawdb.WasmTarget, err error) {
+	return s.inner.ActivatedAsmMap(targets, moduleHash)
 }
 
 func (s *hookedStateDB) RecordCacheWasm(wasm CacheWasm) {

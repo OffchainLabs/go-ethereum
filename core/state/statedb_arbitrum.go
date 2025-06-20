@@ -115,17 +115,17 @@ func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarg
 	return nil
 }
 
-func (s *StateDB) TryGetActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) ([]byte, error) {
+func (s *StateDB) ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) []byte {
 	asmMap, exists := s.arbExtraData.activatedWasms[moduleHash]
 	if exists {
 		if asm, exists := asmMap[target]; exists {
-			return asm, nil
+			return asm
 		}
 	}
 	return s.db.ActivatedAsm(target, moduleHash)
 }
 
-// TryGetActivatedAsmMap tries to read asm map (map from target to assembly binary) from newly activated wasms (StateDB.activatedWasm) first, then if not found tries to read the asm map from wasmdb.
+// ActivatedAsmMap tries to read asm map (map from target to assembly binary) from newly activated wasms (StateDB.activatedWasm) first, then if not found tries to read the asm map from wasmdb.
 // Returns:
 //   - the asm map of activated assembly binaries found
 //   - list of missing targets (not found, but requested)
@@ -135,7 +135,7 @@ func (s *StateDB) TryGetActivatedAsm(target rawdb.WasmTarget, moduleHash common.
 // nil asm map, all targets as missing and an error is returned.
 //
 // Similarly, in case of a database error other then "not found" nil asm map, all targets as missing and an error is returned.
-func (s *StateDB) TryGetActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash common.Hash) (map[rawdb.WasmTarget][]byte, []rawdb.WasmTarget, error) {
+func (s *StateDB) ActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash common.Hash) (map[rawdb.WasmTarget][]byte, []rawdb.WasmTarget, error) {
 	asmMap := s.arbExtraData.activatedWasms[moduleHash]
 	if asmMap != nil {
 		for _, target := range targets {
@@ -148,13 +148,10 @@ func (s *StateDB) TryGetActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash c
 	asmMap = make(map[rawdb.WasmTarget][]byte, len(targets))
 	var missingTargets []rawdb.WasmTarget
 	for _, target := range targets {
-		asm, err := s.db.ActivatedAsm(target, moduleHash)
-		if err == nil {
+		if asm := s.db.ActivatedAsm(target, moduleHash); len(asm) > 0 {
 			asmMap[target] = asm
-		} else if rawdb.IsDbErrNotFound(err) {
-			missingTargets = append(missingTargets, target)
 		} else {
-			return nil, targets, fmt.Errorf("failed to read activated asm from database for target %v and module %v: %w", target, moduleHash, err)
+			missingTargets = append(missingTargets, target)
 		}
 	}
 	return asmMap, missingTargets, nil
@@ -314,7 +311,7 @@ func (s *StateDB) RecordProgram(targets []rawdb.WasmTarget, moduleHash common.Ha
 		// nothing to record
 		return
 	}
-	asmMap, missingTargets, err := s.TryGetActivatedAsmMap(targets, moduleHash)
+	asmMap, missingTargets, err := s.ActivatedAsmMap(targets, moduleHash)
 	if err != nil || len(missingTargets) > 0 {
 		log.Crit("can't find activated wasm while recording", "modulehash", moduleHash, "err", err, "missingTargets", missingTargets)
 	}
