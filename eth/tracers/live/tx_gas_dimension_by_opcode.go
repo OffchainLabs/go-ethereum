@@ -199,7 +199,7 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockEndMetrics(blockNumber uint64,
 
 // if the transaction has any kind of error, try to get as much information
 // as you can out of it, and then write that out to a file underneath
-// Path/errors/blocknumber/blocknumber_txhash.json
+// Path/errors/block_group/blocknumber_txhash.json
 func writeTxErrorToFile(t *TxGasDimensionByOpcodeLiveTracer, receipt *types.Receipt, err error, tracerError error) {
 	var txHashStr string = "no-tx-hash"
 	var blockNumberStr string = "no-block-number"
@@ -251,8 +251,18 @@ func writeTxErrorToFile(t *TxGasDimensionByOpcodeLiveTracer, receipt *types.Rece
 		}
 	}
 
-	// Create error directory path
-	errorDirPath := filepath.Join(t.Path, "errors", blockNumberStr)
+	// Create error directory path grouped by 1000 blocks
+	var errorDirPath string
+	if receipt == nil {
+		// For nil receipts, use a special directory
+		errorDirPath = filepath.Join(t.Path, "errors", "nil-receipts")
+	} else {
+		// Group by 1000 blocks like successful transactions
+		blockNumber := receipt.BlockNumber.Uint64()
+		blockGroup := (blockNumber / 1000) * 1000
+		errorDirPath = filepath.Join(t.Path, "errors", fmt.Sprintf("%d", blockGroup))
+	}
+
 	if err := os.MkdirAll(errorDirPath, 0755); err != nil {
 		log.Error("Failed to create error directory", "path", errorDirPath, "error", err)
 		return

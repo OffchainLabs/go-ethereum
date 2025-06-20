@@ -293,11 +293,11 @@ func calcSloadGas(
 		StateGrowthRefund:     0,
 		ChildExecutionCost:    0,
 	}
-	// Precompiles in nitro fire "artificial" OnOpcode events
+	// Precompiles, stylus, system calls
+	// in nitro fire "artificial" OnOpcode events
 	// with 0 gas. The sloads will always be "hot" and we've
 	// decided that we don't charge gas for them.
-	inPrecompile, inStylus := inPrecompileOrStylusCall(t, depth, t.GetCallStack())
-	if inPrecompile || inStylus {
+	if cost == 0 {
 		ret.Computation = 0
 		ret.StateAccess = 0
 	}
