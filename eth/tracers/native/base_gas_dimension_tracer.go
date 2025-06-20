@@ -482,13 +482,8 @@ type BaseExecutionResult struct {
 
 // get the result of the transaction execution that we will hand to the json output
 func (t *BaseGasDimensionTracer) GetBaseExecutionResult() (BaseExecutionResult, error) {
-	// Tracing aborted
-	if t.reason != nil {
-		return BaseExecutionResult{}, t.reason
-	}
 	failed := t.err != nil
-
-	return BaseExecutionResult{
+	ret := BaseExecutionResult{
 		GasUsed:                    t.gasUsed,
 		GasUsedForL1:               t.gasUsedForL1,
 		GasUsedForL2:               t.gasUsedForL2,
@@ -503,5 +498,6 @@ func (t *BaseGasDimensionTracer) GetBaseExecutionResult() (BaseExecutionResult, 
 		BlockTimestamp:             t.env.Time,
 		BlockNumber:                t.env.BlockNumber,
 		Status:                     t.status,
-	}, nil
+	}
+	return ret, t.reason
 }

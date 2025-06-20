@@ -218,14 +218,15 @@ type ExecutionResult struct {
 // produce json result for output from tracer
 // this is what the end-user actually gets from the RPC endpoint
 func (t *TxGasDimensionLogger) GetResult() (json.RawMessage, error) {
-	baseResult, err := t.GetBaseExecutionResult()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(&ExecutionResult{
+	baseResult, tracerError := t.GetBaseExecutionResult()
+	jsonResult, marshalError := json.Marshal(&ExecutionResult{
 		BaseExecutionResult: baseResult,
 		DimensionLogs:       formatLogs(t.DimensionLogs()),
 	})
+	if marshalError != nil {
+		return nil, marshalError
+	}
+	return jsonResult, tracerError
 }
 
 // formatted logs for json output
