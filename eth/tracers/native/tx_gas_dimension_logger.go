@@ -213,6 +213,7 @@ func (t *TxGasDimensionLogger) DimensionLogs() []DimensionLog { return t.logs }
 type ExecutionResult struct {
 	BaseExecutionResult
 	DimensionLogs []DimensionLogRes `json:"dim"`
+	TracerError   error
 }
 
 // produce json result for output from tracer
@@ -222,11 +223,12 @@ func (t *TxGasDimensionLogger) GetResult() (json.RawMessage, error) {
 	jsonResult, marshalError := json.Marshal(&ExecutionResult{
 		BaseExecutionResult: baseResult,
 		DimensionLogs:       formatLogs(t.DimensionLogs()),
+		TracerError:         tracerError,
 	})
 	if marshalError != nil {
 		return nil, marshalError
 	}
-	return jsonResult, tracerError
+	return jsonResult, nil
 }
 
 // formatted logs for json output
