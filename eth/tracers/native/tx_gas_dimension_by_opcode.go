@@ -74,7 +74,7 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 		t.handleCallStackPush(callStackInfo)
 	} else {
 		// track the execution gas of all opcodes (but not the opcodes that do calls)
-		t.AddToExecutionGasAccumulated(gasesByDimension.OneDimensionalGasCost)
+		t.AddToRootExecutionGasAccumulated(gasesByDimension.OneDimensionalGasCost)
 
 		// update the aggregrate map for this opcode
 		accumulatedDimensions := t.OpcodeToDimensions[opcode]
@@ -100,7 +100,7 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 			}
 
 			// track the execution gas of all opcodes that do calls
-			t.AddToExecutionGasAccumulated(finishGasesByDimension.OneDimensionalGasCost)
+			t.AddToRootExecutionGasAccumulated(finishGasesByDimension.OneDimensionalGasCost)
 
 			accumulatedDimensionsCall := t.OpcodeToDimensions[stackInfo.GasDimensionInfo.Op]
 
@@ -113,6 +113,7 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 			t.OpcodeToDimensions[stackInfo.GasDimensionInfo.Op] = accumulatedDimensionsCall
 
 			t.depth -= 1
+			t.updateCallChildExecutionCost(finishGasesByDimension.OneDimensionalGasCost)
 		}
 		t.updateCallChildExecutionCost(gasesByDimension.OneDimensionalGasCost)
 	}

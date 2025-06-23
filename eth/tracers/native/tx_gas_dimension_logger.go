@@ -146,14 +146,14 @@ func (t *TxGasDimensionLogger) OnOpcode(
 		t.handleCallStackPush(callStackInfo)
 	} else {
 		// track the execution gas of all opcodes (but not the opcodes that do calls)
-		t.AddToExecutionGasAccumulated(gasesByDimension.OneDimensionalGasCost)
+		t.AddToRootExecutionGasAccumulated(gasesByDimension.OneDimensionalGasCost)
 		if depth < t.depth {
 			interrupted, gasUsedByCall, stackInfo, finishGasesByDimension := t.callFinishFunction2(pc, depth, gas)
 			if interrupted {
 				return
 			}
 			// track the execution gas of all opcodes that do calls
-			t.AddToExecutionGasAccumulated(finishGasesByDimension.OneDimensionalGasCost)
+			t.AddToRootExecutionGasAccumulated(finishGasesByDimension.OneDimensionalGasCost)
 			callDimensionLog := t.logs[stackInfo.DimensionLogPosition]
 			callDimensionLog.OneDimensionalGasCost = finishGasesByDimension.OneDimensionalGasCost
 			callDimensionLog.Computation = finishGasesByDimension.Computation
@@ -169,6 +169,7 @@ func (t *TxGasDimensionLogger) OnOpcode(
 			t.logs[stackInfo.DimensionLogPosition] = callDimensionLog
 
 			t.depth -= 1
+			t.updateCallChildExecutionCost(finishGasesByDimension.OneDimensionalGasCost)
 		}
 
 		t.updateCallChildExecutionCost(gasesByDimension.OneDimensionalGasCost)
@@ -329,11 +330,11 @@ func formatLogs(logs []DimensionLog) []DimensionLogRes {
 	return formatted
 }
 
-func formatLogsDebugString( /*logs*/ _ []DimensionLog) string {
-	ret := ""
-	//for _, trace := range logs {
-	//	dimLogRes := copyDimLogToRes(trace)
-	//	ret += dimLogRes.DebugString() + ""
-	//}
+func formatLogsDebugString(logs []DimensionLog) string {
+	ret := "\n"
+	for _, trace := range logs {
+		dimLogRes := copyDimLogToRes(trace)
+		ret += dimLogRes.DebugString() + "\n"
+	}
 	return ret
 }

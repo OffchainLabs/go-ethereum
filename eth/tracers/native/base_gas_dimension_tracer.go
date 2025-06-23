@@ -49,7 +49,7 @@ type BaseGasDimensionTracer struct {
 	refundAccumulated uint64
 	// in order to calculate the refund adjusted, we need to know the total execution gas
 	// of just the opcodes of the transaction with no refunds
-	executionGasAccumulated uint64
+	rootExecutionGasAccumulated uint64
 	// the amount of refund allowed at the end of the transaction, adjusted by EIP-3529
 	refundAdjusted uint64
 	// whether the transaction should be rejected for not following the rules of the VM
@@ -69,29 +69,29 @@ type BaseGasDimensionTracer struct {
 
 func NewBaseGasDimensionTracer(chainConfig *params.ChainConfig) BaseGasDimensionTracer {
 	return BaseGasDimensionTracer{
-		chainConfig:                chainConfig,
-		depth:                      1,
-		refundAccumulated:          0,
-		prevAccessListAddresses:    map[common.Address]int{},
-		prevAccessListSlots:        []map[common.Hash]struct{}{},
-		env:                        nil,
-		txHash:                     common.Hash{},
-		gasUsed:                    0,
-		gasUsedForL1:               0,
-		gasUsedForL2:               0,
-		intrinsicGas:               0,
-		callStack:                  CallGasDimensionStack{},
-		rootIsPrecompile:           false,
-		rootIsPrecompileAdjustment: 0,
-		rootIsStylus:               false,
-		rootIsStylusAdjustment:     0,
-		executionGasAccumulated:    0,
-		refundAdjusted:             0,
-		err:                        nil,
-		status:                     0,
-		interrupt:                  atomic.Bool{},
-		reason:                     nil,
-		opCount:                    0,
+		chainConfig:                 chainConfig,
+		depth:                       1,
+		refundAccumulated:           0,
+		prevAccessListAddresses:     map[common.Address]int{},
+		prevAccessListSlots:         []map[common.Hash]struct{}{},
+		env:                         nil,
+		txHash:                      common.Hash{},
+		gasUsed:                     0,
+		gasUsedForL1:                0,
+		gasUsedForL2:                0,
+		intrinsicGas:                0,
+		callStack:                   CallGasDimensionStack{},
+		rootIsPrecompile:            false,
+		rootIsPrecompileAdjustment:  0,
+		rootIsStylus:                false,
+		rootIsStylusAdjustment:      0,
+		rootExecutionGasAccumulated: 0,
+		refundAdjusted:              0,
+		err:                         nil,
+		status:                      0,
+		interrupt:                   atomic.Bool{},
+		reason:                      nil,
+		opCount:                     0,
 	}
 }
 
@@ -357,14 +357,14 @@ func (t *BaseGasDimensionTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	t.gasUsedForL2 = receipt.GasUsedForL2()
 	t.txHash = receipt.TxHash
 	t.status = receipt.Status
-	t.refundAdjusted = t.adjustRefund(t.executionGasAccumulated+t.intrinsicGas, t.GetRefundAccumulated())
+	t.refundAdjusted = t.adjustRefund(t.rootExecutionGasAccumulated+t.intrinsicGas, t.GetRefundAccumulated())
 	// if the root is a precompile then we need to separately account for the gas used by the
 	// precompile itself, which is not exposed to the opcode tracing
 	if t.rootIsPrecompile {
-		t.rootIsPrecompileAdjustment = t.gasUsedForL2 - (t.executionGasAccumulated + t.intrinsicGas)
+		t.rootIsPrecompileAdjustment = t.gasUsedForL2 - (t.rootExecutionGasAccumulated + t.intrinsicGas)
 	}
 	if t.rootIsStylus {
-		t.rootIsStylusAdjustment = t.gasUsedForL2 - (t.executionGasAccumulated + t.intrinsicGas)
+		t.rootIsStylusAdjustment = t.gasUsedForL2 - (t.rootExecutionGasAccumulated + t.intrinsicGas)
 	}
 }
 
@@ -446,8 +446,8 @@ func (t *BaseGasDimensionTracer) Status() uint64 { return t.status }
 func (t *BaseGasDimensionTracer) Reason() error { return t.reason }
 
 // Add to the execution gas accumulated, for tracking adjusted refund
-func (t *BaseGasDimensionTracer) AddToExecutionGasAccumulated(gas uint64) {
-	t.executionGasAccumulated += gas
+func (t *BaseGasDimensionTracer) AddToRootExecutionGasAccumulated(gas uint64) {
+	t.rootExecutionGasAccumulated += gas
 }
 
 // this function implements the EIP-3529 refund adjustment
