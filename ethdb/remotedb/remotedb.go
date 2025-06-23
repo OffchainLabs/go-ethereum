@@ -34,7 +34,7 @@ type Database struct {
 
 func (db *Database) Has(key []byte) (bool, error) {
 	if _, err := db.Get(key); err != nil {
-		return false, nil
+		return false, err
 	}
 	return true, nil
 }
@@ -54,7 +54,7 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 
 func (db *Database) HasAncient(kind string, number uint64) (bool, error) {
 	if _, err := db.Ancient(kind, number); err != nil {
-		return false, nil
+		return false, err
 	}
 	return true, nil
 }
@@ -148,7 +148,8 @@ func (db *Database) Close() error {
 }
 
 func New(client *rpc.Client) ethdb.Database {
-	return &Database{
-		remote: client,
+	if client == nil {
+		return nil
 	}
+	return &Database{remote: client}
 }

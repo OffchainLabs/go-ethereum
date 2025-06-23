@@ -85,8 +85,6 @@ func (bc *BlockChain) WriteBlockAndSetHeadWithTime(block *types.Block, receipts 
 }
 
 func (bc *BlockChain) ReorgToOldBlock(newHead *types.Block) error {
-	bc.wg.Add(1)
-	defer bc.wg.Done()
 	if _, err := bc.SetCanonical(newHead); err != nil {
 		return fmt.Errorf("error reorging to old block: %w", err)
 	}

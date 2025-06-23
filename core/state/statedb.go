@@ -655,7 +655,6 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	// Insert into the live set
 	obj := newObject(s, addr, acct)
 	s.setStateObject(obj)
-	s.AccountLoaded++
 	return obj
 }
 
@@ -1553,6 +1552,15 @@ func (s *StateDB) AddressInAccessList(addr common.Address) bool {
 // SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
 func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	return s.accessList.Contains(addr, slot)
+}
+
+// GetAccessList returns the data of the access list directly for tracers to consume
+// this is necessary because the accessList is not exported from the state package
+func (s *StateDB) GetAccessList() (addresses map[common.Address]int, slots []map[common.Hash]struct{}) {
+	accessListCopy := s.accessList.Copy()
+	addresses = accessListCopy.addresses
+	slots = accessListCopy.slots
+	return
 }
 
 // markDelete is invoked when an account is deleted but the deletion is
