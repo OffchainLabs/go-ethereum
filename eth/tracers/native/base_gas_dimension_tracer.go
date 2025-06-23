@@ -239,7 +239,7 @@ func (t *BaseGasDimensionTracer) callFinishFunction2(
 	// you can't trust the `gas` field on the call itself. I wonder if the gas field is an estimation
 	gasUsedByCall = stackInfo.GasDimensionInfo.GasCounterAtTimeOfCall - gas
 	var finishErr error
-	finishGasesByDimension, finishErr = finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
+	finishGasesByDimension, finishErr = finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo, true)
 	if finishErr != nil {
 		t.interrupt.Store(true)
 		t.reason = finishErr
