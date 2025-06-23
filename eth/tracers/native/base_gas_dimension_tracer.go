@@ -207,6 +207,52 @@ func (t *BaseGasDimensionTracer) handleCallStackPush(callStackInfo *CallGasDimen
 // because it called an empty account or contract or wrong function signature,
 // call the appropriate finishX function to write the gas dimensions
 // for the call that increased the stack depth in the past
+func (t *BaseGasDimensionTracer) callFinishFunction2(
+	pc uint64,
+	depth int,
+	gas uint64,
+) (
+	interrupted bool,
+	gasUsedByCall uint64,
+	stackInfo CallGasDimensionStackInfo,
+	finishGasesByDimension GasesByDimension,
+) {
+	stackInfo, ok := t.callStack.Pop()
+	// base case, stack is empty, do nothing
+	if !ok {
+		t.interrupt.Store(true)
+		t.reason = fmt.Errorf("call stack is unexpectedly empty %d %d %d", pc, depth, t.depth)
+		return true, 0, zeroCallGasDimensionStackInfo(), zeroGasesByDimension()
+	}
+	finishFunction := GetFinishCalcGasDimensionFunc2(stackInfo.GasDimensionInfo.Op)
+	if finishFunction == nil {
+		t.interrupt.Store(true)
+		t.reason = fmt.Errorf(
+			"no finish function found for opcode %s, call stack is messed up %d",
+			stackInfo.GasDimensionInfo.Op.String(),
+			pc,
+		)
+		return true, 0, zeroCallGasDimensionStackInfo(), zeroGasesByDimension()
+	}
+	// IMPORTANT NOTE: for some reason the only reliable way to actually get the gas cost of the call
+	// is to subtract gas at time of call from gas at opcode AFTER return
+	// you can't trust the `gas` field on the call itself. I wonder if the gas field is an estimation
+	gasUsedByCall = stackInfo.GasDimensionInfo.GasCounterAtTimeOfCall - gas
+	var finishErr error
+	finishGasesByDimension, finishErr = finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
+	if finishErr != nil {
+		t.interrupt.Store(true)
+		t.reason = finishErr
+		return true, 0, zeroCallGasDimensionStackInfo(), zeroGasesByDimension()
+	}
+	return false, gasUsedByCall, stackInfo, finishGasesByDimension
+}
+
+// if the opcode returns from the call stack depth, or
+// if this is an opcode immediately after a call that did not increase the stack depth
+// because it called an empty account or contract or wrong function signature,
+// call the appropriate finishX function to write the gas dimensions
+// for the call that increased the stack depth in the past
 func (t *BaseGasDimensionTracer) callFinishFunction(
 	pc uint64,
 	depth int,

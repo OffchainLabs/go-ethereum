@@ -198,6 +198,18 @@ func GetFinishCalcGasDimensionFunc(op vm.OpCode) FinishCalcGasDimensionFunc {
 		return nil
 	}
 }
+func GetFinishCalcGasDimensionFunc2(op vm.OpCode) FinishCalcGasDimensionFunc {
+	switch op {
+	case vm.DELEGATECALL, vm.STATICCALL:
+		return finishCalcStateReadCallGas2
+	case vm.CALL, vm.CALLCODE:
+		return finishCalcStateReadAndStoreCallGas2
+	case vm.CREATE, vm.CREATE2:
+		return finishCalcCreateGas
+	default:
+		return nil
+	}
+}
 
 // calcSimpleSingleDimensionGas returns the gas used for the
 // simplest of transactions, that only use the computation dimension
@@ -433,7 +445,6 @@ func calcStateReadCallGas(
 	// at a minimum, the cost is 100 for the warm access set
 	// and the memory expansion cost
 	computation := memExpansionCost + accessListComputationCost
-	// see finishCalcStateReadCallGas for more details
 	return GasesByDimension{
 			OneDimensionalGasCost: cost,
 			Computation:           computation,
@@ -504,6 +515,71 @@ func finishCalcStateReadCallGas(
 	}
 	computation := callGasDimensionInfo.AccessListComputationCost + callGasDimensionInfo.MemoryExpansionCost
 	stateAccess := callGasDimensionInfo.AccessListStateAccessCost
+	ret := GasesByDimension{
+		OneDimensionalGasCost: oneDimensionalGas,
+		Computation:           computation,
+		StateAccess:           stateAccess,
+		StateGrowth:           0,
+		HistoryGrowth:         0,
+		StateGrowthRefund:     0,
+		ChildExecutionCost:    codeExecutionCost,
+	}
+	err := checkGasDimensionsEqualCallGas(
+		callGasDimensionInfo.Pc,
+		byte(callGasDimensionInfo.Op),
+		codeExecutionCost,
+		ret,
+	)
+	return ret, err
+}
+
+func finishCalcStateReadCallGas2(
+	totalGasUsed uint64,
+	codeExecutionCost uint64,
+	callGasDimensionInfo CallGasDimensionInfo,
+) (GasesByDimension, error) {
+	fmt.Println("finishCalcStateReadCallGas2 totalGasUsed", totalGasUsed)
+	fmt.Println("finishCalcStateReadCallGas2 codeExecutionCost", codeExecutionCost)
+	fmt.Println("finishCalcStateReadCallGas2 callGasDimensionInfo", callGasDimensionInfo)
+	fmt.Println()
+	oneDimensionalGas := totalGasUsed - codeExecutionCost
+	if callGasDimensionInfo.isTargetPrecompile || callGasDimensionInfo.isTargetStylusContract {
+		fmt.Println("finishCalcStateReadCallGas2 isTargetPrecompile or isTargetStylusContract")
+		ret := GasesByDimension{
+			OneDimensionalGasCost: oneDimensionalGas,
+			Computation:           oneDimensionalGas,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
+			ChildExecutionCost:    codeExecutionCost,
+		}
+		err := checkOneDimGreaterThanMultiDimGas(
+			callGasDimensionInfo.Pc,
+			byte(callGasDimensionInfo.Op),
+			codeExecutionCost,
+			ret,
+		)
+		if err != nil {
+			return ret, err
+		}
+		// if there are no issues with the gas dimensions for the call
+		// itself, we can take the excess and assume it is computation
+		// for a precompile or stylus execution.
+		if callGasDimensionInfo.isTargetPrecompile {
+			precompileAdjustmentGas := oneDimensionalGas - (ret.Computation + ret.StateAccess + ret.StateGrowth + ret.HistoryGrowth)
+			ret.Computation += precompileAdjustmentGas
+		} else {
+			stylusAdjustmentGas := oneDimensionalGas - (ret.Computation + ret.StateAccess + ret.StateGrowth + ret.HistoryGrowth)
+			ret.Computation += stylusAdjustmentGas
+		}
+		return ret, nil
+	}
+	computation := callGasDimensionInfo.AccessListComputationCost + callGasDimensionInfo.MemoryExpansionCost
+	stateAccess := callGasDimensionInfo.AccessListStateAccessCost
+	fmt.Println("finishCalcStateReadCallGas2 computation", computation)
+	fmt.Println("finishCalcStateReadCallGas2 stateAccess", stateAccess)
+	fmt.Println()
 	ret := GasesByDimension{
 		OneDimensionalGasCost: oneDimensionalGas,
 		Computation:           computation,
@@ -624,7 +700,6 @@ func calcCreateGas(
 	}
 	inPrecompile, _ := inPrecompileOrStylusCall(t, depth, t.GetCallStack())
 	// at this point we know everything except deployment_code_execution_cost and code_deposit_cost
-	// so we can get those from the finishCalcCreateGas function
 	return GasesByDimension{
 			OneDimensionalGasCost: cost,
 			Computation:           initCodeCost + memExpansionCost + params.CreateGas + hashCost,
@@ -781,7 +856,6 @@ func calcReadAndStoreCallGas(
 	// at a minimum, the cost is 100 for the warm access set
 	// and the memory expansion cost
 	computation := memExpansionCost + accessListComputationCost
-	// see finishCalcStateReadCallGas for more details
 	return GasesByDimension{
 			OneDimensionalGasCost: cost,
 			Computation:           computation,
@@ -804,6 +878,139 @@ func calcReadAndStoreCallGas(
 			isTargetStylusContract:    isTargetStylusContract,
 			inPrecompile:              inPrecompile,
 		}, nil
+}
+
+func finishCalcStateReadAndStoreCallGas2(
+	totalGasUsed uint64,
+	codeExecutionCost uint64,
+	callGasDimensionInfo CallGasDimensionInfo,
+) (GasesByDimension, error) {
+	fmt.Println("finishCalcStateReadAndStoreCallGas2 totalGasUsed", totalGasUsed)
+	fmt.Println("finishCalcStateReadAndStoreCallGas2 codeExecutionCost", codeExecutionCost)
+	fmt.Println("finishCalcStateReadAndStoreCallGas2 callGasDimensionInfo", callGasDimensionInfo)
+	fmt.Println()
+	if codeExecutionCost > totalGasUsed {
+		return GasesByDimension{}, fmt.Errorf("CALL's totalGasUsed should never be greater than the codeExecutionCost, totalGasUsed: %d, codeExecutionCost: %d", totalGasUsed, codeExecutionCost)
+	}
+	oneDimensionalGas := totalGasUsed - codeExecutionCost
+	// precompiles are assumed to always have warm caches
+	// and the state access is free
+	if callGasDimensionInfo.isTargetPrecompile {
+		return GasesByDimension{
+			OneDimensionalGasCost: oneDimensionalGas,
+			Computation:           oneDimensionalGas,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+		}, nil
+	}
+	// in some cases inside precompiles
+	// fire "fake" calls from inside the precompile that charge no gas
+	if callGasDimensionInfo.inPrecompile && totalGasUsed == 0 {
+		return GasesByDimension{
+			OneDimensionalGasCost: 0,
+			Computation:           0,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+		}, nil
+	}
+	// stylus contracts don't follow the same rules about
+	// call gas going to state growth as EVM does.
+	// so we just assign everything to computation that isn't already
+	// explicitly accounted for in the codeExecutionCost
+	if callGasDimensionInfo.isTargetStylusContract {
+		return GasesByDimension{
+			OneDimensionalGasCost: oneDimensionalGas,
+			Computation:           oneDimensionalGas,
+			StateAccess:           0,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+		}, nil
+	}
+	// the stipend is 2300 and it is not charged to the call itself but used in the execution cost
+	var positiveValueCostLessStipend uint64 = 0
+	if callGasDimensionInfo.IsValueSentWithCall {
+		positiveValueCostLessStipend = params.CallValueTransferGas - params.CallStipend
+	}
+	// the formula for call is:
+	// dynamic_gas = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost + value_to_empty_account_cost
+	// now with leftOver, we are left with address_access_cost + value_to_empty_account_cost
+	fmt.Println("finishCalcStateReadAndStoreCallGas2 totalGasUsed", totalGasUsed)
+	fmt.Println("finishCalcStateReadAndStoreCallGas2 codeExecutionCost", codeExecutionCost)
+	fmt.Println("finishCalcStateReadAndStoreCallGas2 memory expansion cost", callGasDimensionInfo.MemoryExpansionCost)
+	fmt.Println("finishCalcStateReadAndStoreCallGas2 code execution cost", codeExecutionCost)
+	fmt.Println("finishCalcStateReadAndStoreCallGas2 positive value cost less stipend", positiveValueCostLessStipend)
+	leftOver := totalGasUsed - callGasDimensionInfo.MemoryExpansionCost - codeExecutionCost - positiveValueCostLessStipend
+	fmt.Println("finishCalcStateReadAndStoreCallGas2 leftOver", leftOver)
+	// the maximum address_access_cost can ever be is 2600. Meanwhile value_to_empty_account_cost is at minimum 25000
+	// so if leftOver is greater than 2600 then we know that the value_to_empty_account_cost was 25000
+	// and whatever was left over after that was address_access_cost
+	// callcode is the same as call except does not have value_to_empty_account_cost,
+	// so this code properly handles it coincidentally, too
+	ret := GasesByDimension{
+		OneDimensionalGasCost: oneDimensionalGas,
+		Computation:           callGasDimensionInfo.MemoryExpansionCost + params.WarmStorageReadCostEIP2929,
+		StateAccess:           positiveValueCostLessStipend,
+		StateGrowth:           0,
+		HistoryGrowth:         0,
+		StateGrowthRefund:     0,
+		ChildExecutionCost:    codeExecutionCost,
+	}
+	if leftOver > params.ColdAccountAccessCostEIP2929 { // there is a value being sent to an empty account
+		var coldCost uint64 = 0
+		if leftOver-params.CallNewAccountGas == params.ColdAccountAccessCostEIP2929 {
+			coldCost = params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
+		}
+		ret = GasesByDimension{
+			OneDimensionalGasCost: oneDimensionalGas,
+			Computation:           callGasDimensionInfo.MemoryExpansionCost + params.WarmStorageReadCostEIP2929,
+			StateAccess:           coldCost + positiveValueCostLessStipend,
+			StateGrowth:           params.CallNewAccountGas,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
+			ChildExecutionCost:    codeExecutionCost,
+		}
+	} else if leftOver == params.ColdAccountAccessCostEIP2929 {
+		var coldCost uint64 = params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
+		ret = GasesByDimension{
+			OneDimensionalGasCost: oneDimensionalGas,
+			Computation:           callGasDimensionInfo.MemoryExpansionCost + params.WarmStorageReadCostEIP2929,
+			StateAccess:           coldCost + positiveValueCostLessStipend,
+			StateGrowth:           0,
+			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
+			ChildExecutionCost:    codeExecutionCost,
+		}
+	}
+	if callGasDimensionInfo.isTargetPrecompile || callGasDimensionInfo.isTargetStylusContract {
+		err := checkOneDimGreaterThanMultiDimGas(
+			callGasDimensionInfo.Pc,
+			byte(callGasDimensionInfo.Op),
+			codeExecutionCost,
+			ret,
+		)
+		if err != nil {
+			return ret, err
+		}
+		// if there are no issues with the gas dimensions for the call
+		// itself, we can take the excess and assume it is computation
+		// for a precompile or stylus execution
+		if callGasDimensionInfo.isTargetPrecompile {
+			precompileAdjustmentGas := oneDimensionalGas - (ret.Computation + ret.StateAccess + ret.StateGrowth + ret.HistoryGrowth)
+			ret.Computation += precompileAdjustmentGas
+		} else {
+			stylusAdjustmentGas := oneDimensionalGas - (ret.Computation + ret.StateAccess + ret.StateGrowth + ret.HistoryGrowth)
+			ret.Computation += stylusAdjustmentGas
+		}
+	}
+	err := checkGasDimensionsEqualCallGas(
+		callGasDimensionInfo.Pc,
+		byte(callGasDimensionInfo.Op),
+		codeExecutionCost,
+		ret,
+	)
+	return ret, err
 }
 
 // In order to calculate the gas dimensions for opcodes that
