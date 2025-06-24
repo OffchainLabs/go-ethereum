@@ -314,7 +314,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()
 
-	log.Trace("Engine API request received", "method", "ForkchoiceUpdated", "head", update.HeadBlockHash, "finalized", update.FinalizedBlockHash, "safe", update.SafeBlockHash)
+	// log.Trace("Engine API request received", "method", "ForkchoiceUpdated", "head", update.HeadBlockHash, "finalized", update.FinalizedBlockHash, "safe", update.SafeBlockHash)
 	if update.HeadBlockHash == (common.Hash{}) {
 		log.Warn("Forkchoice requested update to zero hash")
 		return engine.STATUS_INVALID, nil // TODO(karalabe): Why does someone send us this?
@@ -461,7 +461,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 // ExchangeTransitionConfigurationV1 checks the given configuration against
 // the configuration of the node.
 func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config engine.TransitionConfigurationV1) (*engine.TransitionConfigurationV1, error) {
-	log.Trace("Engine API request received", "method", "ExchangeTransitionConfiguration", "ttd", config.TerminalTotalDifficulty)
+	// log.Trace("Engine API request received", "method", "ExchangeTransitionConfiguration", "ttd", config.TerminalTotalDifficulty)
 	if config.TerminalTotalDifficulty == nil {
 		return nil, errors.New("invalid terminal total difficulty")
 	}
@@ -525,7 +525,7 @@ func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.Execu
 }
 
 func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool) (*engine.ExecutionPayloadEnvelope, error) {
-	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
+	// log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
 	data := api.localBlocks.get(payloadID, full)
 	if data == nil {
 		return nil, engine.UnknownPayload
@@ -842,7 +842,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	api.newPayloadLock.Lock()
 	defer api.newPayloadLock.Unlock()
 
-	log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
+	// log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
 	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot, requests)
 	if err != nil {
 		bgu := "nil"
@@ -941,7 +941,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 }
 
 func (api *ConsensusAPI) executeStatelessPayload(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, opaqueWitness hexutil.Bytes) (engine.StatelessPayloadStatusV1, error) {
-	log.Trace("Engine API request received", "method", "ExecuteStatelessPayload", "number", params.Number, "hash", params.BlockHash)
+	// log.Trace("Engine API request received", "method", "ExecuteStatelessPayload", "number", params.Number, "hash", params.BlockHash)
 	block, err := engine.ExecutableDataToBlockNoHash(params, versionedHashes, beaconRoot, requests)
 	if err != nil {
 		bgu := "nil"
@@ -1176,7 +1176,7 @@ func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 
 // GetClientVersionV1 exchanges client version data of this node.
 func (api *ConsensusAPI) GetClientVersionV1(info engine.ClientVersionV1) []engine.ClientVersionV1 {
-	log.Trace("Engine API request received", "method", "GetClientVersionV1", "info", info.String())
+	// log.Trace("Engine API request received", "method", "GetClientVersionV1", "info", info.String())
 	commit := make([]byte, 4)
 	if vcs, ok := version.VCS(); ok {
 		commit = common.FromHex(vcs.Commit)[0:4]

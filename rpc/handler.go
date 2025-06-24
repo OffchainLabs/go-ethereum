@@ -429,7 +429,8 @@ func (h *handler) handleResponses(batch []*jsonrpcMessage, handleCall func(*json
 		switch {
 		case msg.isResponse():
 			handleResp(msg)
-			h.log.Trace("Handled RPC response", "reqid", idForLog{msg.ID}, "duration", time.Since(start))
+			// h.log.Trace("Handled RPC response", "reqid", idForLog{msg.ID}, "duration", time.Since(start))
+			_ = start
 
 		case msg.isNotification():
 			if strings.HasSuffix(msg.Method, notificationMethodSuffix) {
@@ -466,7 +467,7 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 	switch {
 	case msg.isNotification():
 		h.handleCall(ctx, msg)
-		h.log.Debug("Served "+msg.Method, "duration", time.Since(start))
+		// h.log.Debug("Served "+msg.Method, "duration", time.Since(start))
 		return nil
 
 	case msg.isCall():
@@ -480,7 +481,7 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 			}
 			h.log.Warn("Served "+msg.Method, logctx...)
 		} else {
-			h.log.Debug("Served "+msg.Method, logctx...)
+			// h.log.Debug("Served "+msg.Method, logctx...)
 		}
 		return resp
 
