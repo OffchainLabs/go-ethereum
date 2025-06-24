@@ -17,7 +17,9 @@
 package simulated
 
 import (
+	"context"
 	"errors"
+	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -51,12 +53,25 @@ type Client interface {
 	ethereum.TransactionReader
 	ethereum.TransactionSender
 	ethereum.ChainIDReader
+	ethereum.ChainSyncReader
+	BlobBaseFee(ctx context.Context) (*big.Int, error)
+	CallContractAtHash(ctx context.Context, msg ethereum.CallMsg, blockHash common.Hash) ([]byte, error)
+	TransactionSender(ctx context.Context, tx *types.Transaction, block common.Hash, index uint) (common.Address, error)
+	Close()
+	Client() rpc.ClientInterface
 }
 
 // simClient wraps ethclient. This exists to prevent extracting ethclient.Client
 // from the Client interface returned by Backend.
 type simClient struct {
-	*ethclient.Client
+	cc *ethclient.Client
+}
+
+func (s *simClient) Close() {
+}
+
+func (s *simClient) Client() rpc.ClientInterface {
+	return s.cc.Client()
 }
 
 // Backend is a simulated blockchain. You can use it to test your contracts or
@@ -188,5 +203,5 @@ func (n *Backend) AdjustTime(adjustment time.Duration) error {
 
 // Client returns a client that accesses the simulated chain.
 func (n *Backend) Client() Client {
-	return n.client
+	return n.client.cc
 }
