@@ -263,6 +263,10 @@ func (c *MessageRunContext) IsEthcall() bool {
 	return c.runMode == messageEthcallMode
 }
 
+func (c *MessageRunContext) IsRecording() bool {
+	return c.runMode == messageRecordingMode
+}
+
 func (c *MessageRunContext) WasmCacheTag() uint32 {
 	return c.wasmCacheTag
 }
