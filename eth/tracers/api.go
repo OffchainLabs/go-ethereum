@@ -265,7 +265,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 		tracker = newStateTracker(maximumPendingTraceStates, start.NumberU64())
 	)
 
-	runCtx := core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()})
+	runCtx := core.NewMessageReplayContext()
 
 	for th := 0; th < threads; th++ {
 		pend.Add(1)
@@ -551,7 +551,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	if !chainConfig.IsArbitrum() && chainConfig.IsPrague(block.Number(), block.Time(), vmctx.ArbOSVersion) {
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
-	runCtx := core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()})
+	runCtx := core.NewMessageReplayContext()
 	for i, tx := range block.Transactions() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -633,7 +633,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		signer       = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time(), arbosVersion)
 		results      = make([]*txTraceResult, len(txs))
 	)
-	runCtx := core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()})
+	runCtx := core.NewMessageReplayContext()
 	for i, tx := range txs {
 		// Generate the next state snapshot fast without tracing
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee(), runCtx)
@@ -665,7 +665,7 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 		results      = make([]*txTraceResult, len(txs))
 		pend         sync.WaitGroup
 	)
-	runCtx := core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()})
+	runCtx := core.NewMessageReplayContext()
 	threads := runtime.NumCPU()
 	if threads > len(txs) {
 		threads = len(txs)
@@ -799,7 +799,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
-	runCtx := core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()})
+	runCtx := core.NewMessageReplayContext()
 	for i, tx := range block.Transactions() {
 		// Prepare the transaction for un-traced execution
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee(), runCtx)
@@ -903,7 +903,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		return nil, err
 	}
 	defer release()
-	msg, err := core.TransactionToMessage(tx, types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time(), vmctx.ArbOSVersion), block.BaseFee(), core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()}))
+	msg, err := core.TransactionToMessage(tx, types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time(), vmctx.ArbOSVersion), block.BaseFee(), core.NewMessageReplayContext())
 	if err != nil {
 		return nil, err
 	}

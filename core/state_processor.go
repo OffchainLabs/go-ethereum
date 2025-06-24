@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -92,7 +91,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
-	runCtx := NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()})
+	runCtx := NewMessageReplayContext()
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee, runCtx)
@@ -219,7 +218,7 @@ func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransaction(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64) (*types.Receipt, *ExecutionResult, error) {
-	return ApplyTransactionWithResultFilter(evm, gp, statedb, header, tx, usedGas, NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()}), nil)
+	return ApplyTransactionWithResultFilter(evm, gp, statedb, header, tx, usedGas, NewMessageReplayContext(), nil)
 }
 
 func ApplyTransactionWithResultFilter(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, runCtx *MessageRunContext, resultFilter func(*ExecutionResult) error) (*types.Receipt, *ExecutionResult, error) {

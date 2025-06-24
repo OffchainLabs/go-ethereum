@@ -186,6 +186,7 @@ const (
 	messageGasEstimationMode
 	messageEthcallMode
 	messageReplayMode
+	messageRecordingMode
 )
 
 type MessageRunContext struct {
@@ -206,21 +207,25 @@ func NewMessageCommitContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext 
 	}
 }
 
-func NewMessageReplayContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
+func NewMessageReplayContext() *MessageRunContext {
+	return &MessageRunContext{
+		runMode:     messageReplayMode,
+		wasmTargets: []rawdb.WasmTarget{rawdb.LocalTarget()},
+	}
+}
+
+func NewMessageRecordingContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
 	if len(wasmTargets) == 0 {
 		wasmTargets = []rawdb.WasmTarget{rawdb.LocalTarget()}
 	}
 	return &MessageRunContext{
-		runMode:     messageReplayMode,
+		runMode:     messageRecordingMode,
 		wasmTargets: wasmTargets,
 	}
 }
 
-func NewMessagePrefetchContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
-	if len(wasmTargets) == 0 {
-		wasmTargets = []rawdb.WasmTarget{rawdb.LocalTarget()}
-	}
-	return NewMessageReplayContext(wasmTargets)
+func NewMessagePrefetchContext() *MessageRunContext {
+	return NewMessageReplayContext()
 }
 
 func NewMessageEthcallContext() *MessageRunContext {
@@ -243,7 +248,7 @@ func (c *MessageRunContext) IsCommitMode() bool {
 
 // these message modes are executed onchain so cannot make any gas shortcuts
 func (c *MessageRunContext) IsExecutedOnChain() bool {
-	return c.runMode == messageCommitMode || c.runMode == messageReplayMode
+	return c.runMode == messageCommitMode || c.runMode == messageReplayMode || c.runMode == messageRecordingMode
 }
 
 func (c *MessageRunContext) IsGasEstimation() bool {
@@ -276,6 +281,8 @@ func (c *MessageRunContext) RunModeMetricName() string {
 		return "eth_call_runmode"
 	case messageReplayMode:
 		return "replay_runmode"
+	case messageRecordingMode:
+		return "recording_runmode"
 	default:
 		return "unknown_runmode"
 	}

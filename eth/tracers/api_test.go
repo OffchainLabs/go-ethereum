@@ -184,7 +184,7 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 	context := core.NewEVMBlockContext(block.Header(), b.chain, nil)
 	signer := types.MakeSigner(b.chainConfig, block.Number(), block.Time(), context.ArbOSVersion)
 	evm := vm.NewEVM(context, statedb, b.chainConfig, vm.Config{})
-	runCtx := core.NewMessageReplayContext([]rawdb.WasmTarget{rawdb.LocalTarget()})
+	runCtx := core.NewMessageReplayContext()
 	for idx, tx := range block.Transactions() {
 		if idx == txIndex {
 			return tx, context, statedb, release, nil
