@@ -130,12 +130,12 @@ func (b *Backend) updateFilterMapsHeads() {
 	blockProcCh := make(chan bool, 10)
 	sub := b.arb.BlockChain().SubscribeChainEvent(headEventCh)
 	if sub == nil {
-		log.Error("arbitrum Backend: failed subscrubing to Head Event")
+		log.Error("arbitrum Backend: failed subscribing to Head Event")
 		return
 	}
 	sub2 := b.arb.BlockChain().SubscribeBlockProcessingEvent(blockProcCh)
 	if sub2 == nil {
-		log.Error("arbitrum Backend: failed subscrubing to Block Processing Event")
+		log.Error("arbitrum Backend: failed subscribing to Block Processing Event")
 		sub.Unsubscribe()
 		return
 	}
