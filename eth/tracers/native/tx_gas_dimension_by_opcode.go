@@ -19,7 +19,7 @@ func init() {
 
 // gasDimensionTracer struct
 type TxGasDimensionByOpcodeTracer struct {
-	BaseGasDimensionTracer
+	*BaseGasDimensionTracer
 	OpcodeToDimensions map[vm.OpCode]GasesByDimension
 }
 

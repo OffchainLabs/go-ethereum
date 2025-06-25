@@ -76,16 +76,16 @@ type BaseGasDimensionTracerConfig struct {
 }
 
 // create a new base gas dimension tracer
-func NewBaseGasDimensionTracer(cfg json.RawMessage, chainConfig *params.ChainConfig) (BaseGasDimensionTracer, error) {
+func NewBaseGasDimensionTracer(cfg json.RawMessage, chainConfig *params.ChainConfig) (*BaseGasDimensionTracer, error) {
 	debug := false
 	if cfg != nil {
 		var config BaseGasDimensionTracerConfig
 		if err := json.Unmarshal(cfg, &config); err != nil {
-			return BaseGasDimensionTracer{}, err
+			return nil, err
 		}
 		debug = config.Debug
 	}
-	return BaseGasDimensionTracer{
+	return &BaseGasDimensionTracer{
 		debug:                       debug,
 		chainConfig:                 chainConfig,
 		depth:                       1,
@@ -464,6 +464,7 @@ func zeroCallGasDimensionInfo() CallGasDimensionInfo {
 		HashCost:                  0,
 		isTargetPrecompile:        false,
 		isTargetStylusContract:    false,
+		inPrecompile:              false,
 	}
 }
 

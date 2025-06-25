@@ -740,6 +740,8 @@ func calcCallGas(
 				StateAccess:           0,
 				StateGrowth:           0,
 				HistoryGrowth:         0,
+				StateGrowthRefund:     0,
+				ChildExecutionCost:    0,
 			}, &CallGasDimensionInfo{
 				Pc:                        pc,
 				Op:                        vm.OpCode(op),
@@ -831,6 +833,8 @@ func finishCalcCallGas(
 			StateAccess:           0,
 			StateGrowth:           0,
 			HistoryGrowth:         0,
+			StateGrowthRefund:     0,
+			ChildExecutionCost:    0,
 		}
 	} else {
 		// the stipend is 2300 and it is not charged to the call itself but used in the execution cost
@@ -892,6 +896,8 @@ func finishCalcCallGas(
 				StateAccess:           coldCost + positiveValueCostLessStipend,
 				StateGrowth:           params.CallNewAccountGas,
 				HistoryGrowth:         0,
+				StateGrowthRefund:     0,
+				ChildExecutionCost:    0,
 			}
 		} else {
 			return GasesByDimension{}, fmt.Errorf(

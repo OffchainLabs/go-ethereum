@@ -67,7 +67,7 @@ func (e *TracerErrorWithDimLogs) Unwrap() error {
 
 // TxGasDimensionLogger struct
 type TxGasDimensionLogger struct {
-	BaseGasDimensionTracer
+	*BaseGasDimensionTracer
 	logs []DimensionLog
 }
 
@@ -248,11 +248,16 @@ type ExecutionResult struct {
 // this is what the end-user actually gets from the RPC endpoint
 func (t *TxGasDimensionLogger) GetResult() (json.RawMessage, error) {
 	baseResult, tracerError := t.GetBaseExecutionResult()
-	// If there's a tracer error, wrap it with dimension logs
+	// If there's a tracer error and debugging is on,
+	// wrap it with dimension logs for additional help
 	if tracerError != nil {
-		return nil, &TracerErrorWithDimLogs{
-			BaseError: tracerError,
-			Logs:      t.DimensionLogs(),
+		if t.debug {
+			return nil, &TracerErrorWithDimLogs{
+				BaseError: tracerError,
+				Logs:      t.DimensionLogs(),
+			}
+		} else {
+			return nil, tracerError
 		}
 	}
 
