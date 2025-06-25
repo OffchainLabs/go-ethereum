@@ -76,11 +76,15 @@ type TxGasDimensionLogger struct {
 // takes a context, and json input for configuration parameters
 func NewTxGasDimensionLogger(
 	_ *tracers.Context,
-	_ json.RawMessage,
+	cfg json.RawMessage,
 	chainConfig *params.ChainConfig,
 ) (*tracers.Tracer, error) {
+	baseGasDimensionTracer, err := NewBaseGasDimensionTracer(cfg, chainConfig)
+	if err != nil {
+		return nil, err
+	}
 	t := &TxGasDimensionLogger{
-		BaseGasDimensionTracer: NewBaseGasDimensionTracer(chainConfig),
+		BaseGasDimensionTracer: baseGasDimensionTracer,
 		logs:                   make([]DimensionLog, 0),
 	}
 
@@ -148,12 +152,14 @@ func (t *TxGasDimensionLogger) OnOpcode(
 		// track the execution gas of all opcodes (but not the opcodes that do calls)
 		t.AddToRootExecutionGasAccumulated(gasesByDimension.OneDimensionalGasCost)
 		if depth < t.depth {
-			interrupted, gasUsedByCall, stackInfo, finishGasesByDimension := t.callFinishFunction2(pc, depth, gas)
+			interrupted, totalGasUsedByCall, stackInfo, finishGasesByDimension := t.callFinishFunction(pc, depth, gas)
 			if interrupted {
 				return
 			}
 			// track the execution gas of all opcodes that do calls
-			t.AddToRootExecutionGasAccumulated(finishGasesByDimension.OneDimensionalGasCost)
+			if depth == 1 {
+				t.AddToRootExecutionGasAccumulated(totalGasUsedByCall)
+			}
 			callDimensionLog := t.logs[stackInfo.DimensionLogPosition]
 			callDimensionLog.OneDimensionalGasCost = finishGasesByDimension.OneDimensionalGasCost
 			callDimensionLog.Computation = finishGasesByDimension.Computation
@@ -161,7 +167,7 @@ func (t *TxGasDimensionLogger) OnOpcode(
 			callDimensionLog.StateGrowth = finishGasesByDimension.StateGrowth
 			callDimensionLog.HistoryGrowth = finishGasesByDimension.HistoryGrowth
 			callDimensionLog.StateGrowthRefund = finishGasesByDimension.StateGrowthRefund
-			callDimensionLog.CallRealGas = gasUsedByCall
+			callDimensionLog.CallRealGas = totalGasUsedByCall
 			callDimensionLog.ChildExecutionCost = finishGasesByDimension.ChildExecutionCost
 			callDimensionLog.CallMemoryExpansion = stackInfo.GasDimensionInfo.MemoryExpansionCost
 			callDimensionLog.CreateInitCodeCost = stackInfo.GasDimensionInfo.InitCodeCost
@@ -169,7 +175,7 @@ func (t *TxGasDimensionLogger) OnOpcode(
 			t.logs[stackInfo.DimensionLogPosition] = callDimensionLog
 
 			t.depth -= 1
-			t.updateCallChildExecutionCost(finishGasesByDimension.OneDimensionalGasCost)
+			t.updateCallChildExecutionCost(totalGasUsedByCall)
 		}
 
 		t.updateCallChildExecutionCost(gasesByDimension.OneDimensionalGasCost)

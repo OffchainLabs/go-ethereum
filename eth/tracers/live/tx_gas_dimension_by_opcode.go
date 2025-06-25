@@ -106,9 +106,14 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnTxStart(
 		t.skip = true
 		return
 	}
+	baseGasDimensionTracer, err := native.NewBaseGasDimensionTracer(nil, t.ChainConfig)
+	if err != nil {
+		log.Error("Failed to create base gas dimension tracer", "error", err)
+		return
+	}
 
 	t.nativeGasByOpcodeTracer = &native.TxGasDimensionByOpcodeTracer{
-		BaseGasDimensionTracer: native.NewBaseGasDimensionTracer(t.ChainConfig),
+		BaseGasDimensionTracer: baseGasDimensionTracer,
 		OpcodeToDimensions:     make(map[_vm.OpCode]native.GasesByDimension),
 	}
 	t.nativeGasByOpcodeTracer.OnTxStart(vm, tx, from)

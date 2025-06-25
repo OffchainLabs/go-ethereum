@@ -28,11 +28,15 @@ type TxGasDimensionByOpcodeTracer struct {
 // takes a context, and json input for configuration parameters
 func NewTxGasDimensionByOpcodeTracer(
 	_ *tracers.Context,
-	_ json.RawMessage,
+	cfg json.RawMessage,
 	chainConfig *params.ChainConfig,
 ) (*tracers.Tracer, error) {
+	baseGasDimensionTracer, err := NewBaseGasDimensionTracer(cfg, chainConfig)
+	if err != nil {
+		return nil, err
+	}
 	t := &TxGasDimensionByOpcodeTracer{
-		BaseGasDimensionTracer: NewBaseGasDimensionTracer(chainConfig),
+		BaseGasDimensionTracer: baseGasDimensionTracer,
 		OpcodeToDimensions:     make(map[vm.OpCode]GasesByDimension),
 	}
 
@@ -94,13 +98,15 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 		// call the appropriate finishX function to write the gas dimensions
 		// for the call that increased the stack depth in the past
 		if depth < t.depth {
-			interrupted, _, stackInfo, finishGasesByDimension := t.callFinishFunction(pc, depth, gas)
+			interrupted, totalGasUsedByCall, stackInfo, finishGasesByDimension := t.callFinishFunction(pc, depth, gas)
 			if interrupted {
 				return
 			}
 
 			// track the execution gas of all opcodes that do calls
-			t.AddToRootExecutionGasAccumulated(finishGasesByDimension.OneDimensionalGasCost)
+			if depth == 1 {
+				t.AddToRootExecutionGasAccumulated(totalGasUsedByCall)
+			}
 
 			accumulatedDimensionsCall := t.OpcodeToDimensions[stackInfo.GasDimensionInfo.Op]
 
@@ -113,7 +119,7 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 			t.OpcodeToDimensions[stackInfo.GasDimensionInfo.Op] = accumulatedDimensionsCall
 
 			t.depth -= 1
-			t.updateCallChildExecutionCost(finishGasesByDimension.OneDimensionalGasCost)
+			t.updateCallChildExecutionCost(totalGasUsedByCall)
 		}
 		t.updateCallChildExecutionCost(gasesByDimension.OneDimensionalGasCost)
 	}

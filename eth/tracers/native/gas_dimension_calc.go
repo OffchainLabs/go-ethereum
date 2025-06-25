@@ -137,12 +137,6 @@ type FinishCalcGasDimensionFunc func(
 	codeExecutionCost uint64,
 	callGasDimensionInfo CallGasDimensionInfo,
 ) (GasesByDimension, error)
-type FinishCalcGasDimensionFunc2 func(
-	totalGasUsed uint64,
-	codeExecutionCost uint64,
-	callGasDimensionInfo CallGasDimensionInfo,
-	debug bool,
-) (GasesByDimension, error)
 
 // getCalcGasDimensionFunc is a massive case switch
 // statement that returns which function to call
@@ -200,19 +194,6 @@ func GetFinishCalcGasDimensionFunc(op vm.OpCode) FinishCalcGasDimensionFunc {
 		return finishCalcCallGas
 	case vm.CREATE, vm.CREATE2:
 		return finishCalcCreateGas
-	default:
-		return nil
-	}
-}
-
-func GetFinishCalcGasDimensionFunc2(op vm.OpCode) FinishCalcGasDimensionFunc2 {
-	switch op {
-	case vm.DELEGATECALL, vm.STATICCALL:
-		return finishCalcStaticDelegateCallGas2
-	case vm.CALL, vm.CALLCODE:
-		return finishCalcCallGas2
-	case vm.CREATE, vm.CREATE2:
-		return finishCalcCreateGas2
 	default:
 		return nil
 	}
@@ -488,26 +469,8 @@ func finishCalcStaticDelegateCallGas(
 	codeExecutionCost uint64,
 	callGasDimensionInfo CallGasDimensionInfo,
 ) (GasesByDimension, error) {
-	return finishCalcStaticDelegateCallGas2(totalGasUsed, codeExecutionCost, callGasDimensionInfo, false)
-}
-
-func finishCalcStaticDelegateCallGas2(
-	totalGasUsed uint64,
-	codeExecutionCost uint64,
-	callGasDimensionInfo CallGasDimensionInfo,
-	debug bool,
-) (GasesByDimension, error) {
-	if debug {
-		fmt.Println("finishCalcStateReadCallGas2 totalGasUsed", totalGasUsed)
-		fmt.Println("finishCalcStateReadCallGas2 codeExecutionCost", codeExecutionCost)
-		fmt.Println("finishCalcStateReadCallGas2 callGasDimensionInfo", callGasDimensionInfo)
-		fmt.Println()
-	}
 	oneDimensionalGas := totalGasUsed - codeExecutionCost
 	if callGasDimensionInfo.isTargetPrecompile || callGasDimensionInfo.isTargetStylusContract {
-		if debug {
-			fmt.Println("finishCalcStateReadCallGas2 isTargetPrecompile or isTargetStylusContract")
-		}
 		ret := GasesByDimension{
 			OneDimensionalGasCost: oneDimensionalGas,
 			Computation:           oneDimensionalGas,
@@ -540,11 +503,6 @@ func finishCalcStaticDelegateCallGas2(
 	}
 	computation := callGasDimensionInfo.AccessListComputationCost + callGasDimensionInfo.MemoryExpansionCost
 	stateAccess := callGasDimensionInfo.AccessListStateAccessCost
-	if debug {
-		fmt.Println("finishCalcStateReadCallGas2 computation", computation)
-		fmt.Println("finishCalcStateReadCallGas2 stateAccess", stateAccess)
-		fmt.Println()
-	}
 	ret := GasesByDimension{
 		OneDimensionalGasCost: oneDimensionalGas,
 		Computation:           computation,
@@ -687,15 +645,6 @@ func calcCreateGas(
 			isTargetStylusContract:    false,
 			inPrecompile:              inPrecompile,
 		}, nil
-}
-
-func finishCalcCreateGas2(
-	totalGasUsed uint64,
-	codeExecutionCost uint64,
-	callGasDimensionInfo CallGasDimensionInfo,
-	debug bool,
-) (GasesByDimension, error) {
-	return finishCalcCreateGas(totalGasUsed, codeExecutionCost, callGasDimensionInfo)
 }
 
 // finishCalcCreateGas returns the gas used for the CREATE and CREATE2 opcodes
@@ -854,18 +803,18 @@ func calcCallGas(
 		}, nil
 }
 
-func finishCalcCallGas2(
+// In order to calculate the gas dimensions for opcodes that
+// increase the stack depth, we need to know
+// the computed gas consumption of the code executed in the call
+// AFAIK, this is only computable after the call has returned
+// the caller is responsible for maintaining the state of the CallGasDimensionInfo
+// when the call is first seen, and then calling finishX after the call has returned.
+// this function finishes the CALL and CALLCODE opcodes
+func finishCalcCallGas(
 	totalGasUsed uint64,
 	codeExecutionCost uint64,
 	callGasDimensionInfo CallGasDimensionInfo,
-	debug bool,
 ) (ret GasesByDimension, err error) {
-	if debug {
-		fmt.Println("finishCalcCallGas2")
-		fmt.Println("totalGasUsed", totalGasUsed)
-		fmt.Println("codeExecutionCost", codeExecutionCost)
-		fmt.Println("callGasDimensionInfo", callGasDimensionInfo)
-	}
 	if codeExecutionCost > totalGasUsed {
 		return GasesByDimension{}, fmt.Errorf("CALL's totalGasUsed should never be greater than the codeExecutionCost, totalGasUsed: %d, codeExecutionCost: %d", totalGasUsed, codeExecutionCost)
 	}
@@ -892,11 +841,6 @@ func finishCalcCallGas2(
 		// the formula for call is:
 		// dynamic_gas = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost + value_to_empty_account_cost
 		// now with leftOver, we are left with address_access_cost + value_to_empty_account_cost
-		if debug {
-			fmt.Println("callGasDimensionInfo.MemoryExpansionCost", callGasDimensionInfo.MemoryExpansionCost)
-			fmt.Println("positiveValueCostLessStipend", positiveValueCostLessStipend)
-			fmt.Println("--------------------------------")
-		}
 		addressAccessAndValueEmptyCosts := totalGasUsed - callGasDimensionInfo.MemoryExpansionCost - codeExecutionCost - positiveValueCostLessStipend
 		// the maximum address_access_cost can ever be is 2600. Meanwhile value_to_empty_account_cost is at minimum 25000
 		// so if leftOver is greater than 2600 then we know that the value_to_empty_account_cost was 25000
@@ -973,21 +917,6 @@ func finishCalcCallGas2(
 		ret,
 	)
 	return ret, err
-}
-
-// In order to calculate the gas dimensions for opcodes that
-// increase the stack depth, we need to know
-// the computed gas consumption of the code executed in the call
-// AFAIK, this is only computable after the call has returned
-// the caller is responsible for maintaining the state of the CallGasDimensionInfo
-// when the call is first seen, and then calling finishX after the call has returned.
-// this function finishes the CALL and CALLCODE opcodes
-func finishCalcCallGas(
-	totalGasUsed uint64,
-	codeExecutionCost uint64,
-	callGasDimensionInfo CallGasDimensionInfo,
-) (ret GasesByDimension, err error) {
-	return finishCalcCallGas2(totalGasUsed, codeExecutionCost, callGasDimensionInfo, false)
 }
 
 // calcSStoreGas returns the gas used for the `SSTORE` opcode
