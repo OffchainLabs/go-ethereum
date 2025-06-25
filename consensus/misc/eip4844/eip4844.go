@@ -81,6 +81,10 @@ func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTim
 
 // CalcBlobFee calculates the blobfee from the header's excess blob gas field.
 func CalcBlobFee(config *params.ChainConfig, header *types.Header) *big.Int {
+	if config.IsArbitrum() {
+		// Arbitrum does not support blob transactions, so we return 0.
+		return big.NewInt(0)
+	}
 	var frac uint64
 	switch config.LatestFork(header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {
 	case forks.Osaka:
