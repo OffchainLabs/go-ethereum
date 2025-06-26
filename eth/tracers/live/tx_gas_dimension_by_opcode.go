@@ -10,7 +10,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/native"
+	"github.com/ethereum/go-ethereum/eth/tracers/native/proto"
 	"github.com/ethereum/go-ethereum/params"
+	protobuf "google.golang.org/protobuf/proto"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -34,6 +36,7 @@ type TxGasDimensionByOpcodeLiveTracer struct {
 	ChainConfig             *params.ChainConfig                  // chain config, needed for the tracer
 	skip                    bool                                 // skip hooking system transactions
 	nativeGasByOpcodeTracer *native.TxGasDimensionByOpcodeTracer // the native tracer that does all the actual work
+	currentBlock            *types.Block                         // store current block info for metrics
 }
 
 // an struct to capture information about errors in tracer execution
@@ -176,13 +179,14 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnTxEnd(
 }
 
 func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockStart(ev tracing.BlockEvent) {
+	t.currentBlock = ev.Block
 }
 
 func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockEnd(err error) {
 }
 
 func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockEndMetrics(blockNumber uint64, blockInsertDuration time.Duration) {
-	filename := fmt.Sprintf("%d.txt", blockNumber)
+	filename := fmt.Sprintf("%d.pb", blockNumber)
 	dirPath := filepath.Join(t.Path, "blocks")
 	filepath := filepath.Join(dirPath, filename)
 
@@ -192,14 +196,36 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockEndMetrics(blockNumber uint64,
 		return
 	}
 
-	// the output is the duration in nanoseconds
-	var outData int64 = blockInsertDuration.Nanoseconds()
+	// Create BlockInfo protobuf message
+	blockInfo := &proto.BlockInfo{
+		Timestamp:                 0, // Will be set from currentBlock if available
+		InsertDurationNanoseconds: uint64(blockInsertDuration.Nanoseconds()),
+		BaseFee:                   0, // Will be set from currentBlock if available
+	}
+
+	// Set timestamp and base fee from current block if available
+	if t.currentBlock != nil {
+		blockInfo.Timestamp = t.currentBlock.Time()
+		if t.currentBlock.BaseFee() != nil {
+			blockInfo.BaseFee = t.currentBlock.BaseFee().Uint64()
+		}
+	}
+
+	// Marshal the protobuf message
+	blockInfoBytes, err := protobuf.Marshal(blockInfo)
+	if err != nil {
+		log.Error("Failed to marshal block info", "error", err)
+		return
+	}
 
 	// Write the file
-	if err := os.WriteFile(filepath, fmt.Appendf(nil, "%d", outData), 0644); err != nil {
+	if err := os.WriteFile(filepath, blockInfoBytes, 0644); err != nil {
 		log.Error("Failed to write file", "path", filepath, "error", err)
 		return
 	}
+
+	// Clear the current block reference
+	t.currentBlock = nil
 }
 
 // if the transaction has any kind of error, try to get as much information
