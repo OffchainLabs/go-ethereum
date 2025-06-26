@@ -41,6 +41,10 @@ func newRecordingKV(inner *triedb.Database, diskDb ethdb.KeyValueStore) *Recordi
 	return &RecordingKV{inner, diskDb, make(map[common.Hash][]byte), sync.Mutex{}, false}
 }
 
+func (db *RecordingKV) CreateDBSnapshot(dir string) error {
+	return errors.New("createDBSnapshot method is not supported")
+}
+
 func (db *RecordingKV) Has(key []byte) (bool, error) {
 	return false, errors.New("recording KV doesn't support Has")
 }

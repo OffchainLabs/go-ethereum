@@ -22,6 +22,7 @@ package pebble
 import (
 	"bytes"
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -114,6 +115,11 @@ type Database struct {
 	writeDelayTime      atomic.Int64 // Total time spent in write stalls
 
 	writeOptions *pebble.WriteOptions
+}
+
+func (d *Database) CreateDBSnapshot(dir string) error {
+	snapshotDir := filepath.Join(dir, filepath.Base(d.Path()))
+	return d.db.Checkpoint(snapshotDir, pebble.WithFlushedWAL())
 }
 
 func (d *Database) onCompactionBegin(info pebble.CompactionInfo) {

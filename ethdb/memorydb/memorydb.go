@@ -61,6 +61,10 @@ func NewWithCap(size int) *Database {
 	}
 }
 
+func (db *Database) CreateDBSnapshot(dir string) error {
+	return errors.New("createDBSnapshot method is not supported by memorydb")
+}
+
 // Close deallocates the internal map and ensures any consecutive data access op
 // fails with an error.
 func (db *Database) Close() error {

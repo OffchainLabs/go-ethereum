@@ -1298,11 +1298,7 @@ func (bc *BlockChain) stopWithoutSaving() {
 	bc.chainmu.Close()
 }
 
-// Stop stops the blockchain service. If any imports are currently in progress
-// it will abort them using the procInterrupt.
-func (bc *BlockChain) Stop() {
-	bc.stopWithoutSaving()
-
+func (bc *BlockChain) FlushToDisk(stopping bool) {
 	// Ensure that the entirety of the state snapshot is journaled to disk.
 	var snapBase common.Hash
 	if bc.snaps != nil {
@@ -1310,9 +1306,15 @@ func (bc *BlockChain) Stop() {
 		if snapBase, err = bc.snaps.Journal(bc.CurrentBlock().Root); err != nil {
 			log.Error("Failed to journal state snapshot", "err", err)
 		}
-		bc.snaps.Release()
+		if stopping {
+			bc.snaps.Release()
+		}
 	}
 	if bc.triedb.Scheme() == rawdb.PathScheme {
+		// Called during live snapshotting
+		if !stopping {
+			return
+		}
 		// Ensure that the in-memory trie nodes are journaled to disk properly.
 		if err := bc.triedb.Journal(bc.CurrentBlock().Root); err != nil {
 			log.Info("Failed to journal in-memory trie nodes", "err", err)
@@ -1352,14 +1354,25 @@ func (bc *BlockChain) Stop() {
 					log.Error("Failed to commit recent state trie", "err", err)
 				}
 			}
-			for !bc.triegc.Empty() {
-				triedb.Dereference(bc.triegc.PopItem().Root)
-			}
-			if _, nodes, _ := triedb.Size(); nodes != 0 { // all memory is contained within the nodes return for hashdb
-				log.Error("Dangling trie nodes after full cleanup")
+			if stopping {
+				for !bc.triegc.Empty() {
+					triedb.Dereference(bc.triegc.PopItem().Root)
+				}
+				if _, nodes, _ := triedb.Size(); nodes != 0 { // all memory is contained within the nodes return for hashdb
+					log.Error("Dangling trie nodes after full cleanup")
+				}
 			}
 		}
 	}
+}
+
+// Stop stops the blockchain service. If any imports are currently in progress
+// it will abort them using the procInterrupt.
+func (bc *BlockChain) Stop() {
+	bc.stopWithoutSaving()
+
+	bc.FlushToDisk(true)
+
 	// Allow tracers to clean-up and release resources.
 	if bc.logger != nil && bc.logger.OnClose != nil {
 		bc.logger.OnClose()

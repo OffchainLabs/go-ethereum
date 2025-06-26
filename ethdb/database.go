@@ -80,6 +80,9 @@ type KeyValueStore interface {
 	Iteratee
 	Compacter
 	io.Closer
+
+	// CreateDBSnapshot creates a copy of underlying database inside dir
+	CreateDBSnapshot(dir string) error
 }
 
 // AncientReaderOp contains the methods required to read from immutable ancient data.
@@ -178,6 +181,9 @@ type AncientStore interface {
 	AncientWriter
 	AncientStater
 	io.Closer
+
+	// CreateDBSnapshot creates a copy of underlying database inside dir
+	CreateDBSnapshot(dir string) error
 }
 
 type WasmTarget string
