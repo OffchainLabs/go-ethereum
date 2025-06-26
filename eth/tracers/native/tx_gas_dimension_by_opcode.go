@@ -236,8 +236,6 @@ func (t *TxGasDimensionByOpcodeTracer) GetProtobufResult() ([]byte, error) {
 		TransactionReverted:        transactionReverted,
 		Dimensions:                 make(map[uint32]*proto.GasesByDimension),
 		TxHash:                     baseExecutionResult.TxHash,
-		BlockTimestamp:             baseExecutionResult.BlockTimestamp,
-		BlockNumber:                baseExecutionResult.BlockNumber.String(),
 	}
 
 	for opcode, dimensions := range t.OpcodeToDimensions {

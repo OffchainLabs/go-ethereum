@@ -48,9 +48,13 @@ message TxGasDimensionByOpcodeExecutionResult {
   map<uint32, GasesByDimension> dimensions = 3;
   // the hash of the transaction
   string tx_hash = 4;
+}
+
+message BlockInfo {
   // the timestamp of the block
-  uint64 block_timestamp = 5;
-  // the block number of the transaction
-  // Using string to represent big.Int
-  string block_number = 6; 
+  uint64 timestamp = 1;
+  // how long it took to insert the block
+  uint64 insert_duration_nanoseconds = 2;
+  // block base fee
+  uint64 base_fee = 3;
 }
