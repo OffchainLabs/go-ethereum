@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/shutdowncheck"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -128,7 +129,16 @@ func (b *Backend) updateFilterMapsHeads() {
 	headEventCh := make(chan core.ChainEvent, 10)
 	blockProcCh := make(chan bool, 10)
 	sub := b.arb.BlockChain().SubscribeChainEvent(headEventCh)
+	if sub == nil {
+		log.Error("arbitrum Backend: failed subscribing to Head Event")
+		return
+	}
 	sub2 := b.arb.BlockChain().SubscribeBlockProcessingEvent(blockProcCh)
+	if sub2 == nil {
+		log.Error("arbitrum Backend: failed subscribing to Block Processing Event")
+		sub.Unsubscribe()
+		return
+	}
 	defer func() {
 		sub.Unsubscribe()
 		sub2.Unsubscribe()
