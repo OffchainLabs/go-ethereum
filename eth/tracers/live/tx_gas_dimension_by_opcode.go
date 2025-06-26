@@ -36,7 +36,8 @@ type TxGasDimensionByOpcodeLiveTracer struct {
 	ChainConfig             *params.ChainConfig                  // chain config, needed for the tracer
 	skip                    bool                                 // skip hooking system transactions
 	nativeGasByOpcodeTracer *native.TxGasDimensionByOpcodeTracer // the native tracer that does all the actual work
-	currentBlock            *types.Block                         // store current block info for metrics
+	blockTimestamp          uint64                               // the timestamp of the currently processing block
+	blockBaseFee            uint64                               // the base fee of the currently processing block
 }
 
 // an struct to capture information about errors in tracer execution
@@ -179,15 +180,24 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnTxEnd(
 }
 
 func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockStart(ev tracing.BlockEvent) {
-	t.currentBlock = ev.Block
+	t.blockTimestamp = 0
+	t.blockBaseFee = 0
+	if ev.Block != nil {
+		t.blockTimestamp = ev.Block.Time()
+		t.blockBaseFee = ev.Block.BaseFee().Uint64()
+	}
 }
 
 func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockEnd(err error) {
 }
 
 func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockEndMetrics(blockNumber uint64, blockInsertDuration time.Duration) {
+	// Calculate block group number (every 1000 blocks)
+	blockGroup := (blockNumber / 1000) * 1000
 	filename := fmt.Sprintf("%d.pb", blockNumber)
-	dirPath := filepath.Join(t.Path, "blocks")
+
+	// Create path with block group subdirectory
+	dirPath := filepath.Join(t.Path, "blocks", fmt.Sprintf("%d", blockGroup))
 	filepath := filepath.Join(dirPath, filename)
 
 	// Ensure the directory exists
@@ -198,17 +208,9 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockEndMetrics(blockNumber uint64,
 
 	// Create BlockInfo protobuf message
 	blockInfo := &proto.BlockInfo{
-		Timestamp:                 0, // Will be set from currentBlock if available
+		Timestamp:                 t.blockTimestamp,
 		InsertDurationNanoseconds: uint64(blockInsertDuration.Nanoseconds()),
-		BaseFee:                   0, // Will be set from currentBlock if available
-	}
-
-	// Set timestamp and base fee from current block if available
-	if t.currentBlock != nil {
-		blockInfo.Timestamp = t.currentBlock.Time()
-		if t.currentBlock.BaseFee() != nil {
-			blockInfo.BaseFee = t.currentBlock.BaseFee().Uint64()
-		}
+		BaseFee:                   t.blockBaseFee,
 	}
 
 	// Marshal the protobuf message
@@ -223,9 +225,6 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockEndMetrics(blockNumber uint64,
 		log.Error("Failed to write file", "path", filepath, "error", err)
 		return
 	}
-
-	// Clear the current block reference
-	t.currentBlock = nil
 }
 
 // if the transaction has any kind of error, try to get as much information
