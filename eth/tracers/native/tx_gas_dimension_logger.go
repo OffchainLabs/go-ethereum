@@ -43,9 +43,31 @@ func (d *DimensionLog) ErrorString() string {
 	return ""
 }
 
+// TracerErrorWithDimLogs is a custom error type that includes dimension logs
+// in its string representation for debugging purposes
+type TracerErrorWithDimLogs struct {
+	BaseError error
+	Logs      []DimensionLog
+}
+
+// Error implements the error interface
+func (e *TracerErrorWithDimLogs) Error() string {
+	if e.BaseError == nil {
+		return "Dimension tracer error with logs"
+	}
+
+	logsStr := formatLogsDebugString(e.Logs)
+	return fmt.Sprintf("%s%s", e.BaseError.Error(), logsStr)
+}
+
+// Unwrap returns the underlying error for error wrapping
+func (e *TracerErrorWithDimLogs) Unwrap() error {
+	return e.BaseError
+}
+
 // TxGasDimensionLogger struct
 type TxGasDimensionLogger struct {
-	BaseGasDimensionTracer
+	*BaseGasDimensionTracer
 	logs []DimensionLog
 }
 
@@ -54,11 +76,15 @@ type TxGasDimensionLogger struct {
 // takes a context, and json input for configuration parameters
 func NewTxGasDimensionLogger(
 	_ *tracers.Context,
-	_ json.RawMessage,
+	cfg json.RawMessage,
 	chainConfig *params.ChainConfig,
 ) (*tracers.Tracer, error) {
+	baseGasDimensionTracer, err := NewBaseGasDimensionTracer(cfg, chainConfig)
+	if err != nil {
+		return nil, err
+	}
 	t := &TxGasDimensionLogger{
-		BaseGasDimensionTracer: NewBaseGasDimensionTracer(chainConfig),
+		BaseGasDimensionTracer: baseGasDimensionTracer,
 		logs:                   make([]DimensionLog, 0),
 	}
 
@@ -124,14 +150,16 @@ func (t *TxGasDimensionLogger) OnOpcode(
 		t.handleCallStackPush(callStackInfo)
 	} else {
 		// track the execution gas of all opcodes (but not the opcodes that do calls)
-		t.AddToExecutionGasAccumulated(gasesByDimension.OneDimensionalGasCost)
+		t.AddToRootExecutionGasAccumulated(gasesByDimension.OneDimensionalGasCost)
 		if depth < t.depth {
-			interrupted, gasUsedByCall, stackInfo, finishGasesByDimension := t.callFinishFunction(pc, depth, gas)
+			interrupted, totalGasUsedByCall, stackInfo, finishGasesByDimension := t.callFinishFunction(pc, depth, gas)
 			if interrupted {
 				return
 			}
 			// track the execution gas of all opcodes that do calls
-			t.AddToExecutionGasAccumulated(finishGasesByDimension.OneDimensionalGasCost)
+			if depth == 1 {
+				t.AddToRootExecutionGasAccumulated(totalGasUsedByCall)
+			}
 			callDimensionLog := t.logs[stackInfo.DimensionLogPosition]
 			callDimensionLog.OneDimensionalGasCost = finishGasesByDimension.OneDimensionalGasCost
 			callDimensionLog.Computation = finishGasesByDimension.Computation
@@ -139,7 +167,7 @@ func (t *TxGasDimensionLogger) OnOpcode(
 			callDimensionLog.StateGrowth = finishGasesByDimension.StateGrowth
 			callDimensionLog.HistoryGrowth = finishGasesByDimension.HistoryGrowth
 			callDimensionLog.StateGrowthRefund = finishGasesByDimension.StateGrowthRefund
-			callDimensionLog.CallRealGas = gasUsedByCall
+			callDimensionLog.CallRealGas = totalGasUsedByCall
 			callDimensionLog.ChildExecutionCost = finishGasesByDimension.ChildExecutionCost
 			callDimensionLog.CallMemoryExpansion = stackInfo.GasDimensionInfo.MemoryExpansionCost
 			callDimensionLog.CreateInitCodeCost = stackInfo.GasDimensionInfo.InitCodeCost
@@ -147,6 +175,7 @@ func (t *TxGasDimensionLogger) OnOpcode(
 			t.logs[stackInfo.DimensionLogPosition] = callDimensionLog
 
 			t.depth -= 1
+			t.updateCallChildExecutionCost(totalGasUsedByCall)
 		}
 
 		t.updateCallChildExecutionCost(gasesByDimension.OneDimensionalGasCost)
@@ -218,10 +247,20 @@ type ExecutionResult struct {
 // produce json result for output from tracer
 // this is what the end-user actually gets from the RPC endpoint
 func (t *TxGasDimensionLogger) GetResult() (json.RawMessage, error) {
-	baseResult, err := t.GetBaseExecutionResult()
-	if err != nil {
-		return nil, err
+	baseResult, tracerError := t.GetBaseExecutionResult()
+	// If there's a tracer error and debugging is on,
+	// wrap it with dimension logs for additional help
+	if tracerError != nil {
+		if t.debug {
+			return nil, &TracerErrorWithDimLogs{
+				BaseError: tracerError,
+				Logs:      t.DimensionLogs(),
+			}
+		} else {
+			return nil, tracerError
+		}
 	}
+
 	return json.Marshal(&ExecutionResult{
 		BaseExecutionResult: baseResult,
 		DimensionLogs:       formatLogs(t.DimensionLogs()),
@@ -272,27 +311,41 @@ func (d *DimensionLogRes) DebugString() string {
 	)
 }
 
+// copyDimLogToRes copies fields of a DimensionLog to a DimensionLogRes
+func copyDimLogToRes(dimLog DimensionLog) DimensionLogRes {
+	return DimensionLogRes{
+		Pc:                    dimLog.Pc,
+		Op:                    dimLog.Op.String(),
+		Depth:                 dimLog.Depth,
+		OneDimensionalGasCost: dimLog.OneDimensionalGasCost,
+		Computation:           dimLog.Computation,
+		StateAccess:           dimLog.StateAccess,
+		StateGrowth:           dimLog.StateGrowth,
+		HistoryGrowth:         dimLog.HistoryGrowth,
+		StateGrowthRefund:     dimLog.StateGrowthRefund,
+		CallRealGas:           dimLog.CallRealGas,
+		ChildExecutionCost:    dimLog.ChildExecutionCost,
+		CallMemoryExpansion:   dimLog.CallMemoryExpansion,
+		CreateInitCodeCost:    dimLog.CreateInitCodeCost,
+		Create2HashCost:       dimLog.Create2HashCost,
+		Err:                   dimLog.Err,
+	}
+}
+
 // formatLogs formats EVM returned structured logs for json output
 func formatLogs(logs []DimensionLog) []DimensionLogRes {
 	formatted := make([]DimensionLogRes, len(logs))
 	for index, trace := range logs {
-		formatted[index] = DimensionLogRes{
-			Pc:                    trace.Pc,
-			Op:                    trace.Op.String(),
-			Depth:                 trace.Depth,
-			OneDimensionalGasCost: trace.OneDimensionalGasCost,
-			Computation:           trace.Computation,
-			StateAccess:           trace.StateAccess,
-			StateGrowth:           trace.StateGrowth,
-			HistoryGrowth:         trace.HistoryGrowth,
-			StateGrowthRefund:     trace.StateGrowthRefund,
-			CallRealGas:           trace.CallRealGas,
-			ChildExecutionCost:    trace.ChildExecutionCost,
-			CallMemoryExpansion:   trace.CallMemoryExpansion,
-			CreateInitCodeCost:    trace.CreateInitCodeCost,
-			Create2HashCost:       trace.Create2HashCost,
-			Err:                   trace.Err,
-		}
+		formatted[index] = copyDimLogToRes(trace)
 	}
 	return formatted
+}
+
+func formatLogsDebugString(logs []DimensionLog) string {
+	ret := "\n"
+	for _, trace := range logs {
+		dimLogRes := copyDimLogToRes(trace)
+		ret += dimLogRes.DebugString() + "\n"
+	}
+	return ret
 }

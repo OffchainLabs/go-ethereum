@@ -265,10 +265,20 @@ func ReadStateScheme(db ethdb.Database) string {
 	if id := ReadPersistentStateID(vdb); id != 0 {
 		return PathScheme
 	}
+	genesisBlockNumber := uint64(0)
+	block0Hash := ReadCanonicalHash(db, 0)
+	if (block0Hash != common.Hash{}) {
+		chainConfig := ReadChainConfig(db, block0Hash)
+		if chainConfig != nil {
+			if chainConfig.IsArbitrum() {
+				genesisBlockNumber = chainConfig.ArbitrumChainParams.GenesisBlockNum
+			}
+		}
+	}
 	// In a hash-based scheme, the genesis state is consistently stored
 	// on the disk. To assess the scheme of the persistent state, it
 	// suffices to inspect the scheme of the genesis state.
-	header := ReadHeader(db, ReadCanonicalHash(db, 0), 0)
+	header := ReadHeader(db, ReadCanonicalHash(db, genesisBlockNumber), genesisBlockNumber)
 	if header == nil {
 		return "" // empty datadir
 	}
