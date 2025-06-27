@@ -455,6 +455,7 @@ func zeroCallGasDimensionInfo() CallGasDimensionInfo {
 	return CallGasDimensionInfo{
 		Pc:                        0,
 		Op:                        0,
+		DepthAtTimeOfCall:         0,
 		GasCounterAtTimeOfCall:    0,
 		MemoryExpansionCost:       0,
 		AccessListComputationCost: 0,
