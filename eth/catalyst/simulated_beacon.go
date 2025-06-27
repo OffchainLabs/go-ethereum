@@ -96,6 +96,8 @@ type SimulatedBeacon struct {
 	engineAPI          *ConsensusAPI
 	curForkchoiceState engine.ForkchoiceStateV1
 	lastBlockTime      uint64
+
+	blobsBundleProvider map[common.Hash]*engine.BlobsBundleV1
 }
 
 func payloadVersion(config *params.ChainConfig, time uint64, header *types.Header) engine.PayloadVersion {
@@ -264,6 +266,10 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		return err
 	}
 	c.lastBlockTime = payload.Timestamp
+
+	if c.blobsBundleProvider != nil && envelope.BlobsBundle != nil {
+		c.blobsBundleProvider[payload.BlockHash] = envelope.BlobsBundle
+	}
 	return nil
 }
 
