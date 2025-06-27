@@ -21,7 +21,7 @@ func TestAsyncFileWriting(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create a test configuration
-	config := txGasDimensionByOpcodeLiveTraceConfig{
+	config := txGasDimensionLiveTraceConfig{
 		Path:        tempDir,
 		ChainConfig: &params.ChainConfig{},
 	}
@@ -32,14 +32,14 @@ func TestAsyncFileWriting(t *testing.T) {
 	}
 
 	// Create the tracer
-	_, err = NewTxGasDimensionByOpcodeLogger(configBytes)
+	_, err = NewTxGasDimensionLiveTracer(configBytes)
 	if err != nil {
 		t.Fatalf("Failed to create tracer: %v", err)
 	}
 
 	// Create a mock tracer instance for testing
 	ctx, cancel := context.WithCancel(context.Background())
-	tracer := &TxGasDimensionByOpcodeLiveTracer{
+	tracer := &TxGasDimensionLiveTracer{
 		Path:           tempDir,
 		ChainConfig:    &params.ChainConfig{},
 		writeQueue:     make(chan fileWriteTask, 1000),
@@ -86,7 +86,7 @@ func TestFileWriteQueueOverflow(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create a test configuration
-	config := txGasDimensionByOpcodeLiveTraceConfig{
+	config := txGasDimensionLiveTraceConfig{
 		Path:        tempDir,
 		ChainConfig: &params.ChainConfig{},
 	}
@@ -97,14 +97,14 @@ func TestFileWriteQueueOverflow(t *testing.T) {
 	}
 
 	// Create the tracer
-	_, err = NewTxGasDimensionByOpcodeLogger(configBytes)
+	_, err = NewTxGasDimensionLiveTracer(configBytes)
 	if err != nil {
 		t.Fatalf("Failed to create tracer: %v", err)
 	}
 
 	// Create a mock tracer instance for testing
 	ctx, cancel := context.WithCancel(context.Background())
-	tracer := &TxGasDimensionByOpcodeLiveTracer{
+	tracer := &TxGasDimensionLiveTracer{
 		Path:           tempDir,
 		ChainConfig:    &params.ChainConfig{},
 		writeQueue:     make(chan fileWriteTask, 1000),

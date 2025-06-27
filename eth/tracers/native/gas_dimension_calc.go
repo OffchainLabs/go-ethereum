@@ -993,7 +993,7 @@ func calcSStoreGas(
 		}
 		t.SetRefundAccumulated(currentRefund)
 	}
-	ret := zeroGasesByDimension()
+	ret := ZeroGasesByDimension()
 	ret.OneDimensionalGasCost = cost
 	if cost >= params.SstoreSetGas { // 22100 case and 20000 case
 		accessCost := cost - params.SstoreSetGas
