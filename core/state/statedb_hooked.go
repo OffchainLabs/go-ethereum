@@ -20,11 +20,11 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
@@ -278,7 +278,7 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 	}
 }
 
-func (s *hookedStateDB) ActivateWasm(moduleHash common.Hash, asmMap map[ethdb.WasmTarget][]byte) {
+func (s *hookedStateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarget][]byte) {
 	s.inner.ActivateWasm(moduleHash, asmMap)
 }
 
@@ -290,11 +290,11 @@ func (s *hookedStateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	return s.inner.IntermediateRoot(deleteEmptyObjects)
 }
 
-func (s *hookedStateDB) TryGetActivatedAsm(target ethdb.WasmTarget, moduleHash common.Hash) (asm []byte, err error) {
+func (s *hookedStateDB) TryGetActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) (asm []byte, err error) {
 	return s.inner.TryGetActivatedAsm(target, moduleHash)
 }
 
-func (s *hookedStateDB) TryGetActivatedAsmMap(targets []ethdb.WasmTarget, moduleHash common.Hash) (asmMap map[ethdb.WasmTarget][]byte, err error) {
+func (s *hookedStateDB) TryGetActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash common.Hash) (asmMap map[rawdb.WasmTarget][]byte, err error) {
 	return s.inner.TryGetActivatedAsmMap(targets, moduleHash)
 }
 
