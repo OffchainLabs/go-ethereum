@@ -270,7 +270,7 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	}
 
 	// Arbitrum: a tx can schedule another (see retryables)
-	result, err = opts.RunScheduledTxes(ctx, opts.Backend, dirtyState, opts.Header, evmContext, core.NewMessageGasEstimationContext(), result)
+	result, err = opts.RunScheduledTxes(ctx, opts.Backend, dirtyState, opts.Header, evmContext, call.TxRunContext, result)
 	if err != nil {
 		return nil, err
 	}
