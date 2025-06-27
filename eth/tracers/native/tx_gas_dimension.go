@@ -14,19 +14,19 @@ import (
 
 // initializer for the tracer
 func init() {
-	tracers.DefaultDirectory.Register("txGasDimensionByOpcode", NewTxGasDimensionByOpcodeTracer, false)
+	tracers.DefaultDirectory.Register("txGasDimension", NewTxGasDimensionTracer, false)
 }
 
 // gasDimensionTracer struct
-type TxGasDimensionByOpcodeTracer struct {
+type TxGasDimensionTracer struct {
 	*BaseGasDimensionTracer
-	OpcodeToDimensions map[vm.OpCode]GasesByDimension
+	Dimensions GasesByDimension
 }
 
 // gasDimensionTracer returns a new tracer that traces gas
 // usage for each opcode against the dimension of that opcode
 // takes a context, and json input for configuration parameters
-func NewTxGasDimensionByOpcodeTracer(
+func NewTxGasDimensionTracer(
 	_ *tracers.Context,
 	cfg json.RawMessage,
 	chainConfig *params.ChainConfig,
@@ -35,9 +35,9 @@ func NewTxGasDimensionByOpcodeTracer(
 	if err != nil {
 		return nil, err
 	}
-	t := &TxGasDimensionByOpcodeTracer{
+	t := &TxGasDimensionTracer{
 		BaseGasDimensionTracer: baseGasDimensionTracer,
-		OpcodeToDimensions:     make(map[vm.OpCode]GasesByDimension),
+		Dimensions:             ZeroGasesByDimension(),
 	}
 
 	return &tracers.Tracer{
@@ -57,7 +57,7 @@ func NewTxGasDimensionByOpcodeTracer(
 // ############################################################################
 
 // hook into each opcode execution
-func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
+func (t *TxGasDimensionTracer) OnOpcode(
 	pc uint64,
 	op byte,
 	gas, cost uint64,
@@ -80,17 +80,13 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 		// track the execution gas of all opcodes (but not the opcodes that do calls)
 		t.AddToRootExecutionGasAccumulated(gasesByDimension.OneDimensionalGasCost)
 
-		// update the aggregrate map for this opcode
-		accumulatedDimensions := t.OpcodeToDimensions[opcode]
-
-		accumulatedDimensions.OneDimensionalGasCost += gasesByDimension.OneDimensionalGasCost
-		accumulatedDimensions.Computation += gasesByDimension.Computation
-		accumulatedDimensions.StateAccess += gasesByDimension.StateAccess
-		accumulatedDimensions.StateGrowth += gasesByDimension.StateGrowth
-		accumulatedDimensions.HistoryGrowth += gasesByDimension.HistoryGrowth
-		accumulatedDimensions.StateGrowthRefund += gasesByDimension.StateGrowthRefund
-
-		t.OpcodeToDimensions[opcode] = accumulatedDimensions
+		// update the dimensions for this opcode
+		t.Dimensions.OneDimensionalGasCost += gasesByDimension.OneDimensionalGasCost
+		t.Dimensions.Computation += gasesByDimension.Computation
+		t.Dimensions.StateAccess += gasesByDimension.StateAccess
+		t.Dimensions.StateGrowth += gasesByDimension.StateGrowth
+		t.Dimensions.HistoryGrowth += gasesByDimension.HistoryGrowth
+		t.Dimensions.StateGrowthRefund += gasesByDimension.StateGrowthRefund
 
 		// if the opcode returns from the call stack depth, or
 		// if this is an opcode immediately after a call that did not increase the stack depth
@@ -98,7 +94,7 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 		// call the appropriate finishX function to write the gas dimensions
 		// for the call that increased the stack depth in the past
 		if depth < t.depth {
-			interrupted, totalGasUsedByCall, stackInfo, finishGasesByDimension := t.callFinishFunction(pc, depth, gas)
+			interrupted, totalGasUsedByCall, _, finishGasesByDimension := t.callFinishFunction(pc, depth, gas)
 			if interrupted {
 				return
 			}
@@ -108,15 +104,12 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 				t.AddToRootExecutionGasAccumulated(totalGasUsedByCall)
 			}
 
-			accumulatedDimensionsCall := t.OpcodeToDimensions[stackInfo.GasDimensionInfo.Op]
-
-			accumulatedDimensionsCall.OneDimensionalGasCost += finishGasesByDimension.OneDimensionalGasCost
-			accumulatedDimensionsCall.Computation += finishGasesByDimension.Computation
-			accumulatedDimensionsCall.StateAccess += finishGasesByDimension.StateAccess
-			accumulatedDimensionsCall.StateGrowth += finishGasesByDimension.StateGrowth
-			accumulatedDimensionsCall.HistoryGrowth += finishGasesByDimension.HistoryGrowth
-			accumulatedDimensionsCall.StateGrowthRefund += finishGasesByDimension.StateGrowthRefund
-			t.OpcodeToDimensions[stackInfo.GasDimensionInfo.Op] = accumulatedDimensionsCall
+			t.Dimensions.OneDimensionalGasCost += finishGasesByDimension.OneDimensionalGasCost
+			t.Dimensions.Computation += finishGasesByDimension.Computation
+			t.Dimensions.StateAccess += finishGasesByDimension.StateAccess
+			t.Dimensions.StateGrowth += finishGasesByDimension.StateGrowth
+			t.Dimensions.HistoryGrowth += finishGasesByDimension.HistoryGrowth
+			t.Dimensions.StateGrowthRefund += finishGasesByDimension.StateGrowthRefund
 
 			t.depth -= 1
 			t.updateCallChildExecutionCost(totalGasUsedByCall)
@@ -129,7 +122,7 @@ func (t *TxGasDimensionByOpcodeTracer) OnOpcode(
 
 // if there is an error in the evm, e.g. invalid jump,
 // out of gas, max call depth exceeded, etc, this hook is called
-func (t *TxGasDimensionByOpcodeTracer) OnFault(
+func (t *TxGasDimensionTracer) OnFault(
 	pc uint64,
 	op byte,
 	gas, cost uint64,
@@ -149,12 +142,9 @@ func (t *TxGasDimensionByOpcodeTracer) OnFault(
 	// because if an error happens inside a call, the gas for the call opcode
 	//  will capture the excess gas consumed by the error/revert
 	if depth == 1 {
-		opcode := vm.OpCode(op)
-		accumulatedDimensions := t.OpcodeToDimensions[opcode]
 		gasAfterOpcode := gas - cost // don't double charge the cost of the opcode itself
-		accumulatedDimensions.OneDimensionalGasCost += gasAfterOpcode
-		accumulatedDimensions.Computation += gasAfterOpcode
-		t.OpcodeToDimensions[opcode] = accumulatedDimensions
+		t.Dimensions.OneDimensionalGasCost += gasAfterOpcode
+		t.Dimensions.Computation += gasAfterOpcode
 	}
 }
 
@@ -163,33 +153,33 @@ func (t *TxGasDimensionByOpcodeTracer) OnFault(
 // ############################################################################
 
 // Error returns the VM error captured by the trace.
-func (t *TxGasDimensionByOpcodeTracer) Error() error { return t.err }
+func (t *TxGasDimensionTracer) Error() error { return t.err }
 
 // ExecutionResult groups all dimension logs emitted by the EVM
 // while replaying a transaction in debug mode as well as transaction
 // execution status, the amount of gas used and the return value
-type TxGasDimensionByOpcodeExecutionResult struct {
+type TxGasDimensionExecutionResult struct {
 	BaseExecutionResult
-	Dimensions map[string]GasesByDimension `json:"dimensions"`
+	Dimensions GasesByDimension `json:"dimensions"`
 }
 
 // produce json result for output from tracer
 // this is what the end-user actually gets from the RPC endpoint
-func (t *TxGasDimensionByOpcodeTracer) GetResult() (json.RawMessage, error) {
+func (t *TxGasDimensionTracer) GetResult() (json.RawMessage, error) {
 	baseExecutionResult, err := t.GetBaseExecutionResult()
 	if err != nil {
 		return nil, err
 	}
 
-	return json.Marshal(&TxGasDimensionByOpcodeExecutionResult{
+	return json.Marshal(&TxGasDimensionExecutionResult{
 		BaseExecutionResult: baseExecutionResult,
-		Dimensions:          t.GetOpcodeDimensionSummary(),
+		Dimensions:          t.Dimensions,
 	})
 }
 
 // produce protobuf serialized result
 // for storing to file in compact format
-func (t *TxGasDimensionByOpcodeTracer) GetProtobufResult() ([]byte, error) {
+func (t *TxGasDimensionTracer) GetProtobufResult() ([]byte, error) {
 	baseExecutionResult, err := t.GetBaseExecutionResult()
 	if err != nil {
 		return nil, err
@@ -224,7 +214,7 @@ func (t *TxGasDimensionByOpcodeTracer) GetProtobufResult() ([]byte, error) {
 		transactionReverted = &trueBool
 	}
 
-	executionResult := &proto.TxGasDimensionByOpcodeExecutionResult{
+	executionResult := &proto.TxGasDimensionResult{
 		GasUsed:                    baseExecutionResult.GasUsed,
 		GasUsedL1:                  baseExecutionResult.GasUsedForL1,
 		GasUsedL2:                  baseExecutionResult.GasUsedForL2,
@@ -234,30 +224,15 @@ func (t *TxGasDimensionByOpcodeTracer) GetProtobufResult() ([]byte, error) {
 		RootIsStylusAdjustment:     rootIsStylusAdjustment,
 		Failed:                     failed,
 		TransactionReverted:        transactionReverted,
-		Dimensions:                 make(map[uint32]*proto.GasesByDimension),
-		TxHash:                     baseExecutionResult.TxHash,
+		Dimensions: &proto.GasesByDimension{
+			OneDimensionalGasCost: t.Dimensions.OneDimensionalGasCost,
+			Computation:           t.Dimensions.Computation,
+			StateAccess:           t.Dimensions.StateAccess,
+			StateGrowth:           t.Dimensions.StateGrowth,
+			HistoryGrowth:         t.Dimensions.HistoryGrowth,
+			StateGrowthRefund:     t.Dimensions.StateGrowthRefund,
+		},
+		TxHash: baseExecutionResult.TxHash,
 	}
-
-	for opcode, dimensions := range t.OpcodeToDimensions {
-		executionResult.Dimensions[uint32(opcode)] = &proto.GasesByDimension{
-			OneDimensionalGasCost: dimensions.OneDimensionalGasCost,
-			Computation:           dimensions.Computation,
-			StateAccess:           dimensions.StateAccess,
-			StateGrowth:           dimensions.StateGrowth,
-			HistoryGrowth:         dimensions.HistoryGrowth,
-			StateGrowthRefund:     dimensions.StateGrowthRefund,
-			ChildExecutionCost:    dimensions.ChildExecutionCost,
-		}
-	}
-
 	return protobuf.Marshal(executionResult)
-}
-
-// stringify opcodes for dimension log output
-func (t *TxGasDimensionByOpcodeTracer) GetOpcodeDimensionSummary() map[string]GasesByDimension {
-	summary := make(map[string]GasesByDimension)
-	for opcode, dimensions := range t.OpcodeToDimensions {
-		summary[opcode.String()] = dimensions
-	}
-	return summary
 }

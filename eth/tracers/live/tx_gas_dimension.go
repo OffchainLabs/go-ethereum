@@ -18,16 +18,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	_vm "github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 )
 
 // initializer for the tracer
 func init() {
-	tracers.LiveDirectory.Register("txGasDimensionByOpcode", NewTxGasDimensionByOpcodeLogger)
+	tracers.LiveDirectory.Register("txGasDimensionLive", NewTxGasDimensionLiveTracer)
 }
 
-type txGasDimensionByOpcodeLiveTraceConfig struct {
+type txGasDimensionLiveTraceConfig struct {
 	Path        string              `json:"path"` // Path to directory for output
 	ChainConfig *params.ChainConfig `json:"chainConfig"`
 }
@@ -43,13 +42,13 @@ type fileWriteTask struct {
 // The tracer uses asynchronous file writing to avoid blocking on I/O operations.
 // File writes are queued and processed by worker goroutines, ensuring the tracer
 // doesn't block the main execution thread.
-type TxGasDimensionByOpcodeLiveTracer struct {
-	Path                    string                               `json:"path"` // Path to directory for output
-	ChainConfig             *params.ChainConfig                  // chain config, needed for the tracer
-	skip                    bool                                 // skip hooking system transactions
-	nativeGasByOpcodeTracer *native.TxGasDimensionByOpcodeTracer // the native tracer that does all the actual work
-	blockTimestamp          uint64                               // the timestamp of the currently processing block
-	blockBaseFee            uint64                               // the base fee of the currently processing block
+type TxGasDimensionLiveTracer struct {
+	Path            string                       `json:"path"` // Path to directory for output
+	ChainConfig     *params.ChainConfig          // chain config, needed for the tracer
+	skip            bool                         // skip hooking system transactions
+	nativeGasTracer *native.TxGasDimensionTracer // the native tracer that does all the actual work
+	blockTimestamp  uint64                       // the timestamp of the currently processing block
+	blockBaseFee    uint64                       // the base fee of the currently processing block
 
 	// Async file writing components
 	writeQueue     chan fileWriteTask // Channel for queuing file write tasks
@@ -69,26 +68,26 @@ type TxGasDimensionByOpcodeLiveTracer struct {
 }
 
 // an struct to capture information about errors in tracer execution
-type TxGasDimensionByOpcodeLiveTraceErrorInfo struct {
-	TxHash       string      `json:"txHash"`
-	BlockNumber  string      `json:"blockNumber"`
-	Error        string      `json:"error"`
-	TracerError  string      `json:"tracerError,omitempty"`
-	Status       uint64      `json:"status"`
-	GasUsed      uint64      `json:"gasUsed"`
-	GasUsedForL1 uint64      `json:"gasUsedForL1"`
-	GasUsedForL2 uint64      `json:"gasUsedForL2"`
-	IntrinsicGas uint64      `json:"intrinsicGas"`
-	Dimensions   interface{} `json:"dimensions,omitempty"`
+type TxGasDimensionLiveTraceErrorInfo struct {
+	TxHash       string                  `json:"txHash"`
+	BlockNumber  string                  `json:"blockNumber"`
+	Error        string                  `json:"error"`
+	TracerError  string                  `json:"tracerError,omitempty"`
+	Status       uint64                  `json:"status"`
+	GasUsed      uint64                  `json:"gasUsed"`
+	GasUsedForL1 uint64                  `json:"gasUsedForL1"`
+	GasUsedForL2 uint64                  `json:"gasUsedForL2"`
+	IntrinsicGas uint64                  `json:"intrinsicGas"`
+	Dimensions   native.GasesByDimension `json:"dimensions,omitempty"`
 }
 
 // gasDimensionTracer returns a new tracer that traces gas
 // usage for each opcode against the dimension of that opcode
 // takes a context, and json input for configuration parameters
-func NewTxGasDimensionByOpcodeLogger(
+func NewTxGasDimensionLiveTracer(
 	cfg json.RawMessage,
 ) (*tracing.Hooks, error) {
-	var config txGasDimensionByOpcodeLiveTraceConfig
+	var config txGasDimensionLiveTraceConfig
 	if err := json.Unmarshal(cfg, &config); err != nil {
 		return nil, err
 	}
@@ -109,15 +108,15 @@ func NewTxGasDimensionByOpcodeLogger(
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 
-	t := &TxGasDimensionByOpcodeLiveTracer{
-		Path:                    config.Path,
-		ChainConfig:             config.ChainConfig,
-		skip:                    false,
-		nativeGasByOpcodeTracer: nil,
-		writeQueue:              make(chan fileWriteTask, 10000), // Increased buffer size to 10000 tasks
-		ctx:                     ctx,
-		cancel:                  cancel,
-		writeQueueSize:          10000,
+	t := &TxGasDimensionLiveTracer{
+		Path:            config.Path,
+		ChainConfig:     config.ChainConfig,
+		skip:            false,
+		nativeGasTracer: nil,
+		writeQueue:      make(chan fileWriteTask, 10000), // Increased buffer size to 10000 tasks
+		ctx:             ctx,
+		cancel:          cancel,
+		writeQueueSize:  10000,
 	}
 
 	// Start async file writing workers
@@ -135,12 +134,12 @@ func NewTxGasDimensionByOpcodeLogger(
 	}, nil
 }
 
-func (t *TxGasDimensionByOpcodeLiveTracer) OnTxStart(
+func (t *TxGasDimensionLiveTracer) OnTxStart(
 	vm *tracing.VMContext,
 	tx *types.Transaction,
 	from common.Address,
 ) {
-	if t.nativeGasByOpcodeTracer != nil {
+	if t.nativeGasTracer != nil {
 		log.Error("Error seen in the gas dimension live tracer lifecycle!")
 	}
 
@@ -155,14 +154,14 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnTxStart(
 		return
 	}
 
-	t.nativeGasByOpcodeTracer = &native.TxGasDimensionByOpcodeTracer{
+	t.nativeGasTracer = &native.TxGasDimensionTracer{
 		BaseGasDimensionTracer: baseGasDimensionTracer,
-		OpcodeToDimensions:     make(map[_vm.OpCode]native.GasesByDimension),
+		Dimensions:             native.ZeroGasesByDimension(),
 	}
-	t.nativeGasByOpcodeTracer.OnTxStart(vm, tx, from)
+	t.nativeGasTracer.OnTxStart(vm, tx, from)
 }
 
-func (t *TxGasDimensionByOpcodeLiveTracer) OnFault(
+func (t *TxGasDimensionLiveTracer) OnFault(
 	pc uint64,
 	op byte,
 	gas, cost uint64,
@@ -173,10 +172,10 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnFault(
 	if t.skip {
 		return
 	}
-	t.nativeGasByOpcodeTracer.OnFault(pc, op, gas, cost, scope, depth, err)
+	t.nativeGasTracer.OnFault(pc, op, gas, cost, scope, depth, err)
 }
 
-func (t *TxGasDimensionByOpcodeLiveTracer) OnOpcode(
+func (t *TxGasDimensionLiveTracer) OnOpcode(
 	pc uint64,
 	op byte,
 	gas, cost uint64,
@@ -188,24 +187,24 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnOpcode(
 	if t.skip {
 		return
 	}
-	t.nativeGasByOpcodeTracer.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
+	t.nativeGasTracer.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
 }
 
-func (t *TxGasDimensionByOpcodeLiveTracer) OnTxEnd(
+func (t *TxGasDimensionLiveTracer) OnTxEnd(
 	receipt *types.Receipt,
 	err error,
 ) {
 	// If we skipped this transaction, just reset and return
 	if t.skip {
-		t.nativeGasByOpcodeTracer = nil
+		t.nativeGasTracer = nil
 		t.skip = false
 		return
 	}
 
 	// first call the native tracer's OnTxEnd
-	t.nativeGasByOpcodeTracer.OnTxEnd(receipt, err)
+	t.nativeGasTracer.OnTxEnd(receipt, err)
 
-	tracerErr := t.nativeGasByOpcodeTracer.Reason()
+	tracerErr := t.nativeGasTracer.Reason()
 
 	if tracerErr != nil || err != nil || receipt == nil {
 		writeTxErrorToFile(t, receipt, err, tracerErr)
@@ -214,11 +213,11 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnTxEnd(
 	}
 
 	// reset the tracer
-	t.nativeGasByOpcodeTracer = nil
+	t.nativeGasTracer = nil
 	t.skip = false
 }
 
-func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockStart(ev tracing.BlockEvent) {
+func (t *TxGasDimensionLiveTracer) OnBlockStart(ev tracing.BlockEvent) {
 	t.blockTimestamp = 0
 	t.blockBaseFee = 0
 	if ev.Block != nil {
@@ -227,10 +226,10 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockStart(ev tracing.BlockEvent) {
 	}
 }
 
-func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockEnd(err error) {
+func (t *TxGasDimensionLiveTracer) OnBlockEnd(err error) {
 }
 
-func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockEndMetrics(blockNumber uint64, blockInsertDuration time.Duration) {
+func (t *TxGasDimensionLiveTracer) OnBlockEndMetrics(blockNumber uint64, blockInsertDuration time.Duration) {
 	// Calculate block group number (every 1000 blocks)
 	blockGroup := (blockNumber / 1000) * 1000
 	filename := fmt.Sprintf("%d.pb", blockNumber)
@@ -260,10 +259,10 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnBlockEndMetrics(blockNumber uint64,
 // if the transaction has any kind of error, try to get as much information
 // as you can out of it, and then write that out to a file underneath
 // Path/errors/block_group/blocknumber_txhash.json
-func writeTxErrorToFile(t *TxGasDimensionByOpcodeLiveTracer, receipt *types.Receipt, err error, tracerError error) {
+func writeTxErrorToFile(t *TxGasDimensionLiveTracer, receipt *types.Receipt, err error, tracerError error) {
 	var txHashStr string = "no-tx-hash"
 	var blockNumberStr string = "no-block-number"
-	var errorInfo TxGasDimensionByOpcodeLiveTraceErrorInfo
+	var errorInfo TxGasDimensionLiveTraceErrorInfo
 
 	var errStr string = ""
 	var tracerErrStr string = ""
@@ -273,18 +272,15 @@ func writeTxErrorToFile(t *TxGasDimensionByOpcodeLiveTracer, receipt *types.Rece
 	if tracerError != nil {
 		tracerErrStr = tracerError.Error()
 	}
-	// dimensions should not error, just return empty if there is no data
-	dimensions := t.nativeGasByOpcodeTracer.GetOpcodeDimensionSummary()
-
 	if receipt == nil {
 		// we need something to use as a name for the error file,
 		// and we have no tx to hash
 		txHashStr += time.Now().String()
 		outErrString := fmt.Sprintf("receipt is nil, err: %s", errStr)
-		errorInfo = TxGasDimensionByOpcodeLiveTraceErrorInfo{
+		errorInfo = TxGasDimensionLiveTraceErrorInfo{
 			Error:       outErrString,
 			TracerError: tracerErrStr,
-			Dimensions:  dimensions,
+			Dimensions:  t.nativeGasTracer.Dimensions,
 		}
 	} else {
 		// if we errored in the tracer because we had an unexpected gas cost mismatch
@@ -292,12 +288,12 @@ func writeTxErrorToFile(t *TxGasDimensionByOpcodeLiveTracer, receipt *types.Rece
 		txHashStr = receipt.TxHash.Hex()
 
 		var intrinsicGas uint64 = 0
-		baseExecutionResult, err := t.nativeGasByOpcodeTracer.GetBaseExecutionResult()
+		baseExecutionResult, err := t.nativeGasTracer.GetBaseExecutionResult()
 		if err == nil {
 			intrinsicGas = baseExecutionResult.IntrinsicGas
 		}
 
-		errorInfo = TxGasDimensionByOpcodeLiveTraceErrorInfo{
+		errorInfo = TxGasDimensionLiveTraceErrorInfo{
 			TxHash:       txHashStr,
 			BlockNumber:  blockNumberStr,
 			Error:        errStr,
@@ -307,7 +303,7 @@ func writeTxErrorToFile(t *TxGasDimensionByOpcodeLiveTracer, receipt *types.Rece
 			GasUsedForL1: receipt.GasUsedForL1,
 			GasUsedForL2: receipt.GasUsedForL2(),
 			IntrinsicGas: intrinsicGas,
-			Dimensions:   dimensions,
+			Dimensions:   t.nativeGasTracer.Dimensions,
 		}
 	}
 
@@ -342,13 +338,13 @@ func writeTxErrorToFile(t *TxGasDimensionByOpcodeLiveTracer, receipt *types.Rece
 // the individual filenames are where the filename is blocknumber_txhash.pb
 // so you have Path/block_group/blocknumber_txhash.pb
 // e.g. Path/1000/1890_0x123abc.pb
-func writeTxSuccessToFile(t *TxGasDimensionByOpcodeLiveTracer, receipt *types.Receipt) {
+func writeTxSuccessToFile(t *TxGasDimensionLiveTracer, receipt *types.Receipt) {
 	// system transactions don't use any gas
 	// they can be skipped
 	if receipt.GasUsed != 0 {
 		txHashString := receipt.TxHash.Hex()
 		blockNumber := receipt.BlockNumber
-		executionResultBytes, err := t.nativeGasByOpcodeTracer.GetProtobufResult()
+		executionResultBytes, err := t.nativeGasTracer.GetProtobufResult()
 		if err != nil {
 			log.Error("Failed to get protobuf result", "error", err)
 			return
@@ -365,7 +361,7 @@ func writeTxSuccessToFile(t *TxGasDimensionByOpcodeLiveTracer, receipt *types.Re
 }
 
 // startFileWorkers starts the async file writing worker goroutines
-func (t *TxGasDimensionByOpcodeLiveTracer) startFileWorkers() {
+func (t *TxGasDimensionLiveTracer) startFileWorkers() {
 	// Start 4 worker goroutines for file writing
 	numWorkers := 4
 	for i := 0; i < numWorkers; i++ {
@@ -375,7 +371,7 @@ func (t *TxGasDimensionByOpcodeLiveTracer) startFileWorkers() {
 }
 
 // fileWorker is the worker goroutine that processes file writing tasks
-func (t *TxGasDimensionByOpcodeLiveTracer) fileWorker() {
+func (t *TxGasDimensionLiveTracer) fileWorker() {
 	defer t.workerWg.Done()
 
 	for {
@@ -393,7 +389,7 @@ func (t *TxGasDimensionByOpcodeLiveTracer) fileWorker() {
 }
 
 // processFileWriteTask handles the actual file writing with proper error handling
-func (t *TxGasDimensionByOpcodeLiveTracer) processFileWriteTask(task fileWriteTask) {
+func (t *TxGasDimensionLiveTracer) processFileWriteTask(task fileWriteTask) {
 	// Ensure the directory exists
 	dir := filepath.Dir(task.filepath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -410,7 +406,7 @@ func (t *TxGasDimensionByOpcodeLiveTracer) processFileWriteTask(task fileWriteTa
 
 // queueFileWrite safely queues a file writing task for async processing
 // This method blocks until space is available in the queue to ensure no writes are dropped
-func (t *TxGasDimensionByOpcodeLiveTracer) queueFileWrite(filepath string, data []byte, taskType string) {
+func (t *TxGasDimensionLiveTracer) queueFileWrite(filepath string, data []byte, taskType string) {
 	task := fileWriteTask{
 		filepath: filepath,
 		data:     data,
@@ -453,7 +449,7 @@ func (t *TxGasDimensionByOpcodeLiveTracer) queueFileWrite(filepath string, data 
 }
 
 // Close gracefully shuts down the async file writing workers
-func (t *TxGasDimensionByOpcodeLiveTracer) Close() {
+func (t *TxGasDimensionLiveTracer) Close() {
 	// Log final statistics
 	t.queueStats.Lock()
 	log.Info("Final file write queue statistics",

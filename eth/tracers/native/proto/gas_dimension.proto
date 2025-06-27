@@ -18,36 +18,33 @@ message GasesByDimension {
   uint64 history_growth = 5;
   // how much gas was refunded for removing state, only applicable to SSTORE opcodes to zero.
   int64 state_growth_refund = 6;
-  // how much of the gas was used for child execution, for CALLs, CREATEs, etc.
-  uint64 child_execution_cost = 7;
 }
 
 // TxGasDimensionByOpcodeExecutionResult represents the execution result
-message TxGasDimensionByOpcodeExecutionResult {
+message TxGasDimensionResult {
   // the total amount of gas used in the transaction
   uint64 gas_used = 1;
   // the gas paid to post the compressed transaction to the L1 chain
-  uint64 gas_used_l1 = 7;
+  uint64 gas_used_l1 = 2;
   // the gas paid to execute the transaction on the L2 chain
-  uint64 gas_used_l2 = 8;
+  uint64 gas_used_l2 = 3;
   // the intrinsic gas of the transaction, the static cost + calldata bytes cost
-  uint64 intrinsic_gas = 9;
+  uint64 intrinsic_gas = 4;
+  // the sum of the gas consumption categorized by dimension for that transaction
+  GasesByDimension dimensions = 5;
   // the adjusted gas refund amount after EIP-3529
-  optional uint64 adjusted_refund = 10;
+  optional uint64 adjusted_refund = 6;
   // the adjustment to the gas used for the root of the transaction if it is a precompile
-  optional uint64 root_is_precompile_adjustment = 12;
+  optional uint64 root_is_precompile_adjustment = 7;
   // the adjustment to the gas used for the root of the transaction if it is a stylus contract
-  optional uint64 root_is_stylus_adjustment = 14;
+  optional uint64 root_is_stylus_adjustment = 8;
   // whether the transaction broke the rules of the VM and was rejected
-  optional bool failed = 2;
+  optional bool failed = 9;
   // the status of the transaction, for a valid transaction that followed the rules,
   // but could have still failed for reasons inside the rules, like reverts, out of gas, etc.
-  //uint64 status = 11; // replaced by optional transaction_reverted which is more space efficient
-  optional bool transaction_reverted = 13;
-  // a map of each opcode to the sum of the gas consumption categorized by dimension for that opcode
-  map<uint32, GasesByDimension> dimensions = 3;
+  optional bool transaction_reverted = 10;
   // the hash of the transaction
-  string tx_hash = 4;
+  string tx_hash = 11;
 }
 
 message BlockInfo {
