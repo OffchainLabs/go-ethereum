@@ -373,7 +373,3 @@ func (s *hookedStateDB) GetSelfDestructs() []common.Address {
 func (s *hookedStateDB) GetCurrentTxLogs() []*types.Log {
 	return s.inner.GetCurrentTxLogs()
 }
-
-func (s *hookedStateDB) GetAccessList() (addresses map[common.Address]int, slots []map[common.Hash]struct{}) {
-	return s.inner.GetAccessList()
-}
