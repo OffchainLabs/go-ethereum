@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -46,8 +47,7 @@ type BaseGasDimensionTracer struct {
 	// if the root is a stylus contract
 	rootIsStylusAdjustment uint64
 	// maintain an access list tracer to check previous access list statuses.
-	prevAccessListAddresses map[common.Address]int
-	prevAccessListSlots     []map[common.Hash]struct{}
+	accessListTracer *logger.AccessListTracer
 	// the amount of refund accumulated at the current step of execution
 	refundAccumulated uint64
 	// in order to calculate the refund adjusted, we need to know the total execution gas
@@ -85,13 +85,13 @@ func NewBaseGasDimensionTracer(cfg json.RawMessage, chainConfig *params.ChainCon
 		}
 		debug = config.Debug
 	}
+	accessListTracer := logger.NewAccessListTracer(types.AccessList{}, map[common.Address]struct{}{})
 	return &BaseGasDimensionTracer{
 		debug:                       debug,
 		chainConfig:                 chainConfig,
 		depth:                       1,
 		refundAccumulated:           0,
-		prevAccessListAddresses:     map[common.Address]int{},
-		prevAccessListSlots:         []map[common.Hash]struct{}{},
+		accessListTracer:            accessListTracer,
 		env:                         nil,
 		txHash:                      common.Hash{},
 		gasUsed:                     0,
@@ -150,7 +150,7 @@ func (t *BaseGasDimensionTracer) onOpcodeStart(
 	t.opCount++
 	// First check if tracer has been interrupted
 	if t.interrupt.Load() {
-		return true, zeroGasesByDimension(), nil, vm.OpCode(op)
+		return true, ZeroGasesByDimension(), nil, vm.OpCode(op)
 	}
 
 	// Depth validation - if depth doesn't match expectations, this is a tracer error
@@ -163,7 +163,7 @@ func (t *BaseGasDimensionTracer) onOpcodeStart(
 			depth,
 			t.callStack,
 		)
-		return true, zeroGasesByDimension(), nil, vm.OpCode(op)
+		return true, ZeroGasesByDimension(), nil, vm.OpCode(op)
 	}
 	if t.depth != len(t.callStack)+1 {
 		t.interrupt.Store(true)
@@ -174,7 +174,7 @@ func (t *BaseGasDimensionTracer) onOpcodeStart(
 			len(t.callStack),
 			t.callStack,
 		)
-		return true, zeroGasesByDimension(), nil, vm.OpCode(op)
+		return true, ZeroGasesByDimension(), nil, vm.OpCode(op)
 	}
 
 	// Get the gas dimension function
@@ -187,7 +187,7 @@ func (t *BaseGasDimensionTracer) onOpcodeStart(
 	if fErr != nil {
 		t.interrupt.Store(true)
 		t.reason = fErr
-		return true, zeroGasesByDimension(), nil, vm.OpCode(op)
+		return true, ZeroGasesByDimension(), nil, vm.OpCode(op)
 	}
 	opcode = vm.OpCode(op)
 
@@ -200,7 +200,7 @@ func (t *BaseGasDimensionTracer) onOpcodeStart(
 			opcode.String(),
 			callStackInfo,
 		)
-		return true, zeroGasesByDimension(), nil, vm.OpCode(op)
+		return true, ZeroGasesByDimension(), nil, vm.OpCode(op)
 	}
 	return false, gasesByDimension, callStackInfo, opcode
 }
@@ -240,7 +240,7 @@ func (t *BaseGasDimensionTracer) callFinishFunction(
 	if !ok {
 		t.interrupt.Store(true)
 		t.reason = fmt.Errorf("call stack is unexpectedly empty %d %d %d", pc, depth, t.depth)
-		return true, 0, zeroCallGasDimensionStackInfo(), zeroGasesByDimension()
+		return true, 0, zeroCallGasDimensionStackInfo(), ZeroGasesByDimension()
 	}
 	finishFunction := GetFinishCalcGasDimensionFunc(stackInfo.GasDimensionInfo.Op)
 	if finishFunction == nil {
@@ -250,7 +250,7 @@ func (t *BaseGasDimensionTracer) callFinishFunction(
 			stackInfo.GasDimensionInfo.Op.String(),
 			pc,
 		)
-		return true, 0, zeroCallGasDimensionStackInfo(), zeroGasesByDimension()
+		return true, 0, zeroCallGasDimensionStackInfo(), ZeroGasesByDimension()
 	}
 	// IMPORTANT NOTE: for some reason the only reliable way to actually get the gas cost of the call
 	// is to subtract gas at time of call from gas at opcode AFTER return
@@ -262,7 +262,7 @@ func (t *BaseGasDimensionTracer) callFinishFunction(
 	if finishErr != nil {
 		t.interrupt.Store(true)
 		t.reason = finishErr
-		return true, 0, zeroCallGasDimensionStackInfo(), zeroGasesByDimension()
+		return true, 0, zeroCallGasDimensionStackInfo(), ZeroGasesByDimension()
 	}
 	return false, totalGasUsedByCall, stackInfo, finishGasesByDimension
 }
@@ -275,18 +275,6 @@ func (t *BaseGasDimensionTracer) updateCallChildExecutionCost(cost uint64) {
 	if len(t.callStack) > 0 {
 		t.callStack.UpdateExecutionCost(cost)
 	}
-}
-
-// at the end of each OnOpcode, update the previous access list, so that we can
-// use it should the next opcode need to check if an address is in the access list
-func (t *BaseGasDimensionTracer) updatePrevAccessList(addresses map[common.Address]int, slots []map[common.Hash]struct{}) {
-	if addresses == nil {
-		t.prevAccessListAddresses = map[common.Address]int{}
-		t.prevAccessListSlots = []map[common.Hash]struct{}{}
-		return
-	}
-	t.prevAccessListAddresses = addresses
-	t.prevAccessListSlots = slots
 }
 
 // OnTxStart handles transaction start
@@ -396,9 +384,9 @@ func (t *BaseGasDimensionTracer) GetRootIsStylus() bool {
 	return t.rootIsStylus
 }
 
-// GetPrevAccessList returns the previous access list
-func (t *BaseGasDimensionTracer) GetPrevAccessList() (addresses map[common.Address]int, slots []map[common.Hash]struct{}) {
-	return t.prevAccessListAddresses, t.prevAccessListSlots
+// GetAccessListTracer returns the access list tracer
+func (t *BaseGasDimensionTracer) GetAccessListTracer() *logger.AccessListTracer {
+	return t.accessListTracer
 }
 
 // GetPrecompileAddressList returns the list of precompile addresses
@@ -437,8 +425,8 @@ func (t *BaseGasDimensionTracer) adjustRefund(gasUsedByL2BeforeRefunds, refund u
 	return refundAdjusted
 }
 
-// zeroGasesByDimension returns a GasesByDimension struct with all fields set to zero
-func zeroGasesByDimension() GasesByDimension {
+// ZeroGasesByDimension returns a GasesByDimension struct with all fields set to zero
+func ZeroGasesByDimension() GasesByDimension {
 	return GasesByDimension{
 		OneDimensionalGasCost: 0,
 		Computation:           0,
@@ -455,6 +443,7 @@ func zeroCallGasDimensionInfo() CallGasDimensionInfo {
 	return CallGasDimensionInfo{
 		Pc:                        0,
 		Op:                        0,
+		DepthAtTimeOfCall:         0,
 		GasCounterAtTimeOfCall:    0,
 		MemoryExpansionCost:       0,
 		AccessListComputationCost: 0,

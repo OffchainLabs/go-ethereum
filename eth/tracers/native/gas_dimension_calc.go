@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -31,6 +32,7 @@ type GasesByDimension struct {
 type CallGasDimensionInfo struct {
 	Pc                        uint64
 	Op                        vm.OpCode
+	DepthAtTimeOfCall         int
 	GasCounterAtTimeOfCall    uint64
 	MemoryExpansionCost       uint64
 	AccessListComputationCost uint64
@@ -99,7 +101,7 @@ type DimensionTracer interface {
 	GetOpRefund() uint64
 	GetRefundAccumulated() uint64
 	SetRefundAccumulated(uint64)
-	GetPrevAccessList() (addresses map[common.Address]int, slots []map[common.Hash]struct{})
+	GetAccessListTracer() *logger.AccessListTracer
 	GetPrecompileAddressList() []common.Address
 	GetStateDB() tracing.StateDB
 	GetCallStack() CallGasDimensionStack
@@ -444,6 +446,7 @@ func calcStaticDelegateCallGas(
 		}, &CallGasDimensionInfo{
 			Pc:                        pc,
 			Op:                        vm.OpCode(op),
+			DepthAtTimeOfCall:         depth,
 			GasCounterAtTimeOfCall:    gas,
 			MemoryExpansionCost:       memExpansionCost,
 			AccessListComputationCost: accessListComputationCost,
@@ -483,6 +486,7 @@ func finishCalcStaticDelegateCallGas(
 		err := checkOneDimGreaterThanMultiDimGas(
 			callGasDimensionInfo.Pc,
 			byte(callGasDimensionInfo.Op),
+			callGasDimensionInfo.DepthAtTimeOfCall,
 			codeExecutionCost,
 			ret,
 		)
@@ -515,6 +519,7 @@ func finishCalcStaticDelegateCallGas(
 	err := checkGasDimensionsEqualCallGas(
 		callGasDimensionInfo.Pc,
 		byte(callGasDimensionInfo.Op),
+		callGasDimensionInfo.DepthAtTimeOfCall,
 		codeExecutionCost,
 		ret,
 	)
@@ -634,6 +639,7 @@ func calcCreateGas(
 		}, &CallGasDimensionInfo{
 			Pc:                        pc,
 			Op:                        vm.OpCode(op),
+			DepthAtTimeOfCall:         depth,
 			GasCounterAtTimeOfCall:    gas,
 			MemoryExpansionCost:       memExpansionCost,
 			AccessListComputationCost: 0,
@@ -676,11 +682,12 @@ func finishCalcCreateGas(
 	}
 	// it should be impossible to call a precompile from the deployment init code
 	if callGasDimensionInfo.isTargetPrecompile {
-		return ret, fmt.Errorf("precompile called from deployment init code")
+		return ret, fmt.Errorf("precompile called from deployment init code, pc: %d, op: %s, depth: %d", callGasDimensionInfo.Pc, callGasDimensionInfo.Op.String(), callGasDimensionInfo.DepthAtTimeOfCall)
 	}
 	err := checkGasDimensionsEqualCallGas(
 		callGasDimensionInfo.Pc,
 		byte(callGasDimensionInfo.Op),
+		callGasDimensionInfo.DepthAtTimeOfCall,
 		codeExecutionCost,
 		ret,
 	)
@@ -745,6 +752,7 @@ func calcCallGas(
 			}, &CallGasDimensionInfo{
 				Pc:                        pc,
 				Op:                        vm.OpCode(op),
+				DepthAtTimeOfCall:         depth,
 				GasCounterAtTimeOfCall:    gas,
 				AccessListComputationCost: 0,
 				AccessListStateAccessCost: 0,
@@ -792,6 +800,7 @@ func calcCallGas(
 		}, &CallGasDimensionInfo{
 			Pc:                        pc,
 			Op:                        vm.OpCode(op),
+			DepthAtTimeOfCall:         depth,
 			GasCounterAtTimeOfCall:    gas,
 			AccessListComputationCost: accessListComputationCost,
 			AccessListStateAccessCost: accessListStateAccessCost,
@@ -818,7 +827,7 @@ func finishCalcCallGas(
 	callGasDimensionInfo CallGasDimensionInfo,
 ) (ret GasesByDimension, err error) {
 	if codeExecutionCost > totalGasUsed {
-		return GasesByDimension{}, fmt.Errorf("CALL's totalGasUsed should never be greater than the codeExecutionCost, totalGasUsed: %d, codeExecutionCost: %d", totalGasUsed, codeExecutionCost)
+		return GasesByDimension{}, fmt.Errorf("CALL's totalGasUsed should never be greater than the codeExecutionCost, totalGasUsed: %d, codeExecutionCost: %d, pc: %d, op: %s, depth: %d", totalGasUsed, codeExecutionCost, callGasDimensionInfo.Pc, callGasDimensionInfo.Op.String(), callGasDimensionInfo.DepthAtTimeOfCall)
 	}
 	if totalGasUsed == 0 {
 		return ret, nil
@@ -901,12 +910,16 @@ func finishCalcCallGas(
 			}
 		} else {
 			return GasesByDimension{}, fmt.Errorf(
-				"invalid addressAccessAndValueEmptyCosts: %d,"+
+				"pc %d, op %s, depth: %d,"+
+					" invalid addressAccessAndValueEmptyCosts: %d,"+
 					" oneDimensionalGas: %d,"+
 					" positiveValueCostLessStipend: %d,"+
 					" codeExecutionCost: %d,"+
 					" memoryExpansionCost: %d"+
 					" IsValueSentWithCall: %t",
+				callGasDimensionInfo.Pc,
+				callGasDimensionInfo.Op.String(),
+				callGasDimensionInfo.DepthAtTimeOfCall,
 				addressAccessAndValueEmptyCosts,
 				oneDimensionalGas,
 				positiveValueCostLessStipend,
@@ -919,6 +932,7 @@ func finishCalcCallGas(
 	err = checkGasDimensionsEqualCallGas(
 		callGasDimensionInfo.Pc,
 		byte(callGasDimensionInfo.Op),
+		callGasDimensionInfo.DepthAtTimeOfCall,
 		codeExecutionCost,
 		ret,
 	)
@@ -980,7 +994,7 @@ func calcSStoreGas(
 		}
 		t.SetRefundAccumulated(currentRefund)
 	}
-	ret := zeroGasesByDimension()
+	ret := ZeroGasesByDimension()
 	ret.OneDimensionalGasCost = cost
 	if cost >= params.SstoreSetGas { // 22100 case and 20000 case
 		accessCost := cost - params.SstoreSetGas
@@ -1196,9 +1210,8 @@ func memoryGasCost(mem []byte, lastGasCost uint64, newMemSize uint64) (fee uint6
 
 // helper function that calculates the gas dimensions for an access list access for an address
 func addressAccessListCost(t DimensionTracer, address common.Address) (computationGasCost uint64, stateAccessGasCost uint64) {
-	accessListAddresses, _ := t.GetPrevAccessList()
-	_, addressInAccessList := accessListAddresses[address]
-	if !addressInAccessList {
+	accessListTracer := t.GetAccessListTracer()
+	if !accessListTracer.HasAddress(address) {
 		computationGasCost = params.WarmStorageReadCostEIP2929
 		stateAccessGasCost = params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
 	} else {
@@ -1209,22 +1222,17 @@ func addressAccessListCost(t DimensionTracer, address common.Address) (computati
 }
 
 // helper function that calculates the gas dimensions for an access list access for a storage slot
-func storageSlotAccessListCost(t DimensionTracer, address common.Address, slot common.Hash) (computationGasCost uint64, stateAccessGasCost uint64) {
-	accessListAddresses, accessListSlots := t.GetPrevAccessList()
-	idx, ok := accessListAddresses[address]
-	if !ok {
-		// no such address (and hence zero slots)
-		return params.WarmStorageReadCostEIP2929, params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929
+func storageSlotAccessListCost(t DimensionTracer, address common.Address, slot common.Hash) (
+	computationGasCost uint64, stateAccessGasCost uint64) {
+	accessListTracer := t.GetAccessListTracer()
+	if !accessListTracer.HasSlot(address, slot) {
+		computationGasCost = params.WarmStorageReadCostEIP2929
+		stateAccessGasCost = params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929
+	} else {
+		computationGasCost = params.WarmStorageReadCostEIP2929
+		stateAccessGasCost = 0
 	}
-	if idx == -1 {
-		// address yes, but no slots
-		return params.WarmStorageReadCostEIP2929, params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929
-	}
-	_, slotPresent := accessListSlots[idx][slot]
-	if !slotPresent {
-		return params.WarmStorageReadCostEIP2929, params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929
-	}
-	return params.WarmStorageReadCostEIP2929, 0
+	return computationGasCost, stateAccessGasCost
 }
 
 // wherever it's possible, check that the gas dimensions are sane
@@ -1256,14 +1264,16 @@ func checkGasDimensionsEqualOneDimensionalGas(
 func checkGasDimensionsEqualCallGas(
 	pc uint64,
 	op byte,
+	depth int,
 	codeExecutionCost uint64,
 	dim GasesByDimension,
 ) error {
 	if dim.OneDimensionalGasCost != dim.Computation+dim.StateAccess+dim.StateGrowth+dim.HistoryGrowth {
 		return fmt.Errorf(
-			"unexpected call gas cost mismatch: pc %d, op %s, with codeExecutionCost %d, expected %d == %v",
+			"unexpected call gas cost mismatch: pc %d, op %s, depth %d, with codeExecutionCost %d, expected %d == %v",
 			pc,
 			vm.OpCode(op).String(),
+			depth,
 			codeExecutionCost,
 			dim.OneDimensionalGasCost,
 			dim,
@@ -1278,15 +1288,17 @@ func checkGasDimensionsEqualCallGas(
 func checkOneDimGreaterThanMultiDimGas(
 	pc uint64,
 	op byte,
+	depth int,
 	codeExecutionCost uint64,
 	dim GasesByDimension,
 ) error {
 	if codeExecutionCost == 0 {
 		if !(dim.OneDimensionalGasCost == dim.Computation+dim.StateAccess+dim.StateGrowth+dim.HistoryGrowth) {
 			return fmt.Errorf(
-				"unexpected unequal precompile adjustment gas cost mismatch: pc %d, op %s, with codeExecutionCost %d, expected %d == %v",
+				"unexpected unequal precompile adjustment gas cost mismatch: pc %d, op %s, depth %d, with codeExecutionCost %d, expected %d == %v",
 				pc,
 				vm.OpCode(op).String(),
+				depth,
 				codeExecutionCost,
 				dim.OneDimensionalGasCost,
 				dim,
@@ -1295,9 +1307,10 @@ func checkOneDimGreaterThanMultiDimGas(
 	} else {
 		if !(dim.OneDimensionalGasCost > dim.Computation+dim.StateAccess+dim.StateGrowth+dim.HistoryGrowth) {
 			return fmt.Errorf(
-				"unexpected precompile adjustment gas cost mismatch: pc %d, op %s, with codeExecutionCost %d, expected %d > %v",
+				"unexpected precompile adjustment gas cost mismatch: pc %d, op %s, depth %d, with codeExecutionCost %d, expected %d > %v",
 				pc,
 				vm.OpCode(op).String(),
+				depth,
 				codeExecutionCost,
 				dim.OneDimensionalGasCost,
 				dim,
