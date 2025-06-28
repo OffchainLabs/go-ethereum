@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -100,7 +101,7 @@ type DimensionTracer interface {
 	GetOpRefund() uint64
 	GetRefundAccumulated() uint64
 	SetRefundAccumulated(uint64)
-	GetPrevAccessList() (addresses map[common.Address]int, slots []map[common.Hash]struct{})
+	GetAccessListTracer() *logger.AccessListTracer
 	GetPrecompileAddressList() []common.Address
 	GetStateDB() tracing.StateDB
 	GetCallStack() CallGasDimensionStack
@@ -1209,9 +1210,8 @@ func memoryGasCost(mem []byte, lastGasCost uint64, newMemSize uint64) (fee uint6
 
 // helper function that calculates the gas dimensions for an access list access for an address
 func addressAccessListCost(t DimensionTracer, address common.Address) (computationGasCost uint64, stateAccessGasCost uint64) {
-	accessListAddresses, _ := t.GetPrevAccessList()
-	_, addressInAccessList := accessListAddresses[address]
-	if !addressInAccessList {
+	accessListTracer := t.GetAccessListTracer()
+	if !accessListTracer.HasAddress(address) {
 		computationGasCost = params.WarmStorageReadCostEIP2929
 		stateAccessGasCost = params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
 	} else {
@@ -1222,22 +1222,17 @@ func addressAccessListCost(t DimensionTracer, address common.Address) (computati
 }
 
 // helper function that calculates the gas dimensions for an access list access for a storage slot
-func storageSlotAccessListCost(t DimensionTracer, address common.Address, slot common.Hash) (computationGasCost uint64, stateAccessGasCost uint64) {
-	accessListAddresses, accessListSlots := t.GetPrevAccessList()
-	idx, ok := accessListAddresses[address]
-	if !ok {
-		// no such address (and hence zero slots)
-		return params.WarmStorageReadCostEIP2929, params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929
+func storageSlotAccessListCost(t DimensionTracer, address common.Address, slot common.Hash) (
+	computationGasCost uint64, stateAccessGasCost uint64) {
+	accessListTracer := t.GetAccessListTracer()
+	if !accessListTracer.HasSlot(address, slot) {
+		computationGasCost = params.WarmStorageReadCostEIP2929
+		stateAccessGasCost = params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929
+	} else {
+		computationGasCost = params.WarmStorageReadCostEIP2929
+		stateAccessGasCost = 0
 	}
-	if idx == -1 {
-		// address yes, but no slots
-		return params.WarmStorageReadCostEIP2929, params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929
-	}
-	_, slotPresent := accessListSlots[idx][slot]
-	if !slotPresent {
-		return params.WarmStorageReadCostEIP2929, params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929
-	}
-	return params.WarmStorageReadCostEIP2929, 0
+	return computationGasCost, stateAccessGasCost
 }
 
 // wherever it's possible, check that the gas dimensions are sane

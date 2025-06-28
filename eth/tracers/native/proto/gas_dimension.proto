@@ -45,6 +45,13 @@ message TxGasDimensionResult {
   optional bool transaction_reverted = 10;
   // the hash of the transaction
   string tx_hash = 11;
+  // the number of the block
+  uint64 block_number = 12;
+}
+
+// batch results to disk for performance
+message TxGasDimensionResultBatch {
+  repeated TxGasDimensionResult results = 1;
 }
 
 message BlockInfo {
@@ -54,4 +61,10 @@ message BlockInfo {
   uint64 insert_duration_nanoseconds = 2;
   // block base fee
   uint64 base_fee = 3;
+  // the number of the block
+  uint64 block_number = 4;
+}
+
+message BlockInfoBatch {
+  repeated BlockInfo blocks = 1;
 }

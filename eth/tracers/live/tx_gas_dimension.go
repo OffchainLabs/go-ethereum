@@ -1,12 +1,10 @@
 package live
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -31,40 +29,23 @@ type txGasDimensionLiveTraceConfig struct {
 	ChainConfig *params.ChainConfig `json:"chainConfig"`
 }
 
-// fileWriteTask represents a file writing task
-type fileWriteTask struct {
-	filepath string
-	data     []byte
-	taskType string // "block", "tx_success", "tx_error"
-}
+const fileWriteQueueMaxSize = 1000
 
 // gasDimensionTracer struct
 // The tracer uses asynchronous file writing to avoid blocking on I/O operations.
 // File writes are queued and processed by worker goroutines, ensuring the tracer
 // doesn't block the main execution thread.
 type TxGasDimensionLiveTracer struct {
-	Path            string                       `json:"path"` // Path to directory for output
-	ChainConfig     *params.ChainConfig          // chain config, needed for the tracer
-	skip            bool                         // skip hooking system transactions
-	nativeGasTracer *native.TxGasDimensionTracer // the native tracer that does all the actual work
-	blockTimestamp  uint64                       // the timestamp of the currently processing block
-	blockBaseFee    uint64                       // the base fee of the currently processing block
-
-	// Async file writing components
-	writeQueue     chan fileWriteTask // Channel for queuing file write tasks
-	workerWg       sync.WaitGroup     // WaitGroup for graceful shutdown of workers
-	ctx            context.Context    // Context for cancellation
-	cancel         context.CancelFunc // Cancel function for graceful shutdown
-	writeQueueSize int                // Size of the write queue buffer
-
-	// Queue monitoring
-	queueStats struct {
-		sync.Mutex
-		totalQueued    uint64
-		totalProcessed uint64
-		totalDropped   uint64
-		maxQueueSize   int
-	}
+	Path                    string                                             `json:"path"` // Path to directory for output
+	ChainConfig             *params.ChainConfig                                // chain config, needed for the tracer
+	skip                    bool                                               // skip hooking system transactions
+	nativeGasTracer         *native.TxGasDimensionTracer                       // the native tracer that does all the actual work
+	blockTimestamp          uint64                                             // the timestamp of the currently processing block
+	blockBaseFee            uint64                                             // the base fee of the currently processing block
+	txWriteQueue            [fileWriteQueueMaxSize]*proto.TxGasDimensionResult // the queue of transactions to write to file
+	txWriteQueueSize        int                                                // the size of the file write queue
+	blockInfoWriteQueue     [fileWriteQueueMaxSize]*proto.BlockInfo            // the queue of block info to write to file
+	blockInfoWriteQueueSize int                                                // the size of the block info write queue
 }
 
 // an struct to capture information about errors in tracer execution
@@ -105,22 +86,12 @@ func NewTxGasDimensionLiveTracer(
 		return nil, fmt.Errorf("tx gas dimension live tracer chain config is required: %v", config)
 	}
 
-	// Create context for graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-
 	t := &TxGasDimensionLiveTracer{
 		Path:            config.Path,
 		ChainConfig:     config.ChainConfig,
 		skip:            false,
 		nativeGasTracer: nil,
-		writeQueue:      make(chan fileWriteTask, 10000), // Increased buffer size to 10000 tasks
-		ctx:             ctx,
-		cancel:          cancel,
-		writeQueueSize:  10000,
 	}
-
-	// Start async file writing workers
-	t.startFileWorkers()
 
 	return &tracing.Hooks{
 		OnOpcode:          t.OnOpcode,
@@ -232,28 +203,146 @@ func (t *TxGasDimensionLiveTracer) OnBlockEnd(err error) {
 func (t *TxGasDimensionLiveTracer) OnBlockEndMetrics(blockNumber uint64, blockInsertDuration time.Duration) {
 	// Calculate block group number (every 1000 blocks)
 	blockGroup := (blockNumber / 1000) * 1000
-	filename := fmt.Sprintf("%d.pb", blockNumber)
-
-	// Create path with block group subdirectory
-	dirPath := filepath.Join(t.Path, "blocks", fmt.Sprintf("%d", blockGroup))
-	filepath := filepath.Join(dirPath, filename)
 
 	// Create BlockInfo protobuf message
 	blockInfo := &proto.BlockInfo{
 		Timestamp:                 t.blockTimestamp,
 		InsertDurationNanoseconds: uint64(blockInsertDuration.Nanoseconds()),
 		BaseFee:                   t.blockBaseFee,
+		BlockNumber:               blockNumber,
 	}
 
-	// Marshal the protobuf message
-	blockInfoBytes, err := protobuf.Marshal(blockInfo)
-	if err != nil {
-		log.Error("Failed to marshal block info", "error", err)
+	// Add to block info write queue
+	t.blockInfoWriteQueue[t.blockInfoWriteQueueSize] = blockInfo
+	t.blockInfoWriteQueueSize++
+
+	// If queue is full, write the batch
+	if t.blockInfoWriteQueueSize >= fileWriteQueueMaxSize {
+		t.writeBlockBatchToFile(fmt.Sprintf("%d", blockGroup))
+	}
+}
+
+// writeBlockBatchToFile converts the blockInfoWriteQueue to a BlockInfoBatch,
+// marshals it to bytes, and writes it to a file
+func (t *TxGasDimensionLiveTracer) writeBlockBatchToFile(blockGroup string) {
+	if t.blockInfoWriteQueueSize == 0 {
 		return
 	}
 
-	// Queue the file write task for async processing
-	t.queueFileWrite(filepath, blockInfoBytes, "block")
+	// Create the batch from the queue
+	batch := &proto.BlockInfoBatch{
+		Blocks: make([]*proto.BlockInfo, t.blockInfoWriteQueueSize),
+	}
+
+	// Copy block infos from queue to batch
+	var i int = 0
+	for i < t.blockInfoWriteQueueSize {
+		batch.Blocks[i] = t.blockInfoWriteQueue[i]
+		i++
+	}
+
+	// Marshal the batch to bytes
+	batchBytes, err := protobuf.Marshal(batch)
+	if err != nil {
+		log.Error("Failed to marshal block batch", "error", err)
+		return
+	}
+
+	// Create directory path
+	dirPath := filepath.Join(t.Path, "blocks", blockGroup)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		log.Error("Failed to create directory", "path", dirPath, "error", err)
+		return
+	}
+
+	// Create filename with timestamp to avoid conflicts
+	timestamp := time.Now().UnixNano()
+	filename := fmt.Sprintf("block_batch_%d.pb", timestamp)
+	filepath := filepath.Join(dirPath, filename)
+
+	// Write the batch file
+	if err := os.WriteFile(filepath, batchBytes, 0644); err != nil {
+		log.Error("Failed to write block batch file", "path", filepath, "error", err)
+		return
+	}
+
+	// Reset the queue size to zero so next writes overwrite previous data
+	t.blockInfoWriteQueueSize = 0
+}
+
+// Close implements the Close method for the tracer hooks
+func (t *TxGasDimensionLiveTracer) Close() {
+	// Flush any remaining items in the queue before closing
+	if t.txWriteQueueSize > 0 {
+		t.flushQueue()
+	}
+	if t.blockInfoWriteQueueSize > 0 {
+		t.flushBlockQueue()
+	}
+}
+
+// writeTxBatchToFile converts the fileWriteQueue to a TxGasDimensionResultBatch,
+// marshals it to bytes, and writes it to a file
+func (t *TxGasDimensionLiveTracer) writeTxBatchToFile(blockGroup string) {
+	if t.txWriteQueueSize == 0 {
+		return
+	}
+
+	// Create the batch from the queue
+	batch := &proto.TxGasDimensionResultBatch{
+		Results: make([]*proto.TxGasDimensionResult, t.txWriteQueueSize),
+	}
+
+	// Copy results from queue to batch
+	var i int = 0
+	for i < t.txWriteQueueSize {
+		batch.Results[i] = t.txWriteQueue[i]
+		i++
+	}
+
+	// Marshal the batch to bytes
+	batchBytes, err := protobuf.Marshal(batch)
+	if err != nil {
+		log.Error("Failed to marshal batch", "error", err)
+		return
+	}
+
+	// Create directory path
+	dirPath := filepath.Join(t.Path, blockGroup)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		log.Error("Failed to create directory", "path", dirPath, "error", err)
+		return
+	}
+
+	// Create filename with timestamp to avoid conflicts
+	timestamp := time.Now().UnixNano()
+	filename := fmt.Sprintf("batch_%d.pb", timestamp)
+	filepath := filepath.Join(dirPath, filename)
+
+	// Write the batch file
+	if err := os.WriteFile(filepath, batchBytes, 0644); err != nil {
+		log.Error("Failed to write batch file", "path", filepath, "error", err)
+		return
+	}
+
+	// Reset the queue size to zero so next writes overwrite previous data
+	t.txWriteQueueSize = 0
+}
+
+// flushQueue is a helper method to flush the current queue contents
+func (t *TxGasDimensionLiveTracer) flushQueue() {
+	if t.txWriteQueueSize > 0 {
+		// Use a default block group for flushing
+		t.writeTxBatchToFile("flush")
+	}
+}
+
+// flushBlockQueue is a helper method to flush the current block queue contents
+func (t *TxGasDimensionLiveTracer) flushBlockQueue() {
+	if t.blockInfoWriteQueueSize > 0 {
+		// Use a default block group for flushing
+		t.writeBlockBatchToFile("flush")
+	}
 }
 
 // if the transaction has any kind of error, try to get as much information
@@ -319,6 +408,10 @@ func writeTxErrorToFile(t *TxGasDimensionLiveTracer, receipt *types.Receipt, err
 		errorDirPath = filepath.Join(t.Path, "errors", fmt.Sprintf("%d", blockGroup))
 	}
 
+	if err := os.MkdirAll(errorDirPath, 0755); err != nil {
+		log.Error("Failed to create error directory", "path", errorDirPath, "error", err)
+		return
+	}
 	// Marshal error info to JSON
 	errorData, err := json.MarshalIndent(errorInfo, "", "  ")
 	if err != nil {
@@ -326,9 +419,12 @@ func writeTxErrorToFile(t *TxGasDimensionLiveTracer, receipt *types.Receipt, err
 		return
 	}
 
-	// Queue the error file write task for async processing
+	// Write error file
 	errorFilepath := filepath.Join(errorDirPath, fmt.Sprintf("%s_%s.json", blockNumberStr, txHashStr))
-	t.queueFileWrite(errorFilepath, errorData, "tx_error")
+	if err := os.WriteFile(errorFilepath, errorData, 0644); err != nil {
+		log.Error("Failed to write error file", "path", errorFilepath, "error", err)
+		return
+	}
 }
 
 // if the transaction is a non-erroring transaction, write it out to
@@ -342,123 +438,35 @@ func writeTxSuccessToFile(t *TxGasDimensionLiveTracer, receipt *types.Receipt) {
 	// system transactions don't use any gas
 	// they can be skipped
 	if receipt.GasUsed != 0 {
-		txHashString := receipt.TxHash.Hex()
 		blockNumber := receipt.BlockNumber
-		executionResultBytes, err := t.nativeGasTracer.GetProtobufResult()
+		executionResult, err := t.nativeGasTracer.GetProtobufResult()
 		if err != nil {
 			log.Error("Failed to get protobuf result", "error", err)
 			return
 		}
 
 		blockGroup := (blockNumber.Uint64() / 1000) * 1000
-		dirPath := filepath.Join(t.Path, fmt.Sprintf("%d", blockGroup))
-		filename := fmt.Sprintf("%s_%s.pb", blockNumber.String(), txHashString)
-		filepath := filepath.Join(dirPath, filename)
+		/*
+			dirPath := filepath.Join(t.Path, fmt.Sprintf("%d", blockGroup))
+			filename := fmt.Sprintf("%s_%s.pb", blockNumber.String(), txHashString)
+			filepath := filepath.Join(dirPath, filename)
 
-		// Queue the file write task for async processing
-		t.queueFileWrite(filepath, executionResultBytes, "tx_success")
-	}
-}
+			// Ensure the directory exists (including block number subdirectory)
+			if err := os.MkdirAll(dirPath, 0755); err != nil {
+				log.Error("Failed to create directory", "path", dirPath, "error", err)
+				return
+			}
 
-// startFileWorkers starts the async file writing worker goroutines
-func (t *TxGasDimensionLiveTracer) startFileWorkers() {
-	// Start 4 worker goroutines for file writing
-	numWorkers := 4
-	for i := 0; i < numWorkers; i++ {
-		t.workerWg.Add(1)
-		go t.fileWorker()
-	}
-}
-
-// fileWorker is the worker goroutine that processes file writing tasks
-func (t *TxGasDimensionLiveTracer) fileWorker() {
-	defer t.workerWg.Done()
-
-	for {
-		select {
-		case task := <-t.writeQueue:
-			t.processFileWriteTask(task)
-			// Update processed statistics
-			t.queueStats.Lock()
-			t.queueStats.totalProcessed++
-			t.queueStats.Unlock()
-		case <-t.ctx.Done():
-			return
+			// Write the file
+			if err := os.WriteFile(filepath, executionResultBytes, 0644); err != nil {
+				log.Error("Failed to write file", "path", filepath, "error", err)
+				return
+			}
+		*/
+		t.txWriteQueue[t.txWriteQueueSize] = executionResult
+		t.txWriteQueueSize++
+		if t.txWriteQueueSize >= fileWriteQueueMaxSize {
+			t.writeTxBatchToFile(fmt.Sprintf("%d", blockGroup))
 		}
 	}
-}
-
-// processFileWriteTask handles the actual file writing with proper error handling
-func (t *TxGasDimensionLiveTracer) processFileWriteTask(task fileWriteTask) {
-	// Ensure the directory exists
-	dir := filepath.Dir(task.filepath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		log.Error("Failed to create directory for async file write", "path", dir, "error", err, "taskType", task.taskType)
-		return
-	}
-
-	// Write the file
-	if err := os.WriteFile(task.filepath, task.data, 0644); err != nil {
-		log.Error("Failed to write file asynchronously", "path", task.filepath, "error", err, "taskType", task.taskType)
-		return
-	}
-}
-
-// queueFileWrite safely queues a file writing task for async processing
-// This method blocks until space is available in the queue to ensure no writes are dropped
-func (t *TxGasDimensionLiveTracer) queueFileWrite(filepath string, data []byte, taskType string) {
-	task := fileWriteTask{
-		filepath: filepath,
-		data:     data,
-		taskType: taskType,
-	}
-
-	// Update queue statistics
-	t.queueStats.Lock()
-	t.queueStats.totalQueued++
-	currentQueueSize := len(t.writeQueue)
-	if currentQueueSize > t.queueStats.maxQueueSize {
-		t.queueStats.maxQueueSize = currentQueueSize
-	}
-	t.queueStats.Unlock()
-
-	// Log queue performance periodically (every 1000 queued tasks)
-	if t.queueStats.totalQueued%1000 == 0 {
-		t.queueStats.Lock()
-		log.Info("File write queue statistics",
-			"totalQueued", t.queueStats.totalQueued,
-			"totalProcessed", t.queueStats.totalProcessed,
-			"currentQueueSize", currentQueueSize,
-			"maxQueueSize", t.queueStats.maxQueueSize,
-			"queueUtilization", float64(currentQueueSize)/float64(t.writeQueueSize)*100)
-		t.queueStats.Unlock()
-	}
-
-	// Block until space is available in the queue
-	// This ensures no writes are dropped, but may slow down the tracer if I/O is slow
-	select {
-	case t.writeQueue <- task:
-		// Task queued successfully
-	case <-t.ctx.Done():
-		// Context was cancelled, log and return
-		t.queueStats.Lock()
-		t.queueStats.totalDropped++
-		t.queueStats.Unlock()
-		log.Warn("Context cancelled while queuing file write task", "taskType", taskType, "filepath", filepath)
-	}
-}
-
-// Close gracefully shuts down the async file writing workers
-func (t *TxGasDimensionLiveTracer) Close() {
-	// Log final statistics
-	t.queueStats.Lock()
-	log.Info("Final file write queue statistics",
-		"totalQueued", t.queueStats.totalQueued,
-		"totalProcessed", t.queueStats.totalProcessed,
-		"totalDropped", t.queueStats.totalDropped,
-		"maxQueueSize", t.queueStats.maxQueueSize)
-	t.queueStats.Unlock()
-
-	t.cancel()
-	t.workerWg.Wait()
 }
