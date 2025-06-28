@@ -180,8 +180,8 @@ func (t *TxGasDimensionLogger) OnOpcode(
 
 		t.updateCallChildExecutionCost(gasesByDimension.OneDimensionalGasCost)
 	}
-	addresses, slots := t.env.StateDB.GetAccessList()
-	t.updatePrevAccessList(addresses, slots)
+	// update the access list for this opcode AFTER all the other logic is done
+	t.accessListTracer.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
 }
 
 // if there is an error in the evm, e.g. invalid jump,

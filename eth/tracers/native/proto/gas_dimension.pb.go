@@ -137,7 +137,9 @@ type TxGasDimensionResult struct {
 	// but could have still failed for reasons inside the rules, like reverts, out of gas, etc.
 	TransactionReverted *bool `protobuf:"varint,10,opt,name=transaction_reverted,json=transactionReverted,proto3,oneof" json:"transaction_reverted,omitempty"`
 	// the hash of the transaction
-	TxHash        string `protobuf:"bytes,11,opt,name=tx_hash,json=txHash,proto3" json:"tx_hash,omitempty"`
+	TxHash string `protobuf:"bytes,11,opt,name=tx_hash,json=txHash,proto3" json:"tx_hash,omitempty"`
+	// the number of the block
+	BlockNumber   uint64 `protobuf:"varint,12,opt,name=block_number,json=blockNumber,proto3" json:"block_number,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -249,6 +251,58 @@ func (x *TxGasDimensionResult) GetTxHash() string {
 	return ""
 }
 
+func (x *TxGasDimensionResult) GetBlockNumber() uint64 {
+	if x != nil {
+		return x.BlockNumber
+	}
+	return 0
+}
+
+// batch results to disk for performance
+type TxGasDimensionResultBatch struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Results       []*TxGasDimensionResult `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TxGasDimensionResultBatch) Reset() {
+	*x = TxGasDimensionResultBatch{}
+	mi := &file_eth_tracers_native_proto_gas_dimension_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TxGasDimensionResultBatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TxGasDimensionResultBatch) ProtoMessage() {}
+
+func (x *TxGasDimensionResultBatch) ProtoReflect() protoreflect.Message {
+	mi := &file_eth_tracers_native_proto_gas_dimension_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TxGasDimensionResultBatch.ProtoReflect.Descriptor instead.
+func (*TxGasDimensionResultBatch) Descriptor() ([]byte, []int) {
+	return file_eth_tracers_native_proto_gas_dimension_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *TxGasDimensionResultBatch) GetResults() []*TxGasDimensionResult {
+	if x != nil {
+		return x.Results
+	}
+	return nil
+}
+
 type BlockInfo struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// the timestamp of the block
@@ -256,14 +310,16 @@ type BlockInfo struct {
 	// how long it took to insert the block
 	InsertDurationNanoseconds uint64 `protobuf:"varint,2,opt,name=insert_duration_nanoseconds,json=insertDurationNanoseconds,proto3" json:"insert_duration_nanoseconds,omitempty"`
 	// block base fee
-	BaseFee       uint64 `protobuf:"varint,3,opt,name=base_fee,json=baseFee,proto3" json:"base_fee,omitempty"`
+	BaseFee uint64 `protobuf:"varint,3,opt,name=base_fee,json=baseFee,proto3" json:"base_fee,omitempty"`
+	// the number of the block
+	BlockNumber   uint64 `protobuf:"varint,4,opt,name=block_number,json=blockNumber,proto3" json:"block_number,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BlockInfo) Reset() {
 	*x = BlockInfo{}
-	mi := &file_eth_tracers_native_proto_gas_dimension_proto_msgTypes[2]
+	mi := &file_eth_tracers_native_proto_gas_dimension_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -275,7 +331,7 @@ func (x *BlockInfo) String() string {
 func (*BlockInfo) ProtoMessage() {}
 
 func (x *BlockInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_eth_tracers_native_proto_gas_dimension_proto_msgTypes[2]
+	mi := &file_eth_tracers_native_proto_gas_dimension_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -288,7 +344,7 @@ func (x *BlockInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockInfo.ProtoReflect.Descriptor instead.
 func (*BlockInfo) Descriptor() ([]byte, []int) {
-	return file_eth_tracers_native_proto_gas_dimension_proto_rawDescGZIP(), []int{2}
+	return file_eth_tracers_native_proto_gas_dimension_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *BlockInfo) GetTimestamp() uint64 {
@@ -312,6 +368,57 @@ func (x *BlockInfo) GetBaseFee() uint64 {
 	return 0
 }
 
+func (x *BlockInfo) GetBlockNumber() uint64 {
+	if x != nil {
+		return x.BlockNumber
+	}
+	return 0
+}
+
+type BlockInfoBatch struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Blocks        []*BlockInfo           `protobuf:"bytes,1,rep,name=blocks,proto3" json:"blocks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BlockInfoBatch) Reset() {
+	*x = BlockInfoBatch{}
+	mi := &file_eth_tracers_native_proto_gas_dimension_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BlockInfoBatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BlockInfoBatch) ProtoMessage() {}
+
+func (x *BlockInfoBatch) ProtoReflect() protoreflect.Message {
+	mi := &file_eth_tracers_native_proto_gas_dimension_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BlockInfoBatch.ProtoReflect.Descriptor instead.
+func (*BlockInfoBatch) Descriptor() ([]byte, []int) {
+	return file_eth_tracers_native_proto_gas_dimension_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *BlockInfoBatch) GetBlocks() []*BlockInfo {
+	if x != nil {
+		return x.Blocks
+	}
+	return nil
+}
+
 var File_eth_tracers_native_proto_gas_dimension_proto protoreflect.FileDescriptor
 
 const file_eth_tracers_native_proto_gas_dimension_proto_rawDesc = "" +
@@ -323,7 +430,7 @@ const file_eth_tracers_native_proto_gas_dimension_proto_rawDesc = "" +
 	"\fstate_access\x18\x03 \x01(\x04R\vstateAccess\x12!\n" +
 	"\fstate_growth\x18\x04 \x01(\x04R\vstateGrowth\x12%\n" +
 	"\x0ehistory_growth\x18\x05 \x01(\x04R\rhistoryGrowth\x12.\n" +
-	"\x13state_growth_refund\x18\x06 \x01(\x03R\x11stateGrowthRefund\"\xfe\x04\n" +
+	"\x13state_growth_refund\x18\x06 \x01(\x03R\x11stateGrowthRefund\"\xa1\x05\n" +
 	"\x14TxGasDimensionResult\x12\x19\n" +
 	"\bgas_used\x18\x01 \x01(\x04R\agasUsed\x12\x1e\n" +
 	"\vgas_used_l1\x18\x02 \x01(\x04R\tgasUsedL1\x12\x1e\n" +
@@ -338,16 +445,22 @@ const file_eth_tracers_native_proto_gas_dimension_proto_rawDesc = "" +
 	"\x06failed\x18\t \x01(\bH\x03R\x06failed\x88\x01\x01\x126\n" +
 	"\x14transaction_reverted\x18\n" +
 	" \x01(\bH\x04R\x13transactionReverted\x88\x01\x01\x12\x17\n" +
-	"\atx_hash\x18\v \x01(\tR\x06txHashB\x12\n" +
+	"\atx_hash\x18\v \x01(\tR\x06txHash\x12!\n" +
+	"\fblock_number\x18\f \x01(\x04R\vblockNumberB\x12\n" +
 	"\x10_adjusted_refundB \n" +
 	"\x1e_root_is_precompile_adjustmentB\x1c\n" +
 	"\x1a_root_is_stylus_adjustmentB\t\n" +
 	"\a_failedB\x17\n" +
-	"\x15_transaction_reverted\"\x84\x01\n" +
+	"\x15_transaction_reverted\"e\n" +
+	"\x19TxGasDimensionResultBatch\x12H\n" +
+	"\aresults\x18\x01 \x03(\v2..eth.tracers.native.proto.TxGasDimensionResultR\aresults\"\xa7\x01\n" +
 	"\tBlockInfo\x12\x1c\n" +
 	"\ttimestamp\x18\x01 \x01(\x04R\ttimestamp\x12>\n" +
 	"\x1binsert_duration_nanoseconds\x18\x02 \x01(\x04R\x19insertDurationNanoseconds\x12\x19\n" +
-	"\bbase_fee\x18\x03 \x01(\x04R\abaseFeeB:Z8github.com/ethereum/go-ethereum/eth/tracers/native/protob\x06proto3"
+	"\bbase_fee\x18\x03 \x01(\x04R\abaseFee\x12!\n" +
+	"\fblock_number\x18\x04 \x01(\x04R\vblockNumber\"M\n" +
+	"\x0eBlockInfoBatch\x12;\n" +
+	"\x06blocks\x18\x01 \x03(\v2#.eth.tracers.native.proto.BlockInfoR\x06blocksB:Z8github.com/ethereum/go-ethereum/eth/tracers/native/protob\x06proto3"
 
 var (
 	file_eth_tracers_native_proto_gas_dimension_proto_rawDescOnce sync.Once
@@ -361,19 +474,23 @@ func file_eth_tracers_native_proto_gas_dimension_proto_rawDescGZIP() []byte {
 	return file_eth_tracers_native_proto_gas_dimension_proto_rawDescData
 }
 
-var file_eth_tracers_native_proto_gas_dimension_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_eth_tracers_native_proto_gas_dimension_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_eth_tracers_native_proto_gas_dimension_proto_goTypes = []any{
-	(*GasesByDimension)(nil),     // 0: eth.tracers.native.proto.GasesByDimension
-	(*TxGasDimensionResult)(nil), // 1: eth.tracers.native.proto.TxGasDimensionResult
-	(*BlockInfo)(nil),            // 2: eth.tracers.native.proto.BlockInfo
+	(*GasesByDimension)(nil),          // 0: eth.tracers.native.proto.GasesByDimension
+	(*TxGasDimensionResult)(nil),      // 1: eth.tracers.native.proto.TxGasDimensionResult
+	(*TxGasDimensionResultBatch)(nil), // 2: eth.tracers.native.proto.TxGasDimensionResultBatch
+	(*BlockInfo)(nil),                 // 3: eth.tracers.native.proto.BlockInfo
+	(*BlockInfoBatch)(nil),            // 4: eth.tracers.native.proto.BlockInfoBatch
 }
 var file_eth_tracers_native_proto_gas_dimension_proto_depIdxs = []int32{
 	0, // 0: eth.tracers.native.proto.TxGasDimensionResult.dimensions:type_name -> eth.tracers.native.proto.GasesByDimension
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	1, // 1: eth.tracers.native.proto.TxGasDimensionResultBatch.results:type_name -> eth.tracers.native.proto.TxGasDimensionResult
+	3, // 2: eth.tracers.native.proto.BlockInfoBatch.blocks:type_name -> eth.tracers.native.proto.BlockInfo
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_eth_tracers_native_proto_gas_dimension_proto_init() }
@@ -388,7 +505,7 @@ func file_eth_tracers_native_proto_gas_dimension_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_eth_tracers_native_proto_gas_dimension_proto_rawDesc), len(file_eth_tracers_native_proto_gas_dimension_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

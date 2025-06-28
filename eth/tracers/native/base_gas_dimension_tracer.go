@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -46,8 +47,7 @@ type BaseGasDimensionTracer struct {
 	// if the root is a stylus contract
 	rootIsStylusAdjustment uint64
 	// maintain an access list tracer to check previous access list statuses.
-	prevAccessListAddresses map[common.Address]int
-	prevAccessListSlots     []map[common.Hash]struct{}
+	accessListTracer *logger.AccessListTracer
 	// the amount of refund accumulated at the current step of execution
 	refundAccumulated uint64
 	// in order to calculate the refund adjusted, we need to know the total execution gas
@@ -85,13 +85,13 @@ func NewBaseGasDimensionTracer(cfg json.RawMessage, chainConfig *params.ChainCon
 		}
 		debug = config.Debug
 	}
+	accessListTracer := logger.NewAccessListTracer(types.AccessList{}, map[common.Address]struct{}{})
 	return &BaseGasDimensionTracer{
 		debug:                       debug,
 		chainConfig:                 chainConfig,
 		depth:                       1,
 		refundAccumulated:           0,
-		prevAccessListAddresses:     map[common.Address]int{},
-		prevAccessListSlots:         []map[common.Hash]struct{}{},
+		accessListTracer:            accessListTracer,
 		env:                         nil,
 		txHash:                      common.Hash{},
 		gasUsed:                     0,
@@ -277,18 +277,6 @@ func (t *BaseGasDimensionTracer) updateCallChildExecutionCost(cost uint64) {
 	}
 }
 
-// at the end of each OnOpcode, update the previous access list, so that we can
-// use it should the next opcode need to check if an address is in the access list
-func (t *BaseGasDimensionTracer) updatePrevAccessList(addresses map[common.Address]int, slots []map[common.Hash]struct{}) {
-	if addresses == nil {
-		t.prevAccessListAddresses = map[common.Address]int{}
-		t.prevAccessListSlots = []map[common.Hash]struct{}{}
-		return
-	}
-	t.prevAccessListAddresses = addresses
-	t.prevAccessListSlots = slots
-}
-
 // OnTxStart handles transaction start
 func (t *BaseGasDimensionTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
@@ -396,9 +384,9 @@ func (t *BaseGasDimensionTracer) GetRootIsStylus() bool {
 	return t.rootIsStylus
 }
 
-// GetPrevAccessList returns the previous access list
-func (t *BaseGasDimensionTracer) GetPrevAccessList() (addresses map[common.Address]int, slots []map[common.Hash]struct{}) {
-	return t.prevAccessListAddresses, t.prevAccessListSlots
+// GetAccessListTracer returns the access list tracer
+func (t *BaseGasDimensionTracer) GetAccessListTracer() *logger.AccessListTracer {
+	return t.accessListTracer
 }
 
 // GetPrecompileAddressList returns the list of precompile addresses

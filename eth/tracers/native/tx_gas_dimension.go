@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
-	protobuf "google.golang.org/protobuf/proto"
 )
 
 // initializer for the tracer
@@ -116,8 +115,8 @@ func (t *TxGasDimensionTracer) OnOpcode(
 		}
 		t.updateCallChildExecutionCost(gasesByDimension.OneDimensionalGasCost)
 	}
-	addresses, slots := t.env.StateDB.GetAccessList()
-	t.updatePrevAccessList(addresses, slots)
+	// update the access list for this opcode AFTER all the other logic is done
+	t.accessListTracer.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
 }
 
 // if there is an error in the evm, e.g. invalid jump,
@@ -179,7 +178,7 @@ func (t *TxGasDimensionTracer) GetResult() (json.RawMessage, error) {
 
 // produce protobuf serialized result
 // for storing to file in compact format
-func (t *TxGasDimensionTracer) GetProtobufResult() ([]byte, error) {
+func (t *TxGasDimensionTracer) GetProtobufResult() (*proto.TxGasDimensionResult, error) {
 	baseExecutionResult, err := t.GetBaseExecutionResult()
 	if err != nil {
 		return nil, err
@@ -232,7 +231,8 @@ func (t *TxGasDimensionTracer) GetProtobufResult() ([]byte, error) {
 			HistoryGrowth:         t.Dimensions.HistoryGrowth,
 			StateGrowthRefund:     t.Dimensions.StateGrowthRefund,
 		},
-		TxHash: baseExecutionResult.TxHash,
+		TxHash:      baseExecutionResult.TxHash,
+		BlockNumber: baseExecutionResult.BlockNumber.Uint64(),
 	}
-	return protobuf.Marshal(executionResult)
+	return executionResult, nil
 }
