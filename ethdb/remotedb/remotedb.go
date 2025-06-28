@@ -39,12 +39,8 @@ func (db *Database) Has(key []byte) (bool, error) {
 	return true, nil
 }
 
-func (db *Database) WasmDataBase() (ethdb.KeyValueStore, uint32) {
-	return db, 0
-}
-
-func (db *Database) WasmTargets() []ethdb.WasmTarget {
-	return nil
+func (db *Database) WasmDataBase() ethdb.KeyValueStore {
+	return db
 }
 
 func (db *Database) Get(key []byte) ([]byte, error) {

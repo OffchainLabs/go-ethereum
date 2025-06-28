@@ -423,7 +423,7 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 }
 
 // Assumes that fields are not nil, i.e. setDefaults or CallDefaults has been called.
-func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, header *types.Header, state *state.StateDB, runMode core.MessageRunMode, skipNonceCheck, skipEoACheck bool) *core.Message {
+func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, header *types.Header, state *state.StateDB, runCtx *core.MessageRunContext, skipNonceCheck, skipEoACheck bool) *core.Message {
 	var (
 		gasPrice  *big.Int
 		gasFeeCap *big.Int
@@ -476,7 +476,7 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, globalGasCap uint64, he
 		BlobGasFeeCap:         (*big.Int)(args.BlobFeeCap),
 		BlobHashes:            args.BlobHashes,
 		SetCodeAuthorizations: args.AuthorizationList,
-		TxRunMode:             runMode,
+		TxRunContext:          runCtx,
 		SkipNonceChecks:       skipNonceCheck,
 		SkipFromEOACheck:      skipEoACheck,
 		SkipL1Charging:        skipL1Charging,

@@ -47,8 +47,6 @@ var (
 type APIBackend struct {
 	b *Backend
 
-	dbForAPICalls ethdb.Database
-
 	fallbackClient        types.FallbackClient
 	archiveClientsManager *archiveFallbackClientsManager
 	sync                  SyncProgressBackend
@@ -131,12 +129,6 @@ func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fal
 	if err != nil {
 		return nil, err
 	}
-	// discard stylus-tag on any call made from api database
-	dbForAPICalls := backend.chainDb
-	wasmStore, tag := backend.chainDb.WasmDataBase()
-	if tag != 0 || len(backend.chainDb.WasmTargets()) > 1 {
-		dbForAPICalls = rawdb.WrapDatabaseWithWasm(backend.chainDb, wasmStore, 0, []ethdb.WasmTarget{rawdb.LocalTarget()})
-	}
 	var archiveClientsManager *archiveFallbackClientsManager
 	if len(archiveRedirects) != 0 {
 		archiveClientsManager, err = newArchiveFallbackClientsManager(archiveRedirects)
@@ -146,7 +138,6 @@ func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fal
 	}
 	backend.apiBackend = &APIBackend{
 		b:                     backend,
-		dbForAPICalls:         dbForAPICalls,
 		fallbackClient:        fallbackClient,
 		archiveClientsManager: archiveClientsManager,
 	}
@@ -371,7 +362,7 @@ func (a *APIBackend) BlobBaseFee(ctx context.Context) *big.Int {
 }
 
 func (a *APIBackend) ChainDb() ethdb.Database {
-	return a.dbForAPICalls
+	return a.b.chainDb
 }
 
 func (a *APIBackend) AccountManager() *accounts.Manager {

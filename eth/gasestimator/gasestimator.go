@@ -49,7 +49,7 @@ type Options struct {
 	State            *state.StateDB           // Pre-state on top of which to estimate the gas
 	BlockOverrides   *override.BlockOverrides // Block overrides to apply during the estimation
 	Backend          core.NodeInterfaceBackendAPI
-	RunScheduledTxes func(context.Context, core.NodeInterfaceBackendAPI, *state.StateDB, *types.Header, vm.BlockContext, core.MessageRunMode, *core.ExecutionResult) (*core.ExecutionResult, error)
+	RunScheduledTxes func(context.Context, core.NodeInterfaceBackendAPI, *state.StateDB, *types.Header, vm.BlockContext, *core.MessageRunContext, *core.ExecutionResult) (*core.ExecutionResult, error)
 
 	ErrorRatio float64 // Allowed overestimation ratio for faster estimation termination
 }
@@ -270,7 +270,7 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	}
 
 	// Arbitrum: a tx can schedule another (see retryables)
-	result, err = opts.RunScheduledTxes(ctx, opts.Backend, dirtyState, opts.Header, evmContext, core.MessageGasEstimationMode, result)
+	result, err = opts.RunScheduledTxes(ctx, opts.Backend, dirtyState, opts.Header, evmContext, call.TxRunContext, result)
 	if err != nil {
 		return nil, err
 	}

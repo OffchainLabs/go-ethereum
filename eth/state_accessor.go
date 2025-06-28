@@ -269,12 +269,13 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	}
 	// Recompute transactions up to the target index.
 	signer := types.MakeSigner(eth.blockchain.Config(), block.Number(), block.Time(), evm.Context.ArbOSVersion)
+	runCtx := core.NewMessageReplayContext()
 	for idx, tx := range block.Transactions() {
 		if idx == txIndex {
 			return tx, context, statedb, release, nil
 		}
 		// Assemble the transaction call message and return if the requested offset
-		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee(), core.MessageReplayMode)
+		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee(), runCtx)
 
 		// Not yet the searched for transaction, execute on top of the current state
 		statedb.SetTxContext(tx.Hash(), idx)
