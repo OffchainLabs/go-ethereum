@@ -112,7 +112,6 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 			threads = uint64(cpus)
 		}
 	}
-	log.Info("interating txes", "from", from, "to", to, "reverse", reverse, "maxThreads", maxThreads, "threads", threads)
 	var (
 		rlpCh    = make(chan *numberRlp, threads*2)     // we send raw rlp over this channel
 		hashesCh = make(chan *blockTxHashes, threads*2) // send hashes over hashesCh
