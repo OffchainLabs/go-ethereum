@@ -175,6 +175,9 @@ type CacheConfig struct {
 	MaxNumberOfBlocksToSkipStateSaving uint32
 	MaxAmountOfGasToSkipStateSaving    uint64
 
+	// Arbitrum: configure tx indexer
+	TxIndexerThreads int // number of threads used when iterating over tx hashes for a block range
+
 	SnapshotNoBuild bool // Whether the background generation is allowed
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 
@@ -224,6 +227,7 @@ var defaultCacheConfig = &CacheConfig{
 	TrieTimeLimitRandomOffset:          0,
 	MaxNumberOfBlocksToSkipStateSaving: 0,
 	MaxAmountOfGasToSkipStateSaving:    0,
+	TxIndexerThreads:                   runtime.NumCPU(),
 
 	TrieCleanLimit: 256,
 	TrieDirtyLimit: 256,
@@ -556,7 +560,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 	// Start tx indexer if it's enabled.
 	if txLookupLimit != nil {
-		bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
+		bc.txIndexer = newTxIndexer(*txLookupLimit, bc.cacheConfig.TxIndexerThreads, bc)
 	}
 	return bc, nil
 }

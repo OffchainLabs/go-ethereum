@@ -40,6 +40,10 @@ func (progress TxIndexProgress) Done() bool {
 // txIndexer is the module responsible for maintaining transaction indexes
 // according to the configured indexing range by users.
 type txIndexer struct {
+	// arbitrum:
+	// maximum threads number used by iteration over transaction hashes for specific block range
+	threads int
+
 	// limit is the maximum number of blocks from head whose tx indexes
 	// are reserved:
 	//  * 0: means the entire chain should be indexed
@@ -67,14 +71,15 @@ type txIndexer struct {
 }
 
 // newTxIndexer initializes the transaction indexer.
-func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
+func newTxIndexer(limit uint64, threads int, chain *BlockChain) *txIndexer {
 	cutoff, _ := chain.HistoryPruningCutoff()
 	indexer := &txIndexer{
-		limit:  limit,
-		cutoff: cutoff,
-		db:     chain.db,
-		term:   make(chan chan struct{}),
-		closed: make(chan struct{}),
+		threads: threads,
+		limit:   limit,
+		cutoff:  cutoff,
+		db:      chain.db,
+		term:    make(chan chan struct{}),
+		closed:  make(chan struct{}),
 	}
 	indexer.head.Store(indexer.resolveHead())
 	indexer.tail.Store(rawdb.ReadTxIndexTail(chain.db))
@@ -122,7 +127,7 @@ func (indexer *txIndexer) run(head uint64, stop chan struct{}, done chan struct{
 			from = head - indexer.limit + 1
 		}
 		from = max(from, indexer.cutoff)
-		rawdb.IndexTransactions(indexer.db, from, head+1, stop, true)
+		rawdb.IndexTransactions(indexer.db, from, head+1, stop, true, indexer.threads)
 		return
 	}
 	// The tail flag is existent (which means indexes in [tail, head] should be
@@ -130,7 +135,7 @@ func (indexer *txIndexer) run(head uint64, stop chan struct{}, done chan struct{
 	if indexer.limit == 0 || head < indexer.limit {
 		if *tail > 0 {
 			from := max(uint64(0), indexer.cutoff)
-			rawdb.IndexTransactions(indexer.db, from, *tail, stop, true)
+			rawdb.IndexTransactions(indexer.db, from, *tail, stop, true, indexer.threads)
 		}
 		return
 	}
@@ -140,10 +145,10 @@ func (indexer *txIndexer) run(head uint64, stop chan struct{}, done chan struct{
 	from = max(from, indexer.cutoff)
 	if from < *tail {
 		// Reindex a part of missing indices and rewind index tail to HEAD-limit
-		rawdb.IndexTransactions(indexer.db, from, *tail, stop, true)
+		rawdb.IndexTransactions(indexer.db, from, *tail, stop, true, indexer.threads)
 	} else {
 		// Unindex a part of stale indices and forward index tail to HEAD-limit
-		rawdb.UnindexTransactions(indexer.db, *tail, from, stop, false)
+		rawdb.UnindexTransactions(indexer.db, *tail, from, stop, false, indexer.threads)
 	}
 }
 

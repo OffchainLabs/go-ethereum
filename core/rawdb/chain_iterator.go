@@ -93,7 +93,7 @@ type blockTxHashes struct {
 // number(s) given, and yields the hashes on a channel. If there is a signal
 // received from interrupt channel, the iteration will be aborted and result
 // channel will be closed.
-func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool, interrupt chan struct{}) chan *blockTxHashes {
+func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool, interrupt chan struct{}, maxThreads int) chan *blockTxHashes {
 	// One thread sequentially reads data from db
 	type numberRlp struct {
 		number uint64
@@ -103,9 +103,16 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 		return nil
 	}
 	threads := to - from
-	if cpus := runtime.NumCPU(); threads > uint64(cpus) {
-		threads = uint64(cpus)
+	if maxThreads > 0 {
+		if threads > uint64(maxThreads) {
+			threads = uint64(maxThreads)
+		}
+	} else {
+		if cpus := runtime.NumCPU(); threads > uint64(cpus) {
+			threads = uint64(cpus)
+		}
 	}
+	log.Info("interating txes", "from", from, "to", to, "reverse", reverse, "maxThreads", maxThreads, "threads", threads)
 	var (
 		rlpCh    = make(chan *numberRlp, threads*2)     // we send raw rlp over this channel
 		hashesCh = make(chan *blockTxHashes, threads*2) // send hashes over hashesCh
@@ -179,13 +186,13 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 //
 // There is a passed channel, the whole procedure will be interrupted if any
 // signal received.
-func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool, report bool) {
+func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool, report bool, threads int) {
 	// short circuit for invalid range
 	if from >= to {
 		return
 	}
 	var (
-		hashesCh = iterateTransactions(db, from, to, true, interrupt)
+		hashesCh = iterateTransactions(db, from, to, true, interrupt, threads)
 		batch    = db.NewBatch()
 		start    = time.Now()
 		logged   = start.Add(-7 * time.Second)
@@ -262,26 +269,26 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 //
 // There is a passed channel, the whole procedure will be interrupted if any
 // signal received.
-func IndexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, report bool) {
-	indexTransactions(db, from, to, interrupt, nil, report)
+func IndexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, report bool, threads int) {
+	indexTransactions(db, from, to, interrupt, nil, report, threads)
 }
 
 // indexTransactionsForTesting is the internal debug version with an additional hook.
 func indexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
-	indexTransactions(db, from, to, interrupt, hook, false)
+	indexTransactions(db, from, to, interrupt, hook, false, 0)
 }
 
 // unindexTransactions removes txlookup indices of the specified block range.
 //
 // There is a passed channel, the whole procedure will be interrupted if any
 // signal received.
-func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool, report bool) {
+func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool, report bool, threads int) {
 	// short circuit for invalid range
 	if from >= to {
 		return
 	}
 	var (
-		hashesCh = iterateTransactions(db, from, to, false, interrupt)
+		hashesCh = iterateTransactions(db, from, to, false, interrupt, threads)
 		batch    = db.NewBatch()
 		start    = time.Now()
 		logged   = start.Add(-7 * time.Second)
@@ -354,13 +361,13 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 //
 // There is a passed channel, the whole procedure will be interrupted if any
 // signal received.
-func UnindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, report bool) {
-	unindexTransactions(db, from, to, interrupt, nil, report)
+func UnindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, report bool, threads int) {
+	unindexTransactions(db, from, to, interrupt, nil, report, threads)
 }
 
 // unindexTransactionsForTesting is the internal debug version with an additional hook.
 func unindexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
-	unindexTransactions(db, from, to, interrupt, hook, false)
+	unindexTransactions(db, from, to, interrupt, hook, false, 0)
 }
 
 // PruneTransactionIndex removes all tx index entries below a certain block number.
