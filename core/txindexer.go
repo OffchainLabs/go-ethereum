@@ -19,6 +19,7 @@ package core
 import (
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -261,7 +262,11 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 			if done == nil {
 				stop = make(chan struct{})
 				done = make(chan struct{})
-				go indexer.run(h.Header.Number.Uint64(), stop, done)
+				go func() {
+					time.Sleep(200 * time.Millisecond)
+					head := indexer.head.Load()
+					indexer.run(head, stop, done)
+				}()
 			}
 
 		case <-done:
