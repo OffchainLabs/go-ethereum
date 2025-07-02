@@ -176,7 +176,8 @@ type CacheConfig struct {
 	MaxAmountOfGasToSkipStateSaving    uint64
 
 	// Arbitrum: configure tx indexer
-	TxIndexerThreads int // number of threads used when iterating over tx hashes for a block range
+	TxIndexerThreads       int           // number of threads used when iterating over tx hashes for a block range
+	TxIndexerMinBatchDelay time.Duration // minimal time to delay indexing waiting for more new blocks to batch
 
 	SnapshotNoBuild bool // Whether the background generation is allowed
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
@@ -186,7 +187,7 @@ type CacheConfig struct {
 	ChainHistoryMode history.HistoryMode
 }
 
-// arbitrum: exposing CacheConfig.triedbConfig to be used by Nitro when initializing arbos in database
+// arbitrum: exposing  to batchCacheConfig.triedbConfig to be used by Nitro when initializing arbos in database
 func (c *CacheConfig) TriedbConfig() *triedb.Config {
 	return c.triedbConfig(false)
 }
@@ -228,6 +229,7 @@ var defaultCacheConfig = &CacheConfig{
 	MaxNumberOfBlocksToSkipStateSaving: 0,
 	MaxAmountOfGasToSkipStateSaving:    0,
 	TxIndexerThreads:                   runtime.NumCPU(),
+	TxIndexerMinBatchDelay:             0,
 
 	TrieCleanLimit: 256,
 	TrieDirtyLimit: 256,
@@ -560,7 +562,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 	// Start tx indexer if it's enabled.
 	if txLookupLimit != nil {
-		bc.txIndexer = newTxIndexer(*txLookupLimit, bc.cacheConfig.TxIndexerThreads, bc)
+		bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
 	}
 	return bc, nil
 }

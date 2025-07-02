@@ -44,6 +44,8 @@ type txIndexer struct {
 	// arbitrum:
 	// maximum threads number used by iteration over transaction hashes for specific block range
 	threads int
+	// minimum time that indexing is delayed waiting for new blocks to batch
+	minBatchDelay time.Duration
 
 	// limit is the maximum number of blocks from head whose tx indexes
 	// are reserved:
@@ -72,15 +74,16 @@ type txIndexer struct {
 }
 
 // newTxIndexer initializes the transaction indexer.
-func newTxIndexer(limit uint64, threads int, chain *BlockChain) *txIndexer {
+func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
 	cutoff, _ := chain.HistoryPruningCutoff()
 	indexer := &txIndexer{
-		threads: threads,
-		limit:   limit,
-		cutoff:  cutoff,
-		db:      chain.db,
-		term:    make(chan chan struct{}),
-		closed:  make(chan struct{}),
+		threads:       chain.cacheConfig.TxIndexerThreads,
+		minBatchDelay: chain.cacheConfig.TxIndexerMinBatchDelay,
+		limit:         limit,
+		cutoff:        cutoff,
+		db:            chain.db,
+		term:          make(chan chan struct{}),
+		closed:        make(chan struct{}),
 	}
 	indexer.head.Store(indexer.resolveHead())
 	indexer.tail.Store(rawdb.ReadTxIndexTail(chain.db))
@@ -255,6 +258,7 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 		done = make(chan struct{})
 		go indexer.run(head, stop, done)
 	}
+	lastBatch := time.Now()
 	for {
 		select {
 		case h := <-headCh:
@@ -262,17 +266,26 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 			if done == nil {
 				stop = make(chan struct{})
 				done = make(chan struct{})
-				go func() {
-					time.Sleep(200 * time.Millisecond)
-					head := indexer.head.Load()
-					indexer.run(head, stop, done)
-				}()
+				if sinceLast := time.Since(lastBatch); sinceLast < indexer.minBatchDelay {
+					go func() {
+						select {
+						case <-stop:
+							close(done)
+							return
+						case <-time.After(indexer.minBatchDelay - sinceLast):
+						}
+						indexer.run(indexer.head.Load(), stop, done)
+					}()
+				} else {
+					go indexer.run(indexer.head.Load(), stop, done)
+				}
 			}
 
 		case <-done:
 			stop = nil
 			done = nil
 			indexer.tail.Store(rawdb.ReadTxIndexTail(indexer.db))
+			lastBatch = time.Now()
 
 		case ch := <-indexer.term:
 			if stop != nil {
