@@ -2,7 +2,9 @@ package native
 
 import (
 	"encoding/json"
+	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/tracers/native/proto"
 
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -117,6 +119,25 @@ func (t *TxGasDimensionTracer) OnOpcode(
 	}
 	// update the access list for this opcode AFTER all the other logic is done
 	t.accessListTracer.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
+	// sanity check
+	addresses, _ := t.env.StateDB.GetAccessList()
+	missingAddresses := make([]common.Address, 0)
+	for addr := range addresses {
+		if !t.accessListTracer.HasAddress(addr) {
+			missingAddresses = append(missingAddresses, addr)
+		}
+		if len(missingAddresses) > 0 {
+			t.interrupt.Store(true)
+			t.reason = fmt.Errorf(
+				"pc %d op %s depth %d address not in access list: %v",
+				pc,
+				vm.OpCode(op).String(),
+				depth,
+				missingAddresses,
+			)
+			return
+		}
+	}
 }
 
 // if there is an error in the evm, e.g. invalid jump,
