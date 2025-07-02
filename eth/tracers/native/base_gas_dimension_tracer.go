@@ -302,19 +302,27 @@ func (t *BaseGasDimensionTracer) OnTxStart(env *tracing.VMContext, tx *types.Tra
 	}
 
 	txAcl := tx.AccessList()
-	aclLen := len(txAcl) + len(precompileAddressList) + 2
+	aclLen := len(txAcl) + len(precompileAddressList) + 3
 	if t.chainConfig.IsShanghai(env.BlockNumber, env.Time, env.ArbOSVersion) {
 		aclLen += 1
 	}
+	// add any access list provided by the user when they submitted the transaction
 	acl := make(types.AccessList, 0, aclLen)
 	acl = append(acl, txAcl...)
+	// add all precompiles to the access list
 	for _, addr := range precompileAddressList {
 		acl = append(acl, types.AccessTuple{Address: addr, StorageKeys: []common.Hash{}})
 	}
+	// add the sender to the access list
 	acl = append(acl, types.AccessTuple{Address: from, StorageKeys: []common.Hash{}})
+	// add the receiver to the access list
 	if tx.To() != nil {
 		acl = append(acl, types.AccessTuple{Address: *tx.To(), StorageKeys: []common.Hash{}})
 	}
+	// add the batch poster address to the access list
+	// to avoid circular import issues we hardcode the batch poster address here
+	batchPosterAddress := common.HexToAddress("0xA4B000000000000000000073657175656e636572")
+	acl = append(acl, types.AccessTuple{Address: batchPosterAddress, StorageKeys: []common.Hash{}})
 	t.accessListTracer = logger.NewAccessListTracer(acl, nil)
 }
 
