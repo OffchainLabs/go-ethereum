@@ -17,6 +17,7 @@
 package logger
 
 import (
+	"fmt"
 	"maps"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -116,6 +117,7 @@ type AccessListTracer struct {
 // An optional AccessList can be specified to occupy slots and addresses in
 // the resulting accesslist.
 func NewAccessListTracer(acl types.AccessList, addressesToExclude map[common.Address]struct{}) *AccessListTracer {
+	fmt.Println("new access list tracer", acl, addressesToExclude)
 	list := newAccessList()
 	for _, al := range acl {
 		if _, ok := addressesToExclude[al.Address]; !ok {
@@ -144,17 +146,20 @@ func (a *AccessListTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, sc
 	op := vm.OpCode(opcode)
 	if (op == vm.SLOAD || op == vm.SSTORE) && stackLen >= 1 {
 		slot := common.Hash(stackData[stackLen-1].Bytes32())
+		fmt.Println("adding slot to access list tracer", slot, scope.Address())
 		a.list.addSlot(scope.Address(), slot)
 	}
 	if (op == vm.EXTCODECOPY || op == vm.EXTCODEHASH || op == vm.EXTCODESIZE || op == vm.BALANCE || op == vm.SELFDESTRUCT) && stackLen >= 1 {
 		addr := common.Address(stackData[stackLen-1].Bytes20())
 		if _, ok := a.excl[addr]; !ok {
+			fmt.Println("adding norm address to access list tracer", addr)
 			a.list.addAddress(addr)
 		}
 	}
 	if (op == vm.DELEGATECALL || op == vm.CALL || op == vm.STATICCALL || op == vm.CALLCODE) && stackLen >= 5 {
 		addr := common.Address(stackData[stackLen-2].Bytes20())
 		if _, ok := a.excl[addr]; !ok {
+			fmt.Println("adding call address to access list tracer", addr)
 			a.list.addAddress(addr)
 		}
 	}

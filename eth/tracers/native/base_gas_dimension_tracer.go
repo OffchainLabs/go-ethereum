@@ -85,13 +85,12 @@ func NewBaseGasDimensionTracer(cfg json.RawMessage, chainConfig *params.ChainCon
 		}
 		debug = config.Debug
 	}
-	accessListTracer := logger.NewAccessListTracer(types.AccessList{}, map[common.Address]struct{}{})
 	return &BaseGasDimensionTracer{
 		debug:                       debug,
 		chainConfig:                 chainConfig,
 		depth:                       1,
 		refundAccumulated:           0,
-		accessListTracer:            accessListTracer,
+		accessListTracer:            nil,
 		env:                         nil,
 		txHash:                      common.Hash{},
 		gasUsed:                     0,
@@ -301,6 +300,16 @@ func (t *BaseGasDimensionTracer) OnTxStart(env *tracing.VMContext, tx *types.Tra
 		t.rootIsPrecompile = slices.Contains(precompileAddressList, *tx.To())
 		t.rootIsStylus = isStylusContract(t, *tx.To())
 	}
+	// addressesToExclude is supposed to contain sender, receiver, precompiles and valid authorizations
+	addressesToExclude := map[common.Address]struct{}{from: {}, *tx.To(): {}}
+	for _, addr := range precompileAddressList {
+		addressesToExclude[addr] = struct{}{}
+	}
+	addressesToExclude[from] = struct{}{}
+	if tx.To() != nil {
+		addressesToExclude[*tx.To()] = struct{}{}
+	}
+	t.accessListTracer = logger.NewAccessListTracer(tx.AccessList(), addressesToExclude)
 }
 
 // OnTxEnd handles transaction end
