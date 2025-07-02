@@ -43,6 +43,12 @@ func TestResourceConstraints(t *testing.T) {
 	if rc[ResourceKindHistoryGrowth][monthSecs].target != 1_000_000 {
 		t.Errorf("wrong constraint target")
 	}
+	if len(rc[ResourceKindStorageAccess]) != 0 {
+		t.Fatalf("expected 0 storage access constraints")
+	}
+	if len(rc[ResourceKindStorageGrowth]) != 0 {
+		t.Fatalf("expected 0 storage growth constraints")
+	}
 
 	// Updates a constraint
 	rc.SetConstraint(ResourceKindHistoryGrowth, monthSecs, 500_000*monthSecs)
