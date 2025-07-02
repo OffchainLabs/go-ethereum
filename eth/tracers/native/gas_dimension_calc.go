@@ -262,7 +262,10 @@ func calcSimpleAddressAccessSetGas(
 		ChildExecutionCost:    0,
 	}
 	if err := checkGasDimensionsEqualOneDimensionalGas(pc, op, depth, gas, cost, ret); err != nil {
-		return GasesByDimension{}, nil, err
+		accessList := t.GetAccessListTracer().AccessList()
+		return GasesByDimension{}, nil, fmt.Errorf(
+			"error in calcSimpleAddressAccessSetGas: %v, address: %v, access list: %v",
+			err, address, accessList)
 	}
 	return ret, nil, nil
 }
