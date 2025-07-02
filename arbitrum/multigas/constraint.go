@@ -2,8 +2,8 @@ package multigas
 
 import "time"
 
-// Constraint defines the max gas target per second for the given period for a single resource.
-type constraint struct {
+// resourceConstraint defines the max gas target per second for the given period for a single resource.
+type resourceConstraint struct {
 	period time.Duration
 	target uint64
 }
@@ -18,12 +18,12 @@ type constraint struct {
 // - X amount of computation over 12 seconds so nodes can keep up.
 // - Y amount of computation over 7 days so fresh nodes can catch up with the chain.
 // - Z amount of history growth over one month to avoid bloat.
-type ResourceConstraints map[ResourceKind]map[uint32]constraint
+type ResourceConstraints map[ResourceKind]map[uint32]resourceConstraint
 
 func NewResourceConstraints() ResourceConstraints {
 	c := ResourceConstraints{}
 	for resource := ResourceKind(0); resource < NumResourceKind; resource++ {
-		c[resource] = map[uint32]constraint{}
+		c[resource] = map[uint32]resourceConstraint{}
 	}
 	return c
 }
@@ -32,7 +32,7 @@ func NewResourceConstraints() ResourceConstraints {
 func (rc ResourceConstraints) SetConstraint(
 	resource ResourceKind, periodSecs uint32, targetPerPeriod uint64,
 ) {
-	rc[resource][periodSecs] = constraint{
+	rc[resource][periodSecs] = resourceConstraint{
 		period: time.Duration(periodSecs) * time.Second,
 		target: targetPerPeriod / uint64(periodSecs),
 	}
