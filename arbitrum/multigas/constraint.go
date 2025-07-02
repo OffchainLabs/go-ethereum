@@ -20,6 +20,8 @@ type resourceConstraint struct {
 // - Z amount of history growth over one month to avoid bloat.
 type ResourceConstraints map[ResourceKind]map[uint32]resourceConstraint
 
+// NewResourceConstraints creates a new set of constraints.
+// This type can be used as a reference.
 func NewResourceConstraints() ResourceConstraints {
 	c := ResourceConstraints{}
 	for resource := ResourceKind(0); resource < NumResourceKind; resource++ {
