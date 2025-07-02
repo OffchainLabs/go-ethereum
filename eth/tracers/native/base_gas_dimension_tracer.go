@@ -300,16 +300,22 @@ func (t *BaseGasDimensionTracer) OnTxStart(env *tracing.VMContext, tx *types.Tra
 		t.rootIsPrecompile = slices.Contains(precompileAddressList, *tx.To())
 		t.rootIsStylus = isStylusContract(t, *tx.To())
 	}
-	// addressesToExclude is supposed to contain sender, receiver, precompiles and valid authorizations
-	addressesToExclude := map[common.Address]struct{}{}
+
+	txAcl := tx.AccessList()
+	aclLen := len(txAcl) + len(precompileAddressList) + 2
+	if t.chainConfig.IsShanghai(env.BlockNumber, env.Time, env.ArbOSVersion) {
+		aclLen += 1
+	}
+	acl := make(types.AccessList, 0, aclLen)
+	acl = append(acl, txAcl...)
 	for _, addr := range precompileAddressList {
-		addressesToExclude[addr] = struct{}{}
+		acl = append(acl, types.AccessTuple{Address: addr, StorageKeys: []common.Hash{}})
 	}
-	addressesToExclude[from] = struct{}{}
+	acl = append(acl, types.AccessTuple{Address: from, StorageKeys: []common.Hash{}})
 	if tx.To() != nil {
-		addressesToExclude[*tx.To()] = struct{}{}
+		acl = append(acl, types.AccessTuple{Address: *tx.To(), StorageKeys: []common.Hash{}})
 	}
-	t.accessListTracer = logger.NewAccessListTracer(tx.AccessList(), addressesToExclude)
+	t.accessListTracer = logger.NewAccessListTracer(acl, nil)
 }
 
 // OnTxEnd handles transaction end
