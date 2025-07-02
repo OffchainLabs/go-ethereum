@@ -301,7 +301,7 @@ func (t *BaseGasDimensionTracer) OnTxStart(env *tracing.VMContext, tx *types.Tra
 		t.rootIsStylus = isStylusContract(t, *tx.To())
 	}
 	// addressesToExclude is supposed to contain sender, receiver, precompiles and valid authorizations
-	addressesToExclude := map[common.Address]struct{}{from: {}, *tx.To(): {}}
+	addressesToExclude := map[common.Address]struct{}{}
 	for _, addr := range precompileAddressList {
 		addressesToExclude[addr] = struct{}{}
 	}
