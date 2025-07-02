@@ -4,7 +4,8 @@ package multigas
 type ResourceKind uint8
 
 const (
-	ResourceKindComputation ResourceKind = iota
+	ResourceKindUnknown ResourceKind = iota
+	ResourceKindComputation
 	ResourceKindHistoryGrowth
 	ResourceKindStorageAccess
 	ResourceKindStorageGrowth

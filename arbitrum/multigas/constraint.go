@@ -27,7 +27,7 @@ type ResourceConstraints map[ResourceKind]map[PeriodSecs]resourceConstraint
 // This type can be used as a reference.
 func NewResourceConstraints() ResourceConstraints {
 	c := ResourceConstraints{}
-	for resource := ResourceKind(0); resource < NumResourceKind; resource++ {
+	for resource := ResourceKindUnknown + 1; resource < NumResourceKind; resource++ {
 		c[resource] = map[PeriodSecs]resourceConstraint{}
 	}
 	return c
