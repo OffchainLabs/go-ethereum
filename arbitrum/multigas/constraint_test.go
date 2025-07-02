@@ -35,7 +35,7 @@ func TestResourceConstraints(t *testing.T) {
 		t.Errorf("wrong constraint target")
 	}
 	if len(rc[ResourceKindHistoryGrowth]) != 1 {
-		t.Fatalf("Expected 1 history growth constraints")
+		t.Fatalf("Expected 1 history growth constraint")
 	}
 	if rc[ResourceKindHistoryGrowth][monthSecs].period != time.Duration(monthSecs)*time.Second {
 		t.Errorf("wrong constraint period")
