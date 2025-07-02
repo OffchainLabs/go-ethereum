@@ -184,11 +184,12 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 	context := core.NewEVMBlockContext(block.Header(), b.chain, nil)
 	signer := types.MakeSigner(b.chainConfig, block.Number(), block.Time(), context.ArbOSVersion)
 	evm := vm.NewEVM(context, statedb, b.chainConfig, vm.Config{})
+	runCtx := core.NewMessageReplayContext()
 	for idx, tx := range block.Transactions() {
 		if idx == txIndex {
 			return tx, context, statedb, release, nil
 		}
-		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee(), core.MessageReplayMode)
+		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee(), runCtx)
 		if _, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}

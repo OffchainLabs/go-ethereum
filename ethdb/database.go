@@ -180,10 +180,8 @@ type AncientStore interface {
 	io.Closer
 }
 
-type WasmTarget string
 type WasmDataBaseRetriever interface {
-	WasmDataBase() (KeyValueStore, uint32)
-	WasmTargets() []WasmTarget
+	WasmDataBase() KeyValueStore
 }
 
 // ResettableAncientStore extends the AncientStore interface by adding a Reset method.
