@@ -289,7 +289,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		tracer.reset(txHash, uint(i))
 		sim.state.SetTxContext(txHash, i)
 		// EoA check is always skipped, even in validation mode.
-		msg := call.ToMessage(header.BaseFee, 0, nil, nil, 0, !sim.validate, true)
+		msg := call.ToMessage(header.BaseFee, 0, nil, nil, core.NewMessageCommitContext(nil), !sim.validate, true)
 		result, err := applyMessageWithEVM(ctx, evm, msg, sim.state, timeout, sim.gp, sim.b, header, blockContext)
 		if err != nil {
 			txErr := txValidationError(err)
