@@ -49,7 +49,7 @@ const (
 // Database wraps access to tries and contract code.
 type Database interface {
 	// Arbitrum: Read activated Stylus contracts
-	ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) (asm []byte, err error)
+	ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) []byte
 	WasmStore() ethdb.KeyValueStore
 
 	// Reader returns a state reader associated with the specified state root.
