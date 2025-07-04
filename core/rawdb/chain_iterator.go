@@ -27,7 +27,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+)
+
+var (
+	txIndexerBlocksHistogram       = metrics.NewRegisteredHistogram("txindexer/indexed/transactions/count", nil, metrics.NewBoundedHistogramSample())
+	txIndexerTransactionsHistogram = metrics.NewRegisteredHistogram("txindexer/indexed/block/count", nil, metrics.NewBoundedHistogramSample())
+	txIndexerTail                  = metrics.NewRegisteredGauge("txindexer/tail", nil)
 )
 
 // InitDatabaseFromFreezer reinitializes an empty database from a previous batch
@@ -257,6 +264,9 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 	default:
 		logger("Indexed transactions", "blocks", blocks, "txs", txs, "tail", lastNum, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
+	txIndexerBlocksHistogram.Update(int64(blocks))
+	txIndexerTransactionsHistogram.Update(int64(txs))
+	txIndexerTail.Update(int64(lastNum))
 }
 
 // IndexTransactions creates txlookup indices of the specified block range. The from
