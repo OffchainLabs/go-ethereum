@@ -113,6 +113,7 @@ func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
 // and tail above the configured cutoff.
 func (indexer *txIndexer) run(head uint64, stop chan struct{}, done chan struct{}) {
 	defer func() { close(done) }()
+	log.Debug("txIndexer run", "head", head)
 
 	// Short circuit if the chain is either empty, or entirely below the
 	// cutoff point.
@@ -258,8 +259,7 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 		done = make(chan struct{})
 		go indexer.run(head, stop, done)
 	}
-	var lastBatch atomic.Int64
-	lastBatch.Store(time.Now().UnixNano())
+	lastBatch := time.Now()
 	for {
 		select {
 		case h := <-headCh:
@@ -267,7 +267,7 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 			if done == nil {
 				stop = make(chan struct{})
 				done = make(chan struct{})
-				if sinceLast := time.Since(time.Unix(0, lastBatch.Load())); sinceLast < indexer.minBatchDelay {
+				if sinceLast := time.Since(lastBatch); sinceLast < indexer.minBatchDelay {
 					go func() {
 						select {
 						case <-stop:
@@ -275,10 +275,12 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 							return
 						case <-time.After(indexer.minBatchDelay - sinceLast):
 						}
-						lastBatch.Store(time.Now().UnixNano())
+						// we can update lastBatch timestamp safely from this goroutine as the read won't happen before this goroutine exits and closes done channel
+						lastBatch = time.Now()
 						indexer.run(indexer.head.Load(), stop, done)
 					}()
 				} else {
+					lastBatch = time.Now()
 					go indexer.run(indexer.head.Load(), stop, done)
 				}
 			}
