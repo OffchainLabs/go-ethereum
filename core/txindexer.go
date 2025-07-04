@@ -258,7 +258,8 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 		done = make(chan struct{})
 		go indexer.run(head, stop, done)
 	}
-	lastBatch := time.Now()
+	var lastBatch atomic.Int64
+	lastBatch.Store(time.Now().UnixNano())
 	for {
 		select {
 		case h := <-headCh:
@@ -266,7 +267,7 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 			if done == nil {
 				stop = make(chan struct{})
 				done = make(chan struct{})
-				if sinceLast := time.Since(lastBatch); sinceLast < indexer.minBatchDelay {
+				if sinceLast := time.Since(time.Unix(0, lastBatch.Load())); sinceLast < indexer.minBatchDelay {
 					go func() {
 						select {
 						case <-stop:
@@ -274,6 +275,7 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 							return
 						case <-time.After(indexer.minBatchDelay - sinceLast):
 						}
+						lastBatch.Store(time.Now().UnixNano())
 						indexer.run(indexer.head.Load(), stop, done)
 					}()
 				} else {
@@ -285,7 +287,6 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 			stop = nil
 			done = nil
 			indexer.tail.Store(rawdb.ReadTxIndexTail(indexer.db))
-			lastBatch = time.Now()
 
 		case ch := <-indexer.term:
 			if stop != nil {
