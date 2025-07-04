@@ -14,3 +14,8 @@ const (
 
 // MultiGas tracks gas for each resource separately.
 type MultiGas [NumResourceKind]uint64
+
+// NewEmptyMultiGas returns an empty MultiGas array
+func NewEmptyMultiGas() MultiGas {
+	return MultiGas{}
+}
