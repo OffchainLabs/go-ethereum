@@ -32,10 +32,10 @@ import (
 )
 
 var (
-	txIndexerIndexedBlocksHistogram         = metrics.NewRegisteredHistogram("txindexer/indexed/transactions/count", nil, metrics.NewBoundedHistogramSample())
-	txIndexerIndexedTransactionsHistogram   = metrics.NewRegisteredHistogram("txindexer/indexed/block/count", nil, metrics.NewBoundedHistogramSample())
-	txIndexerUnindexedBlocksHistogram       = metrics.NewRegisteredHistogram("txindexer/unindexed/transactions/count", nil, metrics.NewBoundedHistogramSample())
-	txIndexerUnindexedTransactionsHistogram = metrics.NewRegisteredHistogram("txindexer/unindexed/block/count", nil, metrics.NewBoundedHistogramSample())
+	txIndexerIndexedBlocksHistogram         = metrics.NewRegisteredHistogram("txindexer/indexed/block/count", nil, metrics.NewBoundedHistogramSample())
+	txIndexerIndexedTransactionsHistogram   = metrics.NewRegisteredHistogram("txindexer/indexed/transaction/count", nil, metrics.NewBoundedHistogramSample())
+	txIndexerUnindexedBlocksHistogram       = metrics.NewRegisteredHistogram("txindexer/unindexed/block/count", nil, metrics.NewBoundedHistogramSample())
+	txIndexerUnindexedTransactionsHistogram = metrics.NewRegisteredHistogram("txindexer/unindexed/transaction/count", nil, metrics.NewBoundedHistogramSample())
 	txIndexerTail                           = metrics.NewRegisteredGauge("txindexer/tail", nil)
 )
 
