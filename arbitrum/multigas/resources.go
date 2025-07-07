@@ -50,8 +50,9 @@ func (z *MultiGas) Get(kind ResourceKind) uint64 {
 	return z.gas[kind]
 }
 
-func (z *MultiGas) Set(kind ResourceKind, gas uint64) {
+func (z *MultiGas) Set(kind ResourceKind, gas uint64) *MultiGas {
 	z.gas[kind] = gas
+	return z
 }
 
 // GetRefund gets the SSTORE refund computed at the end of the transaction.
@@ -60,8 +61,9 @@ func (z *MultiGas) GetRefund() uint64 {
 }
 
 // SetRefund sets the SSTORE refund computed at the end of the transaction.
-func (z *MultiGas) SetRefund(amount uint64) {
+func (z *MultiGas) SetRefund(amount uint64) *MultiGas {
 	z.refund = amount
+	return z
 }
 
 // SafeAdd sets z to the sum x+y and returns z and checks for overflow.
