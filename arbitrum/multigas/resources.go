@@ -11,6 +11,7 @@ const (
 	ResourceKindHistoryGrowth
 	ResourceKindStorageAccess
 	ResourceKindStorageGrowth
+	ResourceKindRefund
 	NumResourceKind
 )
 
@@ -43,6 +44,10 @@ func StorageAccessGas(amount uint64) *MultiGas {
 
 func StorageGrowthGas(amount uint64) *MultiGas {
 	return NewMultiGas(ResourceKindStorageGrowth, amount)
+}
+
+func RefundGas(amount uint64) *MultiGas {
+	return NewMultiGas(ResourceKindRefund, amount)
 }
 
 func (z *MultiGas) Get(kind ResourceKind) uint64 {
