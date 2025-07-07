@@ -11,13 +11,13 @@ const (
 	ResourceKindHistoryGrowth
 	ResourceKindStorageAccess
 	ResourceKindStorageGrowth
-	ResourceKindRefund
 	NumResourceKind
 )
 
 // MultiGas tracks gas for each resource separately.
 type MultiGas struct {
-	gas [NumResourceKind]uint64
+	gas    [NumResourceKind]uint64
+	refund uint64
 }
 
 func ZeroGas() *MultiGas {
@@ -46,16 +46,20 @@ func StorageGrowthGas(amount uint64) *MultiGas {
 	return NewMultiGas(ResourceKindStorageGrowth, amount)
 }
 
-func RefundGas(amount uint64) *MultiGas {
-	return NewMultiGas(ResourceKindRefund, amount)
-}
-
 func (z *MultiGas) Get(kind ResourceKind) uint64 {
 	return z.gas[kind]
 }
 
 func (z *MultiGas) Set(kind ResourceKind, gas uint64) {
 	z.gas[kind] = gas
+}
+
+func (z *MultiGas) GetRefund() uint64 {
+	return z.refund
+}
+
+func (z *MultiGas) SetRefund(amount uint64) {
+	z.refund = amount
 }
 
 // SafeAdd sets z to the sum x+y and returns z and checks for overflow.
