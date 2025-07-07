@@ -1,5 +1,7 @@
 package multigas
 
+import "github.com/ethereum/go-ethereum/common/math"
+
 // ResourceKind represents a dimension for the multi-dimensional gas.
 type ResourceKind uint8
 
@@ -47,18 +49,28 @@ func (z *MultiGas) Get(kind ResourceKind) uint64 {
 	return z.gas[kind]
 }
 
-// Add sets z to the sum x+y and returns z.
-func (z *MultiGas) Add(x *MultiGas, y *MultiGas) *MultiGas {
-	for i := ResourceKindUnknown; i < NumResourceKind; i++ {
-		z.gas[i] = x.gas[i] + y.gas[i]
-	}
-	return z
+func (z *MultiGas) Set(kind ResourceKind, gas uint64) {
+	z.gas[kind] = gas
 }
 
-// Sub sets z to the difference x-y and returns z.
-func (z *MultiGas) Sub(x *MultiGas, y *MultiGas) *MultiGas {
+// SafeAdd sets z to the sum x+y and returns z and checks for overflow.
+func (z *MultiGas) SafeAdd(x *MultiGas, y *MultiGas) (*MultiGas, bool) {
 	for i := ResourceKindUnknown; i < NumResourceKind; i++ {
-		z.gas[i] = x.gas[i] - y.gas[i]
+		var overflow bool
+		z.gas[i], overflow = math.SafeAdd(x.gas[i], y.gas[i])
+		if overflow {
+			return z, overflow
+		}
 	}
-	return z
+	return z, false
+}
+
+// SafeIncrement increments the given resource kind by the amount of gas and checks for overflow.
+func (z *MultiGas) SafeIncrement(kind ResourceKind, gas uint64) bool {
+	result, overflow := math.SafeAdd(z.gas[kind], gas)
+	if overflow {
+		return overflow
+	}
+	z.gas[kind] = result
+	return false
 }
