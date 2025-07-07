@@ -32,9 +32,11 @@ import (
 )
 
 var (
-	txIndexerBlocksHistogram       = metrics.NewRegisteredHistogram("txindexer/indexed/transactions/count", nil, metrics.NewBoundedHistogramSample())
-	txIndexerTransactionsHistogram = metrics.NewRegisteredHistogram("txindexer/indexed/block/count", nil, metrics.NewBoundedHistogramSample())
-	txIndexerTail                  = metrics.NewRegisteredGauge("txindexer/tail", nil)
+	txIndexerIndexedBlocksHistogram         = metrics.NewRegisteredHistogram("txindexer/indexed/transactions/count", nil, metrics.NewBoundedHistogramSample())
+	txIndexerIndexedTransactionsHistogram   = metrics.NewRegisteredHistogram("txindexer/indexed/block/count", nil, metrics.NewBoundedHistogramSample())
+	txIndexerUnindexedBlocksHistogram       = metrics.NewRegisteredHistogram("txindexer/unindexed/transactions/count", nil, metrics.NewBoundedHistogramSample())
+	txIndexerUnindexedTransactionsHistogram = metrics.NewRegisteredHistogram("txindexer/unindexed/block/count", nil, metrics.NewBoundedHistogramSample())
+	txIndexerTail                           = metrics.NewRegisteredGauge("txindexer/tail", nil)
 )
 
 // InitDatabaseFromFreezer reinitializes an empty database from a previous batch
@@ -264,8 +266,8 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 	default:
 		logger("Indexed transactions", "blocks", blocks, "txs", txs, "tail", lastNum, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
-	txIndexerBlocksHistogram.Update(int64(blocks))
-	txIndexerTransactionsHistogram.Update(int64(txs))
+	txIndexerIndexedBlocksHistogram.Update(int64(blocks))
+	txIndexerIndexedTransactionsHistogram.Update(int64(txs))
 	txIndexerTail.Update(int64(lastNum))
 }
 
@@ -363,6 +365,9 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 	default:
 		logger("Unindexed transactions", "blocks", blocks, "txs", txs, "tail", to, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
+	txIndexerUnindexedBlocksHistogram.Update(int64(blocks))
+	txIndexerUnindexedTransactionsHistogram.Update(int64(txs))
+	txIndexerTail.Update(int64(nextNum))
 }
 
 // UnindexTransactions removes txlookup indices of the specified block range.
