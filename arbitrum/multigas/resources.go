@@ -54,10 +54,12 @@ func (z *MultiGas) Set(kind ResourceKind, gas uint64) {
 	z.gas[kind] = gas
 }
 
+// GetRefund gets the SSTORE refund computed at the end of the transaction.
 func (z *MultiGas) GetRefund() uint64 {
 	return z.refund
 }
 
+// SetRefund sets the SSTORE refund computed at the end of the transaction.
 func (z *MultiGas) SetRefund(amount uint64) {
 	z.refund = amount
 }
