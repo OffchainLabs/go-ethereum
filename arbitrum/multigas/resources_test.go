@@ -44,4 +44,20 @@ func TestMultiGas(t *testing.T) {
 	if !overflow {
 		t.Errorf("unexpected overflow: got %v, want %v", overflow, true)
 	}
+
+	// Test SingleGas
+	singleGas, overflow := gas.SingleGas()
+	if overflow {
+		t.Errorf("unexpected overflow: got %v, want %v", overflow, false)
+	}
+	if want := uint64(41); singleGas != want {
+		t.Errorf("unexpected storage growth gas: got %v, want %v", singleGas, want)
+	}
+
+	// Test SingleGas checks for overflow
+	gas.Set(ResourceKindComputation, math.MaxUint64)
+	_, overflow = gas.SingleGas()
+	if !overflow {
+		t.Errorf("unexpected overflow: got %v, want %v", overflow, true)
+	}
 }

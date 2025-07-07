@@ -85,3 +85,16 @@ func (z *MultiGas) SafeIncrement(kind ResourceKind, gas uint64) bool {
 	z.gas[kind] = result
 	return false
 }
+
+// SingleGas converts the multi-gas to single-dimensional gas checking for overflow.
+func (z *MultiGas) SingleGas() (uint64, bool) {
+	var sum uint64
+	for _, value := range z.gas {
+		var overflow bool
+		sum, overflow = math.SafeAdd(sum, value)
+		if overflow {
+			return 0, overflow
+		}
+	}
+	return sum, false
+}
