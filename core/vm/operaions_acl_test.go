@@ -53,8 +53,7 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.Hash{},
-			expectedMultiGas: multigas.StorageAccessGas(params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929),
-			// TODO(NIT-3484): refund: params.SstoreClearsScheduleRefundEIP2200
+			expectedMultiGas: multigas.StorageAccessGas(params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929).SetRefund(params.SstoreClearsScheduleRefundEIP2200),
 		},
 		{
 			name:             "update slot - warm access",
@@ -72,8 +71,7 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			currentValue:     common.Hash{}, // was deleted in current tx
 			newValue:         common.HexToHash("0x5678"),
 			refund:           true,
-			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929),
-			// TODO(NIT-3484): SubRefund called
+			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929).SetRefund(params.SstoreClearsScheduleRefundEIP2200),
 		},
 		{
 			name:             "dirty update - delete slot - warm access",
@@ -81,8 +79,7 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x5678"), // was changed in current tx
 			newValue:         common.Hash{},              // delete
-			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929),
-			// TODO(NIT-3484): refund: params.SstoreClearsScheduleRefundEIP2200
+			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929).SetRefund(params.SstoreClearsScheduleRefundEIP2200),
 		},
 		{
 			name:             "dirty update - change non-zero to different non-zero - warm access",
@@ -99,8 +96,7 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.Hash{},
 			currentValue:     common.HexToHash("0x1234"), // was created in current tx
 			newValue:         common.Hash{},              // back to original empty
-			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929),
-			// TODO(NIT-3484): refund: params.SstoreSetGasEIP2200 - params.WarmStorageReadCostEIP2929
+			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929).SetRefund(params.SstoreSetGasEIP2200 - params.WarmStorageReadCostEIP2929),
 		},
 		{
 			name:             "reset to original existing slot - warm access",
@@ -108,8 +104,7 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x5678"), // was changed in current tx
 			newValue:         common.HexToHash("0x1234"), // back to original value
-			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929),
-			// TODO(NIT-3484): refund: (params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929) - params.WarmStorageReadCostEIP2929
+			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929).SetRefund((params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929) - params.WarmStorageReadCostEIP2929),
 		},
 		{
 			name:             "dirty update - create from nothing - warm access",
@@ -144,8 +139,8 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			// Set up state and stack
 			if tc.originalValue != (common.Hash{}) {
 				statedb.SetState(contractAddr, slotKey, tc.originalValue)
+				statedb.Commit(0, false, false)
 			}
-			statedb.Commit(0, false, false)
 
 			statedb.SetState(contractAddr, slotKey, tc.currentValue)
 
@@ -156,17 +151,16 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 				statedb.AddRefund(params.SstoreClearsScheduleRefundEIP2200)
 			}
 
-			_, singleGas, err := gasSStoreFunc(evm, contract, stack, mem, 0)
+			multiGas, singleGas, err := gasSStoreFunc(evm, contract, stack, mem, 0)
 
 			if err != nil {
 				t.Fatalf("Unexpected error for test case %s: %v", tc.name, err)
 			}
 
-			// TODO(NIT-3484): actually implement multi-gas
-			// if multiGas != tc.expectedMultiGas {
-			// 	t.Errorf("Expected multi gas %d, got %d for test case: %s",
-			// 		tc.expectedMultiGas, singleGas, tc.name)
-			// }
+			if *multiGas != *tc.expectedMultiGas {
+				t.Errorf("Expected multi gas %d, got %d for test case: %s",
+					tc.expectedMultiGas, multiGas, tc.name)
+			}
 
 			expectedSingleGas, overflow := tc.expectedMultiGas.SingleGas()
 			if overflow {

@@ -66,6 +66,16 @@ func (z *MultiGas) SetRefund(amount uint64) *MultiGas {
 	return z
 }
 
+// SafeAddRefund adds the given amount to the refund and checks for overflow.
+func (z *MultiGas) SafeAddRefund(amount uint64) bool {
+	result, overflow := math.SafeAdd(z.refund, amount)
+	if overflow {
+		return overflow
+	}
+	z.refund = result
+	return false
+}
+
 // SafeAdd sets z to the sum x+y and returns z and checks for overflow.
 func (z *MultiGas) SafeAdd(x *MultiGas, y *MultiGas) (*MultiGas, bool) {
 	for i := ResourceKindUnknown; i < NumResourceKind; i++ {
