@@ -30,7 +30,13 @@ func gasSStore4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
-	return multigas.ZeroGas(), gas, nil
+	multiGas := multigas.StorageAccessGas(gas)
+
+	singleGas, overflow := multiGas.SingleGas()
+	if overflow {
+		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+	}
+	return multiGas, singleGas, nil
 }
 
 func gasSLoad4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {

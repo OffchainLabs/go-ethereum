@@ -174,3 +174,40 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 		})
 	}
 }
+
+func TestGasSStore4762(t *testing.T) {
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	evm := NewEVM(BlockContext{}, statedb, params.TestChainConfig, Config{})
+
+	caller := common.Address{}
+	contractAddr := common.Address{1}
+	contractGas := uint64(100000)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+
+	stack := newstack()
+	mem := NewMemory()
+
+	// Setup access list and stack
+	accessList := state.NewAccessEvents(evm.StateDB.PointCache())
+	accessList.AddAccount(caller, false)
+	evm.AccessEvents = accessList
+
+	slotKey := common.HexToHash("0xdeadbeef") // any dummy key
+	stack.push(new(uint256.Int).SetBytes(slotKey.Bytes()))
+
+	expectedSingleGas := params.WitnessBranchReadCost + params.WitnessChunkReadCost +
+		params.WitnessBranchWriteCost + params.WitnessChunkWriteCost
+	expectedMultiGas := multigas.StorageAccessGas(expectedSingleGas)
+
+	multiGas, singleGas, err := gasSStore4762(evm, contract, stack, mem, 0)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if *multiGas != *expectedMultiGas {
+		t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+	}
+	if singleGas != expectedSingleGas {
+		t.Errorf("Expected single gas %d, got %d", expectedSingleGas, singleGas)
+	}
+}
