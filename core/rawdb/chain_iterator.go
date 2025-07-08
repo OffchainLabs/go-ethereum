@@ -32,11 +32,9 @@ import (
 )
 
 var (
-	txIndexerIndexedBlocksHistogram         = metrics.NewRegisteredHistogram("txindexer/indexed/block/count", nil, metrics.NewBoundedHistogramSample())
-	txIndexerIndexedTransactionsHistogram   = metrics.NewRegisteredHistogram("txindexer/indexed/transaction/count", nil, metrics.NewBoundedHistogramSample())
-	txIndexerUnindexedBlocksHistogram       = metrics.NewRegisteredHistogram("txindexer/unindexed/block/count", nil, metrics.NewBoundedHistogramSample())
-	txIndexerUnindexedTransactionsHistogram = metrics.NewRegisteredHistogram("txindexer/unindexed/transaction/count", nil, metrics.NewBoundedHistogramSample())
 	txIndexerTail                           = metrics.NewRegisteredGauge("txindexer/tail", nil)
+	txIndexerUnindexedBlocksHistogram       = metrics.NewRegisteredHistogram("txindexer/unindexed/blocks/count", nil, metrics.NewBoundedHistogramSample())
+	txIndexerUnindexedTransactionsHistogram = metrics.NewRegisteredHistogram("txindexer/unindexed/transactions/count", nil, metrics.NewBoundedHistogramSample())
 )
 
 // InitDatabaseFromFreezer reinitializes an empty database from a previous batch
@@ -239,6 +237,7 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 					log.Crit("Failed writing batch to db", "error", err)
 					return
 				}
+				txIndexerTail.Update(int64(lastNum))
 				batch.Reset()
 			}
 			// If we've spent too much time already, notify the user of what we're doing
@@ -256,6 +255,7 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 		log.Crit("Failed writing batch to db", "error", err)
 		return
 	}
+	txIndexerTail.Update(int64(lastNum))
 	logger := log.Debug
 	if report {
 		logger = log.Info
@@ -266,9 +266,6 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 	default:
 		logger("Indexed transactions", "blocks", blocks, "txs", txs, "tail", lastNum, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
-	txIndexerIndexedBlocksHistogram.Update(int64(blocks))
-	txIndexerIndexedTransactionsHistogram.Update(int64(txs))
-	txIndexerTail.Update(int64(lastNum))
 }
 
 // IndexTransactions creates txlookup indices of the specified block range. The from
@@ -338,6 +335,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 					log.Crit("Failed writing batch to db", "error", err)
 					return
 				}
+				txIndexerTail.Update(int64(nextNum))
 				batch.Reset()
 			}
 			// If we've spent too much time already, notify the user of what we're doing
@@ -355,6 +353,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 		log.Crit("Failed writing batch to db", "error", err)
 		return
 	}
+	txIndexerTail.Update(int64(nextNum))
 	logger := log.Debug
 	if report {
 		logger = log.Info
@@ -367,7 +366,6 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 	}
 	txIndexerUnindexedBlocksHistogram.Update(int64(blocks))
 	txIndexerUnindexedTransactionsHistogram.Update(int64(txs))
-	txIndexerTail.Update(int64(nextNum))
 }
 
 // UnindexTransactions removes txlookup indices of the specified block range.
