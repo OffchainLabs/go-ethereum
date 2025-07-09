@@ -277,8 +277,8 @@ func testFilters(t *testing.T, history uint64, noHistory bool) {
 			gen.AddTx(tx)
 		}
 	})
-	var l uint64
-	bc, err := core.NewBlockChain(db, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, &l)
+	txIndexerConfig := core.TxIndexerConfig{Limit: 0, Threads: 0, MinBatchDelay: 0}
+	bc, err := core.NewBlockChain(db, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, &txIndexerConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,8 +434,8 @@ func TestRangeLogs(t *testing.T) {
 		t.Fatal(err)
 	}
 	chain, _ := core.GenerateChain(gspec.Config, gspec.ToBlock(), ethash.NewFaker(), db, 1000, func(i int, gen *core.BlockGen) {})
-	var l uint64
-	bc, err := core.NewBlockChain(db, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, &l)
+	txIndexerConfig := core.TxIndexerConfig{Limit: 0, Threads: 0, MinBatchDelay: 0}
+	bc, err := core.NewBlockChain(db, nil, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, &txIndexerConfig)
 	if err != nil {
 		t.Fatal(err)
 	}

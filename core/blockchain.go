@@ -175,10 +175,6 @@ type CacheConfig struct {
 	MaxNumberOfBlocksToSkipStateSaving uint32
 	MaxAmountOfGasToSkipStateSaving    uint64
 
-	// Arbitrum: configure tx indexer
-	TxIndexerThreads       int           // number of threads used when iterating over tx hashes for a block range
-	TxIndexerMinBatchDelay time.Duration // minimal time to delay indexing waiting for more new blocks to batch
-
 	SnapshotNoBuild bool // Whether the background generation is allowed
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 
@@ -228,8 +224,6 @@ var defaultCacheConfig = &CacheConfig{
 	TrieTimeLimitRandomOffset:          0,
 	MaxNumberOfBlocksToSkipStateSaving: 0,
 	MaxAmountOfGasToSkipStateSaving:    0,
-	TxIndexerThreads:                   runtime.NumCPU(),
-	TxIndexerMinBatchDelay:             0,
 
 	TrieCleanLimit: 256,
 	TrieDirtyLimit: 256,
@@ -337,7 +331,7 @@ type trieGcEntry struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, txLookupLimit *uint64) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, txIndexerConfig *TxIndexerConfig) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -561,8 +555,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
 	}
 	// Start tx indexer if it's enabled.
-	if txLookupLimit != nil {
-		bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
+	if txIndexerConfig != nil {
+		bc.txIndexer = newTxIndexer(txIndexerConfig, bc)
 	}
 	return bc, nil
 }

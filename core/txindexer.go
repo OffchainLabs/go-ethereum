@@ -27,6 +27,12 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+type TxIndexerConfig struct {
+	Limit         uint64        // tx lookup limit
+	Threads       int           // number of threads used when reading blocks (0 = use geth default)
+	MinBatchDelay time.Duration // minimum time to delay indexing while waiting for more new blocks to batch
+}
+
 // TxIndexProgress is the struct describing the progress for transaction indexing.
 type TxIndexProgress struct {
 	Indexed   uint64 // number of blocks whose transactions are indexed
@@ -42,7 +48,7 @@ func (progress TxIndexProgress) Done() bool {
 // according to the configured indexing range by users.
 type txIndexer struct {
 	// arbitrum:
-	// maximum threads number used by iteration over transaction hashes for specific block range
+	// maximum threads number used when reading blocks
 	threads int
 	// minimum time that indexing is delayed waiting for new blocks to batch
 	minBatchDelay time.Duration
@@ -74,12 +80,12 @@ type txIndexer struct {
 }
 
 // newTxIndexer initializes the transaction indexer.
-func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
+func newTxIndexer(config *TxIndexerConfig, chain *BlockChain) *txIndexer {
 	cutoff, _ := chain.HistoryPruningCutoff()
 	indexer := &txIndexer{
-		threads:       chain.cacheConfig.TxIndexerThreads,
-		minBatchDelay: chain.cacheConfig.TxIndexerMinBatchDelay,
-		limit:         limit,
+		threads:       config.Threads,
+		minBatchDelay: config.MinBatchDelay,
+		limit:         config.Limit,
 		cutoff:        cutoff,
 		db:            chain.db,
 		term:          make(chan chan struct{}),
@@ -91,14 +97,14 @@ func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
 	go indexer.loop(chain)
 
 	var msg string
-	if limit == 0 {
+	if indexer.limit == 0 {
 		if indexer.cutoff == 0 {
 			msg = "entire chain"
 		} else {
 			msg = fmt.Sprintf("blocks since #%d", indexer.cutoff)
 		}
 	} else {
-		msg = fmt.Sprintf("last %d blocks", limit)
+		msg = fmt.Sprintf("last %d blocks", indexer.limit)
 	}
 	log.Info("Initialized transaction indexer", "range", msg)
 
