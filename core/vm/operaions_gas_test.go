@@ -14,13 +14,14 @@ import (
 )
 
 type GasSStoreFuncTestCase struct {
-	name             string
-	slotInAccessList bool
-	originalValue    common.Hash // committed state value
-	currentValue     common.Hash // current state value (may differ from original)
-	newValue         common.Hash // value to set
-	refund           bool        // for recreate slot test, we need to simulate that a refund was added when it was deleted
-	expectedMultiGas *multigas.MultiGas
+	name             string             // descriptive name for the test case
+	slotInAccessList bool               // whether the slot is in the access list
+	originalValue    common.Hash        // committed state value
+	currentValue     common.Hash        // current state value (may differ from original)
+	newValue         common.Hash        // value to set
+	refundValue      uint64             // initial refund value to add (if any)
+	expectedMultiGas *multigas.MultiGas // expected multi gas after the operation
+	expectedRefund   uint64             // expected refund after the operation, if any
 }
 
 func testGasSStoreFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasSStoreFunc gasFunc, testCases []GasSStoreFuncTestCase) {
@@ -29,12 +30,12 @@ func testGasSStoreFuncFuncWithCases(t *testing.T, config *params.ChainConfig, ga
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+			stateDb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 			blockCtx := BlockContext{
 				BlockNumber: big.NewInt(0), // ensures block 0 is passed into Rules()
 			}
 
-			evm := NewEVM(blockCtx, statedb, config, Config{})
+			evm := NewEVM(blockCtx, stateDb, config, Config{})
 
 			caller := common.Address{}
 			contractAddr := common.Address{1}
@@ -44,22 +45,22 @@ func testGasSStoreFuncFuncWithCases(t *testing.T, config *params.ChainConfig, ga
 			mem := NewMemory()
 
 			if tc.slotInAccessList {
-				statedb.AddSlotToAccessList(contractAddr, slotKey)
+				stateDb.AddSlotToAccessList(contractAddr, slotKey)
 			}
 
 			// Set up state and stack
 			if tc.originalValue != (common.Hash{}) {
-				statedb.SetState(contractAddr, slotKey, tc.originalValue)
-				statedb.Commit(0, false, false)
+				stateDb.SetState(contractAddr, slotKey, tc.originalValue)
+				stateDb.Commit(0, false, false)
 			}
 
-			statedb.SetState(contractAddr, slotKey, tc.currentValue)
+			stateDb.SetState(contractAddr, slotKey, tc.currentValue)
 
 			stack.push(new(uint256.Int).SetBytes(tc.newValue.Bytes())) // y (value)
 			stack.push(new(uint256.Int).SetBytes(slotKey.Bytes()))     // x (slot)
 
-			if tc.refund {
-				statedb.AddRefund(params.SstoreClearsScheduleRefundEIP2200)
+			if tc.refundValue > 0 {
+				stateDb.AddRefund(tc.refundValue)
 			}
 
 			multiGas, singleGas, err := gasSStoreFunc(evm, contract, stack, mem, 0)
@@ -81,6 +82,11 @@ func testGasSStoreFuncFuncWithCases(t *testing.T, config *params.ChainConfig, ga
 			if singleGas != expectedSingleGas {
 				t.Errorf("Expected signle gas %d, got %d for test case: %s",
 					expectedSingleGas, singleGas, tc.name)
+			}
+
+			if stateDb.GetRefund() != tc.expectedRefund {
+				t.Errorf("Expected refund %d, got %d for test case: %s",
+					tc.expectedRefund, stateDb.GetRefund(), tc.name)
 			}
 		})
 	}
@@ -120,7 +126,8 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.Hash{},
-			expectedMultiGas: multigas.StorageAccessGas(params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929).SetRefund(params.SstoreClearsScheduleRefundEIP2200),
+			expectedMultiGas: multigas.StorageAccessGas(params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929),
+			expectedRefund:   params.SstoreClearsScheduleRefundEIP2200,
 		},
 		{
 			name:             "update slot - warm access",
@@ -137,8 +144,8 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.Hash{}, // was deleted in current tx
 			newValue:         common.HexToHash("0x5678"),
-			refund:           true,
-			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929).SetRefund(params.SstoreClearsScheduleRefundEIP2200),
+			refundValue:      params.SstoreClearsScheduleRefundEIP2200,
+			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929),
 		},
 		{
 			name:             "dirty update - delete slot - warm access",
@@ -146,7 +153,8 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x5678"), // was changed in current tx
 			newValue:         common.Hash{},              // delete
-			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929).SetRefund(params.SstoreClearsScheduleRefundEIP2200),
+			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929),
+			expectedRefund:   params.SstoreClearsScheduleRefundEIP2200,
 		},
 		{
 			name:             "dirty update - change non-zero to different non-zero - warm access",
@@ -163,7 +171,8 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.Hash{},
 			currentValue:     common.HexToHash("0x1234"), // was created in current tx
 			newValue:         common.Hash{},              // back to original empty
-			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929).SetRefund(params.SstoreSetGasEIP2200 - params.WarmStorageReadCostEIP2929),
+			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929),
+			expectedRefund:   params.SstoreSetGasEIP2200 - params.WarmStorageReadCostEIP2929,
 		},
 		{
 			name:             "reset to original existing slot - warm access",
@@ -171,7 +180,8 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x5678"), // was changed in current tx
 			newValue:         common.HexToHash("0x1234"), // back to original value
-			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929).SetRefund((params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929) - params.WarmStorageReadCostEIP2929),
+			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929),
+			expectedRefund:   (params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929) - params.WarmStorageReadCostEIP2929,
 		},
 		{
 			name:             "dirty update - create from nothing - warm access",
@@ -201,7 +211,8 @@ func TestGasSStoreFuncLegacy(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.Hash{},
-			expectedMultiGas: multigas.StorageAccessGas(params.SstoreClearGas).SetRefund(params.SstoreRefundGas),
+			expectedMultiGas: multigas.StorageAccessGas(params.SstoreClearGas),
+			expectedRefund:   params.SstoreRefundGas,
 		},
 		{
 			name:             "legacy: modify slot non-zero => non-zero",
@@ -217,6 +228,90 @@ func TestGasSStoreFuncLegacy(t *testing.T) {
 	config.ConstantinopleBlock = big.NewInt(0) // optional, but realistic
 
 	testGasSStoreFuncFuncWithCases(t, &config, gasSStore, testCases)
+}
+
+func TestGasSStoreFuncEip2200(t *testing.T) {
+	testCases := []GasSStoreFuncTestCase{
+		// (1) NOOP
+		{
+			name:             "noop (1)",
+			originalValue:    common.HexToHash("0x1234"),
+			currentValue:     common.HexToHash("0x1234"),
+			newValue:         common.HexToHash("0x1234"),
+			expectedMultiGas: multigas.StorageAccessGas(params.SloadGasEIP2200),
+		},
+		// (2.1.1) Create slot from 0
+		{
+			name:             "create slot (2.1.1)",
+			originalValue:    common.Hash{},
+			currentValue:     common.Hash{},
+			newValue:         common.HexToHash("0x1234"),
+			expectedMultiGas: multigas.StorageGrowthGas(params.SstoreSetGasEIP2200),
+		},
+		// (2.1.2b) Delete existing slot (refund)
+		{
+			name:             "delete slot (2.1.2b)",
+			originalValue:    common.HexToHash("0x1234"),
+			currentValue:     common.HexToHash("0x1234"),
+			newValue:         common.Hash{},
+			expectedMultiGas: multigas.StorageAccessGas(params.SstoreResetGasEIP2200),
+			expectedRefund:   params.SstoreClearsScheduleRefundEIP2200,
+		},
+		// (2.1.2) Write existing value (no refund)
+		{
+			name:             "write existing slot (2.1.2)",
+			originalValue:    common.HexToHash("0x1234"),
+			currentValue:     common.HexToHash("0x1234"),
+			newValue:         common.HexToHash("0x5678"),
+			expectedMultiGas: multigas.StorageAccessGas(params.SstoreResetGasEIP2200),
+		},
+		// (2.2.1.2) Delete dirty slot
+		{
+			name:             "delete slot (2.2.1.2)",
+			originalValue:    common.HexToHash("0x1234"),
+			currentValue:     common.HexToHash("0x5678"),
+			newValue:         common.Hash{},
+			expectedMultiGas: multigas.StorageAccessGas(params.SloadGasEIP2200),
+			expectedRefund:   params.SstoreClearsScheduleRefundEIP2200,
+		},
+		// (2.2.1.1) Recreate dirty slot
+		{
+			name:             "recreate slot (2.2.1.1)",
+			originalValue:    common.HexToHash("0x1234"),
+			currentValue:     common.Hash{},
+			newValue:         common.HexToHash("0x5678"),
+			refundValue:      params.SstoreClearsScheduleRefundEIP2200,
+			expectedMultiGas: multigas.StorageAccessGas(params.SloadGasEIP2200),
+		},
+		// (2.2.2.1) Reset to original empty slot
+		{
+			name:             "reset to original inexistent slot (2.2.2.1)",
+			originalValue:    common.Hash{},
+			currentValue:     common.HexToHash("0x1234"),
+			newValue:         common.Hash{},
+			expectedMultiGas: multigas.StorageAccessGas(params.SloadGasEIP2200),
+			expectedRefund:   params.SstoreSetGasEIP2200 - params.SloadGasEIP2200,
+		},
+		// (2.2.2.2) Reset to original value
+		{
+			name:             "reset to original existing slot (2.2.2.2)",
+			originalValue:    common.HexToHash("0x1234"),
+			currentValue:     common.HexToHash("0x5678"),
+			newValue:         common.HexToHash("0x1234"),
+			expectedMultiGas: multigas.StorageAccessGas(params.SloadGasEIP2200),
+			expectedRefund:   params.SstoreResetGasEIP2200 - params.SloadGasEIP2200,
+		},
+		// (2.2) Generic dirty update
+		{
+			name:             "dirty update (2.2)",
+			originalValue:    common.HexToHash("0x1234"),
+			currentValue:     common.HexToHash("0x5678"),
+			newValue:         common.HexToHash("0x9abc"),
+			expectedMultiGas: multigas.StorageAccessGas(params.SloadGasEIP2200),
+		},
+	}
+
+	testGasSStoreFuncFuncWithCases(t, params.TestChainConfig, gasSStoreEIP2200, testCases)
 }
 
 func TestGasSStoreFuncEip1283(t *testing.T) {
@@ -243,7 +338,8 @@ func TestGasSStoreFuncEip1283(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.Hash{},
-			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreCleanGas).SetRefund(params.NetSstoreClearRefund),
+			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreCleanGas),
+			expectedRefund:   params.NetSstoreClearRefund,
 		},
 		{
 			name:             "write existing slot (2.1.2)",
@@ -253,20 +349,21 @@ func TestGasSStoreFuncEip1283(t *testing.T) {
 			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreCleanGas),
 		},
 		// Dirty update cases (original != current)
-		// { // FIXME(NIT-3484): this test case causing negative refund, see https://github.com/OffchainLabs/go-ethereum/pull/484#discussion_r2194774493
-		// 	name:             "recreate slot (2.2.1.1)",
-		// 	originalValue:    common.HexToHash("0x1234"),
-		// 	currentValue:     common.Hash{}, // was deleted in current tx
-		// 	newValue:         common.HexToHash("0x5678"),
-		// 	refund:           true, // simulate refund from deletion
-		// 	expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreDirtyGas).SetRefund(-params.NetSstoreClearRefund),
-		// },
+		{
+			name:             "recreate slot (2.2.1.1)",
+			originalValue:    common.HexToHash("0x1234"),
+			currentValue:     common.Hash{}, // was deleted in current tx
+			newValue:         common.HexToHash("0x5678"),
+			refundValue:      params.SstoreClearsScheduleRefundEIP2200, // simulate refund from deletion
+			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreDirtyGas),
+		},
 		{
 			name:             "delete slot (2.2.1.2)",
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x5678"), // was changed in current tx
 			newValue:         common.Hash{},              // delete
-			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreDirtyGas).SetRefund(params.NetSstoreClearRefund),
+			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreDirtyGas),
+			expectedRefund:   params.NetSstoreClearRefund,
 		},
 		{
 			name:             "dirty update (2.2)",
@@ -281,14 +378,16 @@ func TestGasSStoreFuncEip1283(t *testing.T) {
 			originalValue:    common.Hash{},
 			currentValue:     common.HexToHash("0x1234"), // was created in current tx
 			newValue:         common.Hash{},              // back to original empty
-			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreDirtyGas).SetRefund(params.NetSstoreResetClearRefund),
+			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreDirtyGas),
+			expectedRefund:   params.NetSstoreResetClearRefund,
 		},
 		{
 			name:             "reset to original existing slot (2.2.2.2)",
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x5678"), // was changed in current tx
 			newValue:         common.HexToHash("0x1234"), // back to original value
-			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreDirtyGas).SetRefund(params.NetSstoreResetRefund),
+			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreDirtyGas),
+			expectedRefund:   params.NetSstoreResetRefund,
 		},
 		{
 			name:             "dirty update - create from nothing (2.2)",

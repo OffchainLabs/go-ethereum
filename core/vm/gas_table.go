@@ -232,17 +232,33 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	value := common.Hash(y.Bytes32())
 
 	if current == value { // noop (1)
-		return multigas.ZeroGas(), params.SloadGasEIP2200, nil
+		multiGas := multigas.StorageAccessGas(params.SloadGasEIP2200)
+		singleGas, overflow := multiGas.SingleGas()
+		if overflow {
+			return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		}
+		return multiGas, singleGas, nil
 	}
 	original := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
-			return multigas.ZeroGas(), params.SstoreSetGasEIP2200, nil
+			multiGas := multigas.StorageGrowthGas(params.SstoreSetGasEIP2200)
+			singleGas, overflow := multiGas.SingleGas()
+			if overflow {
+				return multigas.ZeroGas(), 0, ErrGasUintOverflow
+			}
+			return multiGas, singleGas, nil
 		}
 		if value == (common.Hash{}) { // delete slot (2.1.2b)
 			evm.StateDB.AddRefund(params.SstoreClearsScheduleRefundEIP2200)
 		}
-		return multigas.ZeroGas(), params.SstoreResetGasEIP2200, nil // write existing slot (2.1.2)
+
+		multiGas := multigas.StorageAccessGas(params.SstoreResetGasEIP2200)
+		singleGas, overflow := multiGas.SingleGas()
+		if overflow {
+			return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		}
+		return multiGas, singleGas, nil
 	}
 	if original != (common.Hash{}) {
 		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
@@ -258,7 +274,12 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 			evm.StateDB.AddRefund(params.SstoreResetGasEIP2200 - params.SloadGasEIP2200)
 		}
 	}
-	return multigas.ZeroGas(), params.SloadGasEIP2200, nil // dirty update (2.2)
+	multiGas := multigas.StorageAccessGas(params.SloadGasEIP2200)
+	singleGas, overflow := multiGas.SingleGas()
+	if overflow {
+		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+	}
+	return multiGas, singleGas, nil // dirty update (2.2)
 }
 
 func makeGasLog(n uint64) gasFunc {
