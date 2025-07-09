@@ -6,6 +6,18 @@ import (
 )
 
 func TestMultiGas(t *testing.T) {
+	// Test SafeAddRefund checks for overflow
+	overflow := new(MultiGas).SetRefund(math.MaxUint64).SafeAddRefund(1)
+	if !overflow {
+		t.Errorf("unexpected overflow: got %v, want %v", overflow, true)
+	}
+
+	// Test SafeSubRefund checks for underflow
+	overflow = new(MultiGas).SetRefund(0).SafeSubRefund(1)
+	if !overflow {
+		t.Errorf("unexpected underflow: got %v, want %v", overflow, true)
+	}
+
 	// Test SafeAdd
 	gas, overflow := new(MultiGas).SafeAdd(ComputationGas(10), HistoryGrowthGas(20))
 	if overflow {

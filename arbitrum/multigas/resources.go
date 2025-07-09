@@ -76,6 +76,16 @@ func (z *MultiGas) SafeAddRefund(amount uint64) bool {
 	return false
 }
 
+// SafeSubRefund subtracts the given amount from the refund and checks for underflow.
+func (z *MultiGas) SafeSubRefund(amount uint64) bool {
+	result, overflow := math.SafeSub(z.refund, amount)
+	if overflow {
+		return true // underflow
+	}
+	z.refund = result
+	return false
+}
+
 // SafeAdd sets z to the sum x+y and returns z and checks for overflow.
 func (z *MultiGas) SafeAdd(x *MultiGas, y *MultiGas) (*MultiGas, bool) {
 	for i := ResourceKindUnknown; i < NumResourceKind; i++ {
