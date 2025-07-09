@@ -44,9 +44,7 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 		)
 		// Check slot presence in the access list
 		if _, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
-			if multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.ColdSloadCostEIP2929) {
-				return multigas.ZeroGas(), 0, ErrGasUintOverflow
-			}
+			multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.ColdSloadCostEIP2929)
 			// If the caller cannot afford the cost, this change will be rolled back
 			evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
 		}
@@ -55,9 +53,7 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 		if current == value { // noop (1)
 			// EIP 2200 original clause:
 			//		return params.SloadGasEIP2200, nil
-			if multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929) {
-				return multigas.ZeroGas(), 0, ErrGasUintOverflow
-			}
+			multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929)
 			singleGas, overflow := multiGas.SingleGas()
 			if overflow {
 				return multigas.ZeroGas(), 0, ErrGasUintOverflow
@@ -67,9 +63,7 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 		original := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
 		if original == current {
 			if original == (common.Hash{}) { // create slot (2.1.1)
-				if multiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.SstoreSetGasEIP2200) {
-					return multigas.ZeroGas(), 0, ErrGasUintOverflow
-				}
+				multiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.SstoreSetGasEIP2200)
 				singleGas, overflow := multiGas.SingleGas()
 				if overflow {
 					return multigas.ZeroGas(), 0, ErrGasUintOverflow
@@ -78,9 +72,6 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 			}
 			if value == (common.Hash{}) { // delete slot (2.1.2b)
 				evm.StateDB.AddRefund(clearingRefund)
-				if overflow := multiGas.SafeAddRefund(clearingRefund); overflow {
-					return multigas.ZeroGas(), 0, ErrGasUintOverflow
-				}
 			}
 			// EIP-2200 original clause:
 			//		return params.SstoreResetGasEIP2200, nil // write existing slot (2.1.2)
@@ -96,36 +87,22 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 		if original != (common.Hash{}) {
 			if current == (common.Hash{}) { // recreate slot (2.2.1.1)
 				evm.StateDB.SubRefund(clearingRefund)
-				if overflow := multiGas.SafeAddRefund(clearingRefund); overflow {
-					return multigas.ZeroGas(), 0, ErrGasUintOverflow
-				}
 			} else if value == (common.Hash{}) { // delete slot (2.2.1.2)
 				evm.StateDB.AddRefund(clearingRefund)
-				if overflow := multiGas.SafeAddRefund(clearingRefund); overflow {
-					return multigas.ZeroGas(), 0, ErrGasUintOverflow
-				}
 			}
 		}
 		if original == value {
 			if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
 				// EIP 2200 Original clause:
 				//evm.StateDB.AddRefund(params.SstoreSetGasEIP2200 - params.SloadGasEIP2200)
-				resetRefund := params.SstoreSetGasEIP2200 - params.WarmStorageReadCostEIP2929
-				evm.StateDB.AddRefund(resetRefund)
-				if overflow := multiGas.SafeAddRefund(resetRefund); overflow {
-					return multigas.ZeroGas(), 0, ErrGasUintOverflow
-				}
+				evm.StateDB.AddRefund(params.SstoreSetGasEIP2200 - params.WarmStorageReadCostEIP2929)
 			} else { // reset to original existing slot (2.2.2.2)
 				// EIP 2200 Original clause:
 				//	evm.StateDB.AddRefund(params.SstoreResetGasEIP2200 - params.SloadGasEIP2200)
 				// - SSTORE_RESET_GAS redefined as (5000 - COLD_SLOAD_COST)
 				// - SLOAD_GAS redefined as WARM_STORAGE_READ_COST
 				// Final: (5000 - COLD_SLOAD_COST) - WARM_STORAGE_READ_COST
-				resetRefund := (params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929) - params.WarmStorageReadCostEIP2929
-				evm.StateDB.AddRefund(resetRefund)
-				if overflow := multiGas.SafeAddRefund(resetRefund); overflow {
-					return multigas.ZeroGas(), 0, ErrGasUintOverflow
-				}
+				evm.StateDB.AddRefund((params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929) - params.WarmStorageReadCostEIP2929)
 			}
 		}
 		// EIP-2200 original clause:

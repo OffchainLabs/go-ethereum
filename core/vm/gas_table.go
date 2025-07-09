@@ -121,9 +121,8 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 			}
 			return multiGas, singleGas, nil
 		case current != (common.Hash{}) && y.Sign() == 0: // non 0 => 0
-			refund := params.SstoreRefundGas
-			evm.StateDB.AddRefund(refund)
-			multiGas := multigas.StorageAccessGas(params.SstoreClearGas).SetRefund(refund)
+			evm.StateDB.AddRefund(params.SstoreRefundGas)
+			multiGas := multigas.StorageAccessGas(params.SstoreClearGas)
 			singleGas, overflow := multiGas.SingleGas()
 			if overflow {
 				return multigas.ZeroGas(), 0, ErrGasUintOverflow
@@ -173,49 +172,31 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 			return multiGas, singleGas, nil
 		}
 
-		multiGas := multigas.StorageAccessGas(params.NetSstoreCleanGas)
 		if value == (common.Hash{}) { // delete slot (2.1.2b)
-			clearRefund := params.NetSstoreClearRefund
-			evm.StateDB.AddRefund(clearRefund)
-			multiGas.SetRefund(clearRefund)
+			evm.StateDB.AddRefund(params.NetSstoreClearRefund)
 		}
+		multiGas := multigas.StorageAccessGas(params.NetSstoreCleanGas)
 		singleGas, overflow := multiGas.SingleGas()
 		if overflow {
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}
 		return multiGas, singleGas, nil // write existing slot (2.1.2)
 	}
-	multiGas := multigas.StorageAccessGas(params.NetSstoreDirtyGas)
 	if original != (common.Hash{}) {
 		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
-			clearRefund := params.NetSstoreClearRefund
-			evm.StateDB.SubRefund(clearRefund) // FIXME(NIT-3484): causing negative refund, see https://github.com/OffchainLabs/go-ethereum/pull/484#discussion_r2194774493
-			if overflow := multiGas.SafeSubRefund(clearRefund); overflow {
-				return multigas.ZeroGas(), 0, ErrGasUintOverflow
-			}
+			evm.StateDB.SubRefund(params.NetSstoreClearRefund)
 		} else if value == (common.Hash{}) { // delete slot (2.2.1.2)
-			clearRefund := params.NetSstoreClearRefund
-			evm.StateDB.AddRefund(clearRefund)
-			if overflow := multiGas.SafeAddRefund(clearRefund); overflow {
-				return multigas.ZeroGas(), 0, ErrGasUintOverflow
-			}
+			evm.StateDB.AddRefund(params.NetSstoreClearRefund)
 		}
 	}
 	if original == value {
 		if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
-			resetClearRefund := params.NetSstoreResetClearRefund
-			evm.StateDB.AddRefund(resetClearRefund)
-			if overflow := multiGas.SafeAddRefund(resetClearRefund); overflow {
-				return multigas.ZeroGas(), 0, ErrGasUintOverflow
-			}
+			evm.StateDB.AddRefund(params.NetSstoreResetClearRefund)
 		} else { // reset to original existing slot (2.2.2.2)
-			resetRefund := params.NetSstoreResetRefund
-			evm.StateDB.AddRefund(resetRefund)
-			if overflow := multiGas.SafeAddRefund(resetRefund); overflow {
-				return multigas.ZeroGas(), 0, ErrGasUintOverflow
-			}
+			evm.StateDB.AddRefund(params.NetSstoreResetRefund)
 		}
 	}
+	multiGas := multigas.StorageAccessGas(params.NetSstoreDirtyGas)
 	singleGas, overflow := multiGas.SingleGas()
 	if overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
