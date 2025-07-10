@@ -1,6 +1,7 @@
 package native
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"slices"
@@ -16,6 +17,8 @@ import (
 
 // BaseGasDimensionTracer contains the shared functionality between different gas dimension tracers
 type BaseGasDimensionTracer struct {
+	// whether the tracer itself is being debugged
+	debug bool
 	// hold on to the context
 	env *tracing.VMContext
 	// the hash of the transactionh
@@ -49,7 +52,7 @@ type BaseGasDimensionTracer struct {
 	refundAccumulated uint64
 	// in order to calculate the refund adjusted, we need to know the total execution gas
 	// of just the opcodes of the transaction with no refunds
-	executionGasAccumulated uint64
+	rootExecutionGasAccumulated uint64
 	// the amount of refund allowed at the end of the transaction, adjusted by EIP-3529
 	refundAdjusted uint64
 	// whether the transaction should be rejected for not following the rules of the VM
@@ -67,32 +70,47 @@ type BaseGasDimensionTracer struct {
 	opCount uint64
 }
 
-func NewBaseGasDimensionTracer(chainConfig *params.ChainConfig) BaseGasDimensionTracer {
-	return BaseGasDimensionTracer{
-		chainConfig:                chainConfig,
-		depth:                      1,
-		refundAccumulated:          0,
-		prevAccessListAddresses:    map[common.Address]int{},
-		prevAccessListSlots:        []map[common.Hash]struct{}{},
-		env:                        nil,
-		txHash:                     common.Hash{},
-		gasUsed:                    0,
-		gasUsedForL1:               0,
-		gasUsedForL2:               0,
-		intrinsicGas:               0,
-		callStack:                  CallGasDimensionStack{},
-		rootIsPrecompile:           false,
-		rootIsPrecompileAdjustment: 0,
-		rootIsStylus:               false,
-		rootIsStylusAdjustment:     0,
-		executionGasAccumulated:    0,
-		refundAdjusted:             0,
-		err:                        nil,
-		status:                     0,
-		interrupt:                  atomic.Bool{},
-		reason:                     nil,
-		opCount:                    0,
+// BaseGasDimensionTracerConfig is the configuration for the base gas dimension tracer
+type BaseGasDimensionTracerConfig struct {
+	Debug bool
+}
+
+// create a new base gas dimension tracer
+func NewBaseGasDimensionTracer(cfg json.RawMessage, chainConfig *params.ChainConfig) (*BaseGasDimensionTracer, error) {
+	debug := false
+	if cfg != nil {
+		var config BaseGasDimensionTracerConfig
+		if err := json.Unmarshal(cfg, &config); err != nil {
+			return nil, err
+		}
+		debug = config.Debug
 	}
+	return &BaseGasDimensionTracer{
+		debug:                       debug,
+		chainConfig:                 chainConfig,
+		depth:                       1,
+		refundAccumulated:           0,
+		prevAccessListAddresses:     map[common.Address]int{},
+		prevAccessListSlots:         []map[common.Hash]struct{}{},
+		env:                         nil,
+		txHash:                      common.Hash{},
+		gasUsed:                     0,
+		gasUsedForL1:                0,
+		gasUsedForL2:                0,
+		intrinsicGas:                0,
+		callStack:                   CallGasDimensionStack{},
+		rootIsPrecompile:            false,
+		rootIsPrecompileAdjustment:  0,
+		rootIsStylus:                false,
+		rootIsStylusAdjustment:      0,
+		rootExecutionGasAccumulated: 0,
+		refundAdjusted:              0,
+		err:                         nil,
+		status:                      0,
+		interrupt:                   atomic.Bool{},
+		reason:                      nil,
+		opCount:                     0,
+	}, nil
 }
 
 // OnOpcode handles the shared opcode execution logic
@@ -213,7 +231,7 @@ func (t *BaseGasDimensionTracer) callFinishFunction(
 	gas uint64,
 ) (
 	interrupted bool,
-	gasUsedByCall uint64,
+	totalGasUsedByCall uint64,
 	stackInfo CallGasDimensionStackInfo,
 	finishGasesByDimension GasesByDimension,
 ) {
@@ -237,16 +255,16 @@ func (t *BaseGasDimensionTracer) callFinishFunction(
 	// IMPORTANT NOTE: for some reason the only reliable way to actually get the gas cost of the call
 	// is to subtract gas at time of call from gas at opcode AFTER return
 	// you can't trust the `gas` field on the call itself. I wonder if the gas field is an estimation
-	gasUsedByCall = stackInfo.GasDimensionInfo.GasCounterAtTimeOfCall - gas
+	totalGasUsedByCall = stackInfo.GasDimensionInfo.GasCounterAtTimeOfCall - gas
 	var finishErr error
 
-	finishGasesByDimension, finishErr = finishFunction(gasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
+	finishGasesByDimension, finishErr = finishFunction(totalGasUsedByCall, stackInfo.ExecutionCost, stackInfo.GasDimensionInfo)
 	if finishErr != nil {
 		t.interrupt.Store(true)
 		t.reason = finishErr
 		return true, 0, zeroCallGasDimensionStackInfo(), zeroGasesByDimension()
 	}
-	return false, gasUsedByCall, stackInfo, finishGasesByDimension
+	return false, totalGasUsedByCall, stackInfo, finishGasesByDimension
 }
 
 // if we are in a call stack depth greater than 0,
@@ -311,14 +329,14 @@ func (t *BaseGasDimensionTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	t.gasUsedForL2 = receipt.GasUsedForL2()
 	t.txHash = receipt.TxHash
 	t.status = receipt.Status
-	t.refundAdjusted = t.adjustRefund(t.executionGasAccumulated+t.intrinsicGas, t.GetRefundAccumulated())
+	t.refundAdjusted = t.adjustRefund(t.rootExecutionGasAccumulated+t.intrinsicGas, t.GetRefundAccumulated())
 	// if the root is a precompile then we need to separately account for the gas used by the
 	// precompile itself, which is not exposed to the opcode tracing
 	if t.rootIsPrecompile {
-		t.rootIsPrecompileAdjustment = t.gasUsedForL2 - (t.executionGasAccumulated + t.intrinsicGas)
+		t.rootIsPrecompileAdjustment = t.gasUsedForL2 - (t.rootExecutionGasAccumulated + t.intrinsicGas)
 	}
 	if t.rootIsStylus {
-		t.rootIsStylusAdjustment = t.gasUsedForL2 - (t.executionGasAccumulated + t.intrinsicGas)
+		t.rootIsStylusAdjustment = t.gasUsedForL2 - (t.rootExecutionGasAccumulated + t.intrinsicGas)
 	}
 }
 
@@ -400,8 +418,8 @@ func (t *BaseGasDimensionTracer) Status() uint64 { return t.status }
 func (t *BaseGasDimensionTracer) Reason() error { return t.reason }
 
 // Add to the execution gas accumulated, for tracking adjusted refund
-func (t *BaseGasDimensionTracer) AddToExecutionGasAccumulated(gas uint64) {
-	t.executionGasAccumulated += gas
+func (t *BaseGasDimensionTracer) AddToRootExecutionGasAccumulated(gas uint64) {
+	t.rootExecutionGasAccumulated += gas
 }
 
 // this function implements the EIP-3529 refund adjustment
@@ -446,6 +464,7 @@ func zeroCallGasDimensionInfo() CallGasDimensionInfo {
 		HashCost:                  0,
 		isTargetPrecompile:        false,
 		isTargetStylusContract:    false,
+		inPrecompile:              false,
 	}
 }
 
@@ -482,13 +501,8 @@ type BaseExecutionResult struct {
 
 // get the result of the transaction execution that we will hand to the json output
 func (t *BaseGasDimensionTracer) GetBaseExecutionResult() (BaseExecutionResult, error) {
-	// Tracing aborted
-	if t.reason != nil {
-		return BaseExecutionResult{}, t.reason
-	}
 	failed := t.err != nil
-
-	return BaseExecutionResult{
+	ret := BaseExecutionResult{
 		GasUsed:                    t.gasUsed,
 		GasUsedForL1:               t.gasUsedForL1,
 		GasUsedForL2:               t.gasUsedForL2,
@@ -503,5 +517,6 @@ func (t *BaseGasDimensionTracer) GetBaseExecutionResult() (BaseExecutionResult, 
 		BlockTimestamp:             t.env.Time,
 		BlockNumber:                t.env.BlockNumber,
 		Status:                     t.status,
-	}, nil
+	}
+	return ret, t.reason
 }

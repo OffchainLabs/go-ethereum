@@ -26,14 +26,16 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+type WasmTarget string
+
 const (
-	TargetWavm  ethdb.WasmTarget = "wavm"
-	TargetArm64 ethdb.WasmTarget = "arm64"
-	TargetAmd64 ethdb.WasmTarget = "amd64"
-	TargetHost  ethdb.WasmTarget = "host"
+	TargetWavm  WasmTarget = "wavm"
+	TargetArm64 WasmTarget = "arm64"
+	TargetAmd64 WasmTarget = "amd64"
+	TargetHost  WasmTarget = "host"
 )
 
-func LocalTarget() ethdb.WasmTarget {
+func LocalTarget() WasmTarget {
 	if runtime.GOOS == "linux" {
 		switch runtime.GOARCH {
 		case "arm64":
@@ -45,7 +47,7 @@ func LocalTarget() ethdb.WasmTarget {
 	return TargetHost
 }
 
-func activatedAsmKeyPrefix(target ethdb.WasmTarget) (WasmPrefix, error) {
+func activatedAsmKeyPrefix(target WasmTarget) (WasmPrefix, error) {
 	var prefix WasmPrefix
 	switch target {
 	case TargetWavm:
@@ -62,19 +64,19 @@ func activatedAsmKeyPrefix(target ethdb.WasmTarget) (WasmPrefix, error) {
 	return prefix, nil
 }
 
-func IsSupportedWasmTarget(target ethdb.WasmTarget) bool {
+func IsSupportedWasmTarget(target WasmTarget) bool {
 	_, err := activatedAsmKeyPrefix(target)
 	return err == nil
 }
 
-func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asmMap map[ethdb.WasmTarget][]byte) {
+func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asmMap map[WasmTarget][]byte) {
 	for target, asm := range asmMap {
 		WriteActivatedAsm(db, target, moduleHash, asm)
 	}
 }
 
 // Stores the activated asm for a given moduleHash and target
-func WriteActivatedAsm(db ethdb.KeyValueWriter, target ethdb.WasmTarget, moduleHash common.Hash, asm []byte) {
+func WriteActivatedAsm(db ethdb.KeyValueWriter, target WasmTarget, moduleHash common.Hash, asm []byte) {
 	prefix, err := activatedAsmKeyPrefix(target)
 	if err != nil {
 		log.Crit("Failed to store activated wasm asm", "err", err)
@@ -86,7 +88,7 @@ func WriteActivatedAsm(db ethdb.KeyValueWriter, target ethdb.WasmTarget, moduleH
 }
 
 // Retrieves the activated asm for a given moduleHash and target
-func ReadActivatedAsm(db ethdb.KeyValueReader, target ethdb.WasmTarget, moduleHash common.Hash) []byte {
+func ReadActivatedAsm(db ethdb.KeyValueReader, target WasmTarget, moduleHash common.Hash) []byte {
 	prefix, err := activatedAsmKeyPrefix(target)
 	if err != nil {
 		log.Crit("Failed to read activated wasm asm", "err", err)

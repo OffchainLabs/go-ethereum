@@ -23,6 +23,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -149,8 +150,8 @@ func toWordSize(size uint64) uint64 {
 // processing.
 type Message struct {
 	// Arbitrum-specific
-	TxRunMode MessageRunMode
-	Tx        *types.Transaction
+	TxRunContext *MessageRunContext
+	Tx           *types.Transaction
 
 	To                    *common.Address
 	From                  common.Address
@@ -178,24 +179,123 @@ type Message struct {
 	SkipL1Charging bool
 }
 
-type MessageRunMode uint8
+type messageRunMode uint8
 
 const (
-	MessageCommitMode MessageRunMode = iota
-	MessageGasEstimationMode
-	MessageEthcallMode
-	MessageReplayMode
+	messageCommitMode messageRunMode = iota
+	messageGasEstimationMode
+	messageEthcallMode
+	messageReplayMode
+	messageRecordingMode
 )
 
+type MessageRunContext struct {
+	runMode messageRunMode
+
+	wasmCacheTag uint32
+	wasmTargets  []rawdb.WasmTarget
+}
+
+func NewMessageCommitContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
+	if len(wasmTargets) == 0 {
+		wasmTargets = []rawdb.WasmTarget{rawdb.LocalTarget()}
+	}
+	return &MessageRunContext{
+		runMode:      messageCommitMode,
+		wasmCacheTag: 1,
+		wasmTargets:  wasmTargets,
+	}
+}
+
+func NewMessageReplayContext() *MessageRunContext {
+	return &MessageRunContext{
+		runMode:     messageReplayMode,
+		wasmTargets: []rawdb.WasmTarget{rawdb.LocalTarget()},
+	}
+}
+
+func NewMessageRecordingContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
+	if len(wasmTargets) == 0 {
+		wasmTargets = []rawdb.WasmTarget{rawdb.LocalTarget()}
+	}
+	return &MessageRunContext{
+		runMode:     messageRecordingMode,
+		wasmTargets: wasmTargets,
+	}
+}
+
+func NewMessagePrefetchContext() *MessageRunContext {
+	return NewMessageReplayContext()
+}
+
+func NewMessageEthcallContext() *MessageRunContext {
+	return &MessageRunContext{
+		runMode:     messageEthcallMode,
+		wasmTargets: []rawdb.WasmTarget{rawdb.LocalTarget()},
+	}
+}
+
+func NewMessageGasEstimationContext() *MessageRunContext {
+	return &MessageRunContext{
+		runMode:     messageGasEstimationMode,
+		wasmTargets: []rawdb.WasmTarget{rawdb.LocalTarget()},
+	}
+}
+
+func (c *MessageRunContext) IsCommitMode() bool {
+	return c.runMode == messageCommitMode
+}
+
 // these message modes are executed onchain so cannot make any gas shortcuts
-func (m MessageRunMode) ExecutedOnChain() bool {
-	return m == MessageCommitMode || m == MessageReplayMode
+func (c *MessageRunContext) IsExecutedOnChain() bool {
+	return c.runMode == messageCommitMode || c.runMode == messageReplayMode || c.runMode == messageRecordingMode
+}
+
+func (c *MessageRunContext) IsGasEstimation() bool {
+	return c.runMode == messageGasEstimationMode
+}
+
+func (c *MessageRunContext) IsNonMutating() bool {
+	return c.runMode == messageGasEstimationMode || c.runMode == messageEthcallMode
+}
+
+func (c *MessageRunContext) IsEthcall() bool {
+	return c.runMode == messageEthcallMode
+}
+
+func (c *MessageRunContext) IsRecording() bool {
+	return c.runMode == messageRecordingMode
+}
+
+func (c *MessageRunContext) WasmCacheTag() uint32 {
+	return c.wasmCacheTag
+}
+
+func (c *MessageRunContext) WasmTargets() []rawdb.WasmTarget {
+	return c.wasmTargets
+}
+
+func (c *MessageRunContext) RunModeMetricName() string {
+	switch c.runMode {
+	case messageCommitMode:
+		return "commit_runmode"
+	case messageGasEstimationMode:
+		return "gas_estimation_runmode"
+	case messageEthcallMode:
+		return "eth_call_runmode"
+	case messageReplayMode:
+		return "replay_runmode"
+	case messageRecordingMode:
+		return "recording_runmode"
+	default:
+		return "unknown_runmode"
+	}
 }
 
 // TransactionToMessage converts a transaction into a Message.
-func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int, runmode MessageRunMode) (*Message, error) {
+func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int, runCtx *MessageRunContext) (*Message, error) {
 	msg := &Message{
-		TxRunMode: runmode,
+		TxRunContext: runCtx,
 
 		Tx: tx,
 

@@ -91,9 +91,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
+	runCtx := NewMessageReplayContext()
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
-		msg, err := TransactionToMessage(tx, signer, header.BaseFee, MessageReplayMode)
+		msg, err := TransactionToMessage(tx, signer, header.BaseFee, runCtx)
 		if err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
@@ -217,11 +218,11 @@ func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransaction(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64) (*types.Receipt, *ExecutionResult, error) {
-	return ApplyTransactionWithResultFilter(evm, gp, statedb, header, tx, usedGas, MessageReplayMode, nil)
+	return ApplyTransactionWithResultFilter(evm, gp, statedb, header, tx, usedGas, NewMessageReplayContext(), nil)
 }
 
-func ApplyTransactionWithResultFilter(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, runMode MessageRunMode, resultFilter func(*ExecutionResult) error) (*types.Receipt, *ExecutionResult, error) {
-	msg, err := TransactionToMessage(tx, types.MakeSigner(evm.ChainConfig(), header.Number, header.Time, evm.Context.ArbOSVersion), header.BaseFee, runMode)
+func ApplyTransactionWithResultFilter(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, runCtx *MessageRunContext, resultFilter func(*ExecutionResult) error) (*types.Receipt, *ExecutionResult, error) {
+	msg, err := TransactionToMessage(tx, types.MakeSigner(evm.ChainConfig(), header.Number, header.Time, evm.Context.ArbOSVersion), header.BaseFee, runCtx)
 	if err != nil {
 		return nil, nil, err
 	}
