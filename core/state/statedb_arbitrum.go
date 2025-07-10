@@ -20,7 +20,9 @@ package state
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"math/big"
+	"slices"
 
 	"errors"
 	"runtime"
@@ -91,13 +93,8 @@ func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarg
 			}
 		}
 		if inconsistent {
-			var previousTargets, newTargets []rawdb.WasmTarget
-			for target := range previouslyActivated {
-				previousTargets = append(previousTargets, target)
-			}
-			for target := range asmMap {
-				previousTargets = append(previousTargets, target)
-			}
+			previousTargets := slices.Collect(maps.Keys(previouslyActivated))
+			newTargets := slices.Collect(maps.Keys(asmMap))
 			log.Error("Inconsistent stylus compile targets used with StateDB, previously activated module with different target list", "moduleHash", moduleHash, "previousTargets", previousTargets, "newTargets", newTargets)
 			return errors.New("inconsistent stylus compile targets")
 		}
