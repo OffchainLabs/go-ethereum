@@ -119,7 +119,6 @@ func newTxIndexer(config *TxIndexerConfig, chain *BlockChain) *txIndexer {
 // and tail above the configured cutoff.
 func (indexer *txIndexer) run(head uint64, stop chan struct{}, done chan struct{}) {
 	defer func() { close(done) }()
-	log.Debug("txIndexer run", "head", head)
 
 	// Short circuit if the chain is either empty, or entirely below the
 	// cutoff point.
