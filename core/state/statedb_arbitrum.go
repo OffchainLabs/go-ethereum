@@ -74,7 +74,7 @@ func NewStylusPrefix(dictionary byte) []byte {
 	return append(prefix, dictionary)
 }
 
-// AcitvateWasm adds asmMap to newly activated wasms map under moduleHash key, but only if the key doesn't already exist in the map.
+// ActivateWasm adds asmMap to newly activated wasms map under moduleHash key, but only if the key doesn't already exist in the map.
 // If the asmMap is added to the newly activated wasms, then wasmActivation is added to the journal so the operation can be reverted and the new entry removed in StateDB.RevertToSnapshot.
 // note: all ActivateWasm calls in given StateDB cycle (cycle reset by statedb commit) requires that the asmMap contain entries for the same targets as the first asmMap passed to ActivateWasm in the cycle. This is assumed in other parts of the code.
 func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarget][]byte) error {
