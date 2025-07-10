@@ -136,7 +136,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			if tracer.Hooks != nil {
 				logState = state.NewHookedState(st.StateDB, tracer.Hooks)
 			}
-			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, core.MessageReplayMode)
+			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, core.NewMessageReplayContext())
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
@@ -214,7 +214,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 	}
 	context := test.Context.toBlockContext(test.Genesis)
 	signer := types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time), context.ArbOSVersion)
-	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, core.MessageReplayMode)
+	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, core.NewMessageReplayContext())
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
 	}
@@ -332,7 +332,7 @@ func TestInternals(t *testing.T) {
 				byte(vm.LOG0),
 			},
 			tracer: mkTracer("prestateTracer", nil),
-			want:   fmt.Sprintf(`{"0x0000000000000000000000000000000000000000":{"balance":"0x0"},"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600164ffffffffff60016000f560ff6000a0"},"%s":{"balance":"0x1c6bf52634000"}}`, originHex),
+			want:   fmt.Sprintf(`{"0x0000000000000000000000000000000000000000":{"balance":"0x0"},"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600164ffffffffff60016000f560ff6000a0"},"0x0000f90827f1c53a10cb7a02335b175320002935":{"balance":"0x0"},"%s":{"balance":"0x1c6bf52634000"},"0xa4b05fffffffffffffffffffffffffffffffffff":{"balance":"0x0"}}`, originHex),
 		},
 		{
 			// CREATE2 which requires padding memory by prestate tracer
@@ -351,7 +351,7 @@ func TestInternals(t *testing.T) {
 				byte(vm.LOG0),
 			},
 			tracer: mkTracer("prestateTracer", nil),
-			want:   fmt.Sprintf(`{"0x0000000000000000000000000000000000000000":{"balance":"0x0"},"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600160ff60016000f560ff6000a0"},"%s":{"balance":"0x1c6bf52634000"}}`, originHex),
+			want:   fmt.Sprintf(`{"0x0000000000000000000000000000000000000000":{"balance":"0x0"},"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600160ff60016000f560ff6000a0"},"0x0000f90827f1c53a10cb7a02335b175320002935":{"balance":"0x0"},"%s":{"balance":"0x1c6bf52634000"},"0xa4b05fffffffffffffffffffffffffffffffffff":{"balance":"0x0"}}`, originHex),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -381,7 +381,7 @@ func TestInternals(t *testing.T) {
 				t.Fatalf("test %v: failed to sign transaction: %v", tc.name, err)
 			}
 			evm := vm.NewEVM(context, logState, config, vm.Config{Tracer: tc.tracer.Hooks})
-			msg, err := core.TransactionToMessage(tx, signer, big.NewInt(0), core.MessageReplayMode)
+			msg, err := core.TransactionToMessage(tx, signer, big.NewInt(0), core.NewMessageReplayContext())
 			if err != nil {
 				t.Fatalf("test %v: failed to create message: %v", tc.name, err)
 			}

@@ -151,6 +151,21 @@ func (tx *ArbitrumUnsignedTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) 
 	return dst.Set(baseFee)
 }
 
+func (tx *ArbitrumUnsignedTx) sigHash(chainID *big.Int) common.Hash {
+	return prefixedRlpHash(
+		ArbitrumUnsignedTxType,
+		[]any{
+			chainID,
+			tx.From,
+			tx.Nonce,
+			tx.GasFeeCap,
+			tx.Gas,
+			tx.To,
+			tx.Value,
+			tx.Data,
+		})
+}
+
 type ArbitrumContractTx struct {
 	ChainId   *big.Int
 	RequestId common.Hash
@@ -219,6 +234,21 @@ func (tx *ArbitrumContractTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) 
 		return dst.Set(tx.GasFeeCap)
 	}
 	return dst.Set(baseFee)
+}
+
+func (tx *ArbitrumContractTx) sigHash(chainID *big.Int) common.Hash {
+	return prefixedRlpHash(
+		ArbitrumContractTxType,
+		[]any{
+			chainID,
+			tx.RequestId,
+			tx.From,
+			tx.GasFeeCap,
+			tx.Gas,
+			tx.To,
+			tx.Value,
+			tx.Data,
+		})
 }
 
 type ArbitrumRetryTx struct {
@@ -303,6 +333,25 @@ func (tx *ArbitrumRetryTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *bi
 		return dst.Set(tx.GasFeeCap)
 	}
 	return dst.Set(baseFee)
+}
+
+func (tx *ArbitrumRetryTx) sigHash(chainID *big.Int) common.Hash {
+	return prefixedRlpHash(
+		ArbitrumRetryTxType,
+		[]any{
+			chainID,
+			tx.Nonce,
+			tx.From,
+			tx.GasFeeCap,
+			tx.Gas,
+			tx.To,
+			tx.Value,
+			tx.Data,
+			tx.TicketId,
+			tx.RefundTo,
+			tx.MaxRefund,
+			tx.SubmissionFeeRefund,
+		})
 }
 
 type ArbitrumSubmitRetryableTx struct {
@@ -424,6 +473,26 @@ func (tx *ArbitrumSubmitRetryableTx) data() []byte {
 	return data
 }
 
+func (tx *ArbitrumSubmitRetryableTx) sigHash(chainID *big.Int) common.Hash {
+	return prefixedRlpHash(
+		ArbitrumSubmitRetryableTxType,
+		[]any{
+			chainID,
+			tx.RequestId,
+			tx.From,
+			tx.L1BaseFee,
+			tx.DepositValue,
+			tx.GasFeeCap,
+			tx.Gas,
+			tx.RetryTo,
+			tx.RetryValue,
+			tx.Beneficiary,
+			tx.MaxSubmissionFee,
+			tx.FeeRefundAddr,
+			tx.RetryData,
+		})
+}
+
 type ArbitrumDepositTx struct {
 	ChainId     *big.Int
 	L1RequestId common.Hash
@@ -482,6 +551,18 @@ func (d *ArbitrumDepositTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *b
 	return dst.Set(bigZero)
 }
 
+func (d *ArbitrumDepositTx) sigHash(chainID *big.Int) common.Hash {
+	return prefixedRlpHash(
+		ArbitrumRetryTxType,
+		[]any{
+			chainID,
+			d.L1RequestId,
+			d.From,
+			d.To,
+			d.Value,
+		})
+}
+
 type ArbitrumInternalTx struct {
 	ChainId *big.Int
 	Data    []byte
@@ -527,6 +608,15 @@ func (t *ArbitrumInternalTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *
 	return dst.Set(bigZero)
 }
 
+func (t *ArbitrumInternalTx) sigHash(chainID *big.Int) common.Hash {
+	return prefixedRlpHash(
+		ArbitrumInternalTxType,
+		[]any{
+			chainID,
+			t.Data,
+		})
+}
+
 type HeaderInfo struct {
 	SendRoot           common.Hash
 	SendCount          uint64
@@ -552,7 +642,7 @@ func (info HeaderInfo) UpdateHeaderWithInfo(header *Header) {
 }
 
 func DeserializeHeaderExtraInformation(header *Header) HeaderInfo {
-	if header == nil || header.BaseFee == nil || header.BaseFee.Sign() == 0 || len(header.Extra) != 32 || header.Difficulty.Cmp(common.Big1) != 0 {
+	if header == nil || header.BaseFee == nil || len(header.Extra) != 32 || header.Difficulty.Cmp(common.Big1) != 0 {
 		// imported blocks have no base fee
 		// The genesis block doesn't have an ArbOS encoded extra field
 		return HeaderInfo{}
