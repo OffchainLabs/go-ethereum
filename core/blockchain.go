@@ -183,7 +183,7 @@ type CacheConfig struct {
 	ChainHistoryMode history.HistoryMode
 }
 
-// arbitrum: exposing  to batchCacheConfig.triedbConfig to be used by Nitro when initializing arbos in database
+// arbitrum: exposing CacheConfig.triedbConfig to be used by Nitro when initializing arbos in database
 func (c *CacheConfig) TriedbConfig() *triedb.Config {
 	return c.triedbConfig(false)
 }
