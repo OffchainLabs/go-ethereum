@@ -331,7 +331,16 @@ type trieGcEntry struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, txIndexerConfig *TxIndexerConfig) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, txLookupLimit *uint64) (*BlockChain, error) {
+	var txIndexerConfig *TxIndexerConfig
+	if txLookupLimit != nil {
+		txIndexerConfig = &TxIndexerConfig{Limit: *txLookupLimit, Threads: 0, MinBatchDelay: 0}
+	}
+	return NewBlockChainExtended(db, cacheConfig, chainConfig, genesis, overrides, engine, vmConfig, txIndexerConfig)
+}
+
+// implements NewBlockChain function but accepts more arguments
+func NewBlockChainExtended(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, txIndexerConfig *TxIndexerConfig) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}

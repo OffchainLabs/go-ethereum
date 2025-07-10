@@ -456,8 +456,8 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 	gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
 	// Generate blocks for testing
 	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
-	txIndexerConfig := core.TxIndexerConfig{Limit: 0, Threads: 0, MinBatchDelay: 0}
-	chain, err := core.NewBlockChain(db, cacheConfig, nil, gspec, nil, engine, vm.Config{}, &txIndexerConfig)
+	txlookupLimit := uint64(0)
+	chain, err := core.NewBlockChain(db, cacheConfig, nil, gspec, nil, engine, vm.Config{}, &txlookupLimit)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
