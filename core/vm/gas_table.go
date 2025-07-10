@@ -115,25 +115,16 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 		switch {
 		case current == (common.Hash{}) && y.Sign() != 0: // 0 => non 0
 			multiGas := multigas.StorageGrowthGas(params.SstoreSetGas)
-			singleGas, overflow := multiGas.SingleGas()
-			if overflow {
-				return multigas.ZeroGas(), 0, ErrGasUintOverflow
-			}
+			singleGas, _ := multiGas.SingleGas()
 			return multiGas, singleGas, nil
 		case current != (common.Hash{}) && y.Sign() == 0: // non 0 => 0
 			evm.StateDB.AddRefund(params.SstoreRefundGas)
 			multiGas := multigas.StorageAccessGas(params.SstoreClearGas)
-			singleGas, overflow := multiGas.SingleGas()
-			if overflow {
-				return multigas.ZeroGas(), 0, ErrGasUintOverflow
-			}
+			singleGas, _ := multiGas.SingleGas()
 			return multiGas, singleGas, nil
 		default: // non 0 => non 0 (or 0 => 0)
 			multiGas := multigas.StorageAccessGas(params.SstoreResetGas)
-			singleGas, overflow := multiGas.SingleGas()
-			if overflow {
-				return multigas.ZeroGas(), 0, ErrGasUintOverflow
-			}
+			singleGas, _ := multiGas.SingleGas()
 			return multiGas, singleGas, nil
 		}
 	}
@@ -155,20 +146,14 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 	value := common.Hash(y.Bytes32())
 	if current == value { // noop (1)
 		multiGas := multigas.StorageAccessGas(params.NetSstoreNoopGas)
-		singleGas, overflow := multiGas.SingleGas()
-		if overflow {
-			return multigas.ZeroGas(), 0, ErrGasUintOverflow
-		}
+		singleGas, _ := multiGas.SingleGas()
 		return multiGas, singleGas, nil
 	}
 	original := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
 			multiGas := multigas.StorageGrowthGas(params.NetSstoreInitGas)
-			singleGas, overflow := multiGas.SingleGas()
-			if overflow {
-				return multigas.ZeroGas(), 0, ErrGasUintOverflow
-			}
+			singleGas, _ := multiGas.SingleGas()
 			return multiGas, singleGas, nil
 		}
 
@@ -176,10 +161,7 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 			evm.StateDB.AddRefund(params.NetSstoreClearRefund)
 		}
 		multiGas := multigas.StorageAccessGas(params.NetSstoreCleanGas)
-		singleGas, overflow := multiGas.SingleGas()
-		if overflow {
-			return multigas.ZeroGas(), 0, ErrGasUintOverflow
-		}
+		singleGas, _ := multiGas.SingleGas()
 		return multiGas, singleGas, nil // write existing slot (2.1.2)
 	}
 	if original != (common.Hash{}) {
@@ -197,10 +179,7 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 		}
 	}
 	multiGas := multigas.StorageAccessGas(params.NetSstoreDirtyGas)
-	singleGas, overflow := multiGas.SingleGas()
-	if overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
-	}
+	singleGas, _ := multiGas.SingleGas()
 	return multiGas, singleGas, nil
 }
 
@@ -233,20 +212,14 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 
 	if current == value { // noop (1)
 		multiGas := multigas.StorageAccessGas(params.SloadGasEIP2200)
-		singleGas, overflow := multiGas.SingleGas()
-		if overflow {
-			return multigas.ZeroGas(), 0, ErrGasUintOverflow
-		}
+		singleGas, _ := multiGas.SingleGas()
 		return multiGas, singleGas, nil
 	}
 	original := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
 			multiGas := multigas.StorageGrowthGas(params.SstoreSetGasEIP2200)
-			singleGas, overflow := multiGas.SingleGas()
-			if overflow {
-				return multigas.ZeroGas(), 0, ErrGasUintOverflow
-			}
+			singleGas, _ := multiGas.SingleGas()
 			return multiGas, singleGas, nil
 		}
 		if value == (common.Hash{}) { // delete slot (2.1.2b)
@@ -254,10 +227,7 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 		}
 
 		multiGas := multigas.StorageAccessGas(params.SstoreResetGasEIP2200)
-		singleGas, overflow := multiGas.SingleGas()
-		if overflow {
-			return multigas.ZeroGas(), 0, ErrGasUintOverflow
-		}
+		singleGas, _ := multiGas.SingleGas()
 		return multiGas, singleGas, nil
 	}
 	if original != (common.Hash{}) {
@@ -275,10 +245,7 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 		}
 	}
 	multiGas := multigas.StorageAccessGas(params.SloadGasEIP2200)
-	singleGas, overflow := multiGas.SingleGas()
-	if overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
-	}
+	singleGas, _ := multiGas.SingleGas()
 	return multiGas, singleGas, nil // dirty update (2.2)
 }
 

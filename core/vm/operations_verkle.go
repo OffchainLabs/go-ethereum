@@ -32,10 +32,7 @@ func gasSStore4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 	}
 	multiGas := multigas.StorageAccessGas(gas)
 
-	singleGas, overflow := multiGas.SingleGas()
-	if overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
-	}
+	singleGas, _ := multiGas.SingleGas()
 	return multiGas, singleGas, nil
 }
 
@@ -154,7 +151,7 @@ func gasCodeCopyEip4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 	}
 	_, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(contract.Code, uint64CodeOffset, length.Uint64())
 
-	// TODO(NIT-3484): Update multi dimensional gas here and use `math.SafeAdd`
+	// TODO(NIT-3484): Update multi dimensional gas here
 	if !contract.IsDeployment && !contract.IsSystemCall {
 		gas += evm.AccessEvents.CodeChunksRangeGas(contract.Address(), copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false)
 	}

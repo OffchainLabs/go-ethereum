@@ -27,8 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// Note: Only EIP-2200 gas logic is implemented for multigas calculation
-// as all chains adopted EIP-2200 before multigas support was introduced.
 func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
 		// If we fail the minimum gas availability invariant, fail (0)
@@ -54,20 +52,14 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 			// EIP 2200 original clause:
 			//		return params.SloadGasEIP2200, nil
 			multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929)
-			singleGas, overflow := multiGas.SingleGas()
-			if overflow {
-				return multigas.ZeroGas(), 0, ErrGasUintOverflow
-			}
+			singleGas, _ := multiGas.SingleGas()
 			return multiGas, singleGas, nil // SLOAD_GAS
 		}
 		original := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
 		if original == current {
 			if original == (common.Hash{}) { // create slot (2.1.1)
 				multiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.SstoreSetGasEIP2200)
-				singleGas, overflow := multiGas.SingleGas()
-				if overflow {
-					return multigas.ZeroGas(), 0, ErrGasUintOverflow
-				}
+				singleGas, _ := multiGas.SingleGas()
 				return multiGas, singleGas, nil
 			}
 			if value == (common.Hash{}) { // delete slot (2.1.2b)
@@ -75,13 +67,8 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 			}
 			// EIP-2200 original clause:
 			//		return params.SstoreResetGasEIP2200, nil // write existing slot (2.1.2)
-			if multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.SstoreResetGasEIP2200-params.ColdSloadCostEIP2929) {
-				return multigas.ZeroGas(), 0, ErrGasUintOverflow
-			}
-			singleGas, overflow := multiGas.SingleGas()
-			if overflow {
-				return multigas.ZeroGas(), 0, ErrGasUintOverflow
-			}
+			multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.SstoreResetGasEIP2200-params.ColdSloadCostEIP2929)
+			singleGas, _ := multiGas.SingleGas()
 			return multiGas, singleGas, nil // write existing slot (2.1.2)
 		}
 		if original != (common.Hash{}) {
@@ -107,13 +94,8 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 		}
 		// EIP-2200 original clause:
 		//return params.SloadGasEIP2200, nil // dirty update (2.2)
-		if multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929) {
-			return multigas.ZeroGas(), 0, ErrGasUintOverflow
-		}
-		singleGas, overflow := multiGas.SingleGas()
-		if overflow {
-			return multigas.ZeroGas(), 0, ErrGasUintOverflow
-		}
+		multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929)
+		singleGas, _ := multiGas.SingleGas()
 		return multiGas, singleGas, nil // dirty update (2.2)
 	}
 }

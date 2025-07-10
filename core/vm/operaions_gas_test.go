@@ -92,6 +92,7 @@ func testGasSStoreFuncFuncWithCases(t *testing.T, config *params.ChainConfig, ga
 	}
 }
 
+// Modern (Berlin, EIP-2929) SSTORE gas function test with access list
 func TestMakeGasSStoreFunc(t *testing.T) {
 	testCases := []GasSStoreFuncTestCase{
 		// NOOP cases (current == value)
@@ -197,39 +198,7 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 	testGasSStoreFuncFuncWithCases(t, params.TestChainConfig, gasSStoreFunc, testCases)
 }
 
-func TestGasSStoreFuncLegacy(t *testing.T) {
-	testCases := []GasSStoreFuncTestCase{
-		{
-			name:             "legacy: create slot 0 => non-zero",
-			originalValue:    common.Hash{},
-			currentValue:     common.Hash{},
-			newValue:         common.HexToHash("0x1234"),
-			expectedMultiGas: multigas.StorageGrowthGas(params.SstoreSetGas),
-		},
-		{
-			name:             "legacy: delete slot non-zero => 0",
-			originalValue:    common.HexToHash("0x1234"),
-			currentValue:     common.HexToHash("0x1234"),
-			newValue:         common.Hash{},
-			expectedMultiGas: multigas.StorageAccessGas(params.SstoreClearGas),
-			expectedRefund:   params.SstoreRefundGas,
-		},
-		{
-			name:             "legacy: modify slot non-zero => non-zero",
-			originalValue:    common.HexToHash("0x1234"),
-			currentValue:     common.HexToHash("0x1234"),
-			newValue:         common.HexToHash("0x5678"),
-			expectedMultiGas: multigas.StorageAccessGas(params.SstoreResetGas),
-		},
-	}
-
-	config := *params.TestChainConfig
-	config.PetersburgBlock = big.NewInt(0)     // enable legacy path
-	config.ConstantinopleBlock = big.NewInt(0) // optional, but realistic
-
-	testGasSStoreFuncFuncWithCases(t, &config, gasSStore, testCases)
-}
-
+// Istanbul (EIP-2200) SSTORE gas function test
 func TestGasSStoreFuncEip2200(t *testing.T) {
 	testCases := []GasSStoreFuncTestCase{
 		// (1) NOOP
@@ -314,6 +283,7 @@ func TestGasSStoreFuncEip2200(t *testing.T) {
 	testGasSStoreFuncFuncWithCases(t, params.TestChainConfig, gasSStoreEIP2200, testCases)
 }
 
+// Constantinople (EIP-1283) SSTORE gas function test
 func TestGasSStoreFuncEip1283(t *testing.T) {
 	testCases := []GasSStoreFuncTestCase{
 		// NOOP cases (current == value)
@@ -406,6 +376,41 @@ func TestGasSStoreFuncEip1283(t *testing.T) {
 	testGasSStoreFuncFuncWithCases(t, &config, gasSStore, testCases)
 }
 
+// Legacy SSTORE gas function test, then we are in Petersburg (removal of EIP-1283) OR Constantinople is not active
+func TestGasSStoreFuncLegacy(t *testing.T) {
+	testCases := []GasSStoreFuncTestCase{
+		{
+			name:             "legacy: create slot 0 => non-zero",
+			originalValue:    common.Hash{},
+			currentValue:     common.Hash{},
+			newValue:         common.HexToHash("0x1234"),
+			expectedMultiGas: multigas.StorageGrowthGas(params.SstoreSetGas),
+		},
+		{
+			name:             "legacy: delete slot non-zero => 0",
+			originalValue:    common.HexToHash("0x1234"),
+			currentValue:     common.HexToHash("0x1234"),
+			newValue:         common.Hash{},
+			expectedMultiGas: multigas.StorageAccessGas(params.SstoreClearGas),
+			expectedRefund:   params.SstoreRefundGas,
+		},
+		{
+			name:             "legacy: modify slot non-zero => non-zero",
+			originalValue:    common.HexToHash("0x1234"),
+			currentValue:     common.HexToHash("0x1234"),
+			newValue:         common.HexToHash("0x5678"),
+			expectedMultiGas: multigas.StorageAccessGas(params.SstoreResetGas),
+		},
+	}
+
+	config := *params.TestChainConfig
+	config.PetersburgBlock = big.NewInt(0)     // enable legacy path
+	config.ConstantinopleBlock = big.NewInt(0) // optional, but realistic
+
+	testGasSStoreFuncFuncWithCases(t, &config, gasSStore, testCases)
+}
+
+// Statelessness mode (EIP-4762) SSTORE gas function test
 func TestGasSStore4762(t *testing.T) {
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	evm := NewEVM(BlockContext{}, statedb, params.TestChainConfig, Config{})
