@@ -29,7 +29,7 @@ import (
 
 type TxIndexerConfig struct {
 	Limit         uint64        // tx lookup limit
-	Threads       int           // number of threads used when reading blocks (0 = use geth default)
+	Threads       int           // number of threads used when RLP decoding blocks (0 = use geth default)
 	MinBatchDelay time.Duration // minimum time to delay indexing while waiting for more new blocks to batch
 }
 
@@ -48,7 +48,7 @@ func (progress TxIndexProgress) Done() bool {
 // according to the configured indexing range by users.
 type txIndexer struct {
 	// arbitrum:
-	// maximum threads number used when reading blocks
+	// maximum threads number used when RLP decoding blocks
 	threads int
 	// minimum time that indexing is delayed waiting for new blocks to batch
 	minBatchDelay time.Duration
