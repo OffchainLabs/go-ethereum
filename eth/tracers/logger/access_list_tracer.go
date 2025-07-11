@@ -46,6 +46,12 @@ func (al accessList) addAddress(address common.Address) {
 	}
 }
 
+// hasAddress checks if an address is in the accesslist.
+func (al accessList) hasAddress(address common.Address) bool {
+	_, ok := al[address]
+	return ok
+}
+
 // addSlot adds a storage slot to the accesslist.
 func (al accessList) addSlot(address common.Address, slot common.Hash) {
 	// Set address if not previously present
@@ -53,6 +59,12 @@ func (al accessList) addSlot(address common.Address, slot common.Hash) {
 
 	// Set the slot on the surely existent storage set
 	al[address][slot] = struct{}{}
+}
+
+// hasSlot checks if a storage slot is in the accesslist.
+func (al accessList) hasSlot(address common.Address, slot common.Hash) bool {
+	_, ok := al[address][slot]
+	return ok
 }
 
 // equal checks if the content of the current access list is the same as the
@@ -146,6 +158,28 @@ func (a *AccessListTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, sc
 			a.list.addAddress(addr)
 		}
 	}
+	/*
+		if op == vm.CREATE {
+			nonce := a.env.StateDB.GetNonce(caller)
+			addr := crypto.CreateAddress(caller, nonce)
+			a.lookupAccount(addr)
+			a.created[addr] = true
+		}
+		if stackLen >= 4 && op == vm.CREATE2 {
+			offset := stackData[stackLen-2]
+			size := stackData[stackLen-3]
+			init, err := internal.GetMemoryCopyPadded(scope.MemoryData(), int64(offset.Uint64()), int64(size.Uint64()))
+			if err != nil {
+				log.Warn("failed to copy CREATE2 input", "err", err, "tracer", "prestateTracer", "offset", offset, "size", size)
+				return
+			}
+			inithash := crypto.Keccak256(init)
+			salt := stackData[stackLen-4]
+			addr := crypto.CreateAddress2(caller, salt.Bytes32(), inithash)
+			a.lookupAccount(addr)
+			a.created[addr] = true
+		}
+	*/
 }
 
 // AccessList returns the current accesslist maintained by the tracer.
@@ -156,4 +190,14 @@ func (a *AccessListTracer) AccessList() types.AccessList {
 // Equal returns if the content of two access list traces are equal.
 func (a *AccessListTracer) Equal(other *AccessListTracer) bool {
 	return a.list.equal(other.list)
+}
+
+// HasAddress checks if an address is in the accesslist.
+func (a *AccessListTracer) HasAddress(address common.Address) bool {
+	return a.list.hasAddress(address)
+}
+
+// HasSlot checks if a storage slot is in the accesslist.
+func (a *AccessListTracer) HasSlot(address common.Address, slot common.Hash) bool {
+	return a.list.hasSlot(address, slot)
 }
