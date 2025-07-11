@@ -25,6 +25,8 @@ type GasSStoreFuncTestCase struct {
 }
 
 func testGasSStoreFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasSStoreFunc gasFunc, testCases []GasSStoreFuncTestCase) {
+	t.Helper()
+
 	slotKey := common.HexToHash("0x01")
 	contractGas := uint64(100000)
 
