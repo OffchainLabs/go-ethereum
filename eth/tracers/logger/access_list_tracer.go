@@ -158,6 +158,28 @@ func (a *AccessListTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, sc
 			a.list.addAddress(addr)
 		}
 	}
+	/*
+		if op == vm.CREATE {
+			nonce := a.env.StateDB.GetNonce(caller)
+			addr := crypto.CreateAddress(caller, nonce)
+			a.lookupAccount(addr)
+			a.created[addr] = true
+		}
+		if stackLen >= 4 && op == vm.CREATE2 {
+			offset := stackData[stackLen-2]
+			size := stackData[stackLen-3]
+			init, err := internal.GetMemoryCopyPadded(scope.MemoryData(), int64(offset.Uint64()), int64(size.Uint64()))
+			if err != nil {
+				log.Warn("failed to copy CREATE2 input", "err", err, "tracer", "prestateTracer", "offset", offset, "size", size)
+				return
+			}
+			inithash := crypto.Keccak256(init)
+			salt := stackData[stackLen-4]
+			addr := crypto.CreateAddress2(caller, salt.Bytes32(), inithash)
+			a.lookupAccount(addr)
+			a.created[addr] = true
+		}
+	*/
 }
 
 // AccessList returns the current accesslist maintained by the tracer.
