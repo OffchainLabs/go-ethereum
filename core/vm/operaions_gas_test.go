@@ -453,18 +453,23 @@ func TestGasSStore4762(t *testing.T) {
 
 type GasCallFuncTestCase struct {
 	name             string // descriptive name for the test case
+	slotInAccessList bool   // whether the slot is in the access list
 	transfersValue   bool   // whether the call transfers value
 	valueTransferGas uint64 // gas argument passed on stack
 	targetExists     bool   // whether the target account exists
 	targetEmpty      bool   // whether the target account is empty (no balance/code)
 	isEIP158         bool   // whether EIP-158 rules apply (empty account handling)
 	isEIP4762        bool   // whether EIP-4762 rules apply (Verkle trees)
+	isEIP2929        bool   // whether EIP-2929 rules apply (access lists)
 	isSystemCall     bool   // whether this is a system call (bypasses some gas costs)
 	memorySize       uint64 // memory size for the operation (triggers memory expansion)
 }
 
 func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasCallFunc gasFunc, testCases []GasCallFuncTestCase, isCallCode bool) {
 	t.Helper()
+
+	contractGas := uint64(100000)
+	slotKey := common.HexToHash("0xdeadbeef") // any dummy key
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -503,8 +508,11 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 				}
 			}
 
+			if tc.slotInAccessList {
+				stateDb.AddSlotToAccessList(targetAddr, slotKey)
+			}
+
 			// Setup contract
-			contractGas := uint64(100000)
 			contract := NewContract(caller, caller, new(uint256.Int), contractGas, nil)
 			contract.IsSystemCall = tc.isSystemCall
 			contract.Gas = contractGas
@@ -531,13 +539,19 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 			// Initialize expected multi gas with transfer gas value
 			expectedMultiGas := multigas.ComputationGas(tc.valueTransferGas)
 
+			// For EIP-2929 (access lists)
+			wasColdAccess := !tc.isEIP2929 || !evm.StateDB.AddressInAccessList(targetAddr)
+			if tc.isEIP2929 && wasColdAccess && !tc.slotInAccessList {
+				expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.ColdAccountAccessCostEIP2929-params.WarmStorageReadCostEIP2929)
+			}
+
 			// Apply cahin rules
 			if tc.transfersValue && !tc.isEIP4762 {
 				expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallValueTransferGas)
 			}
 
 			// Account creation gas only applies to gasCall, not gasCallCode
-			if !isCallCode {
+			if !isCallCode && wasColdAccess {
 				if tc.isEIP158 {
 					if tc.transfersValue && tc.targetEmpty {
 						expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallNewAccountGas)
@@ -557,8 +571,7 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 			// EIP4762 storage access gas for value transfers
 			if tc.isEIP4762 && tc.transfersValue && !tc.isSystemCall {
 				valueTransferGas := evm.AccessEvents.ValueTransferGas(contract.Address(), caller)
-				overflow := expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas)
-				if overflow {
+				if overflow := expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas); overflow {
 					t.Fatalf("Expected multi gas overflow for test case %s", tc.name)
 				}
 			}
@@ -744,4 +757,39 @@ func TestGasCallCode(t *testing.T) {
 	}
 
 	testGasCallFuncFuncWithCases(t, params.TestChainConfig, gasCallCode, testCases, true)
+}
+
+// CALL decorated with makeCallVariantGasCallEIP2929 gas function test
+func TestGasCallEIP2929(t *testing.T) {
+	testCases := []GasCallFuncTestCase{
+		{
+			name:             "Cold access to existing account",
+			slotInAccessList: false,
+			transfersValue:   false,
+			valueTransferGas: 80000,
+			targetExists:     true,
+			targetEmpty:      false,
+			isEIP158:         true,
+			isEIP4762:        false,
+			isEIP2929:        true,
+			isSystemCall:     false,
+			memorySize:       0,
+		},
+		{
+			name:             "Warm access (repeated)",
+			slotInAccessList: true,
+			transfersValue:   false,
+			valueTransferGas: 80000,
+			targetExists:     true,
+			targetEmpty:      false,
+			isEIP158:         true,
+			isEIP4762:        false,
+			isEIP2929:        true,
+			isSystemCall:     false,
+			memorySize:       0,
+		},
+	}
+
+	gasCallEIP2929 = makeCallVariantGasCallEIP2929(gasCall, 1)
+	testGasCallFuncFuncWithCases(t, params.TestChainConfig, gasCallEIP2929, testCases, false)
 }

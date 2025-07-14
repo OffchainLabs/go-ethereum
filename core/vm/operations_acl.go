@@ -194,12 +194,19 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc, addressPosition int) g
 		// also become correctly reported to tracers.
 		contract.Gas += coldCost
 
-		// TODO(NIT-3484): Update multi dimensional gas here
+		if overflow := multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, coldCost); overflow {
+			return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		}
+
+		// FIXME(NIT-3483): this is the temporary workaround until all possible options for oldCalculators are instrumented (e.g DELEGATECALL, STATICCALL)
+		// for now, we calc single-dimensional gas separately to make `BlockchainTest` pass with history data
+		// singleGas, _ := multiGas.SingleGas()
+		// return multiGas, singleGas, nil
 		var overflow bool
 		if gas, overflow = math.SafeAdd(gas, coldCost); overflow {
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}
-		return multigas.ZeroGas(), gas, nil
+		return multiGas, gas, nil
 	}
 }
 

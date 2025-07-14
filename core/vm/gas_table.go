@@ -433,8 +433,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	if evm.chainRules.IsEIP4762 && !contract.IsSystemCall {
 		if transfersValue {
 			valueTransferGas := evm.AccessEvents.ValueTransferGas(contract.Address(), address)
-			overflow := multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas)
-			if overflow {
+			if overflow := multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas); overflow {
 				return multigas.ZeroGas(), 0, ErrGasUintOverflow
 			}
 		}
@@ -446,8 +445,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	if err != nil {
 		return multigas.ZeroGas(), 0, err
 	}
-	overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp)
-	if overflow {
+	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
 
@@ -476,8 +474,7 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 		transfersValue := !stack.Back(2).IsZero()
 		if transfersValue {
 			valueTransferGas := evm.AccessEvents.ValueTransferGas(contract.Address(), address)
-			overflow = multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas)
-			if overflow {
+			if overflow = multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas); overflow {
 				return multigas.ZeroGas(), 0, ErrGasUintOverflow
 			}
 		}
@@ -489,8 +486,7 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 	if err != nil {
 		return multigas.ZeroGas(), 0, err
 	}
-	overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp)
-	if overflow {
+	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
 
