@@ -460,6 +460,7 @@ type GasCallFuncTestCase struct {
 	targetEmpty      bool   // whether the target account is empty (no balance/code)
 	isEIP158         bool   // whether EIP-158 rules apply (empty account handling)
 	isEIP4762        bool   // whether EIP-4762 rules apply (Verkle trees)
+	addWitnessGas    bool   // whether to add witness gas for EIP-4762
 	isEIP2929        bool   // whether EIP-2929 rules apply (access lists)
 	isSystemCall     bool   // whether this is a system call (bypasses some gas costs)
 	memorySize       uint64 // memory size for the operation (triggers memory expansion)
@@ -574,6 +575,12 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 				if overflow := expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas); overflow {
 					t.Fatalf("Expected multi gas overflow for test case %s", tc.name)
 				}
+			}
+
+			// For EIP-4762 (Witnesses gas)
+			if tc.addWitnessGas && !contract.IsSystemCall {
+				// Calculated in `touchAddressAndChargeGas` WitnessBranchReadCost + WitnessChunkReadCost = 2100
+				expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, 2100)
 			}
 
 			// Call the function
@@ -760,7 +767,7 @@ func TestGasCallCode(t *testing.T) {
 }
 
 // CALL decorated with makeCallVariantGasCallEIP2929 gas function test
-func TestGasCallEIP2929(t *testing.T) {
+func TestCallVariantGasCallEIP2929(t *testing.T) {
 	testCases := []GasCallFuncTestCase{
 		{
 			name:             "Cold access to existing account",
@@ -792,4 +799,36 @@ func TestGasCallEIP2929(t *testing.T) {
 
 	gasCallEIP2929 = makeCallVariantGasCallEIP2929(gasCall, 1)
 	testGasCallFuncFuncWithCases(t, params.TestChainConfig, gasCallEIP2929, testCases, false)
+}
+
+func TestVariantGasEIP4762(t *testing.T) {
+	testCases := []GasCallFuncTestCase{
+		{
+			name:             "EIP4762 non-system call with witness cost",
+			transfersValue:   false,
+			valueTransferGas: 50000,
+			targetExists:     true,
+			targetEmpty:      false,
+			isEIP158:         true,
+			isEIP4762:        true,
+			addWitnessGas:    true,
+			isSystemCall:     false,
+			memorySize:       64,
+		},
+		{
+			name:             "EIP4762 system call skips witness cost",
+			transfersValue:   false,
+			valueTransferGas: 50000,
+			targetExists:     true,
+			targetEmpty:      false,
+			isEIP158:         true,
+			isEIP4762:        true,
+			addWitnessGas:    true,
+			isSystemCall:     true,
+			memorySize:       64,
+		},
+	}
+
+	gasCallEIP4762 = makeCallVariantGasEIP4762(gasCallCode)
+	testGasCallFuncFuncWithCases(t, params.TestChainConfig, gasCallEIP4762, testCases, true)
 }
