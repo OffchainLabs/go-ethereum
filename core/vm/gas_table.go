@@ -440,7 +440,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		}
 	}
 
-	// NOTE(NIT-3483): Should callGas take into account all gas or only the computation gas?
+	// NOTE(NIT-3483): using only the computation gas for callGas
 	computationGas := multiGas.Get(multigas.ResourceKindComputation)
 	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, computationGas, stack.Back(0))
 	if err != nil {
@@ -456,39 +456,46 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 }
 
 func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
-	multiGas, memoryGas, err := memoryGasCost(mem, memorySize)
+	memoryMultiGas, _, err := memoryGasCost(mem, memorySize)
 	if err != nil {
 		return multigas.ZeroGas(), 0, err
 	}
 	var (
-		gas      uint64
+		multiGas = multigas.ZeroGas()
 		overflow bool
 	)
 	if stack.Back(2).Sign() != 0 && !evm.chainRules.IsEIP4762 {
-		gas += params.CallValueTransferGas
+		multiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallValueTransferGas)
 	}
-	// TODO(NIT-3484): Update multi dimensional gas here
-	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
+	multiGas, overflow = multiGas.SafeAdd(multiGas, memoryMultiGas)
+	if overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
 	if evm.chainRules.IsEIP4762 && !contract.IsSystemCall {
 		address := common.Address(stack.Back(1).Bytes20())
 		transfersValue := !stack.Back(2).IsZero()
 		if transfersValue {
-			gas, overflow = math.SafeAdd(gas, evm.AccessEvents.ValueTransferGas(contract.Address(), address))
+			valueTransferGas := evm.AccessEvents.ValueTransferGas(contract.Address(), address)
+			overflow = multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas)
 			if overflow {
 				return multigas.ZeroGas(), 0, ErrGasUintOverflow
 			}
 		}
 	}
-	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
+
+	// NOTE(NIT-3483): using only the computation gas for callGas
+	computationGas := multiGas.Get(multigas.ResourceKindComputation)
+	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, computationGas, stack.Back(0))
 	if err != nil {
 		return multigas.ZeroGas(), 0, err
 	}
-	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
+	overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp)
+	if overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
-	return multiGas, gas, nil
+
+	singleGas, _ := multiGas.SingleGas()
+	return multiGas, singleGas, nil
 }
 
 func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {

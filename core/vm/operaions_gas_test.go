@@ -451,21 +451,136 @@ func TestGasSStore4762(t *testing.T) {
 	}
 }
 
+type GasCallFuncTestCase struct {
+	name             string // descriptive name for the test case
+	transfersValue   bool   // whether the call transfers value
+	valueTransferGas uint64 // gas argument passed on stack
+	targetExists     bool   // whether the target account exists
+	targetEmpty      bool   // whether the target account is empty (no balance/code)
+	isEIP158         bool   // whether EIP-158 rules apply (empty account handling)
+	isEIP4762        bool   // whether EIP-4762 rules apply (Verkle trees)
+	isSystemCall     bool   // whether this is a system call (bypasses some gas costs)
+	memorySize       uint64 // memory size for the operation (triggers memory expansion)
+}
+
+func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasCallFunc gasFunc, testCases []GasCallFuncTestCase, isCallCode bool) {
+	t.Helper()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			stateDb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+			stack := newstack()
+
+			// Configure chain rules
+			if tc.isEIP4762 {
+				verkleTime := uint64(0)
+				config.VerkleTime = &verkleTime
+			}
+
+			blockCtx := BlockContext{
+				BlockNumber: big.NewInt(1),
+			}
+			evm := NewEVM(blockCtx, stateDb, config, Config{})
+
+			// Set chain rules based on test case
+			evm.chainRules.IsEIP158 = tc.isEIP158
+			evm.chainRules.IsEIP4762 = tc.isEIP4762
+
+			// Setup target address
+			caller := common.Address{1}
+			targetAddr := common.Address{2}
+
+			// Setup caller account
+			stateDb.CreateAccount(caller)
+			stateDb.SetBalance(caller, uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
+
+			if tc.targetExists {
+				if tc.targetEmpty {
+					stateDb.CreateAccount(targetAddr)
+				} else {
+					stateDb.CreateAccount(targetAddr)
+					stateDb.SetBalance(targetAddr, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
+				}
+			}
+
+			// Setup contract
+			contractGas := uint64(100000)
+			contract := NewContract(caller, caller, new(uint256.Int), contractGas, nil)
+			contract.IsSystemCall = tc.isSystemCall
+			contract.Gas = contractGas
+
+			// Setup stack: [value, address, gas] (bottom to top)
+			if tc.transfersValue {
+				stack.push(new(uint256.Int).SetUint64(1)) // value
+			} else {
+				stack.push(new(uint256.Int).SetUint64(0)) // value
+			}
+			stack.push(new(uint256.Int).SetBytes(targetAddr.Bytes()))   // address
+			stack.push(new(uint256.Int).SetUint64(tc.valueTransferGas)) // gas
+
+			// Setup two instances of memory to avoid side effects in `memoryGasCost`
+			mem := NewMemory()
+			memForExpected := NewMemory()
+
+			// Mock AccessEvents for EIP4762
+			if tc.isEIP4762 {
+				accessEvents := state.NewAccessEvents(stateDb.PointCache())
+				evm.AccessEvents = accessEvents
+			}
+
+			// Initialize expected multi gas with transfer gas value
+			expectedMultiGas := multigas.ComputationGas(tc.valueTransferGas)
+
+			// Apply cahin rules
+			if tc.transfersValue && !tc.isEIP4762 {
+				expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallValueTransferGas)
+			}
+
+			// Account creation gas only applies to gasCall, not gasCallCode
+			if !isCallCode {
+				if tc.isEIP158 {
+					if tc.transfersValue && tc.targetEmpty {
+						expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallNewAccountGas)
+					}
+				} else if !tc.targetExists {
+					expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallNewAccountGas)
+				}
+			}
+
+			// Call `memoryGasCost` to get the memory gas cost
+			memoryMultiGas, _, err := memoryGasCost(memForExpected, tc.memorySize)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			expectedMultiGas, _ = expectedMultiGas.SafeAdd(expectedMultiGas, memoryMultiGas)
+
+			// EIP4762 storage access gas for value transfers
+			if tc.isEIP4762 && tc.transfersValue && !tc.isSystemCall {
+				valueTransferGas := evm.AccessEvents.ValueTransferGas(contract.Address(), caller)
+				overflow := expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas)
+				if overflow {
+					t.Fatalf("Expected multi gas overflow for test case %s", tc.name)
+				}
+			}
+
+			// Call the function
+			multiGas, _, err := gasCallFunc(evm, contract, stack, mem, tc.memorySize)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if *multiGas != *expectedMultiGas {
+				t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+			}
+		})
+	}
+}
+
 // CALL gas function test
 func TestGasCall(t *testing.T) {
-	testCases := []struct {
-		name             string
-		transfersValue   bool
-		valueTransferGas uint64
-		targetExists     bool
-		targetEmpty      bool
-		isEIP158         bool
-		isEIP4762        bool
-		isSystemCall     bool
-		memorySize       uint64
-	}{
+	testCases := []GasCallFuncTestCase{
 		{
-			name:             "No value transfer, no memory expansion",
+			name:             "No value transfer with memory expansion",
 			transfersValue:   false,
 			valueTransferGas: 80000,
 			targetExists:     true,
@@ -530,113 +645,103 @@ func TestGasCall(t *testing.T) {
 			isSystemCall:     true,
 			memorySize:       0,
 		},
+		{
+			name:             "EIP4762 no value transfer with memory",
+			transfersValue:   false,
+			valueTransferGas: 35000,
+			targetExists:     true,
+			targetEmpty:      false,
+			isEIP158:         true,
+			isEIP4762:        true,
+			isSystemCall:     false,
+			memorySize:       256,
+		},
+	}
+	testGasCallFuncFuncWithCases(t, params.TestChainConfig, gasCall, testCases, false)
+}
+
+// CALLCODE gas function test
+func TestGasCallCode(t *testing.T) {
+	// NOTE: targetExists/targetEmpty fields don't affect gasCallCode but kept for consistency
+	testCases := []GasCallFuncTestCase{
+		{
+			name:             "No value transfer with memory expansion",
+			transfersValue:   false,
+			valueTransferGas: 80000,
+			memorySize:       500,
+			targetExists:     true,
+			targetEmpty:      false,
+			isEIP158:         true,
+			isEIP4762:        false,
+			isSystemCall:     false,
+		},
+		{
+			name:             "Value transfer (pre-EIP4762)",
+			transfersValue:   true,
+			valueTransferGas: 70000,
+			memorySize:       0,
+			targetExists:     true,
+			targetEmpty:      false,
+			isEIP158:         true,
+			isEIP4762:        false,
+			isSystemCall:     false,
+		},
+		{
+			name:             "Value transfer with memory expansion",
+			transfersValue:   true,
+			valueTransferGas: 65000,
+			memorySize:       256,
+			targetExists:     true,
+			targetEmpty:      false,
+			isEIP158:         true,
+			isEIP4762:        false,
+			isSystemCall:     false,
+		},
+		{
+			name:             "EIP4762 value transfer (not system call)",
+			transfersValue:   true,
+			valueTransferGas: 45000,
+			memorySize:       0,
+			targetExists:     true,
+			targetEmpty:      false,
+			isEIP158:         true,
+			isEIP4762:        true,
+			isSystemCall:     false,
+		},
+		{
+			name:             "EIP4762 value transfer (system call)",
+			transfersValue:   true,
+			valueTransferGas: 40000,
+			memorySize:       0,
+			targetExists:     true,
+			targetEmpty:      false,
+			isEIP158:         true,
+			isEIP4762:        true,
+			isSystemCall:     true,
+		},
+		{
+			name:             "EIP4762 no value transfer with memory",
+			transfersValue:   false,
+			valueTransferGas: 50000,
+			memorySize:       128,
+			targetExists:     true,
+			targetEmpty:      false,
+			isEIP158:         true,
+			isEIP4762:        true,
+			isSystemCall:     false,
+		},
+		{
+			name:             "Pre-EIP158 with value transfer",
+			transfersValue:   true,
+			valueTransferGas: 55000,
+			memorySize:       0,
+			targetExists:     true,
+			targetEmpty:      false,
+			isEIP158:         false,
+			isEIP4762:        false,
+			isSystemCall:     false,
+		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			stateDb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-			stack := newstack()
-
-			// Configure chain rules
-			config := *params.TestChainConfig
-			if tc.isEIP4762 {
-				verkleTime := uint64(0)
-				config.VerkleTime = &verkleTime
-			}
-
-			blockCtx := BlockContext{
-				BlockNumber: big.NewInt(1),
-			}
-			evm := NewEVM(blockCtx, stateDb, &config, Config{})
-
-			// Set chain rules based on test case
-			evm.chainRules.IsEIP158 = tc.isEIP158
-			evm.chainRules.IsEIP4762 = tc.isEIP4762
-
-			// Setup target address
-			caller := common.Address{1}
-			targetAddr := common.Address{2}
-
-			// Setup caller account
-			stateDb.CreateAccount(caller)
-			stateDb.SetBalance(caller, uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
-
-			if tc.targetExists {
-				if tc.targetEmpty {
-					stateDb.CreateAccount(targetAddr)
-				} else {
-					stateDb.CreateAccount(targetAddr)
-					stateDb.SetBalance(targetAddr, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
-				}
-			}
-
-			// Setup contract
-			contractGas := uint64(100000)
-			contract := NewContract(caller, caller, new(uint256.Int), contractGas, nil)
-			contract.IsSystemCall = tc.isSystemCall
-			contract.Gas = contractGas
-
-			// Setup stack: [value, address, gas] (bottom to top)
-			if tc.transfersValue {
-				stack.push(new(uint256.Int).SetUint64(1)) // value
-			} else {
-				stack.push(new(uint256.Int).SetUint64(0)) // value
-			}
-			stack.push(new(uint256.Int).SetBytes(targetAddr.Bytes()))   // address
-			stack.push(new(uint256.Int).SetUint64(tc.valueTransferGas)) // gas
-
-			// Setup two instances of memory to avoid side effects in `memoryGasCost`
-			mem := NewMemory()
-			memForExpected := NewMemory()
-
-			// Mock AccessEvents for EIP4762
-			if tc.isEIP4762 {
-				accessEvents := state.NewAccessEvents(stateDb.PointCache())
-				evm.AccessEvents = accessEvents
-				// For testing, we'll need to ensure the access events returns the expected gas
-				// This might require setting up the state properly or mocking the behavior
-			}
-
-			// Initialize expected multi gas with transfer gas value
-			expectedMultiGas := multigas.ComputationGas(tc.valueTransferGas)
-
-			// Apply cahin rules
-			if tc.transfersValue && !tc.isEIP4762 {
-				expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallValueTransferGas)
-			}
-
-			if tc.isEIP158 {
-				if tc.transfersValue && tc.targetEmpty {
-					expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallNewAccountGas)
-				}
-			} else if !tc.targetExists {
-				expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallNewAccountGas)
-			}
-
-			// Call `memoryGasCost` to get the memory gas cost
-			memoryMultiGas, _, err := memoryGasCost(memForExpected, tc.memorySize)
-			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
-			}
-			expectedMultiGas, _ = expectedMultiGas.SafeAdd(expectedMultiGas, memoryMultiGas)
-
-			if tc.isEIP4762 && tc.transfersValue && !tc.isSystemCall {
-				valueTransferGas := evm.AccessEvents.ValueTransferGas(contract.Address(), caller)
-				overflow := expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas)
-				if overflow {
-					t.Fatalf("Expected multi gas overflow for test case %s", tc.name)
-				}
-			}
-
-			// Call the function
-			multiGas, _, err := gasCall(evm, contract, stack, mem, tc.memorySize)
-			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
-			}
-
-			if *multiGas != *expectedMultiGas {
-				t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
-			}
-		})
-	}
+	testGasCallFuncFuncWithCases(t, params.TestChainConfig, gasCallCode, testCases, true)
 }
