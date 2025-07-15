@@ -1,20 +1,18 @@
 package state
 
 import (
-	"errors"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
-func (db *CachingDB) ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) ([]byte, error) {
+func (db *CachingDB) ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) []byte {
 	cacheKey := activatedAsmCacheKey{moduleHash, target}
 	if asm, _ := db.activatedAsmCache.Get(cacheKey); len(asm) > 0 {
-		return asm, nil
+		return asm
 	}
-	if asm := rawdb.ReadActivatedAsm(db.wasmdb, target, moduleHash); len(asm) > 0 {
+	asm := rawdb.ReadActivatedAsm(db.wasmdb, target, moduleHash)
+	if len(asm) > 0 {
 		db.activatedAsmCache.Add(cacheKey, asm)
-		return asm, nil
 	}
-	return nil, errors.New("not found")
+	return asm
 }
