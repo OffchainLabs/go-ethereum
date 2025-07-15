@@ -503,12 +503,12 @@ func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	if err != nil {
 		return multigas.ZeroGas(), 0, err
 	}
-	var overflow bool
-	// TODO(NIT-3484): Update multi dimensional gas here
-	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
+	if overflow := multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
-	return multiGas, gas, nil
+
+	singleGas, _ := multiGas.SingleGas()
+	return multiGas, singleGas, nil
 }
 
 func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
@@ -520,12 +520,12 @@ func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 	if err != nil {
 		return multigas.ZeroGas(), 0, err
 	}
-	var overflow bool
-	// TODO(NIT-3484): Update multi dimensional gas here
-	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
+	if overflow := multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
-	return multiGas, gas, nil
+
+	singleGas, _ := multiGas.SingleGas()
+	return multiGas, singleGas, nil
 }
 
 func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {

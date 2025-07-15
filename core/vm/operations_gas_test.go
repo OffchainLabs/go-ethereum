@@ -832,3 +832,56 @@ func TestVariantGasEIP4762(t *testing.T) {
 	gasCallEIP4762 = makeCallVariantGasEIP4762(gasCallCode)
 	testGasCallFuncFuncWithCases(t, params.TestChainConfig, gasCallEIP4762, testCases, true)
 }
+
+func testGasDelegateOrStaticCall(t *testing.T, gasImplFunc gasFunc) {
+	t.Helper()
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	evm := NewEVM(BlockContext{}, statedb, params.TestChainConfig, Config{})
+
+	caller := common.Address{}
+	contractAddr := common.Address{1}
+	contractGas := uint64(100000)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+
+	stack := newstack()
+	mem := NewMemory()
+	memForExpected := NewMemory()
+
+	stack.push(new(uint256.Int).SetUint64(50000))
+	memorySize := uint64(64)
+
+	expectedMultiGas, memorySingleGas, err := memoryGasCost(memForExpected, memorySize)
+	if err != nil {
+		t.Fatalf("Failed memoryGasCost: %v", err)
+	}
+
+	callGas, err := callGas(evm.chainRules.IsEIP150, contractGas, memorySingleGas, stack.Back(0))
+	if err != nil {
+		t.Fatalf("Failed callGas: %v", err)
+	}
+
+	expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, callGas)
+	expectedSingleGas := memorySingleGas + callGas
+
+	// Call gasImplFunc
+	multiGas, singleGas, err := gasImplFunc(evm, contract, stack, mem, memorySize)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if *multiGas != *expectedMultiGas {
+		t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+	}
+	if singleGas != expectedSingleGas {
+		t.Errorf("Expected single gas %d, got %d", expectedSingleGas, singleGas)
+	}
+}
+
+func TestGasDelegateCall(t *testing.T) {
+	testGasDelegateOrStaticCall(t, gasDelegateCall)
+}
+
+func TestGasStaticCall(t *testing.T) {
+	testGasDelegateOrStaticCall(t, gasStaticCall)
+}
