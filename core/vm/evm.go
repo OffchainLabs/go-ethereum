@@ -23,6 +23,7 @@ import (
 
 	"github.com/holiman/uint256"
 
+	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -198,7 +199,7 @@ func isSystemCall(caller common.Address) bool {
 // parameters. It also handles any necessary value transfer required and takse
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
-func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, usedMultiGas *multigas.MultiGas, err error) {
 	// Capture the tracer start/end events in debug mode
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, CALL, caller, addr, input, gas, value.ToBig())
@@ -208,14 +209,15 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, gas, ErrDepth
+		return nil, gas, multigas.ZeroGas(), ErrDepth
 	}
 	// Fail if we're trying to transfer more than the available balance
 	if !value.IsZero() && !evm.Context.CanTransfer(evm.StateDB, caller, value) {
-		return nil, gas, ErrInsufficientBalance
+		return nil, gas, multigas.ZeroGas(), ErrInsufficientBalance
 	}
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
+	usedMultiGas = multigas.ZeroGas()
 
 	if !evm.StateDB.Exist(addr) {
 		if !isPrecompile && evm.chainRules.IsEIP4762 && !isSystemCall(caller) {
@@ -223,14 +225,14 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			wgas := evm.AccessEvents.AddAccount(addr, false)
 			if gas < wgas {
 				evm.StateDB.RevertToSnapshot(snapshot)
-				return nil, 0, ErrOutOfGas
+				return nil, 0, multigas.ZeroGas(), ErrOutOfGas
 			}
 			gas -= wgas
 		}
 
 		if !isPrecompile && evm.chainRules.IsEIP158 && value.IsZero() {
 			// Calling a non-existing account, don't do anything.
-			return nil, gas, nil
+			return nil, gas, usedMultiGas, nil
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
@@ -258,6 +260,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			contract.SetCallCode(evm.resolveCodeHash(addr), code)
 			ret, err = evm.interpreter.Run(contract, input, false)
 			gas = contract.Gas
+			usedMultiGas, _ = usedMultiGas.SafeAdd(usedMultiGas, contract.UsedMultiGas)
 		}
 	}
 	// When an error was returned by the EVM or when setting the creation code
@@ -270,13 +273,14 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 				evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
 			}
 
+			usedMultiGas.SafeIncrement(multigas.ResourceKindComputation, gas)
 			gas = 0
 		}
 		// TODO: consider clearing up unused snapshots:
 		//} else {
 		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
-	return ret, gas, err
+	return ret, gas, usedMultiGas, err
 }
 
 // CallCode executes the contract associated with the addr with the given input
