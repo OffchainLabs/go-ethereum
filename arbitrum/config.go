@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	flag "github.com/spf13/pflag"
 )
@@ -119,4 +120,5 @@ var DefaultConfig = Config{
 		TimeoutQueueBound: 512,
 	},
 	BlockRedirectsList: "default",
+	StateScheme:        rawdb.HashScheme,
 }

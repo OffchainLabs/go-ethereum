@@ -49,10 +49,8 @@ const (
 // Database wraps access to tries and contract code.
 type Database interface {
 	// Arbitrum: Read activated Stylus contracts
-	ActivatedAsm(target ethdb.WasmTarget, moduleHash common.Hash) (asm []byte, err error)
+	ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) []byte
 	WasmStore() ethdb.KeyValueStore
-	WasmCacheTag() uint32
-	WasmTargets() []ethdb.WasmTarget
 
 	// Reader returns a state reader associated with the specified state root.
 	Reader(root common.Hash) (Reader, error)
@@ -155,7 +153,7 @@ type Trie interface {
 
 type activatedAsmCacheKey struct {
 	moduleHash common.Hash
-	target     ethdb.WasmTarget
+	target     rawdb.WasmTarget
 }
 
 // CachingDB is an implementation of Database interface. It leverages both trie and
@@ -163,9 +161,7 @@ type activatedAsmCacheKey struct {
 // long-live object and has a few caches inside for sharing between blocks.
 type CachingDB struct {
 	// Arbitrum
-	activatedAsmCache     *lru.SizeConstrainedCache[activatedAsmCacheKey, []byte]
-	wasmTag               uint32
-	wasmDatabaseRetriever ethdb.WasmDataBaseRetriever
+	activatedAsmCache *lru.SizeConstrainedCache[activatedAsmCacheKey, []byte]
 
 	disk          ethdb.KeyValueStore
 	wasmdb        ethdb.KeyValueStore
@@ -178,12 +174,10 @@ type CachingDB struct {
 
 // NewDatabase creates a state database with the provided data sources.
 func NewDatabase(triedb *triedb.Database, snap *snapshot.Tree) *CachingDB {
-	wasmdb, wasmTag := triedb.Disk().WasmDataBase()
+	wasmdb := triedb.Disk().WasmDataBase()
 	return &CachingDB{
 		// Arbitrum only
-		activatedAsmCache:     lru.NewSizeConstrainedCache[activatedAsmCacheKey, []byte](activatedWasmCacheSize),
-		wasmTag:               wasmTag,
-		wasmDatabaseRetriever: triedb.Disk(),
+		activatedAsmCache: lru.NewSizeConstrainedCache[activatedAsmCacheKey, []byte](activatedWasmCacheSize),
 
 		disk:          triedb.Disk(),
 		wasmdb:        wasmdb,
@@ -310,14 +304,6 @@ func mustCopyTrie(t Trie) Trie {
 
 func (db *CachingDB) WasmStore() ethdb.KeyValueStore {
 	return db.wasmdb
-}
-
-func (db *CachingDB) WasmCacheTag() uint32 {
-	return db.wasmTag
-}
-
-func (db *CachingDB) WasmTargets() []ethdb.WasmTarget {
-	return db.wasmDatabaseRetriever.WasmTargets()
 }
 
 func (db *CachingDB) DiskDB() ethdb.KeyValueStore {

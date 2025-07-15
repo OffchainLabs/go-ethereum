@@ -19,86 +19,90 @@ package vm
 import (
 	gomath "math"
 
+	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func gasSStore4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func gasSStore4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
 	gas := evm.AccessEvents.SlotGas(contract.Address(), stack.peek().Bytes32(), true)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
-	return gas, nil
+	multiGas := multigas.StorageAccessGas(gas)
+
+	singleGas, _ := multiGas.SingleGas()
+	return multiGas, singleGas, nil
 }
 
-func gasSLoad4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func gasSLoad4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
 	gas := evm.AccessEvents.SlotGas(contract.Address(), stack.peek().Bytes32(), false)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
-	return gas, nil
+	return multigas.ZeroGas(), gas, nil
 }
 
-func gasBalance4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func gasBalance4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
 	if contract.IsSystemCall {
-		return 0, nil
+		return multigas.ZeroGas(), 0, nil
 	}
 	address := stack.peek().Bytes20()
 	gas := evm.AccessEvents.BasicDataGas(address, false)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
-	return gas, nil
+	return multigas.ZeroGas(), gas, nil
 }
 
-func gasExtCodeSize4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func gasExtCodeSize4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
 	address := stack.peek().Bytes20()
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
-		return 0, nil
+		return multigas.ZeroGas(), 0, nil
 	}
 	if contract.IsSystemCall {
-		return 0, nil
+		return multigas.ZeroGas(), 0, nil
 	}
 	gas := evm.AccessEvents.BasicDataGas(address, false)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
-	return gas, nil
+	return multigas.ZeroGas(), gas, nil
 }
 
-func gasExtCodeHash4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func gasExtCodeHash4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
 	if contract.IsSystemCall {
-		return 0, nil
+		return multigas.ZeroGas(), 0, nil
 	}
 	address := stack.peek().Bytes20()
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
-		return 0, nil
+		return multigas.ZeroGas(), 0, nil
 	}
 	gas := evm.AccessEvents.CodeHashGas(address, false)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
-	return gas, nil
+	return multigas.ZeroGas(), gas, nil
 }
 
 func makeCallVariantGasEIP4762(oldCalculator gasFunc) gasFunc {
-	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-		gas, err := oldCalculator(evm, contract, stack, mem, memorySize)
+	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
+		multiGas, gas, err := oldCalculator(evm, contract, stack, mem, memorySize)
 		if err != nil {
-			return 0, err
+			return multigas.ZeroGas(), 0, err
 		}
 		if contract.IsSystemCall {
-			return gas, nil
+			return multigas.ZeroGas(), gas, nil
 		}
 		if _, isPrecompile := evm.precompile(contract.Address()); isPrecompile {
-			return gas, nil
+			return multigas.ZeroGas(), gas, nil
 		}
 		witnessGas := evm.AccessEvents.MessageCallGas(contract.Address())
 		if witnessGas == 0 {
 			witnessGas = params.WarmStorageReadCostEIP2929
 		}
-		return witnessGas + gas, nil
+		return multiGas, witnessGas + gas, nil
 	}
 }
 
@@ -109,13 +113,13 @@ var (
 	gasDelegateCallEIP4762 = makeCallVariantGasEIP4762(gasDelegateCall)
 )
 
-func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
 	beneficiaryAddr := common.Address(stack.peek().Bytes20())
 	if _, isPrecompile := evm.precompile(beneficiaryAddr); isPrecompile {
-		return 0, nil
+		return multigas.ZeroGas(), 0, nil
 	}
 	if contract.IsSystemCall {
-		return 0, nil
+		return multigas.ZeroGas(), 0, nil
 	}
 	contractAddr := contract.Address()
 	statelessGas := evm.AccessEvents.BasicDataGas(contractAddr, false)
@@ -129,13 +133,13 @@ func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 			statelessGas += evm.AccessEvents.BasicDataGas(beneficiaryAddr, true)
 		}
 	}
-	return statelessGas, nil
+	return multigas.ZeroGas(), statelessGas, nil
 }
 
-func gasCodeCopyEip4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	gas, err := gasCodeCopy(evm, contract, stack, mem, memorySize)
+func gasCodeCopyEip4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
+	multiGas, gas, err := gasCodeCopy(evm, contract, stack, mem, memorySize)
 	if err != nil {
-		return 0, err
+		return multigas.ZeroGas(), 0, err
 	}
 	var (
 		codeOffset = stack.Back(1)
@@ -146,20 +150,22 @@ func gasCodeCopyEip4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 		uint64CodeOffset = gomath.MaxUint64
 	}
 	_, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(contract.Code, uint64CodeOffset, length.Uint64())
+
+	// TODO(NIT-3484): Update multi dimensional gas here
 	if !contract.IsDeployment && !contract.IsSystemCall {
 		gas += evm.AccessEvents.CodeChunksRangeGas(contract.Address(), copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false)
 	}
-	return gas, nil
+	return multiGas, gas, nil
 }
 
-func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
 	// memory expansion first (dynamic part of pre-2929 implementation)
-	gas, err := gasExtCodeCopy(evm, contract, stack, mem, memorySize)
+	multiGas, gas, err := gasExtCodeCopy(evm, contract, stack, mem, memorySize)
 	if err != nil {
-		return 0, err
+		return multigas.ZeroGas(), 0, err
 	}
 	if contract.IsSystemCall {
-		return gas, nil
+		return multiGas, gas, nil
 	}
 	addr := common.Address(stack.peek().Bytes20())
 	wgas := evm.AccessEvents.BasicDataGas(addr, false)
@@ -167,9 +173,10 @@ func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 		wgas = params.WarmStorageReadCostEIP2929
 	}
 	var overflow bool
+	// TODO(NIT-3484): Update multi dimensional gas here
 	// We charge (cold-warm), since 'warm' is already charged as constantGas
 	if gas, overflow = math.SafeAdd(gas, wgas); overflow {
-		return 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
-	return gas, nil
+	return multiGas, gas, nil
 }
