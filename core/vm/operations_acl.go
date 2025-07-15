@@ -198,15 +198,8 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc, addressPosition int) g
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}
 
-		// FIXME(NIT-3483): this is the temporary workaround until all possible options for oldCalculators are instrumented (e.g DELEGATECALL, STATICCALL)
-		// for now, we calc single-dimensional gas separately to make `BlockchainTest` pass with history data
-		// singleGas, _ := multiGas.SingleGas()
-		// return multiGas, singleGas, nil
-		var overflow bool
-		if gas, overflow = math.SafeAdd(gas, coldCost); overflow {
-			return multigas.ZeroGas(), 0, ErrGasUintOverflow
-		}
-		return multiGas, gas, nil
+		singleGas, _ := multiGas.SingleGas()
+		return multiGas, singleGas, nil
 	}
 }
 
@@ -272,8 +265,8 @@ var (
 func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
 		var (
-			total uint64 // total dynamic gas used
-			addr  = common.Address(stack.Back(1).Bytes20())
+			multiGas = multigas.ZeroGas() // total dynamic gas used
+			addr     = common.Address(stack.Back(1).Bytes20())
 		)
 
 		// Check slot presence in the access list
@@ -287,7 +280,7 @@ func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
 			if !contract.UseGas(coldCost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
 				return multigas.ZeroGas(), 0, ErrOutOfGas
 			}
-			total += coldCost
+			multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, coldCost)
 		}
 
 		// Check if code is a delegation and if so, charge for resolution.
@@ -302,7 +295,7 @@ func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
 			if !contract.UseGas(cost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
 				return multigas.ZeroGas(), 0, ErrOutOfGas
 			}
-			total += cost
+			multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, cost)
 		}
 
 		// Now call the old calculator, which takes into account
@@ -319,12 +312,14 @@ func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
 		// adding it to the return, it will be charged outside of this function, as
 		// part of the dynamic gas. This will ensure it is correctly reported to
 		// tracers.
-		contract.Gas += total
+		contract.Gas += multiGas.Get(multigas.ResourceKindStorageAccess)
 
 		var overflow bool
-		if total, overflow = math.SafeAdd(old, total); overflow {
+		if multiGas, overflow = multiGas.SafeAdd(multiGas, multiOld); overflow {
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}
-		return multigas.ZeroGas(), total, nil
+
+		singleGas, _ := multiGas.SingleGas()
+		return multiGas, singleGas, nil
 	}
 }

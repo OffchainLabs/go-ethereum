@@ -833,6 +833,74 @@ func TestVariantGasEIP4762(t *testing.T) {
 	testGasCallFuncFuncWithCases(t, params.TestChainConfig, gasCallEIP4762, testCases, true)
 }
 
+func TestCallVariantGasCallEIP7702(t *testing.T) {
+	testCases := []GasCallFuncTestCase{
+		{
+			name:             "7702 cold access, non-delegate, no value",
+			slotInAccessList: false,
+			transfersValue:   false,
+			valueTransferGas: 50000,
+			targetExists:     true,
+			targetEmpty:      false,
+			isEIP158:         true,
+			isEIP2929:        true,
+			isSystemCall:     false,
+			memorySize:       128,
+		},
+		{
+			name:             "7702 warm access, with value transfer",
+			slotInAccessList: true,
+			transfersValue:   true,
+			valueTransferGas: 60000,
+			targetExists:     true,
+			targetEmpty:      false,
+			isEIP158:         true,
+			isEIP2929:        true,
+			isSystemCall:     false,
+			memorySize:       64,
+		},
+		{
+			name:             "7702 cold access, empty account, value transfer",
+			slotInAccessList: false,
+			transfersValue:   true,
+			valueTransferGas: 55000,
+			targetExists:     true,
+			targetEmpty:      true,
+			isEIP158:         true,
+			isEIP2929:        true,
+			isSystemCall:     false,
+			memorySize:       0,
+		},
+		{
+			name:             "7702 no value, warm slot",
+			slotInAccessList: true,
+			transfersValue:   false,
+			valueTransferGas: 45000,
+			targetExists:     true,
+			targetEmpty:      false,
+			isEIP158:         true,
+			isEIP2929:        true,
+			isSystemCall:     false,
+			memorySize:       32,
+		},
+		{
+			name:             "7702 system call skips access gas",
+			slotInAccessList: false,
+			transfersValue:   false,
+			valueTransferGas: 40000,
+			targetExists:     true,
+			targetEmpty:      false,
+			isEIP158:         true,
+			isEIP2929:        true,
+			isSystemCall:     true,
+			memorySize:       16,
+		},
+	}
+
+	wrapped := makeCallVariantGasCallEIP7702(gasCall)
+	testGasCallFuncFuncWithCases(t, params.TestChainConfig, wrapped, testCases, false)
+}
+
 func testGasDelegateOrStaticCall(t *testing.T, gasImplFunc gasFunc) {
 	t.Helper()
 
