@@ -411,10 +411,10 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 
 	if evm.chainRules.IsEIP158 {
 		if transfersValue && evm.StateDB.Empty(address) {
-			multiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallNewAccountGas)
+			multiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.CallNewAccountGas)
 		}
 	} else if !evm.StateDB.Exist(address) {
-		multiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallNewAccountGas)
+		multiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.CallNewAccountGas)
 	}
 
 	if transfersValue && !evm.chainRules.IsEIP4762 {
@@ -439,9 +439,8 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		}
 	}
 
-	// NOTE(NIT-3483): using only the computation gas for callGas
-	computationGas := multiGas.Get(multigas.ResourceKindComputation)
-	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, computationGas, stack.Back(0))
+	singleGas, _ := multiGas.SingleGas()
+	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, singleGas, stack.Back(0))
 	if err != nil {
 		return multigas.ZeroGas(), 0, err
 	}
@@ -449,7 +448,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
 
-	singleGas, _ := multiGas.SingleGas()
+	singleGas, _ = multiGas.SingleGas()
 	return multiGas, singleGas, nil
 }
 
@@ -480,9 +479,8 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 		}
 	}
 
-	// NOTE(NIT-3483): using only the computation gas for callGas
-	computationGas := multiGas.Get(multigas.ResourceKindComputation)
-	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, computationGas, stack.Back(0))
+	singleGas, _ := multiGas.SingleGas()
+	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, singleGas, stack.Back(0))
 	if err != nil {
 		return multigas.ZeroGas(), 0, err
 	}
@@ -490,7 +488,7 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
 
-	singleGas, _ := multiGas.SingleGas()
+	singleGas, _ = multiGas.SingleGas()
 	return multiGas, singleGas, nil
 }
 

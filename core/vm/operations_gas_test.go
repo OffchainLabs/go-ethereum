@@ -555,10 +555,10 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 			if !isCallCode && wasColdAccess {
 				if tc.isEIP158 {
 					if tc.transfersValue && tc.targetEmpty {
-						expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallNewAccountGas)
+						expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.CallNewAccountGas)
 					}
 				} else if !tc.targetExists {
-					expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallNewAccountGas)
+					expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.CallNewAccountGas)
 				}
 			}
 
