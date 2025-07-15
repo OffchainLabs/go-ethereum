@@ -22,6 +22,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -44,6 +45,8 @@ type ExecutionResult struct {
 	ScheduledTxes types.Transactions
 	// Arbitrum: the contract deployed from the top-level transaction, or nil if not a contract creation tx
 	TopLevelDeployed *common.Address
+	// Arbitrum: total used multi-dimensional gas
+	UsedMultiGas *multigas.MultiGas
 }
 
 // Unwrap returns the internal evm error which allows us for further
@@ -554,6 +557,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			Err:           err,
 			ReturnData:    returnData,
 			ScheduledTxes: st.evm.ProcessingHook.ScheduledTxes(),
+			UsedMultiGas:  multigas.ZeroGas(),
 		}, nil
 	}
 
@@ -583,6 +587,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Random != nil, st.evm.Context.Time, st.evm.Context.ArbOSVersion)
 		contractCreation = msg.To == nil
 		floorDataGas     uint64
+		usedMultiGas     = multigas.ZeroGas()
 	)
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
@@ -671,7 +676,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 
 		// Execute the transaction's call.
-		ret, st.gasRemaining, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining, value)
+		ret, st.gasRemaining, usedMultiGas, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining, value)
 	}
 
 	// Record the gas used excluding gas refunds. This value represents the actual
@@ -679,7 +684,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	peakGasUsed := st.gasUsed()
 
 	// Compute refund counter, capped to a refund quotient.
-	st.gasRemaining += st.calcRefund()
+	refund := st.calcRefund()
+	st.gasRemaining += refund
 	if rules.IsPrague && st.evm.ProcessingHook.IsCalldataPricingIncreaseEnabled() {
 		// After EIP-7623: Data-heavy transactions pay the floor gas.
 		if st.gasUsed() < floorDataGas {
@@ -694,6 +700,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 	}
 	st.returnGas()
+
+	// Arbitrum: set the multigas refunds
+	usedMultiGas.SetRefund(refund)
 
 	effectiveTip := msg.GasPrice
 	if rules.IsLondon {
@@ -742,6 +751,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		ReturnData:       ret,
 		ScheduledTxes:    st.evm.ProcessingHook.ScheduledTxes(),
 		TopLevelDeployed: deployedContract,
+		UsedMultiGas:     usedMultiGas,
 	}, nil
 }
 

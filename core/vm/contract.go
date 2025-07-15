@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/holiman/uint256"
@@ -47,6 +48,9 @@ type Contract struct {
 
 	Gas   uint64
 	value *uint256.Int
+
+	// Arbitrum: total used multi-dimensional gas
+	UsedMultiGas *multigas.MultiGas
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
@@ -56,11 +60,12 @@ func NewContract(caller common.Address, address common.Address, value *uint256.I
 		jumpDests = make(map[common.Hash]bitvec)
 	}
 	return &Contract{
-		caller:    caller,
-		address:   address,
-		jumpdests: jumpDests,
-		Gas:       gas,
-		value:     value,
+		caller:       caller,
+		address:      address,
+		jumpdests:    jumpDests,
+		Gas:          gas,
+		value:        value,
+		UsedMultiGas: multigas.ZeroGas(),
 	}
 }
 
