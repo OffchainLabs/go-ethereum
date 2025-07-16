@@ -19,12 +19,19 @@ package core
 import (
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
+
+type TxIndexerConfig struct {
+	Limit         uint64        // tx lookup limit
+	Threads       int           // number of threads used when RLP decoding blocks (0 = use geth default)
+	MinBatchDelay time.Duration // minimum time to delay indexing while waiting for more new blocks to batch
+}
 
 // TxIndexProgress is the struct describing the progress for transaction indexing.
 type TxIndexProgress struct {
@@ -40,6 +47,12 @@ func (progress TxIndexProgress) Done() bool {
 // txIndexer is the module responsible for maintaining transaction indexes
 // according to the configured indexing range by users.
 type txIndexer struct {
+	// arbitrum:
+	// maximum threads number used when RLP decoding blocks
+	threads int
+	// minimum time that indexing is delayed waiting for new blocks to batch
+	minBatchDelay time.Duration
+
 	// limit is the maximum number of blocks from head whose tx indexes
 	// are reserved:
 	//  * 0: means the entire chain should be indexed
@@ -67,14 +80,16 @@ type txIndexer struct {
 }
 
 // newTxIndexer initializes the transaction indexer.
-func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
+func newTxIndexer(config *TxIndexerConfig, chain *BlockChain) *txIndexer {
 	cutoff, _ := chain.HistoryPruningCutoff()
 	indexer := &txIndexer{
-		limit:  limit,
-		cutoff: cutoff,
-		db:     chain.db,
-		term:   make(chan chan struct{}),
-		closed: make(chan struct{}),
+		threads:       config.Threads,
+		minBatchDelay: config.MinBatchDelay,
+		limit:         config.Limit,
+		cutoff:        cutoff,
+		db:            chain.db,
+		term:          make(chan chan struct{}),
+		closed:        make(chan struct{}),
 	}
 	indexer.head.Store(indexer.resolveHead())
 	indexer.tail.Store(rawdb.ReadTxIndexTail(chain.db))
@@ -82,14 +97,14 @@ func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
 	go indexer.loop(chain)
 
 	var msg string
-	if limit == 0 {
+	if indexer.limit == 0 {
 		if indexer.cutoff == 0 {
 			msg = "entire chain"
 		} else {
 			msg = fmt.Sprintf("blocks since #%d", indexer.cutoff)
 		}
 	} else {
-		msg = fmt.Sprintf("last %d blocks", limit)
+		msg = fmt.Sprintf("last %d blocks", indexer.limit)
 	}
 	log.Info("Initialized transaction indexer", "range", msg)
 
@@ -122,7 +137,7 @@ func (indexer *txIndexer) run(head uint64, stop chan struct{}, done chan struct{
 			from = head - indexer.limit + 1
 		}
 		from = max(from, indexer.cutoff)
-		rawdb.IndexTransactions(indexer.db, from, head+1, stop, true)
+		rawdb.IndexTransactions(indexer.db, from, head+1, stop, true, indexer.threads)
 		return
 	}
 	// The tail flag is existent (which means indexes in [tail, head] should be
@@ -130,7 +145,7 @@ func (indexer *txIndexer) run(head uint64, stop chan struct{}, done chan struct{
 	if indexer.limit == 0 || head < indexer.limit {
 		if *tail > 0 {
 			from := max(uint64(0), indexer.cutoff)
-			rawdb.IndexTransactions(indexer.db, from, *tail, stop, true)
+			rawdb.IndexTransactions(indexer.db, from, *tail, stop, true, indexer.threads)
 		}
 		return
 	}
@@ -140,10 +155,10 @@ func (indexer *txIndexer) run(head uint64, stop chan struct{}, done chan struct{
 	from = max(from, indexer.cutoff)
 	if from < *tail {
 		// Reindex a part of missing indices and rewind index tail to HEAD-limit
-		rawdb.IndexTransactions(indexer.db, from, *tail, stop, true)
+		rawdb.IndexTransactions(indexer.db, from, *tail, stop, true, indexer.threads)
 	} else {
 		// Unindex a part of stale indices and forward index tail to HEAD-limit
-		rawdb.UnindexTransactions(indexer.db, *tail, from, stop, false)
+		rawdb.UnindexTransactions(indexer.db, *tail, from, stop, false, indexer.threads)
 	}
 }
 
@@ -249,6 +264,7 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 		done = make(chan struct{})
 		go indexer.run(head, stop, done)
 	}
+	lastBatch := time.Now()
 	for {
 		select {
 		case h := <-headCh:
@@ -256,7 +272,22 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 			if done == nil {
 				stop = make(chan struct{})
 				done = make(chan struct{})
-				go indexer.run(h.Header.Number.Uint64(), stop, done)
+				if sinceLast := time.Since(lastBatch); sinceLast < indexer.minBatchDelay {
+					go func() {
+						select {
+						case <-stop:
+							close(done)
+							return
+						case <-time.After(indexer.minBatchDelay - sinceLast):
+						}
+						// we can update lastBatch timestamp safely from this goroutine as the read won't happen before this goroutine exits and closes done channel
+						lastBatch = time.Now()
+						indexer.run(indexer.head.Load(), stop, done)
+					}()
+				} else {
+					lastBatch = time.Now()
+					go indexer.run(indexer.head.Load(), stop, done)
+				}
 			}
 
 		case <-done:
