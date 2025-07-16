@@ -662,7 +662,7 @@ type batch struct {
 // Put inserts the given value into the batch for later committing.
 // In case ethdb.ErrBatchTooLarge is returned, it is safe to flush the batch and retry putting the key,value pair.
 func (b *batch) Put(key, value []byte) error {
-	// The size increase is argument in call to cockroachdb/pebble.Batch.grow in cockroachdb/pebble.Batch.prepareDeferredKeyValueRecord. pebble.Batch.grow may panic if the batch data size plus the increase reaches cockroachdb/pebble.maxBatchSize
+	// The size increase is an argument to the cockroachdb/pebble.Batch.grow call in cockroachdb/pebble.Batch.prepareDeferredKeyValueRecord. pebble.Batch.grow may panic if the batch data size plus the increase reaches cockroachdb/pebble.maxBatchSize
 	sizeIncrease := 1 + uint64(2*binary.MaxVarintLen32) + uint64(len(key)) + uint64(len(value))
 	// check if we fit within maxBatchSize
 	if uint64(b.b.Len())+sizeIncrease >= maxBatchSize {
