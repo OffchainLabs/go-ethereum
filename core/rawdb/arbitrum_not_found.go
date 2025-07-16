@@ -19,7 +19,7 @@ package rawdb
 // Arbitrum specific code to handle database errors
 
 func ignoreNotFound(blob []byte, err error) ([]byte, error) {
-	if isDbErrNotFound(err) {
+	if IsDbErrNotFound(err) {
 		return nil, nil
 	}
 	return blob, err

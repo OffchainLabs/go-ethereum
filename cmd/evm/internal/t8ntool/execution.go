@@ -236,7 +236,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, errMsg})
 			continue
 		}
-		msg, err := core.TransactionToMessage(tx, signer, pre.Env.BaseFee, core.MessageCommitMode)
+		msg, err := core.TransactionToMessage(tx, signer, pre.Env.BaseFee, core.NewMessageCommitContext(nil))
 		if err != nil {
 			log.Warn("rejected tx", "index", i, "hash", tx.Hash(), "error", err)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
@@ -367,9 +367,13 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not parse requests logs: %v", err))
 		}
 		// EIP-7002
-		core.ProcessWithdrawalQueue(&requests, evm)
+		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
+			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not process withdrawal requests: %v", err))
+		}
 		// EIP-7251
-		core.ProcessConsolidationQueue(&requests, evm)
+		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
+			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not process consolidation requests: %v", err))
+		}
 	}
 
 	// Commit block

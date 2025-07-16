@@ -178,7 +178,7 @@ func (l panicLogger) Fatalf(format string, args ...interface{}) {
 
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string, readonly bool, extraOptions *ExtraOptions) (*Database, error) {
+func New(file string, cache int, handles int, namespace string, readonly bool, ephemeral bool, extraOptions *ExtraOptions) (*Database, error) {
 	if extraOptions == nil {
 		extraOptions = &ExtraOptions{}
 	}
@@ -250,7 +250,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		fn:           file,
 		log:          logger,
 		quitChan:     make(chan chan error),
-		writeOptions: &pebble.WriteOptions{Sync: extraOptions.SyncMode},
+		writeOptions: &pebble.WriteOptions{Sync: !ephemeral && extraOptions.SyncMode},
 	}
 	opt := &pebble.Options{
 		// Pebble has a single combined cache area and the write
@@ -570,12 +570,8 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		compReads[i%2] = compRead
 		nWrites[i%2] = nWrite
 
-		if d.writeDelayNMeter != nil {
-			d.writeDelayNMeter.Mark(writeDelayCounts[i%2] - writeDelayCounts[(i-1)%2])
-		}
-		if d.writeDelayMeter != nil {
-			d.writeDelayMeter.Mark(writeDelayTimes[i%2] - writeDelayTimes[(i-1)%2])
-		}
+		d.writeDelayNMeter.Mark(writeDelayCounts[i%2] - writeDelayCounts[(i-1)%2])
+		d.writeDelayMeter.Mark(writeDelayTimes[i%2] - writeDelayTimes[(i-1)%2])
 		// Print a warning log if writing has been stalled for a while. The log will
 		// be printed per minute to avoid overwhelming users.
 		if d.writeStalled.Load() && writeDelayCounts[i%2] == writeDelayCounts[(i-1)%2] &&
@@ -583,24 +579,13 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 			d.log.Warn("Database compacting, degraded performance")
 			lastWriteStallReport = time.Now()
 		}
-		if d.compTimeMeter != nil {
-			d.compTimeMeter.Mark(compTimes[i%2] - compTimes[(i-1)%2])
-		}
-		if d.compReadMeter != nil {
-			d.compReadMeter.Mark(compReads[i%2] - compReads[(i-1)%2])
-		}
-		if d.compWriteMeter != nil {
-			d.compWriteMeter.Mark(compWrites[i%2] - compWrites[(i-1)%2])
-		}
-		if d.diskSizeGauge != nil {
-			d.diskSizeGauge.Update(int64(stats.DiskSpaceUsage()))
-		}
-		if d.diskReadMeter != nil {
-			d.diskReadMeter.Mark(0) // pebble doesn't track non-compaction reads
-		}
-		if d.diskWriteMeter != nil {
-			d.diskWriteMeter.Mark(nWrites[i%2] - nWrites[(i-1)%2])
-		}
+		d.compTimeMeter.Mark(compTimes[i%2] - compTimes[(i-1)%2])
+		d.compReadMeter.Mark(compReads[i%2] - compReads[(i-1)%2])
+		d.compWriteMeter.Mark(compWrites[i%2] - compWrites[(i-1)%2])
+		d.diskSizeGauge.Update(int64(stats.DiskSpaceUsage()))
+		d.diskReadMeter.Mark(0) // pebble doesn't track non-compaction reads
+		d.diskWriteMeter.Mark(nWrites[i%2] - nWrites[(i-1)%2])
+
 		// See https://github.com/cockroachdb/pebble/pull/1628#pullrequestreview-1026664054
 		manuallyAllocated := stats.BlockCache.Size + int64(stats.MemTable.Size) + int64(stats.MemTable.ZombieSize)
 		d.manualMemAllocGauge.Update(manuallyAllocated)
