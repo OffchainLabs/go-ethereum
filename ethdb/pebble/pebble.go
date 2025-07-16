@@ -53,16 +53,14 @@ const (
 	// leveldb database cannot keep up with requested writes.
 	degradationWarnInterval = time.Minute
 
-	// The max batch size is limited by the uint32 offsets stored in
-	// internal/batchskl.node, DeferredBatchOp, and flushableBatchEntry.
-	//
+	// The max size of internal pebble batch is limited by the uint32 offsets.
 	// Pebble limits the size to MaxUint32 (just short of 4GB) so that the exclusive
 	// end of an allocation fits in uint32.
-	//
 	// On 32-bit systems, slices are naturally limited to MaxInt (just short of
 	// 2GB).
 	// see: cockroachdb/pebble.maxBatchSize
-	maxBatchSize = (1<<31)<<(^uint(0)>>63) - 1
+	oneIf64Bit   = ^uint(0) >> 63
+	maxBatchSize = (1<<31)<<oneIf64Bit - 1 // MaxUint32 on 64-bit platform, MaxInt on 32-bit platform
 )
 
 // Database is a persistent key-value store based on the pebble storage engine.
