@@ -87,8 +87,8 @@ var Defaults = &Config{
 // periodically flush a couple tries to disk, garbage collecting the remainder.
 type Database struct {
 	// Arbitrum:
-	idealCapBatchSize    uint32
-	idealCommitBatchSize uint32
+	idealCapBatchSize    uint
+	idealCommitBatchSize uint
 
 	diskdb  ethdb.Database              // Persistent storage for matured trie nodes
 	cleans  *fastcache.Cache            // GC friendly memory cache of clean node RLPs
@@ -144,9 +144,9 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	if config.CleanCacheSize > 0 {
 		cleans = fastcache.New(config.CleanCacheSize)
 	}
-	sanitizeBatchSize := func(size uint32) uint32 {
+	sanitizeBatchSize := func(size uint32) uint {
 		if size > 0 {
-			return size
+			return uint(size)
 		}
 		return ethdb.IdealBatchSize
 	}
@@ -386,7 +386,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		}
 
 		// If we exceeded the ideal batch size, commit and reset
-		if uint32(batch.ValueSize()) >= db.idealCapBatchSize {
+		if uint(batch.ValueSize()) >= db.idealCapBatchSize {
 			if err := batch.Write(); err != nil {
 				log.Error("Failed to write flush list to disk", "err", err)
 				return err
@@ -528,7 +528,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 			log.Crit("Failure in hashdb Commit operation", "err", err)
 		}
 	}
-	if uint32(batch.ValueSize()) >= db.idealCommitBatchSize {
+	if uint(batch.ValueSize()) >= db.idealCommitBatchSize {
 		if err := batch.Write(); err != nil {
 			return err
 		}
