@@ -332,6 +332,15 @@ type trieGcEntry struct {
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
 func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, txLookupLimit *uint64) (*BlockChain, error) {
+	var txIndexerConfig *TxIndexerConfig
+	if txLookupLimit != nil {
+		txIndexerConfig = &TxIndexerConfig{Limit: *txLookupLimit, Threads: 0, MinBatchDelay: 0}
+	}
+	return NewBlockChainExtended(db, cacheConfig, chainConfig, genesis, overrides, engine, vmConfig, txIndexerConfig)
+}
+
+// implements NewBlockChain function but accepts more arguments
+func NewBlockChainExtended(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, txIndexerConfig *TxIndexerConfig) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -555,8 +564,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
 	}
 	// Start tx indexer if it's enabled.
-	if txLookupLimit != nil {
-		bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
+	if txIndexerConfig != nil {
+		bc.txIndexer = newTxIndexer(txIndexerConfig, bc)
 	}
 	return bc, nil
 }
