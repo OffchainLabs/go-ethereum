@@ -373,6 +373,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 				log.Warn("Pebble batch limit reached in hashdb Cap operation, flushing batch. Consider setting ideal cap batch size to a lower value.", "pebbleError", err)
 				// flush batch & retry the write
 				if err = batch.Write(); err != nil {
+					log.Error("Failed to write flush list to disk", "err", err)
 					return err
 				}
 				batch.Reset()
