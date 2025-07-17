@@ -318,7 +318,7 @@ var (
 )
 
 func gasCreate2(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
-	multiGas, gas, err := memoryGasCost(mem, memorySize)
+	multiGas, _, err := memoryGasCost(mem, memorySize)
 	if err != nil {
 		return multigas.ZeroGas(), 0, err
 	}
@@ -329,15 +329,15 @@ func gasCreate2(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memoryS
 	if wordGas, overflow = math.SafeMul(toWordSize(wordGas), params.Keccak256WordGas); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
-	// TODO(NIT-3484): Update multi dimensional gas here
-	if gas, overflow = math.SafeAdd(gas, wordGas); overflow {
+	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, wordGas); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
-	return multiGas, gas, nil
+	singleGas, _ := multiGas.SingleGas()
+	return multiGas, singleGas, nil
 }
 
 func gasCreateEip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
-	multiGas, gas, err := memoryGasCost(mem, memorySize)
+	multiGas, _, err := memoryGasCost(mem, memorySize)
 	if err != nil {
 		return multigas.ZeroGas(), 0, err
 	}
@@ -348,16 +348,16 @@ func gasCreateEip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	if size > evm.chainConfig.MaxInitCodeSize() {
 		return multigas.ZeroGas(), 0, fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
 	}
-	// TODO(NIT-3484): Update multi dimensional gas here
 	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
 	moreGas := params.InitCodeWordGas * ((size + 31) / 32)
-	if gas, overflow = math.SafeAdd(gas, moreGas); overflow {
+	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, moreGas); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
-	return multiGas, gas, nil
+	singleGas, _ := multiGas.SingleGas()
+	return multiGas, singleGas, nil
 }
 func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
-	multiGas, gas, err := memoryGasCost(mem, memorySize)
+	multiGas, _, err := memoryGasCost(mem, memorySize)
 	if err != nil {
 		return multigas.ZeroGas(), 0, err
 	}
@@ -368,13 +368,13 @@ func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 	if size > evm.chainConfig.MaxInitCodeSize() {
 		return multigas.ZeroGas(), 0, fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
 	}
-	// TODO(NIT-3484): Update multi dimensional gas here
 	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
 	moreGas := (params.InitCodeWordGas + params.Keccak256WordGas) * ((size + 31) / 32)
-	if gas, overflow = math.SafeAdd(gas, moreGas); overflow {
+	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, moreGas); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
-	return multiGas, gas, nil
+	singleGas, _ := multiGas.SingleGas()
+	return multiGas, singleGas, nil
 }
 
 func gasExpFrontier(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
