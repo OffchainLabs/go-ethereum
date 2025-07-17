@@ -73,7 +73,6 @@ type Config struct {
 // Notably, clean cache is disabled explicitly,
 var Defaults = &Config{
 	// Arbitrum:
-	// default zeroes used to prevent need for correct initialization in all places used upstream
 	IdealCapBatchSize:    0, // 0 = ethdb.IdealBatchSize will be used
 	IdealCommitBatchSize: 0, // 0 = ethdb.IdealBatchSize will be used
 
