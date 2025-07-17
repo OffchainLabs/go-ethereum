@@ -645,7 +645,13 @@ type batch struct {
 // Put inserts the given value into the batch for later committing.
 // In case ethdb.ErrBatchTooLarge is returned, it is safe to flush the batch and retry putting the key,value pair.
 func (b *batch) Put(key, value []byte) error {
-	// The size increase is an argument to the cockroachdb/pebble.Batch.grow call in cockroachdb/pebble.Batch.prepareDeferredKeyValueRecord. pebble.Batch.grow may panic if the batch data size plus the increase reaches cockroachdb/pebble.maxBatchSize
+	// The size increase is an argument to the cockroachdb/pebble.Batch.grow call in cockroachdb/pebble.Batch.prepareDeferredKeyValueRecord called internally in cockroachdb/pebble.Batch.Set.
+	// pebble.Batch.grow panics when the batch data size plus the increase reaches cockroachdb/pebble.maxBatchSize
+	// 1 byte for batch entry kind
+	// + MaxVariantLen32 for encoding of key length
+	// + MaxVariantLen32 for encoding of value length
+	// + key length
+	// + value length
 	sizeIncrease := 1 + uint64(2*binary.MaxVarintLen32) + uint64(len(key)) + uint64(len(value))
 	// check if we fit within maxBatchSize
 	if uint64(b.b.Len())+sizeIncrease >= maxBatchSize {
@@ -662,7 +668,11 @@ func (b *batch) Put(key, value []byte) error {
 // Delete inserts the key removal into the batch for later committing.
 // In case ethdb.ErrBatchTooLarge is returned, it is safe to flush the batch and retry deleting the key
 func (b *batch) Delete(key []byte) error {
-	// The size increase is argument in call to cockroachdb/pebble.Batch.grow in cockroachdb/pebble.Batch.prepareDeferredKeyRecord. pebble.Batch.grow may panic if the batch data size plus the increase reaches cockroachdb/pebble.maxBatchSize
+	// the size increase is argument in call to cockroachdb/pebble.Batch.grow in cockroachdb/pebble.Batch.prepareDeferredKeyRecord called internally in cockroachdb/pebble.Batch.Delete.
+	// pebble.Batch.grow panics when the batch data size plus the increase reaches cockroachdb/pebble.maxBatchSize
+	// 1 byte for batch entry kind
+	// + MaxVariantLen32 for encoding of key length
+	// + key length
 	sizeIncrease := 1 + uint64(binary.MaxVarintLen32) + uint64(len(key))
 	// check if we fit within maxBatchSize
 	if uint64(b.b.Len())+sizeIncrease >= maxBatchSize {
