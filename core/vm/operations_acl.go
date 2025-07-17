@@ -251,22 +251,23 @@ var (
 func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 	gasFunc := func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
 		var (
-			gas     uint64
-			address = common.Address(stack.peek().Bytes20())
+			multiGas = multigas.ZeroGas()
+			address  = common.Address(stack.peek().Bytes20())
 		)
 		if !evm.StateDB.AddressInAccessList(address) {
 			// If the caller cannot afford the cost, this change will be rolled back
 			evm.StateDB.AddAddressToAccessList(address)
-			gas = params.ColdAccountAccessCostEIP2929
+			multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.ColdAccountAccessCostEIP2929)
 		}
 		// if empty and transfers value
 		if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
-			gas += params.CreateBySelfdestructGas
+			multiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas)
 		}
 		if refundsEnabled && !evm.StateDB.HasSelfDestructed(contract.Address()) {
 			evm.StateDB.AddRefund(params.SelfdestructRefundGas)
 		}
-		return multigas.ZeroGas(), gas, nil
+		singleGas, _ := multiGas.SingleGas()
+		return multiGas, singleGas, nil
 	}
 	return gasFunc
 }

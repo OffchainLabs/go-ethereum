@@ -137,7 +137,9 @@ func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 			statelessGas += evm.AccessEvents.BasicDataGas(beneficiaryAddr, true)
 		}
 	}
-	return multigas.ZeroGas(), statelessGas, nil
+	multiGas := multigas.StorageAccessGas(statelessGas)
+	singleGas, _ := multiGas.SingleGas()
+	return multiGas, singleGas, nil
 }
 
 func gasCodeCopyEip4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
