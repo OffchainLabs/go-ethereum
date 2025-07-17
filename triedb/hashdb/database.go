@@ -87,7 +87,8 @@ var Defaults = &Config{
 // periodically flush a couple tries to disk, garbage collecting the remainder.
 type Database struct {
 	// Arbitrum:
-	config *Config
+	idealCapBatchSize    uint32
+	idealCommitBatchSize uint32
 
 	diskdb  ethdb.Database              // Persistent storage for matured trie nodes
 	cleans  *fastcache.Cache            // GC friendly memory cache of clean node RLPs
@@ -143,8 +144,15 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	if config.CleanCacheSize > 0 {
 		cleans = fastcache.New(config.CleanCacheSize)
 	}
+	sanitizeBatchSize := func(size uint32) uint32 {
+		if size > 0 {
+			return size
+		}
+		return ethdb.IdealBatchSize
+	}
 	return &Database{
-		config: config,
+		idealCapBatchSize:    sanitizeBatchSize(config.IdealCapBatchSize),
+		idealCommitBatchSize: sanitizeBatchSize(config.IdealCommitBatchSize),
 
 		diskdb:  diskdb,
 		cleans:  cleans,
@@ -355,12 +363,6 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	size := db.dirtiesSize + common.StorageSize(len(db.dirties)*cachedNodeSize)
 	size += db.childrenSize
 
-	// Arbitrum:
-	idealBatchSize := uint(db.config.IdealCapBatchSize)
-	if idealBatchSize == 0 {
-		idealBatchSize = uint(ethdb.IdealBatchSize)
-	}
-
 	// Keep committing nodes from the flush-list until we're below allowance
 	oldest := db.oldest
 	for size > limit && oldest != (common.Hash{}) {
@@ -384,7 +386,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		}
 
 		// If we exceeded the ideal batch size, commit and reset
-		if uint(batch.ValueSize()) >= idealBatchSize {
+		if uint32(batch.ValueSize()) >= db.idealCapBatchSize {
 			if err := batch.Write(); err != nil {
 				log.Error("Failed to write flush list to disk", "err", err)
 				return err
@@ -526,11 +528,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 			log.Crit("Failure in hashdb Commit operation", "err", err)
 		}
 	}
-	idealBatchSize := uint(db.config.IdealCommitBatchSize)
-	if idealBatchSize == 0 {
-		idealBatchSize = uint(ethdb.IdealBatchSize)
-	}
-	if uint(batch.ValueSize()) >= idealBatchSize {
+	if uint32(batch.ValueSize()) >= db.idealCommitBatchSize {
 		if err := batch.Write(); err != nil {
 			return err
 		}
