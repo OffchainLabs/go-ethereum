@@ -1110,7 +1110,7 @@ func testGasSelfdestructFuncWithCases(t *testing.T, config *params.ChainConfig, 
 
 			caller := common.Address{}
 			contractAddr := common.Address{1}
-			beneficiaryAddr := common.Address{2} // Not used in this test
+			beneficiaryAddr := common.Address{2}
 			contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
 
 			stack := newstack()
@@ -1190,4 +1190,73 @@ func TestGasSelfdestruct(t *testing.T) {
 	}
 
 	testGasSelfdestructFuncWithCases(t, params.TestChainConfig, gasSelfdestruct, testCases)
+}
+
+// Modern (EIP-2929) SELFDESTRUCT gas function test with access list
+func TestMakeSelfdestructGasFn(t *testing.T) {
+	testCases := []GasSelfdestructFuncTestCase{
+		{
+			name:             "selfdestruct - no access list - with refund",
+			expectedMultiGas: multigas.StorageAccessGas(params.ColdAccountAccessCostEIP2929).Set(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas),
+			expectedRefund:   params.SelfdestructRefundGas,
+		},
+		{
+			name:              "has been destructed - no access list - no refund",
+			expectedMultiGas:  multigas.StorageAccessGas(params.ColdAccountAccessCostEIP2929),
+			hasBeenDestructed: true,
+		},
+		{
+			name:             "selfdestruct - in access list - with refund",
+			expectedMultiGas: multigas.StorageAccessGas(params.ColdAccountAccessCostEIP2929).Set(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas),
+			expectedRefund:   params.SelfdestructRefundGas,
+			slotInAccessList: true,
+		},
+		{
+			name:              "has been destructed - in access list - no refund",
+			expectedMultiGas:  multigas.StorageAccessGas(params.ColdAccountAccessCostEIP2929),
+			hasBeenDestructed: true,
+			slotInAccessList:  true,
+		},
+	}
+
+	testGasSelfdestructFuncWithCases(t, params.TestChainConfig, makeSelfdestructGasFn(true), testCases)
+}
+
+// Statelessness mode (EIP-4762) SELFDESTRUCT gas function test
+func TestGasSelfdestructEIP4762(t *testing.T) {
+	stateDb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	evm := NewEVM(BlockContext{}, stateDb, params.TestChainConfig, Config{})
+
+	caller := common.Address{}
+	contractAddr := common.Address{1}
+	beneficiaryAddr := common.Address{2}
+	contractGas := uint64(100000)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+
+	stack := newstack()
+	mem := NewMemory()
+
+	// Setup access list
+	accessList := state.NewAccessEvents(evm.StateDB.PointCache())
+	accessListForExpected := state.NewAccessEvents(evm.StateDB.PointCache())
+	evm.AccessEvents = accessList
+
+	stateDb.CreateAccount(beneficiaryAddr)
+
+	stateDb.CreateAccount(contractAddr)
+	stateDb.SetBalance(contractAddr, uint256.NewInt(0), tracing.BalanceChangeUnspecified)
+
+	stack.push(new(uint256.Int).SetBytes(beneficiaryAddr.Bytes()))
+
+	expectedStorageAccessGas := accessListForExpected.BasicDataGas(contractAddr, false) + accessListForExpected.BasicDataGas(beneficiaryAddr, false)
+	expectedMultiGas := multigas.StorageAccessGas(expectedStorageAccessGas)
+
+	multiGas, _, err := gasSelfdestructEIP4762(evm, contract, stack, mem, 0)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if *multiGas != *expectedMultiGas {
+		t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+	}
 }
