@@ -19,15 +19,12 @@ package vm
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 type (
 	executionFunc func(pc *uint64, interpreter *EVMInterpreter, callContext *ScopeContext) ([]byte, error)
-	// last parameter is the requested memory size as a uint64
-	// gasFunc returns multi-dimensional gas usage (MultiGas) and single-dimensional gas (uint64)
-	gasFunc func(*EVM, *Contract, *Stack, *Memory, uint64) (*multigas.MultiGas, uint64, error)
+	gasFunc       func(*EVM, *Contract, *Stack, *Memory, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
 	// memorySizeFunc returns the required size, and whether the operation overflowed a uint64
 	memorySizeFunc func(*Stack) (size uint64, overflow bool)
 )

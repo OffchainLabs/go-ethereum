@@ -289,7 +289,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			// Consume the gas and return an error if not enough gas is available.
 			// cost is explicitly set so that the capture state defer method can get the proper cost
 			var dynamicCost uint64
-			_, dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
+			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
 			cost += dynamicCost // for tracing
 			if err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
