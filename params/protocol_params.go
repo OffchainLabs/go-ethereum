@@ -44,7 +44,7 @@ const (
 	Keccak256WordGas uint64 = 6  // Once per word of the KECCAK256 operation's data.
 	InitCodeWordGas  uint64 = 2  // Once per word of the init code when creating a contract.
 
-	SstoreSetGas    uint64 = 20000 // Once per SSTORE operation.
+	SstoreSetGas    uint64 = 20002 // Once per SSTORE operation.
 	SstoreResetGas  uint64 = 5000  // Once per SSTORE operation if the zeroness changes from zero.
 	SstoreClearGas  uint64 = 5000  // Once per SSTORE operation if the zeroness doesn't change.
 	SstoreRefundGas uint64 = 15000 // Once per SSTORE operation if the zeroness changes to zero.
