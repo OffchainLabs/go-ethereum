@@ -1258,5 +1258,46 @@ func TestGasSelfdestructEIP4762(t *testing.T) {
 
 	if *multiGas != *expectedMultiGas {
 		t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+// Base LOG0-LOG4 gas function test
+func TestMakeGasLog(t *testing.T) {
+	for n := uint64(0); n <= 4; n++ {
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		evm := NewEVM(BlockContext{}, statedb, params.TestChainConfig, Config{})
+
+		caller := common.Address{}
+		contractAddr := common.Address{1}
+		contractGas := uint64(100000)
+		contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+
+		stack := newstack()
+		mem := NewMemory()
+		memForExpected := NewMemory()
+
+		// Set up stack for LOG operation
+		requestedSize := uint64(32)                           // requestedSize = 32 bytes for data
+		stack.push(new(uint256.Int).SetUint64(requestedSize)) // stack.Back(1)
+		stack.push(new(uint256.Int))                          // dummy top (stack.Back(0))
+
+		// memorySize is arbitrary, only affects memory cost component
+		memorySize := uint64(64)
+
+		_, memorySingleGas, err := memoryGasCost(memForExpected, memorySize)
+		if err != nil {
+			t.Fatalf("Failed memoryGasCost: %v", err)
+		}
+
+		expectedComputation := memorySingleGas + params.LogGas + n*params.LogTopicGas
+		expectedHistory := requestedSize * params.LogDataGas
+
+		expectedMultiGas := multigas.ComputationGas(expectedComputation).Set(multigas.ResourceKindHistoryGrowth, expectedHistory)
+
+		multiGas, _, err := makeGasLog(n)(evm, contract, stack, mem, memorySize)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+
+		if *multiGas != *expectedMultiGas {
+			t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+		}
 	}
 }

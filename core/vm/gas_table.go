@@ -258,16 +258,15 @@ func makeGasLog(n uint64) gasFunc {
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}
 
-		multiGas, gas, err := memoryGasCost(mem, memorySize)
+		multiGas, _, err := memoryGasCost(mem, memorySize)
 		if err != nil {
 			return multigas.ZeroGas(), 0, err
 		}
 
-		// TODO(NIT-3484): Update multi dimensional gas here
-		if gas, overflow = math.SafeAdd(gas, params.LogGas); overflow {
+		if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, params.LogGas); overflow {
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}
-		if gas, overflow = math.SafeAdd(gas, n*params.LogTopicGas); overflow {
+		if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, n*params.LogTopicGas); overflow {
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}
 
@@ -275,10 +274,11 @@ func makeGasLog(n uint64) gasFunc {
 		if memorySizeGas, overflow = math.SafeMul(requestedSize, params.LogDataGas); overflow {
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}
-		if gas, overflow = math.SafeAdd(gas, memorySizeGas); overflow {
+		if overflow = multiGas.SafeIncrement(multigas.ResourceKindHistoryGrowth, memorySizeGas); overflow {
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}
-		return multiGas, gas, nil
+		singleGas, _ := multiGas.SingleGas()
+		return multiGas, singleGas, nil
 	}
 }
 
