@@ -81,7 +81,7 @@ func TestChainIterator(t *testing.T) {
 	}
 	for i, c := range cases {
 		var numbers []int
-		hashCh := iterateTransactions(chainDb, c.from, c.to, c.reverse, nil)
+		hashCh := iterateTransactions(chainDb, c.from, c.to, c.reverse, nil, 0)
 		if hashCh != nil {
 			for h := range hashCh {
 				numbers = append(numbers, int(h.number))
@@ -173,18 +173,18 @@ func TestIndexTransactions(t *testing.T) {
 			t.Fatalf("Transaction tail mismatch")
 		}
 	}
-	IndexTransactions(chainDB, 5, 11, nil, false)
+	IndexTransactions(chainDB, 5, 11, nil, false, 0)
 	verify(5, 11, true, 5)
 	verify(0, 5, false, 5)
 
-	IndexTransactions(chainDB, 0, 5, nil, false)
+	IndexTransactions(chainDB, 0, 5, nil, false, 0)
 	verify(0, 11, true, 0)
 
-	UnindexTransactions(chainDB, 0, 5, nil, false)
+	UnindexTransactions(chainDB, 0, 5, nil, false, 0)
 	verify(5, 11, true, 5)
 	verify(0, 5, false, 5)
 
-	UnindexTransactions(chainDB, 5, 11, nil, false)
+	UnindexTransactions(chainDB, 5, 11, nil, false, 0)
 	verify(0, 11, false, 11)
 
 	// Testing corner cases
@@ -201,7 +201,7 @@ func TestIndexTransactions(t *testing.T) {
 	})
 	verify(9, 11, true, 9)
 	verify(0, 9, false, 9)
-	IndexTransactions(chainDB, 0, 9, nil, false)
+	IndexTransactions(chainDB, 0, 9, nil, false, 0)
 
 	signal = make(chan struct{})
 	var once2 sync.Once
@@ -224,7 +224,7 @@ func TestPruneTransactionIndex(t *testing.T) {
 	lastBlock := blocks[len(blocks)-1].NumberU64()
 	pruneBlock := lastBlock - 3
 
-	IndexTransactions(chainDB, 0, lastBlock+1, nil, false)
+	IndexTransactions(chainDB, 0, lastBlock+1, nil, false, 0)
 
 	// Check all transactions are in index.
 	for _, block := range blocks {
