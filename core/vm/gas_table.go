@@ -329,6 +329,8 @@ func gasCreate2(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memoryS
 	if wordGas, overflow = math.SafeMul(toWordSize(wordGas), params.Keccak256WordGas); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
+	// Keccak hashing considered as computation.
+	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, wordGas); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
@@ -350,6 +352,9 @@ func gasCreateEip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	}
 	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
 	moreGas := params.InitCodeWordGas * ((size + 31) / 32)
+
+	// Init code execution considered as computation.
+	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, moreGas); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
@@ -370,6 +375,9 @@ func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 	}
 	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
 	moreGas := (params.InitCodeWordGas + params.Keccak256WordGas) * ((size + 31) / 32)
+
+	// Init code execution and Keccak hashing both considered as computation.
+	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, moreGas); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
