@@ -953,3 +953,132 @@ func TestGasDelegateCall(t *testing.T) {
 func TestGasStaticCall(t *testing.T) {
 	testGasDelegateOrStaticCall(t, gasStaticCall)
 }
+
+func testGasCreateFunc(t *testing.T, gasImplFunc gasFunc, includeHashCost bool, enableEip3860 bool) {
+	t.Helper()
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+
+	chainConfig := params.TestChainConfig
+	if enableEip3860 {
+		chainConfig.ShanghaiTime = new(uint64) // Enable EIP-3860
+		*chainConfig.ShanghaiTime = 0
+	}
+
+	evm := NewEVM(BlockContext{}, statedb, chainConfig, Config{})
+
+	caller := common.Address{}
+	contractAddr := common.Address{1}
+	contractGas := uint64(100000)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+
+	stack := newstack()
+	mem := NewMemory()
+	memForExpected := NewMemory()
+
+	// Set up test cases based on EIP-3860 requirement
+	var testCases []struct {
+		name       string
+		initSize   uint64
+		shouldFail bool
+	}
+
+	if enableEip3860 {
+		// Test with different init code sizes (within limit) and boundary conditions
+		maxInitCodeSize := evm.chainConfig.MaxInitCodeSize()
+		testCases = []struct {
+			name       string
+			initSize   uint64
+			shouldFail bool
+		}{
+			{"small init code", 32, false},
+			{"medium init code", 1024, false},
+			{"max init code", maxInitCodeSize, false},
+			{"over max init code", maxInitCodeSize + 1, true},
+		}
+	} else {
+		// Test with different init code sizes (no limit)
+		testCases = []struct {
+			name       string
+			initSize   uint64
+			shouldFail bool
+		}{
+			{"small init code", 32, false},
+			{"medium init code", 1024, false},
+			{"large init code", 32768, false},
+		}
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup stack
+			stack = newstack()
+			stack.push(new(uint256.Int).SetUint64(tc.initSize)) // size (stack position 2)
+			stack.push(new(uint256.Int).SetUint64(0))           // offset (stack position 1)
+			stack.push(new(uint256.Int).SetUint64(0))           // value (stack position 0)
+
+			memorySize := uint64(64)
+
+			// Call gasImplFunc
+			multiGas, singleGas, err := gasImplFunc(evm, contract, stack, mem, memorySize)
+
+			if tc.shouldFail {
+				if err == nil {
+					t.Fatalf("Expected error for init code size %d, but got none", tc.initSize)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			// Calculate expected multi-dimensional gas
+			expectedMultiGas, memorySingleGas, err := memoryGasCost(memForExpected, memorySize)
+			if err != nil {
+				t.Fatalf("Failed memoryGasCost: %v", err)
+			}
+			// Calculate expected multi-dimensional gas
+
+			wordSize := (tc.initSize + 31) / 32
+			var totalComputationCost uint64
+			if enableEip3860 {
+				// EIP-3860 functions calculate init code cost
+				initCodeCost := params.InitCodeWordGas * wordSize
+				totalComputationCost = initCodeCost
+				if includeHashCost {
+					hashCost := params.Keccak256WordGas * wordSize
+					totalComputationCost += hashCost
+				}
+			} else {
+				// Regular gasCreate2 only calculates hash cost
+				if includeHashCost {
+					hashCost := params.Keccak256WordGas * wordSize
+					totalComputationCost = hashCost
+				}
+			}
+
+			expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, totalComputationCost)
+			expectedSingleGas := memorySingleGas + totalComputationCost
+
+			if *multiGas != *expectedMultiGas {
+				t.Errorf("Expected multi gas %+v, got %+v", expectedMultiGas, multiGas)
+			}
+			if singleGas != expectedSingleGas {
+				t.Errorf("Expected single gas %d, got %d", expectedSingleGas, singleGas)
+			}
+		})
+	}
+}
+
+func TestGasCreate2(t *testing.T) {
+	testGasCreateFunc(t, gasCreate2, true, false)
+}
+
+func TestGasCreateEip3860(t *testing.T) {
+	testGasCreateFunc(t, gasCreateEip3860, false, true)
+}
+
+func TestGasCreate2Eip3860(t *testing.T) {
+	testGasCreateFunc(t, gasCreate2Eip3860, true, true)
+}
