@@ -102,6 +102,8 @@ func makeCallVariantGasEIP4762(oldCalculator gasFunc) gasFunc {
 		if witnessGas == 0 {
 			witnessGas = params.WarmStorageReadCostEIP2929
 		}
+		//  Witness gas considered as storage access.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, witnessGas)
 		singleGas, _ := multiGas.SingleGas()
 		return multiGas, singleGas, nil

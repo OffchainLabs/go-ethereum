@@ -52,6 +52,8 @@ func memoryGasCost(mem *Memory, newMemSize uint64) (*multigas.MultiGas, uint64, 
 		fee := newTotalFee - mem.lastGasCost
 		mem.lastGasCost = newTotalFee
 
+		// Memory expansion considered as computation.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		return multigas.ComputationGas(fee), fee, nil
 	}
 	return multigas.ZeroGas(), 0, nil
@@ -409,6 +411,8 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		address        = common.Address(stack.Back(1).Bytes20())
 	)
 
+	// Storage slot writes (zero → nonzero) considered as storage growth.
+	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	if evm.chainRules.IsEIP158 {
 		if transfersValue && evm.StateDB.Empty(address) {
 			multiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.CallNewAccountGas)
@@ -417,6 +421,8 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		multiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.CallNewAccountGas)
 	}
 
+	// Value transfer to non-empty account considered as computation.
+	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	if transfersValue && !evm.chainRules.IsEIP4762 {
 		multiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallValueTransferGas)
 	}
@@ -433,6 +439,8 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	if evm.chainRules.IsEIP4762 && !contract.IsSystemCall {
 		if transfersValue {
 			valueTransferGas := evm.AccessEvents.ValueTransferGas(contract.Address(), address)
+			// Account lookups considered as storage access.
+			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 			if overflow := multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas); overflow {
 				return multigas.ZeroGas(), 0, ErrGasUintOverflow
 			}
@@ -444,6 +452,8 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	if err != nil {
 		return multigas.ZeroGas(), 0, err
 	}
+	// Call gas forwarding considered as computation.
+	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
@@ -462,6 +472,8 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 		overflow bool
 	)
 	if stack.Back(2).Sign() != 0 && !evm.chainRules.IsEIP4762 {
+		// Value transfer to non-empty account considered as computation.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		multiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallValueTransferGas)
 	}
 	multiGas, overflow = multiGas.SafeAdd(multiGas, memoryMultiGas)
@@ -473,6 +485,8 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 		transfersValue := !stack.Back(2).IsZero()
 		if transfersValue {
 			valueTransferGas := evm.AccessEvents.ValueTransferGas(contract.Address(), address)
+			// Account lookups considered as storage access.
+			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 			if overflow = multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas); overflow {
 				return multigas.ZeroGas(), 0, ErrGasUintOverflow
 			}
@@ -484,6 +498,8 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 	if err != nil {
 		return multigas.ZeroGas(), 0, err
 	}
+	// Call gas forwarding considered as computation.
+	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
@@ -501,6 +517,8 @@ func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	if err != nil {
 		return multigas.ZeroGas(), 0, err
 	}
+	// Call gas forwarding considered as computation.
+	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	if overflow := multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
@@ -518,6 +536,8 @@ func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 	if err != nil {
 		return multigas.ZeroGas(), 0, err
 	}
+	// Call gas forwarding considered as computation.
+	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	if overflow := multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
