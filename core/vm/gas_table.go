@@ -263,9 +263,14 @@ func makeGasLog(n uint64) gasFunc {
 			return multigas.ZeroGas(), 0, err
 		}
 
+		// Base LOG operation considered as computation.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, params.LogGas); overflow {
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}
+
+		// LOG topic operations considered as computation.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, n*params.LogTopicGas); overflow {
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}
@@ -274,6 +279,8 @@ func makeGasLog(n uint64) gasFunc {
 		if memorySizeGas, overflow = math.SafeMul(requestedSize, params.LogDataGas); overflow {
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}
+		// Event log data considered as history growth.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		if overflow = multiGas.SafeIncrement(multigas.ResourceKindHistoryGrowth, memorySizeGas); overflow {
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}

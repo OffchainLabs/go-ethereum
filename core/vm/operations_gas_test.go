@@ -1258,6 +1258,9 @@ func TestGasSelfdestructEIP4762(t *testing.T) {
 
 	if *multiGas != *expectedMultiGas {
 		t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+	}
+}
+
 // Base LOG0-LOG4 gas function test
 func TestMakeGasLog(t *testing.T) {
 	for n := uint64(0); n <= 4; n++ {
