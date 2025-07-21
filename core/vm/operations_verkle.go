@@ -93,16 +93,20 @@ func makeCallVariantGasEIP4762(oldCalculator gasFunc) gasFunc {
 			return multigas.ZeroGas(), 0, err
 		}
 		if contract.IsSystemCall {
-			return multigas.ZeroGas(), gas, nil
+			return multiGas, gas, nil
 		}
 		if _, isPrecompile := evm.precompile(contract.Address()); isPrecompile {
-			return multigas.ZeroGas(), gas, nil
+			return multiGas, gas, nil
 		}
 		witnessGas := evm.AccessEvents.MessageCallGas(contract.Address())
 		if witnessGas == 0 {
 			witnessGas = params.WarmStorageReadCostEIP2929
 		}
-		return multiGas, witnessGas + gas, nil
+		//  Witness gas considered as storage access.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
+		multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, witnessGas)
+		singleGas, _ := multiGas.SingleGas()
+		return multiGas, singleGas, nil
 	}
 }
 
