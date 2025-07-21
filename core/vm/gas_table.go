@@ -558,9 +558,13 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	multiGas := multigas.ZeroGas()
 	// EIP150 homestead gas reprice fork:
 	if evm.chainRules.IsEIP150 {
+		// Selfdestruct operation considered as storage access.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.SelfdestructGasEIP150)
 		var address = common.Address(stack.Back(0).Bytes20())
 
+		// New account creation considered as storage growth.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		if evm.chainRules.IsEIP158 {
 			// if empty and transfers value
 			if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
