@@ -555,26 +555,31 @@ func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 }
 
 func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
-	var gas uint64
+	multiGas := multigas.ZeroGas()
 	// EIP150 homestead gas reprice fork:
 	if evm.chainRules.IsEIP150 {
-		gas = params.SelfdestructGasEIP150
+		// Selfdestruct operation considered as storage access.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
+		multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.SelfdestructGasEIP150)
 		var address = common.Address(stack.Back(0).Bytes20())
 
+		// New account creation considered as storage growth.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		if evm.chainRules.IsEIP158 {
 			// if empty and transfers value
 			if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
-				gas += params.CreateBySelfdestructGas
+				multiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas)
 			}
 		} else if !evm.StateDB.Exist(address) {
-			gas += params.CreateBySelfdestructGas
+			multiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas)
 		}
 	}
 
 	if !evm.StateDB.HasSelfDestructed(contract.Address()) {
 		evm.StateDB.AddRefund(params.SelfdestructRefundGas)
 	}
-	return multigas.ZeroGas(), gas, nil
+	singleGas, _ := multiGas.SingleGas()
+	return multiGas, singleGas, nil
 }
 
 func gasExtCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
