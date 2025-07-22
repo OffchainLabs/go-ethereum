@@ -117,16 +117,16 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 		switch {
 		case current == (common.Hash{}) && y.Sign() != 0: // 0 => non 0
 			multiGas := multigas.StorageGrowthGas(params.SstoreSetGas)
-			singleGas, _ := multiGas.SingleGas()
+			singleGas := multiGas.SingleGas()
 			return multiGas, singleGas, nil
 		case current != (common.Hash{}) && y.Sign() == 0: // non 0 => 0
 			evm.StateDB.AddRefund(params.SstoreRefundGas)
 			multiGas := multigas.StorageAccessGas(params.SstoreClearGas)
-			singleGas, _ := multiGas.SingleGas()
+			singleGas := multiGas.SingleGas()
 			return multiGas, singleGas, nil
 		default: // non 0 => non 0 (or 0 => 0)
 			multiGas := multigas.StorageAccessGas(params.SstoreResetGas)
-			singleGas, _ := multiGas.SingleGas()
+			singleGas := multiGas.SingleGas()
 			return multiGas, singleGas, nil
 		}
 	}
@@ -148,14 +148,14 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 	value := common.Hash(y.Bytes32())
 	if current == value { // noop (1)
 		multiGas := multigas.StorageAccessGas(params.NetSstoreNoopGas)
-		singleGas, _ := multiGas.SingleGas()
+		singleGas := multiGas.SingleGas()
 		return multiGas, singleGas, nil
 	}
 	original := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
 			multiGas := multigas.StorageGrowthGas(params.NetSstoreInitGas)
-			singleGas, _ := multiGas.SingleGas()
+			singleGas := multiGas.SingleGas()
 			return multiGas, singleGas, nil
 		}
 
@@ -163,7 +163,7 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 			evm.StateDB.AddRefund(params.NetSstoreClearRefund)
 		}
 		multiGas := multigas.StorageAccessGas(params.NetSstoreCleanGas)
-		singleGas, _ := multiGas.SingleGas()
+		singleGas := multiGas.SingleGas()
 		return multiGas, singleGas, nil // write existing slot (2.1.2)
 	}
 	if original != (common.Hash{}) {
@@ -181,7 +181,7 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 		}
 	}
 	multiGas := multigas.StorageAccessGas(params.NetSstoreDirtyGas)
-	singleGas, _ := multiGas.SingleGas()
+	singleGas := multiGas.SingleGas()
 	return multiGas, singleGas, nil
 }
 
@@ -214,14 +214,14 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 
 	if current == value { // noop (1)
 		multiGas := multigas.StorageAccessGas(params.SloadGasEIP2200)
-		singleGas, _ := multiGas.SingleGas()
+		singleGas := multiGas.SingleGas()
 		return multiGas, singleGas, nil
 	}
 	original := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
 			multiGas := multigas.StorageGrowthGas(params.SstoreSetGasEIP2200)
-			singleGas, _ := multiGas.SingleGas()
+			singleGas := multiGas.SingleGas()
 			return multiGas, singleGas, nil
 		}
 		if value == (common.Hash{}) { // delete slot (2.1.2b)
@@ -229,7 +229,7 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 		}
 
 		multiGas := multigas.StorageAccessGas(params.SstoreResetGasEIP2200)
-		singleGas, _ := multiGas.SingleGas()
+		singleGas := multiGas.SingleGas()
 		return multiGas, singleGas, nil
 	}
 	if original != (common.Hash{}) {
@@ -247,7 +247,7 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 		}
 	}
 	multiGas := multigas.StorageAccessGas(params.SloadGasEIP2200)
-	singleGas, _ := multiGas.SingleGas()
+	singleGas := multiGas.SingleGas()
 	return multiGas, singleGas, nil // dirty update (2.2)
 }
 
@@ -258,16 +258,20 @@ func makeGasLog(n uint64) gasFunc {
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}
 
-		multiGas, gas, err := memoryGasCost(mem, memorySize)
+		multiGas, _, err := memoryGasCost(mem, memorySize)
 		if err != nil {
 			return multigas.ZeroGas(), 0, err
 		}
 
-		// TODO(NIT-3484): Update multi dimensional gas here
-		if gas, overflow = math.SafeAdd(gas, params.LogGas); overflow {
+		// Base LOG operation considered as computation.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
+		if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, params.LogGas); overflow {
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}
-		if gas, overflow = math.SafeAdd(gas, n*params.LogTopicGas); overflow {
+
+		// LOG topic operations considered as computation.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
+		if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, n*params.LogTopicGas); overflow {
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}
 
@@ -275,10 +279,13 @@ func makeGasLog(n uint64) gasFunc {
 		if memorySizeGas, overflow = math.SafeMul(requestedSize, params.LogDataGas); overflow {
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}
-		if gas, overflow = math.SafeAdd(gas, memorySizeGas); overflow {
+		// Event log data considered as history growth.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
+		if overflow = multiGas.SafeIncrement(multigas.ResourceKindHistoryGrowth, memorySizeGas); overflow {
 			return multigas.ZeroGas(), 0, ErrGasUintOverflow
 		}
-		return multiGas, gas, nil
+		singleGas := multiGas.SingleGas()
+		return multiGas, singleGas, nil
 	}
 }
 
@@ -334,7 +341,7 @@ func gasCreate2(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memoryS
 	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, wordGas); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
-	singleGas, _ := multiGas.SingleGas()
+	singleGas := multiGas.SingleGas()
 	return multiGas, singleGas, nil
 }
 
@@ -358,7 +365,7 @@ func gasCreateEip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, moreGas); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
-	singleGas, _ := multiGas.SingleGas()
+	singleGas := multiGas.SingleGas()
 	return multiGas, singleGas, nil
 }
 func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
@@ -381,7 +388,7 @@ func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, moreGas); overflow {
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
-	singleGas, _ := multiGas.SingleGas()
+	singleGas := multiGas.SingleGas()
 	return multiGas, singleGas, nil
 }
 
@@ -455,7 +462,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		}
 	}
 
-	singleGas, _ := multiGas.SingleGas()
+	singleGas := multiGas.SingleGas()
 	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, singleGas, stack.Back(0))
 	if err != nil {
 		return multigas.ZeroGas(), 0, err
@@ -466,7 +473,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
 
-	singleGas, _ = multiGas.SingleGas()
+	singleGas = multiGas.SingleGas()
 	return multiGas, singleGas, nil
 }
 
@@ -501,7 +508,7 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 		}
 	}
 
-	singleGas, _ := multiGas.SingleGas()
+	singleGas := multiGas.SingleGas()
 	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, singleGas, stack.Back(0))
 	if err != nil {
 		return multigas.ZeroGas(), 0, err
@@ -512,7 +519,7 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
 
-	singleGas, _ = multiGas.SingleGas()
+	singleGas = multiGas.SingleGas()
 	return multiGas, singleGas, nil
 }
 
@@ -531,7 +538,7 @@ func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
 
-	singleGas, _ := multiGas.SingleGas()
+	singleGas := multiGas.SingleGas()
 	return multiGas, singleGas, nil
 }
 
@@ -550,31 +557,36 @@ func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 		return multigas.ZeroGas(), 0, ErrGasUintOverflow
 	}
 
-	singleGas, _ := multiGas.SingleGas()
+	singleGas := multiGas.SingleGas()
 	return multiGas, singleGas, nil
 }
 
 func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
-	var gas uint64
+	multiGas := multigas.ZeroGas()
 	// EIP150 homestead gas reprice fork:
 	if evm.chainRules.IsEIP150 {
-		gas = params.SelfdestructGasEIP150
+		// Selfdestruct operation considered as storage access.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
+		multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.SelfdestructGasEIP150)
 		var address = common.Address(stack.Back(0).Bytes20())
 
+		// New account creation considered as storage growth.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		if evm.chainRules.IsEIP158 {
 			// if empty and transfers value
 			if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
-				gas += params.CreateBySelfdestructGas
+				multiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas)
 			}
 		} else if !evm.StateDB.Exist(address) {
-			gas += params.CreateBySelfdestructGas
+			multiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas)
 		}
 	}
 
 	if !evm.StateDB.HasSelfDestructed(contract.Address()) {
 		evm.StateDB.AddRefund(params.SelfdestructRefundGas)
 	}
-	return multigas.ZeroGas(), gas, nil
+	singleGas := multiGas.SingleGas()
+	return multiGas, singleGas, nil
 }
 
 func gasExtCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {

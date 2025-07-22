@@ -77,13 +77,9 @@ func testGasSStoreFuncFuncWithCases(t *testing.T, config *params.ChainConfig, ga
 					tc.expectedMultiGas, multiGas, tc.name)
 			}
 
-			expectedSingleGas, overflow := tc.expectedMultiGas.SingleGas()
-			if overflow {
-				t.Fatalf("Expected single gas overflow for test case %s", tc.name)
-			}
-
+			expectedSingleGas := tc.expectedMultiGas.SingleGas()
 			if singleGas != expectedSingleGas {
-				t.Errorf("Expected signle gas %d, got %d for test case: %s",
+				t.Errorf("Expected single gas %d, got %d for test case: %s",
 					expectedSingleGas, singleGas, tc.name)
 			}
 
@@ -1081,4 +1077,235 @@ func TestGasCreateEip3860(t *testing.T) {
 
 func TestGasCreate2Eip3860(t *testing.T) {
 	testGasCreateFunc(t, gasCreate2Eip3860, true, true)
+}
+
+type GasSelfdestructFuncTestCase struct {
+	name              string             // descriptive name for the test case
+	isEIP150          bool               // whether the test is for EIP-150
+	isEIP158          bool               // whether the test is for EIP-158
+	beneficiaryExists bool               // whether beneficiary account exists
+	slotInAccessList  bool               // whether the slot is in the access list
+	hasBeenDestructed bool               // whether the contract has been destructed before
+	expectedMultiGas  *multigas.MultiGas // expected multi gas after the operation
+	expectedRefund    uint64             // expected refund after the operation, if any
+}
+
+func testGasSelfdestructFuncWithCases(t *testing.T, config *params.ChainConfig, gasSelfdestructFunc gasFunc, testCases []GasSelfdestructFuncTestCase) {
+	t.Helper()
+
+	contractGas := uint64(100000)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			stateDb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+			blockCtx := BlockContext{
+				BlockNumber: big.NewInt(0), // ensures block 0 is passed into Rules()
+			}
+
+			evm := NewEVM(blockCtx, stateDb, config, Config{})
+
+			caller := common.Address{}
+			contractAddr := common.Address{1}
+			beneficiaryAddr := common.Address{2}
+			contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+
+			stack := newstack()
+			mem := NewMemory()
+
+			// Set chain rules based on test case
+			evm.chainRules.IsEIP150 = tc.isEIP150
+			evm.chainRules.IsEIP158 = tc.isEIP158
+
+			if tc.beneficiaryExists {
+				stateDb.CreateAccount(beneficiaryAddr)
+			}
+
+			stateDb.CreateAccount(contractAddr)
+			if tc.hasBeenDestructed {
+				stateDb.SelfDestruct(contractAddr)
+			} else {
+				stateDb.SetBalance(contractAddr, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
+			}
+
+			stack.push(new(uint256.Int).SetBytes(beneficiaryAddr.Bytes()))
+
+			multiGas, _, err := gasSelfdestructFunc(evm, contract, stack, mem, 0)
+			if err != nil {
+				t.Fatalf("Unexpected error for test case %s: %v", tc.name, err)
+			}
+
+			if *multiGas != *tc.expectedMultiGas {
+				t.Errorf("Expected multi gas %d, got %d for test case: %s",
+					tc.expectedMultiGas, multiGas, tc.name)
+			}
+
+			if stateDb.GetRefund() != tc.expectedRefund {
+				t.Errorf("Expected refund %d, got %d for test case: %s",
+					tc.expectedRefund, stateDb.GetRefund(), tc.name)
+			}
+		})
+	}
+}
+
+// Base SELFDESTRUCT gas function test
+func TestGasSelfdestruct(t *testing.T) {
+	testCases := []GasSelfdestructFuncTestCase{
+		{
+			name:             "idle selfdestruct with refund",
+			expectedMultiGas: multigas.ZeroGas(),
+			expectedRefund:   params.SelfdestructRefundGas,
+		},
+		{
+			name:              "idle selfdestruct without refund",
+			expectedMultiGas:  multigas.ZeroGas(),
+			beneficiaryExists: true,
+			hasBeenDestructed: true,
+		},
+		{
+			name:              "selfdestruct exisit with EIP-150 with refund",
+			isEIP150:          true,
+			expectedMultiGas:  multigas.StorageAccessGas(params.SelfdestructGasEIP150),
+			beneficiaryExists: true,
+			expectedRefund:    params.SelfdestructRefundGas,
+		},
+		{
+			name:              "selfdestruct not-exisit with EIP-150 and EIP-158 without refund",
+			isEIP150:          true,
+			isEIP158:          true,
+			expectedMultiGas:  multigas.StorageAccessGas(params.SelfdestructGasEIP150),
+			hasBeenDestructed: true,
+		},
+		{
+			name:              "selfdestruct exisit with EIP-150 and EIP-158 with refund",
+			beneficiaryExists: false,
+			isEIP150:          true,
+			isEIP158:          true,
+			expectedMultiGas: func() *multigas.MultiGas {
+				mg, _ := multigas.StorageAccessGas(params.SelfdestructGasEIP150).Set(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas)
+				return mg
+			}(),
+			expectedRefund: params.SelfdestructRefundGas,
+		},
+	}
+
+	testGasSelfdestructFuncWithCases(t, params.TestChainConfig, gasSelfdestruct, testCases)
+}
+
+// Modern (EIP-2929) SELFDESTRUCT gas function test with access list
+func TestMakeSelfdestructGasFn(t *testing.T) {
+	testCases := []GasSelfdestructFuncTestCase{
+		{
+			name: "selfdestruct - no access list - with refund",
+			expectedMultiGas: func() *multigas.MultiGas {
+				mg, _ := multigas.StorageAccessGas(params.ColdAccountAccessCostEIP2929).Set(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas)
+				return mg
+			}(),
+			expectedRefund: params.SelfdestructRefundGas,
+		},
+		{
+			name:              "has been destructed - no access list - no refund",
+			expectedMultiGas:  multigas.StorageAccessGas(params.ColdAccountAccessCostEIP2929),
+			hasBeenDestructed: true,
+		},
+		{
+			name: "selfdestruct - in access list - with refund",
+			expectedMultiGas: func() *multigas.MultiGas {
+				mg, _ := multigas.StorageAccessGas(params.ColdAccountAccessCostEIP2929).Set(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas)
+				return mg
+			}(),
+			expectedRefund:   params.SelfdestructRefundGas,
+			slotInAccessList: true,
+		},
+		{
+			name:              "has been destructed - in access list - no refund",
+			expectedMultiGas:  multigas.StorageAccessGas(params.ColdAccountAccessCostEIP2929),
+			hasBeenDestructed: true,
+			slotInAccessList:  true,
+		},
+	}
+
+	testGasSelfdestructFuncWithCases(t, params.TestChainConfig, makeSelfdestructGasFn(true), testCases)
+}
+
+// Statelessness mode (EIP-4762) SELFDESTRUCT gas function test
+func TestGasSelfdestructEIP4762(t *testing.T) {
+	stateDb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	evm := NewEVM(BlockContext{}, stateDb, params.TestChainConfig, Config{})
+
+	caller := common.Address{}
+	contractAddr := common.Address{1}
+	beneficiaryAddr := common.Address{2}
+	contractGas := uint64(100000)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+
+	stack := newstack()
+	mem := NewMemory()
+
+	// Setup access list
+	accessList := state.NewAccessEvents(evm.StateDB.PointCache())
+	accessListForExpected := state.NewAccessEvents(evm.StateDB.PointCache())
+	evm.AccessEvents = accessList
+
+	stateDb.CreateAccount(beneficiaryAddr)
+
+	stateDb.CreateAccount(contractAddr)
+	stateDb.SetBalance(contractAddr, uint256.NewInt(0), tracing.BalanceChangeUnspecified)
+
+	stack.push(new(uint256.Int).SetBytes(beneficiaryAddr.Bytes()))
+
+	expectedStorageAccessGas := accessListForExpected.BasicDataGas(contractAddr, false) + accessListForExpected.BasicDataGas(beneficiaryAddr, false)
+	expectedMultiGas := multigas.StorageAccessGas(expectedStorageAccessGas)
+
+	multiGas, _, err := gasSelfdestructEIP4762(evm, contract, stack, mem, 0)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if *multiGas != *expectedMultiGas {
+		t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+	}
+}
+
+// Base LOG0-LOG4 gas function test
+func TestMakeGasLog(t *testing.T) {
+	for n := uint64(0); n <= 4; n++ {
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		evm := NewEVM(BlockContext{}, statedb, params.TestChainConfig, Config{})
+
+		caller := common.Address{}
+		contractAddr := common.Address{1}
+		contractGas := uint64(100000)
+		contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+
+		stack := newstack()
+		mem := NewMemory()
+		memForExpected := NewMemory()
+
+		// Set up stack for LOG operation
+		requestedSize := uint64(32)                           // requestedSize = 32 bytes for data
+		stack.push(new(uint256.Int).SetUint64(requestedSize)) // stack.Back(1)
+		stack.push(new(uint256.Int))                          // dummy top (stack.Back(0))
+
+		// memorySize is arbitrary, only affects memory cost component
+		memorySize := uint64(64)
+
+		_, memorySingleGas, err := memoryGasCost(memForExpected, memorySize)
+		if err != nil {
+			t.Fatalf("Failed memoryGasCost: %v", err)
+		}
+
+		expectedComputation := memorySingleGas + params.LogGas + n*params.LogTopicGas
+		expectedHistory := requestedSize * params.LogDataGas
+
+		expectedMultiGas, _ := multigas.ComputationGas(expectedComputation).Set(multigas.ResourceKindHistoryGrowth, expectedHistory)
+
+		multiGas, _, err := makeGasLog(n)(evm, contract, stack, mem, memorySize)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+
+		if *multiGas != *expectedMultiGas {
+			t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+		}
+	}
 }
