@@ -32,7 +32,7 @@ func gasSStore4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 	}
 	multiGas := multigas.StorageAccessGas(gas)
 
-	singleGas, _ := multiGas.SingleGas()
+	singleGas := multiGas.SingleGas()
 	return multiGas, singleGas, nil
 }
 
@@ -105,7 +105,7 @@ func makeCallVariantGasEIP4762(oldCalculator gasFunc) gasFunc {
 		//  Witness gas considered as storage access.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, witnessGas)
-		singleGas, _ := multiGas.SingleGas()
+		singleGas := multiGas.SingleGas()
 		return multiGas, singleGas, nil
 	}
 }
@@ -138,7 +138,7 @@ func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 		}
 	}
 	multiGas := multigas.StorageAccessGas(statelessGas)
-	singleGas, _ := multiGas.SingleGas()
+	singleGas := multiGas.SingleGas()
 	return multiGas, singleGas, nil
 }
 
