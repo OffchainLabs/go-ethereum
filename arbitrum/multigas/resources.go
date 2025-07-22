@@ -17,6 +17,7 @@ const (
 // MultiGas tracks gas for each resource separately.
 type MultiGas struct {
 	gas    [NumResourceKind]uint64
+	total  uint64
 	refund uint64
 }
 
@@ -27,6 +28,7 @@ func ZeroGas() *MultiGas {
 func NewMultiGas(kind ResourceKind, amount uint64) *MultiGas {
 	mg := ZeroGas()
 	mg.gas[kind] = amount
+	mg.total = amount
 	return mg
 }
 
@@ -50,9 +52,18 @@ func (z *MultiGas) Get(kind ResourceKind) uint64 {
 	return z.gas[kind]
 }
 
-func (z *MultiGas) Set(kind ResourceKind, gas uint64) *MultiGas {
+func (z *MultiGas) Set(kind ResourceKind, gas uint64) (*MultiGas, bool) {
+	oldValue := z.gas[kind]
+	newTotal := z.total - oldValue
+
+	finalTotal, overflow := math.SafeAdd(newTotal, gas)
+	if overflow {
+		return z, true
+	}
+
 	z.gas[kind] = gas
-	return z
+	z.total = finalTotal
+	return z, false
 }
 
 // GetRefund gets the SSTORE refund computed at the end of the transaction.
@@ -68,35 +79,40 @@ func (z *MultiGas) SetRefund(amount uint64) *MultiGas {
 
 // SafeAdd sets z to the sum x+y and returns z and checks for overflow.
 func (z *MultiGas) SafeAdd(x *MultiGas, y *MultiGas) (*MultiGas, bool) {
-	for i := ResourceKindUnknown; i < NumResourceKind; i++ {
-		var overflow bool
-		z.gas[i], overflow = math.SafeAdd(x.gas[i], y.gas[i])
+	for i := range z.gas {
+		newValue, overflow := math.SafeAdd(x.gas[i], y.gas[i])
 		if overflow {
-			return z, overflow
+			return z, true
 		}
+		z.gas[i] = newValue
 	}
+
+	newTotal, overflow := math.SafeAdd(x.total, y.total)
+	if overflow {
+		return z, true
+	}
+	z.total = newTotal
 	return z, false
 }
 
 // SafeIncrement increments the given resource kind by the amount of gas and checks for overflow.
 func (z *MultiGas) SafeIncrement(kind ResourceKind, gas uint64) bool {
-	result, overflow := math.SafeAdd(z.gas[kind], gas)
+	newValue, overflow := math.SafeAdd(z.gas[kind], gas)
 	if overflow {
-		return overflow
+		return true
 	}
-	z.gas[kind] = result
+
+	newTotal, overflow := math.SafeAdd(z.total, gas)
+	if overflow {
+		return true
+	}
+
+	z.gas[kind] = newValue
+	z.total = newTotal
 	return false
 }
 
-// SingleGas converts the multi-gas to single-dimensional gas checking for overflow.
-func (z *MultiGas) SingleGas() (uint64, bool) {
-	var sum uint64
-	for _, value := range z.gas {
-		var overflow bool
-		sum, overflow = math.SafeAdd(sum, value)
-		if overflow {
-			return 0, overflow
-		}
-	}
-	return sum, false
+// SingleGas returns single-dimensional gas sum.
+func (z *MultiGas) SingleGas() uint64 {
+	return z.total
 }
