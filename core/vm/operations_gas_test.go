@@ -77,13 +77,9 @@ func testGasSStoreFuncFuncWithCases(t *testing.T, config *params.ChainConfig, ga
 					tc.expectedMultiGas, multiGas, tc.name)
 			}
 
-			expectedSingleGas, overflow := tc.expectedMultiGas.SingleGas()
-			if overflow {
-				t.Fatalf("Expected single gas overflow for test case %s", tc.name)
-			}
-
+			expectedSingleGas := tc.expectedMultiGas.SingleGas()
 			if singleGas != expectedSingleGas {
-				t.Errorf("Expected signle gas %d, got %d for test case: %s",
+				t.Errorf("Expected single gas %d, got %d for test case: %s",
 					expectedSingleGas, singleGas, tc.name)
 			}
 
@@ -1184,8 +1180,11 @@ func TestGasSelfdestruct(t *testing.T) {
 			beneficiaryExists: false,
 			isEIP150:          true,
 			isEIP158:          true,
-			expectedMultiGas:  multigas.StorageAccessGas(params.SelfdestructGasEIP150).Set(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas),
-			expectedRefund:    params.SelfdestructRefundGas,
+			expectedMultiGas: func() *multigas.MultiGas {
+				mg, _ := multigas.StorageAccessGas(params.SelfdestructGasEIP150).Set(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas)
+				return mg
+			}(),
+			expectedRefund: params.SelfdestructRefundGas,
 		},
 	}
 
@@ -1196,9 +1195,12 @@ func TestGasSelfdestruct(t *testing.T) {
 func TestMakeSelfdestructGasFn(t *testing.T) {
 	testCases := []GasSelfdestructFuncTestCase{
 		{
-			name:             "selfdestruct - no access list - with refund",
-			expectedMultiGas: multigas.StorageAccessGas(params.ColdAccountAccessCostEIP2929).Set(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas),
-			expectedRefund:   params.SelfdestructRefundGas,
+			name: "selfdestruct - no access list - with refund",
+			expectedMultiGas: func() *multigas.MultiGas {
+				mg, _ := multigas.StorageAccessGas(params.ColdAccountAccessCostEIP2929).Set(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas)
+				return mg
+			}(),
+			expectedRefund: params.SelfdestructRefundGas,
 		},
 		{
 			name:              "has been destructed - no access list - no refund",
@@ -1206,8 +1208,11 @@ func TestMakeSelfdestructGasFn(t *testing.T) {
 			hasBeenDestructed: true,
 		},
 		{
-			name:             "selfdestruct - in access list - with refund",
-			expectedMultiGas: multigas.StorageAccessGas(params.ColdAccountAccessCostEIP2929).Set(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas),
+			name: "selfdestruct - in access list - with refund",
+			expectedMultiGas: func() *multigas.MultiGas {
+				mg, _ := multigas.StorageAccessGas(params.ColdAccountAccessCostEIP2929).Set(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas)
+				return mg
+			}(),
 			expectedRefund:   params.SelfdestructRefundGas,
 			slotInAccessList: true,
 		},
@@ -1292,7 +1297,7 @@ func TestMakeGasLog(t *testing.T) {
 		expectedComputation := memorySingleGas + params.LogGas + n*params.LogTopicGas
 		expectedHistory := requestedSize * params.LogDataGas
 
-		expectedMultiGas := multigas.ComputationGas(expectedComputation).Set(multigas.ResourceKindHistoryGrowth, expectedHistory)
+		expectedMultiGas, _ := multigas.ComputationGas(expectedComputation).Set(multigas.ResourceKindHistoryGrowth, expectedHistory)
 
 		multiGas, _, err := makeGasLog(n)(evm, contract, stack, mem, memorySize)
 		if err != nil {
