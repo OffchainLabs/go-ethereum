@@ -42,12 +42,13 @@ func TestMemoryGasCost(t *testing.T) {
 		{0x1fffffffe1, 0, true},
 	}
 	for i, tt := range tests {
-		_, v, err := memoryGasCost(&Memory{}, tt.size)
+		multiGas, err := memoryGasCost(&Memory{}, tt.size)
+		gas := multiGas.SingleGas()
 		if (err == ErrGasUintOverflow) != tt.overflow {
 			t.Errorf("test %d: overflow mismatch: have %v, want %v", i, err == ErrGasUintOverflow, tt.overflow)
 		}
-		if v != tt.cost {
-			t.Errorf("test %d: gas cost mismatch: have %v, want %v", i, v, tt.cost)
+		if gas != tt.cost {
+			t.Errorf("test %d: gas cost mismatch: have %v, want %v", i, gas, tt.cost)
 		}
 	}
 }

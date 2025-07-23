@@ -28,9 +28,9 @@ import (
 
 // memoryGasCost calculates the quadratic gas for memory expansion. It does so
 // only for the memory region that is expanded, not the total memory.
-func memoryGasCost(mem *Memory, newMemSize uint64) (*multigas.MultiGas, uint64, error) {
+func memoryGasCost(mem *Memory, newMemSize uint64) (*multigas.MultiGas, error) {
 	if newMemSize == 0 {
-		return multigas.ZeroGas(), 0, nil
+		return multigas.ZeroGas(), nil
 	}
 	// The maximum that will fit in a uint64 is max_word_count - 1. Anything above
 	// that will result in an overflow. Additionally, a newMemSize which results in
@@ -38,7 +38,7 @@ func memoryGasCost(mem *Memory, newMemSize uint64) (*multigas.MultiGas, uint64, 
 	// overflow. The constant 0x1FFFFFFFE0 is the highest number that can be used
 	// without overflowing the gas calculation.
 	if newMemSize > 0x1FFFFFFFE0 {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 	newMemSizeWords := toWordSize(newMemSize)
 	newMemSize = newMemSizeWords * 32
@@ -54,9 +54,9 @@ func memoryGasCost(mem *Memory, newMemSize uint64) (*multigas.MultiGas, uint64, 
 
 		// Memory expansion considered as computation.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-		return multigas.ComputationGas(fee), fee, nil
+		return multigas.ComputationGas(fee), nil
 	}
-	return multigas.ZeroGas(), 0, nil
+	return multigas.ZeroGas(), nil
 }
 
 // memoryCopierGas creates the gas functions for the following opcodes, and takes
@@ -68,27 +68,27 @@ func memoryGasCost(mem *Memory, newMemSize uint64) (*multigas.MultiGas, uint64, 
 // EXTCODECOPY (stack position 3)
 // RETURNDATACOPY (stack position 2)
 func memoryCopierGas(stackpos int) gasFunc {
-	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
+	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
 		// Gas for expanding the memory
-		multiGas, gas, err := memoryGasCost(mem, memorySize)
+		multiGas, err := memoryGasCost(mem, memorySize)
 		if err != nil {
-			return multigas.ZeroGas(), 0, err
+			return multigas.ZeroGas(), err
 		}
 		// And gas for copying data, charged per word at param.CopyGas
 		words, overflow := stack.Back(stackpos).Uint64WithOverflow()
 		if overflow {
-			return multigas.ZeroGas(), 0, ErrGasUintOverflow
+			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 
 		if words, overflow = math.SafeMul(toWordSize(words), params.CopyGas); overflow {
-			return multigas.ZeroGas(), 0, ErrGasUintOverflow
+			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 
 		// TODO(NIT-3484): Update multi dimensional gas here
-		if gas, overflow = math.SafeAdd(gas, words); overflow {
-			return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		if overflow = multiGas.SafeIncrement(multigas.ResourceKindUnknown, words); overflow {
+			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
-		return multiGas, gas, nil
+		return multiGas, nil
 	}
 }
 
@@ -100,7 +100,7 @@ var (
 	gasReturnDataCopy = memoryCopierGas(2)
 )
 
-func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
+func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
 	var (
 		y, x    = stack.Back(1), stack.Back(0)
 		current = evm.StateDB.GetState(contract.Address(), x.Bytes32())
@@ -116,18 +116,12 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 		// 3. From a non-zero to a non-zero                         (CHANGE)
 		switch {
 		case current == (common.Hash{}) && y.Sign() != 0: // 0 => non 0
-			multiGas := multigas.StorageGrowthGas(params.SstoreSetGas)
-			singleGas := multiGas.SingleGas()
-			return multiGas, singleGas, nil
+			return multigas.StorageGrowthGas(params.SstoreSetGas), nil
 		case current != (common.Hash{}) && y.Sign() == 0: // non 0 => 0
 			evm.StateDB.AddRefund(params.SstoreRefundGas)
-			multiGas := multigas.StorageAccessGas(params.SstoreClearGas)
-			singleGas := multiGas.SingleGas()
-			return multiGas, singleGas, nil
+			return multigas.StorageAccessGas(params.SstoreClearGas), nil
 		default: // non 0 => non 0 (or 0 => 0)
-			multiGas := multigas.StorageAccessGas(params.SstoreResetGas)
-			singleGas := multiGas.SingleGas()
-			return multiGas, singleGas, nil
+			return multigas.StorageAccessGas(params.SstoreResetGas), nil
 		}
 	}
 
@@ -147,24 +141,18 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 	//			(2.2.2.2.) Otherwise, add 4800 gas to refund counter.
 	value := common.Hash(y.Bytes32())
 	if current == value { // noop (1)
-		multiGas := multigas.StorageAccessGas(params.NetSstoreNoopGas)
-		singleGas := multiGas.SingleGas()
-		return multiGas, singleGas, nil
+		return multigas.StorageAccessGas(params.NetSstoreNoopGas), nil
 	}
 	original := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
-			multiGas := multigas.StorageGrowthGas(params.NetSstoreInitGas)
-			singleGas := multiGas.SingleGas()
-			return multiGas, singleGas, nil
+			return multigas.StorageGrowthGas(params.NetSstoreInitGas), nil
 		}
 
 		if value == (common.Hash{}) { // delete slot (2.1.2b)
 			evm.StateDB.AddRefund(params.NetSstoreClearRefund)
 		}
-		multiGas := multigas.StorageAccessGas(params.NetSstoreCleanGas)
-		singleGas := multiGas.SingleGas()
-		return multiGas, singleGas, nil // write existing slot (2.1.2)
+		return multigas.StorageAccessGas(params.NetSstoreCleanGas), nil // write existing slot (2.1.2)
 	}
 	if original != (common.Hash{}) {
 		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
@@ -180,9 +168,7 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 			evm.StateDB.AddRefund(params.NetSstoreResetRefund)
 		}
 	}
-	multiGas := multigas.StorageAccessGas(params.NetSstoreDirtyGas)
-	singleGas := multiGas.SingleGas()
-	return multiGas, singleGas, nil
+	return multigas.StorageAccessGas(params.NetSstoreDirtyGas), nil
 }
 
 // Here come the EIP2200 rules:
@@ -200,10 +186,10 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 //			(2.2.2.) If original value equals new value (this storage slot is reset):
 //				(2.2.2.1.) If original value is 0, add SSTORE_SET_GAS - SLOAD_GAS to refund counter.
 //				(2.2.2.2.) Otherwise, add SSTORE_RESET_GAS - SLOAD_GAS gas to refund counter.
-func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
+func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
 	// If we fail the minimum gas availability invariant, fail (0)
 	if contract.Gas <= params.SstoreSentryGasEIP2200 {
-		return multigas.ZeroGas(), 0, errors.New("not enough gas for reentrancy sentry")
+		return multigas.ZeroGas(), errors.New("not enough gas for reentrancy sentry")
 	}
 	// Gas sentry honoured, do the actual gas calculation based on the stored value
 	var (
@@ -213,24 +199,18 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	value := common.Hash(y.Bytes32())
 
 	if current == value { // noop (1)
-		multiGas := multigas.StorageAccessGas(params.SloadGasEIP2200)
-		singleGas := multiGas.SingleGas()
-		return multiGas, singleGas, nil
+		return multigas.StorageAccessGas(params.SloadGasEIP2200), nil
 	}
 	original := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
-			multiGas := multigas.StorageGrowthGas(params.SstoreSetGasEIP2200)
-			singleGas := multiGas.SingleGas()
-			return multiGas, singleGas, nil
+			return multigas.StorageGrowthGas(params.SstoreSetGasEIP2200), nil
 		}
 		if value == (common.Hash{}) { // delete slot (2.1.2b)
 			evm.StateDB.AddRefund(params.SstoreClearsScheduleRefundEIP2200)
 		}
 
-		multiGas := multigas.StorageAccessGas(params.SstoreResetGasEIP2200)
-		singleGas := multiGas.SingleGas()
-		return multiGas, singleGas, nil
+		return multigas.StorageAccessGas(params.SstoreResetGasEIP2200), nil
 	}
 	if original != (common.Hash{}) {
 		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
@@ -246,72 +226,69 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 			evm.StateDB.AddRefund(params.SstoreResetGasEIP2200 - params.SloadGasEIP2200)
 		}
 	}
-	multiGas := multigas.StorageAccessGas(params.SloadGasEIP2200)
-	singleGas := multiGas.SingleGas()
-	return multiGas, singleGas, nil // dirty update (2.2)
+	return multigas.StorageAccessGas(params.SloadGasEIP2200), nil // dirty update (2.2)
 }
 
 func makeGasLog(n uint64) gasFunc {
-	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
+	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
 		requestedSize, overflow := stack.Back(1).Uint64WithOverflow()
 		if overflow {
-			return multigas.ZeroGas(), 0, ErrGasUintOverflow
+			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 
-		multiGas, _, err := memoryGasCost(mem, memorySize)
+		multiGas, err := memoryGasCost(mem, memorySize)
 		if err != nil {
-			return multigas.ZeroGas(), 0, err
+			return multigas.ZeroGas(), err
 		}
 
 		// Base LOG operation considered as computation.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, params.LogGas); overflow {
-			return multigas.ZeroGas(), 0, ErrGasUintOverflow
+			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 
 		// LOG topic operations considered as computation.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, n*params.LogTopicGas); overflow {
-			return multigas.ZeroGas(), 0, ErrGasUintOverflow
+			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 
 		var memorySizeGas uint64
 		if memorySizeGas, overflow = math.SafeMul(requestedSize, params.LogDataGas); overflow {
-			return multigas.ZeroGas(), 0, ErrGasUintOverflow
+			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 		// Event log data considered as history growth.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		if overflow = multiGas.SafeIncrement(multigas.ResourceKindHistoryGrowth, memorySizeGas); overflow {
-			return multigas.ZeroGas(), 0, ErrGasUintOverflow
+			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
-		singleGas := multiGas.SingleGas()
-		return multiGas, singleGas, nil
+		return multiGas, nil
 	}
 }
 
-func gasKeccak256(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
-	multiGas, gas, err := memoryGasCost(mem, memorySize)
+func gasKeccak256(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
+	multiGas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
-		return multigas.ZeroGas(), 0, err
+		return multigas.ZeroGas(), err
 	}
 	wordGas, overflow := stack.Back(1).Uint64WithOverflow()
 	if overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 	if wordGas, overflow = math.SafeMul(toWordSize(wordGas), params.Keccak256WordGas); overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 	// TODO(NIT-3484): Update multi dimensional gas here
-	if gas, overflow = math.SafeAdd(gas, wordGas); overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+	if overflow = multiGas.SafeIncrement(multigas.ResourceKindUnknown, wordGas); overflow {
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
-	return multiGas, gas, nil
+	return multiGas, nil
 }
 
 // pureMemoryGascost is used by several operations, which aside from their
 // static cost have a dynamic cost which is solely based on the memory
 // expansion
-func pureMemoryGascost(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
+func pureMemoryGascost(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
 	return memoryGasCost(mem, memorySize)
 }
 
@@ -324,38 +301,37 @@ var (
 	gasCreate  = pureMemoryGascost
 )
 
-func gasCreate2(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
-	multiGas, _, err := memoryGasCost(mem, memorySize)
+func gasCreate2(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
+	multiGas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
-		return multigas.ZeroGas(), 0, err
+		return multigas.ZeroGas(), err
 	}
 	wordGas, overflow := stack.Back(2).Uint64WithOverflow()
 	if overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 	if wordGas, overflow = math.SafeMul(toWordSize(wordGas), params.Keccak256WordGas); overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 	// Keccak hashing considered as computation.
 	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, wordGas); overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
-	singleGas := multiGas.SingleGas()
-	return multiGas, singleGas, nil
+	return multiGas, nil
 }
 
-func gasCreateEip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
-	multiGas, _, err := memoryGasCost(mem, memorySize)
+func gasCreateEip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
+	multiGas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
-		return multigas.ZeroGas(), 0, err
+		return multigas.ZeroGas(), err
 	}
 	size, overflow := stack.Back(2).Uint64WithOverflow()
 	if overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 	if size > evm.chainConfig.MaxInitCodeSize() {
-		return multigas.ZeroGas(), 0, fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
+		return multigas.ZeroGas(), fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
 	}
 	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
 	moreGas := params.InitCodeWordGas * ((size + 31) / 32)
@@ -363,22 +339,21 @@ func gasCreateEip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	// Init code execution considered as computation.
 	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, moreGas); overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
-	singleGas := multiGas.SingleGas()
-	return multiGas, singleGas, nil
+	return multiGas, nil
 }
-func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
-	multiGas, _, err := memoryGasCost(mem, memorySize)
+func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
+	multiGas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
-		return multigas.ZeroGas(), 0, err
+		return multigas.ZeroGas(), err
 	}
 	size, overflow := stack.Back(2).Uint64WithOverflow()
 	if overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 	if size > evm.chainConfig.MaxInitCodeSize() {
-		return multigas.ZeroGas(), 0, fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
+		return multigas.ZeroGas(), fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
 	}
 	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
 	moreGas := (params.InitCodeWordGas + params.Keccak256WordGas) * ((size + 31) / 32)
@@ -386,13 +361,12 @@ func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 	// Init code execution and Keccak hashing both considered as computation.
 	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, moreGas); overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
-	singleGas := multiGas.SingleGas()
-	return multiGas, singleGas, nil
+	return multiGas, nil
 }
 
-func gasExpFrontier(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
+func gasExpFrontier(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
 	expByteLen := uint64((stack.data[stack.len()-2].BitLen() + 7) / 8)
 
 	var (
@@ -400,26 +374,27 @@ func gasExpFrontier(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 		overflow bool
 	)
 	if gas, overflow = math.SafeAdd(gas, params.ExpGas); overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
-	return multigas.ZeroGas(), gas, nil
+	// TODO(NIT-3484): Update multi dimensional gas here
+	return multigas.UnknownGas(gas), nil
 }
 
-func gasExpEIP158(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
+func gasExpEIP158(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
 	expByteLen := uint64((stack.data[stack.len()-2].BitLen() + 7) / 8)
 
 	var (
 		gas      = expByteLen * params.ExpByteEIP158 // no overflow check required. Max is 256 * ExpByte gas
 		overflow bool
 	)
-	// TODO(NIT-3484): Update multi dimensional gas here
 	if gas, overflow = math.SafeAdd(gas, params.ExpGas); overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
-	return multigas.ZeroGas(), gas, nil
+	// TODO(NIT-3484): Update multi dimensional gas here
+	return multigas.UnknownGas(gas), nil
 }
 
-func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
+func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
 	var (
 		multiGas       = multigas.ZeroGas()
 		transfersValue = !stack.Back(2).IsZero()
@@ -442,13 +417,13 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		multiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallValueTransferGas)
 	}
 
-	memoryMultiGas, _, err := memoryGasCost(mem, memorySize)
+	memoryMultiGas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
-		return multigas.ZeroGas(), 0, err
+		return multigas.ZeroGas(), err
 	}
 	multiGas, overflow := multiGas.SafeAdd(multiGas, memoryMultiGas)
 	if overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 
 	if evm.chainRules.IsEIP4762 && !contract.IsSystemCall {
@@ -457,7 +432,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 			// Account lookups considered as storage access.
 			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 			if overflow := multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas); overflow {
-				return multigas.ZeroGas(), 0, ErrGasUintOverflow
+				return multigas.ZeroGas(), ErrGasUintOverflow
 			}
 		}
 	}
@@ -465,22 +440,21 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	singleGas := multiGas.SingleGas()
 	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, singleGas, stack.Back(0))
 	if err != nil {
-		return multigas.ZeroGas(), 0, err
+		return multigas.ZeroGas(), err
 	}
 	// Call gas forwarding considered as computation.
 	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp); overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 
-	singleGas = multiGas.SingleGas()
-	return multiGas, singleGas, nil
+	return multiGas, nil
 }
 
-func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
-	memoryMultiGas, _, err := memoryGasCost(mem, memorySize)
+func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
+	memoryMultiGas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
-		return multigas.ZeroGas(), 0, err
+		return multigas.ZeroGas(), err
 	}
 	var (
 		multiGas = multigas.ZeroGas()
@@ -493,7 +467,7 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 	}
 	multiGas, overflow = multiGas.SafeAdd(multiGas, memoryMultiGas)
 	if overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 	if evm.chainRules.IsEIP4762 && !contract.IsSystemCall {
 		address := common.Address(stack.Back(1).Bytes20())
@@ -503,7 +477,7 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 			// Account lookups considered as storage access.
 			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 			if overflow = multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas); overflow {
-				return multigas.ZeroGas(), 0, ErrGasUintOverflow
+				return multigas.ZeroGas(), ErrGasUintOverflow
 			}
 		}
 	}
@@ -511,57 +485,56 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 	singleGas := multiGas.SingleGas()
 	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, singleGas, stack.Back(0))
 	if err != nil {
-		return multigas.ZeroGas(), 0, err
+		return multigas.ZeroGas(), err
 	}
 	// Call gas forwarding considered as computation.
 	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp); overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 
-	singleGas = multiGas.SingleGas()
-	return multiGas, singleGas, nil
+	return multiGas, nil
 }
 
-func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
-	multiGas, gas, err := memoryGasCost(mem, memorySize)
+func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
+	multiGas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
-		return multigas.ZeroGas(), 0, err
+		return multigas.ZeroGas(), err
 	}
+	gas := multiGas.SingleGas()
 	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
 	if err != nil {
-		return multigas.ZeroGas(), 0, err
+		return multigas.ZeroGas(), err
 	}
 	// Call gas forwarding considered as computation.
 	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	if overflow := multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp); overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 
-	singleGas := multiGas.SingleGas()
-	return multiGas, singleGas, nil
+	return multiGas, nil
 }
 
-func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
-	multiGas, gas, err := memoryGasCost(mem, memorySize)
+func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
+	multiGas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
-		return multigas.ZeroGas(), 0, err
+		return multigas.ZeroGas(), err
 	}
+	gas := multiGas.SingleGas()
 	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
 	if err != nil {
-		return multigas.ZeroGas(), 0, err
+		return multigas.ZeroGas(), err
 	}
 	// Call gas forwarding considered as computation.
 	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	if overflow := multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp); overflow {
-		return multigas.ZeroGas(), 0, ErrGasUintOverflow
+		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 
-	singleGas := multiGas.SingleGas()
-	return multiGas, singleGas, nil
+	return multiGas, nil
 }
 
-func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
+func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
 	multiGas := multigas.ZeroGas()
 	// EIP150 homestead gas reprice fork:
 	if evm.chainRules.IsEIP150 {
@@ -585,23 +558,22 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	if !evm.StateDB.HasSelfDestructed(contract.Address()) {
 		evm.StateDB.AddRefund(params.SelfdestructRefundGas)
 	}
-	singleGas := multiGas.SingleGas()
-	return multiGas, singleGas, nil
+	return multiGas, nil
 }
 
-func gasExtCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
+func gasExtCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
 	panic("not implemented")
 }
 
-func gasExtDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
+func gasExtDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
 	panic("not implemented")
 }
-func gasExtStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
+func gasExtStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
 	panic("not implemented")
 }
 
 // gasEOFCreate returns the gas-cost for EOF-Create. Hashing charge needs to be
 // deducted in the opcode itself, since it depends on the immediate
-func gasEOFCreate(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, uint64, error) {
+func gasEOFCreate(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
 	panic("not implemented")
 }
