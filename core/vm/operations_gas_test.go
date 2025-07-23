@@ -66,7 +66,7 @@ func testGasSStoreFuncFuncWithCases(t *testing.T, config *params.ChainConfig, ga
 				stateDb.AddRefund(tc.refundValue)
 			}
 
-			multiGas, singleGas, err := gasSStoreFunc(evm, contract, stack, mem, 0)
+			multiGas, err := gasSStoreFunc(evm, contract, stack, mem, 0)
 
 			if err != nil {
 				t.Fatalf("Unexpected error for test case %s: %v", tc.name, err)
@@ -75,12 +75,6 @@ func testGasSStoreFuncFuncWithCases(t *testing.T, config *params.ChainConfig, ga
 			if *multiGas != *tc.expectedMultiGas {
 				t.Errorf("Expected multi gas %d, got %d for test case: %s",
 					tc.expectedMultiGas, multiGas, tc.name)
-			}
-
-			expectedSingleGas := tc.expectedMultiGas.SingleGas()
-			if singleGas != expectedSingleGas {
-				t.Errorf("Expected single gas %d, got %d for test case: %s",
-					expectedSingleGas, singleGas, tc.name)
 			}
 
 			if stateDb.GetRefund() != tc.expectedRefund {
@@ -430,20 +424,17 @@ func TestGasSStore4762(t *testing.T) {
 	slotKey := common.HexToHash("0xdeadbeef") // any dummy key
 	stack.push(new(uint256.Int).SetBytes(slotKey.Bytes()))
 
-	expectedSingleGas := params.WitnessBranchReadCost + params.WitnessChunkReadCost +
+	expectedStorageAccessGas := params.WitnessBranchReadCost + params.WitnessChunkReadCost +
 		params.WitnessBranchWriteCost + params.WitnessChunkWriteCost
-	expectedMultiGas := multigas.StorageAccessGas(expectedSingleGas)
+	expectedMultiGas := multigas.StorageAccessGas(expectedStorageAccessGas)
 
-	multiGas, singleGas, err := gasSStore4762(evm, contract, stack, mem, 0)
+	multiGas, err := gasSStore4762(evm, contract, stack, mem, 0)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
 	if *multiGas != *expectedMultiGas {
 		t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
-	}
-	if singleGas != expectedSingleGas {
-		t.Errorf("Expected single gas %d, got %d", expectedSingleGas, singleGas)
 	}
 }
 
@@ -559,7 +550,7 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 			}
 
 			// Call `memoryGasCost` to get the memory gas cost
-			memoryMultiGas, _, err := memoryGasCost(memForExpected, tc.memorySize)
+			memoryMultiGas, err := memoryGasCost(memForExpected, tc.memorySize)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
@@ -580,7 +571,7 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 			}
 
 			// Call the function
-			multiGas, _, err := gasCallFunc(evm, contract, stack, mem, tc.memorySize)
+			multiGas, err := gasCallFunc(evm, contract, stack, mem, tc.memorySize)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
@@ -915,30 +906,26 @@ func testGasDelegateOrStaticCall(t *testing.T, gasImplFunc gasFunc) {
 	stack.push(new(uint256.Int).SetUint64(50000))
 	memorySize := uint64(64)
 
-	expectedMultiGas, memorySingleGas, err := memoryGasCost(memForExpected, memorySize)
+	expectedMultiGas, err := memoryGasCost(memForExpected, memorySize)
 	if err != nil {
 		t.Fatalf("Failed memoryGasCost: %v", err)
 	}
 
-	callGas, err := callGas(evm.chainRules.IsEIP150, contractGas, memorySingleGas, stack.Back(0))
+	callGas, err := callGas(evm.chainRules.IsEIP150, contractGas, expectedMultiGas.SingleGas(), stack.Back(0))
 	if err != nil {
 		t.Fatalf("Failed callGas: %v", err)
 	}
 
 	expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, callGas)
-	expectedSingleGas := memorySingleGas + callGas
 
 	// Call gasImplFunc
-	multiGas, singleGas, err := gasImplFunc(evm, contract, stack, mem, memorySize)
+	multiGas, err := gasImplFunc(evm, contract, stack, mem, memorySize)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
 	if *multiGas != *expectedMultiGas {
 		t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
-	}
-	if singleGas != expectedSingleGas {
-		t.Errorf("Expected single gas %d, got %d", expectedSingleGas, singleGas)
 	}
 }
 
@@ -1016,7 +1003,7 @@ func testGasCreateFunc(t *testing.T, gasImplFunc gasFunc, includeHashCost bool, 
 			memorySize := uint64(64)
 
 			// Call gasImplFunc
-			multiGas, singleGas, err := gasImplFunc(evm, contract, stack, mem, memorySize)
+			multiGas, err := gasImplFunc(evm, contract, stack, mem, memorySize)
 
 			if tc.shouldFail {
 				if err == nil {
@@ -1030,7 +1017,7 @@ func testGasCreateFunc(t *testing.T, gasImplFunc gasFunc, includeHashCost bool, 
 			}
 
 			// Calculate expected multi-dimensional gas
-			expectedMultiGas, memorySingleGas, err := memoryGasCost(memForExpected, memorySize)
+			expectedMultiGas, err := memoryGasCost(memForExpected, memorySize)
 			if err != nil {
 				t.Fatalf("Failed memoryGasCost: %v", err)
 			}
@@ -1055,13 +1042,9 @@ func testGasCreateFunc(t *testing.T, gasImplFunc gasFunc, includeHashCost bool, 
 			}
 
 			expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, totalComputationCost)
-			expectedSingleGas := memorySingleGas + totalComputationCost
 
 			if *multiGas != *expectedMultiGas {
 				t.Errorf("Expected multi gas %+v, got %+v", expectedMultiGas, multiGas)
-			}
-			if singleGas != expectedSingleGas {
-				t.Errorf("Expected single gas %d, got %d", expectedSingleGas, singleGas)
 			}
 		})
 	}
@@ -1129,7 +1112,7 @@ func testGasSelfdestructFuncWithCases(t *testing.T, config *params.ChainConfig, 
 
 			stack.push(new(uint256.Int).SetBytes(beneficiaryAddr.Bytes()))
 
-			multiGas, _, err := gasSelfdestructFunc(evm, contract, stack, mem, 0)
+			multiGas, err := gasSelfdestructFunc(evm, contract, stack, mem, 0)
 			if err != nil {
 				t.Fatalf("Unexpected error for test case %s: %v", tc.name, err)
 			}
@@ -1256,7 +1239,7 @@ func TestGasSelfdestructEIP4762(t *testing.T) {
 	expectedStorageAccessGas := accessListForExpected.BasicDataGas(contractAddr, false) + accessListForExpected.BasicDataGas(beneficiaryAddr, false)
 	expectedMultiGas := multigas.StorageAccessGas(expectedStorageAccessGas)
 
-	multiGas, _, err := gasSelfdestructEIP4762(evm, contract, stack, mem, 0)
+	multiGas, err := gasSelfdestructEIP4762(evm, contract, stack, mem, 0)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -1289,17 +1272,15 @@ func TestMakeGasLog(t *testing.T) {
 		// memorySize is arbitrary, only affects memory cost component
 		memorySize := uint64(64)
 
-		_, memorySingleGas, err := memoryGasCost(memForExpected, memorySize)
+		expectedMultiGas, err := memoryGasCost(memForExpected, memorySize)
 		if err != nil {
 			t.Fatalf("Failed memoryGasCost: %v", err)
 		}
 
-		expectedComputation := memorySingleGas + params.LogGas + n*params.LogTopicGas
-		expectedHistory := requestedSize * params.LogDataGas
+		expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, params.LogGas+n*params.LogTopicGas)
+		expectedMultiGas.SafeIncrement(multigas.ResourceKindHistoryGrowth, requestedSize*params.LogDataGas)
 
-		expectedMultiGas, _ := multigas.ComputationGas(expectedComputation).Set(multigas.ResourceKindHistoryGrowth, expectedHistory)
-
-		multiGas, _, err := makeGasLog(n)(evm, contract, stack, mem, memorySize)
+		multiGas, err := makeGasLog(n)(evm, contract, stack, mem, memorySize)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
