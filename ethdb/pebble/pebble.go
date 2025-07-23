@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -59,8 +60,7 @@ const (
 	// On 32-bit systems, slices are naturally limited to MaxInt (just short of
 	// 2GB).
 	// see: cockroachdb/pebble.maxBatchSize
-	oneIf64Bit   = ^uint(0) >> 63
-	maxBatchSize = (1<<31)<<oneIf64Bit - 1 // MaxUint32 on 64-bit platform, MaxInt on 32-bit platform
+	maxBatchSize = min(math.MaxUint32, math.MaxInt) // MaxUint32 on 64-bit platform, MaxInt on 32-bit platform
 )
 
 // Database is a persistent key-value store based on the pebble storage engine.
