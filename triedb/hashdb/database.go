@@ -370,19 +370,17 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		node := db.dirties[oldest]
 
 		err := rawdb.WriteLegacyTrieNodeWithError(batch, oldest, node.node)
-		if err != nil {
-			if errors.Is(err, ethdb.ErrBatchTooLarge) {
-				log.Warn("Pebble batch limit reached in hashdb Cap operation, flushing batch. Consider setting ideal cap batch size to a lower value.", "pebbleError", err)
-				// flush batch & retry the write
-				if err = batch.Write(); err != nil {
-					log.Error("Failed to write flush list to disk", "err", err)
-					return err
-				}
-				batch.Reset()
-				rawdb.WriteLegacyTrieNode(batch, oldest, node.node)
-			} else {
-				log.Crit("Failure in hashdb Cap operation", "err", err)
+		if errors.Is(err, ethdb.ErrBatchTooLarge) {
+			log.Warn("Pebble batch limit reached in hashdb Cap operation, flushing batch. Consider setting ideal cap batch size to a lower value.", "pebbleError", err)
+			// flush batch & retry the write
+			if err = batch.Write(); err != nil {
+				log.Error("Failed to write flush list to disk", "err", err)
+				return err
 			}
+			batch.Reset()
+			rawdb.WriteLegacyTrieNode(batch, oldest, node.node)
+		} else if err != nil {
+			log.Crit("Failure in hashdb Cap operation", "err", err)
 		}
 
 		// If we exceeded the ideal batch size, commit and reset
@@ -511,22 +509,20 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	}
 	// If we've reached an optimal batch size, commit and start over
 	err = rawdb.WriteLegacyTrieNodeWithError(batch, hash, node.node)
-	if err != nil {
-		if errors.Is(err, ethdb.ErrBatchTooLarge) {
-			log.Warn("Pebble batch limit reached in hashdb Commit operation, flushing batch. Consider setting ideal commit batch size to a lower value.", "pebbleError", err)
-			// flush batch & retry the write
-			if err = batch.Write(); err != nil {
-				return err
-			}
-			err = batch.Replay(uncacher)
-			if err != nil {
-				return err
-			}
-			batch.Reset()
-			rawdb.WriteLegacyTrieNode(batch, hash, node.node)
-		} else {
-			log.Crit("Failure in hashdb Commit operation", "err", err)
+	if errors.Is(err, ethdb.ErrBatchTooLarge) {
+		log.Warn("Pebble batch limit reached in hashdb Commit operation, flushing batch. Consider setting ideal commit batch size to a lower value.", "pebbleError", err)
+		// flush batch & retry the write
+		if err = batch.Write(); err != nil {
+			return err
 		}
+		err = batch.Replay(uncacher)
+		if err != nil {
+			return err
+		}
+		batch.Reset()
+		rawdb.WriteLegacyTrieNode(batch, hash, node.node)
+	} else if err != nil {
+		log.Crit("Failure in hashdb Commit operation", "err", err)
 	}
 	if uint(batch.ValueSize()) >= db.idealCommitBatchSize {
 		if err := batch.Write(); err != nil {
