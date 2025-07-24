@@ -332,3 +332,13 @@ func (db *Database) IsVerkle() bool {
 func (db *Database) Disk() ethdb.Database {
 	return db.disk
 }
+
+// HashScheme: check if we are busy committing and holding main db lock for a longer time
+// PathScheme: always false (not necessary)
+func (db *Database) IsBusyCommitting() bool {
+	hdb, ok := db.backend.(*hashdb.Database)
+	if !ok {
+		return false
+	}
+	return hdb.IsBusyCommitting()
+}
