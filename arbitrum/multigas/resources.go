@@ -36,6 +36,21 @@ func NewMultiGas(kind ResourceKind, amount uint64) *MultiGas {
 	return mg
 }
 
+// MultiGasFromMap creates a new MultiGas that contains multiple resources.
+// This is meant to be called with constant values and will panic if there is an overflow.
+func MultiGasFromMap(gasMap map[ResourceKind]uint64) *MultiGas {
+	mg := ZeroGas()
+	for kind, gas := range gasMap {
+		var overflow bool
+		mg.total, overflow = math.SafeAdd(mg.total, gas)
+		if overflow {
+			panic("multigas overflow")
+		}
+		mg.gas[kind] = gas
+	}
+	return mg
+}
+
 // UnknownGas returns a MultiGas initialized with unknown gas.
 func UnknownGas(amount uint64) *MultiGas {
 	return NewMultiGas(ResourceKindUnknown, amount)

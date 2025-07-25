@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"github.com/ethereum/go-ethereum/arbitrum/multigas"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -51,4 +53,15 @@ func callGas(isEip150 bool, availableGas, base uint64, callCost *uint256.Int) (u
 	}
 
 	return callCost.Uint64(), nil
+}
+
+// constantMultiGas returns the constant multi-gas cost of an opcode.
+func constantMultiGas(cost uint64, op OpCode) *multigas.MultiGas {
+	if op == SELFDESTRUCT && cost == params.SelfdestructGasEIP150 {
+		return multigas.MultiGasFromMap(map[multigas.ResourceKind]uint64{
+			multigas.ResourceKindComputation:   params.WarmStorageReadCostEIP2929,
+			multigas.ResourceKindStorageAccess: cost - params.WarmStorageReadCostEIP2929,
+		})
+	}
+	return multigas.ComputationGas(cost)
 }
