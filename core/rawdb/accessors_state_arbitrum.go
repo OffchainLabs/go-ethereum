@@ -29,6 +29,7 @@ import (
 type WasmTarget string
 
 const (
+	TargetWasm  WasmTarget = "wasm"
 	TargetWavm  WasmTarget = "wavm"
 	TargetArm64 WasmTarget = "arm64"
 	TargetAmd64 WasmTarget = "amd64"
