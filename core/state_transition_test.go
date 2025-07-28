@@ -49,9 +49,12 @@ func TestApplyMessageReturnsMultiGas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to apply tx: %v", err)
 	}
-	expectedMultigas := multigas.ZeroGas()
-	expectedMultigas.Set(multigas.ResourceKindStorageAccess, 2100)
-	expectedMultigas.Set(multigas.ResourceKindStorageGrowth, 20000)
+
+	expectedMultigas := multigas.MultiGasFromMap(map[multigas.ResourceKind]uint64{
+		multigas.ResourceKindComputation:   3 + 3, // PUSH4+PUSH1
+		multigas.ResourceKindStorageAccess: 2100,  // SSTORE
+		multigas.ResourceKindStorageGrowth: 20000, // SSTORE
+	})
 	if got, want := *res.UsedMultiGas, *expectedMultigas; got != want {
 		t.Errorf("unexpected multi gas: got %v, want %v", got, want)
 	}
