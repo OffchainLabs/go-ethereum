@@ -57,6 +57,12 @@ func callGas(isEip150 bool, availableGas, base uint64, callCost *uint256.Int) (u
 
 // constantMultiGas returns the constant multi-gas cost of an opcode.
 func constantMultiGas(cost uint64, op OpCode) *multigas.MultiGas {
+	// SELFDESTRUCT is a special case because it charges for storage access but it isn't
+	// dependent on any input data. We charge a small computational cost for warm access like
+	// other multi-dimensional gas opcodes, and the rest is storage access to delete the
+	// contract from the database.
+	// Note we only need to cover EIP150 because it the current cost, and SELFDESTRUCT cost was
+	// zero previously.
 	if op == SELFDESTRUCT && cost == params.SelfdestructGasEIP150 {
 		return multigas.MultiGasFromMap(map[multigas.ResourceKind]uint64{
 			multigas.ResourceKindComputation:   params.WarmStorageReadCostEIP2929,
