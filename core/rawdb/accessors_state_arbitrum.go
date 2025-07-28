@@ -72,7 +72,9 @@ func IsSupportedWasmTarget(target WasmTarget) bool {
 
 func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asmMap map[WasmTarget][]byte) {
 	for target, asm := range asmMap {
-		WriteActivatedAsm(db, target, moduleHash, asm)
+		if target != TargetWasm {
+			WriteActivatedAsm(db, target, moduleHash, asm)
+		}
 	}
 }
 
