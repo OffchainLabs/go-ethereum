@@ -13,3 +13,14 @@ message MultiGasData {
   uint64 total_gas = 6;
   uint64 refund = 7;
 }
+
+message BlockMultiGasData {
+  uint64 block_number = 1;
+  string block_hash = 2;
+  MultiGasData gas_data = 4;
+}
+
+message BlockMultiGasBatch {
+  repeated BlockMultiGasData data = 1;
+  uint64 batch_timestamp = 2;
+}
