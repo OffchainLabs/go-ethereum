@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package multigas.proto;
+
+option go_package = "github.com/ethereum/go-ethereum/arbitrum/multigas/proto";
+
+message MultiGasData {
+  uint64 computation = 1;
+  uint64 history_growth = 2;
+  uint64 storage_access = 3;
+  uint64 storage_growth = 4;
+  uint64 unknown = 5;
+  uint64 total_gas = 6;
+  uint64 refund = 7;
+}
