@@ -5,6 +5,24 @@ import (
 	"testing"
 )
 
+func TestCheckResourceKind(t *testing.T) {
+	_, err := CheckResourceKind(0)
+	if err == nil {
+		t.Errorf("expected error, got nil")
+	}
+	_, err = CheckResourceKind(uint8(NumResourceKind))
+	if err == nil {
+		t.Errorf("expected error, got nil")
+	}
+	resource, err := CheckResourceKind(uint8(ResourceKindComputation))
+	if err != nil {
+		t.Errorf("unexpected error, got %v", err)
+	}
+	if resource != ResourceKindComputation {
+		t.Errorf("expected computation resource, got %v", resource)
+	}
+}
+
 func TestZeroGas(t *testing.T) {
 	zero := ZeroGas()
 	if zero.SingleGas() != 0 {
