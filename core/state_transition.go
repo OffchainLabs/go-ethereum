@@ -679,6 +679,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		ret, st.gasRemaining, usedMultiGas, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining, value)
 	}
 
+	// Refund the gas that was held to limit the amount of computation done.
+	st.gasRemaining += st.calcHeldGasRefund()
+
 	// Record the gas used excluding gas refunds. This value represents the actual
 	// gas allowance required to complete execution.
 	peakGasUsed := st.gasUsed()
@@ -813,9 +816,12 @@ func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization) 
 	return nil
 }
 
+func (st *stateTransition) calcHeldGasRefund() uint64 {
+	return st.evm.ProcessingHook.HeldGas()
+}
+
 // calcRefund computes refund counter, capped to a refund quotient.
 func (st *stateTransition) calcRefund() uint64 {
-	st.gasRemaining += st.evm.ProcessingHook.ForceRefundGas()
 	nonrefundable := st.evm.ProcessingHook.NonrefundableGas()
 	var refund uint64
 	if nonrefundable < st.gasUsed() {
