@@ -27,12 +27,20 @@ var (
 	ErrWriteBatchFile    = errors.New("failed to write batch file")
 )
 
-// BlockMultiGas contains all the multi-dimensional gas data accumulated for a single block
-// along with the block's identifying information.
-type BlockMultiGas struct {
-	MultiGas
-	BlockNumber uint64
-	BlockHash   string
+// TransactionMultiGas represents gas data for a single transaction
+type TransactionMultiGas struct {
+	TxHash   []byte
+	TxIndex  uint32
+	MultiGas MultiGas
+}
+
+// BlockTransactionsMultiGas contains all the multi-dimensional gas data for transactions
+// within a single block along with the block's identifying information.
+type BlockTransactionsMultiGas struct {
+	BlockNumber    uint64
+	BlockHash      []byte
+	BlockTimestamp uint64
+	Transactions   []TransactionMultiGas
 }
 
 // Config holds the configuration for the MultiGas collector.
@@ -42,31 +50,49 @@ type Config struct {
 }
 
 // Collector manages the asynchronous collection and batching of multi-dimensional
-// gas data from blocks. It receives BlockMultiGas data through a channel, buffers
+// gas data from blocks. It receives BlockTransactionMultiGas data through a channel, buffers
 // it in memory, and periodically writes batches to disk in protobuf format.
 type Collector struct {
 	config   Config
-	input    <-chan *BlockMultiGas
+	input    <-chan *BlockTransactionsMultiGas
 	wg       sync.WaitGroup
 	buffer   []*proto.BlockMultiGasData
 	batchNum uint64
 	mu       sync.Mutex
 }
 
-// ToProto converts the BlockMultiGas to its protobuf representation.
-func (bmg *BlockMultiGas) ToProto() *proto.BlockMultiGasData {
+// ToProto converts the BlockTransactionMultiGas to its protobuf representation.
+func (btmg *BlockTransactionsMultiGas) ToProto() *proto.BlockMultiGasData {
+	protoTxs := make([]*proto.TransactionMultiGasData, len(btmg.Transactions))
+
+	for i, tx := range btmg.Transactions {
+		multiGasData := &proto.MultiGasData{
+			Computation:   tx.MultiGas.Get(ResourceKindComputation),
+			StorageAccess: tx.MultiGas.Get(ResourceKindStorageAccess),
+			StorageGrowth: tx.MultiGas.Get(ResourceKindStorageGrowth),
+			HistoryGrowth: tx.MultiGas.Get(ResourceKindHistoryGrowth),
+		}
+
+		if unknown := tx.MultiGas.Get(ResourceKindUnknown); unknown > 0 {
+			multiGasData.Unknown = &unknown
+		}
+
+		if refund := tx.MultiGas.GetRefund(); refund > 0 {
+			multiGasData.Refund = &refund
+		}
+
+		protoTxs[i] = &proto.TransactionMultiGasData{
+			TxHash:   tx.TxHash,
+			TxIndex:  tx.TxIndex,
+			MultiGas: multiGasData,
+		}
+	}
+
 	return &proto.BlockMultiGasData{
-		BlockNumber: bmg.BlockNumber,
-		BlockHash:   bmg.BlockHash,
-		GasData: &proto.MultiGasData{
-			Computation:   bmg.Get(ResourceKindComputation),
-			StorageAccess: bmg.Get(ResourceKindStorageAccess),
-			StorageGrowth: bmg.Get(ResourceKindStorageGrowth),
-			HistoryGrowth: bmg.Get(ResourceKindHistoryGrowth),
-			Unknown:       bmg.Get(ResourceKindUnknown),
-			TotalGas:      bmg.total,
-			Refund:        bmg.refund,
-		},
+		BlockNumber:    btmg.BlockNumber,
+		BlockHash:      btmg.BlockHash,
+		BlockTimestamp: btmg.BlockTimestamp,
+		Transactions:   protoTxs,
 	}
 }
 
@@ -80,7 +106,7 @@ func (bmg *BlockMultiGas) ToProto() *proto.BlockMultiGasData {
 //
 // Parameters:
 //   - config: Configuration specifying output directory and batch size
-//   - input: Channel for receiving BlockMultiGas data (collector takes ownership)
+//   - input: Channel for receiving BlockTransactionMultiGas data (collector takes ownership)
 //
 // Returns:
 //   - *Collector: The initialized collector ready to receive data
@@ -88,7 +114,7 @@ func (bmg *BlockMultiGas) ToProto() *proto.BlockMultiGasData {
 //
 // The caller should close the input channel when done sending data, then call
 // Wait() to ensure all data has been written to disk.
-func NewCollector(config Config, input <-chan *BlockMultiGas) (*Collector, error) {
+func NewCollector(config Config, input <-chan *BlockTransactionsMultiGas) (*Collector, error) {
 	if config.OutputDir == "" {
 		return nil, ErrOutputDirRequired
 	}
@@ -115,14 +141,14 @@ func NewCollector(config Config, input <-chan *BlockMultiGas) (*Collector, error
 }
 
 // processData is the main processing loop that runs in a background goroutine.
-// It continuously reads BlockMultiGas data from the input channel, converts it
+// It continuously reads BlockTransactionMultiGas data from the input channel, converts it
 // to protobuf format, buffers it, and writes batches to disk when the buffer
 // fills up or when the channel is closed.
 func (c *Collector) processData() {
 	defer c.wg.Done()
 
-	for multiGas := range c.input {
-		protoData := multiGas.ToProto()
+	for blockData := range c.input {
+		protoData := blockData.ToProto()
 
 		c.mu.Lock()
 		c.buffer = append(c.buffer, protoData)
@@ -159,8 +185,7 @@ func (c *Collector) flushBatch() error {
 	}
 
 	batch := &proto.BlockMultiGasBatch{
-		BatchTimestamp: uint64(time.Now().Unix()),
-		Data:           make([]*proto.BlockMultiGasData, len(c.buffer)),
+		Data: make([]*proto.BlockMultiGasData, len(c.buffer)),
 	}
 	copy(batch.Data, c.buffer)
 

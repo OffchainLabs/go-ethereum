@@ -21,15 +21,15 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Multi-dimensional gas consumption data mirroring multigas.MultiGas struct
 type MultiGasData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Computation   uint64                 `protobuf:"varint,1,opt,name=computation,proto3" json:"computation,omitempty"`
 	HistoryGrowth uint64                 `protobuf:"varint,2,opt,name=history_growth,json=historyGrowth,proto3" json:"history_growth,omitempty"`
 	StorageAccess uint64                 `protobuf:"varint,3,opt,name=storage_access,json=storageAccess,proto3" json:"storage_access,omitempty"`
 	StorageGrowth uint64                 `protobuf:"varint,4,opt,name=storage_growth,json=storageGrowth,proto3" json:"storage_growth,omitempty"`
-	Unknown       uint64                 `protobuf:"varint,5,opt,name=unknown,proto3" json:"unknown,omitempty"`
-	TotalGas      uint64                 `protobuf:"varint,6,opt,name=total_gas,json=totalGas,proto3" json:"total_gas,omitempty"`
-	Refund        uint64                 `protobuf:"varint,7,opt,name=refund,proto3" json:"refund,omitempty"`
+	Unknown       *uint64                `protobuf:"varint,5,opt,name=unknown,proto3,oneof" json:"unknown,omitempty"`
+	Refund        *uint64                `protobuf:"varint,6,opt,name=refund,proto3,oneof" json:"refund,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -93,38 +93,94 @@ func (x *MultiGasData) GetStorageGrowth() uint64 {
 }
 
 func (x *MultiGasData) GetUnknown() uint64 {
-	if x != nil {
-		return x.Unknown
-	}
-	return 0
-}
-
-func (x *MultiGasData) GetTotalGas() uint64 {
-	if x != nil {
-		return x.TotalGas
+	if x != nil && x.Unknown != nil {
+		return *x.Unknown
 	}
 	return 0
 }
 
 func (x *MultiGasData) GetRefund() uint64 {
-	if x != nil {
-		return x.Refund
+	if x != nil && x.Refund != nil {
+		return *x.Refund
 	}
 	return 0
 }
 
-type BlockMultiGasData struct {
+// Gas data and metadata for a single transaction
+type TransactionMultiGasData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	BlockNumber   uint64                 `protobuf:"varint,1,opt,name=block_number,json=blockNumber,proto3" json:"block_number,omitempty"`
-	BlockHash     string                 `protobuf:"bytes,2,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty"`
-	GasData       *MultiGasData          `protobuf:"bytes,4,opt,name=gas_data,json=gasData,proto3" json:"gas_data,omitempty"`
+	TxHash        []byte                 `protobuf:"bytes,1,opt,name=tx_hash,json=txHash,proto3" json:"tx_hash,omitempty"`
+	TxIndex       uint32                 `protobuf:"varint,2,opt,name=tx_index,json=txIndex,proto3" json:"tx_index,omitempty"`
+	MultiGas      *MultiGasData          `protobuf:"bytes,3,opt,name=multi_gas,json=multiGas,proto3" json:"multi_gas,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
+func (x *TransactionMultiGasData) Reset() {
+	*x = TransactionMultiGasData{}
+	mi := &file_arbitrum_multigas_proto_multigas_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TransactionMultiGasData) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TransactionMultiGasData) ProtoMessage() {}
+
+func (x *TransactionMultiGasData) ProtoReflect() protoreflect.Message {
+	mi := &file_arbitrum_multigas_proto_multigas_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TransactionMultiGasData.ProtoReflect.Descriptor instead.
+func (*TransactionMultiGasData) Descriptor() ([]byte, []int) {
+	return file_arbitrum_multigas_proto_multigas_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *TransactionMultiGasData) GetTxHash() []byte {
+	if x != nil {
+		return x.TxHash
+	}
+	return nil
+}
+
+func (x *TransactionMultiGasData) GetTxIndex() uint32 {
+	if x != nil {
+		return x.TxIndex
+	}
+	return 0
+}
+
+func (x *TransactionMultiGasData) GetMultiGas() *MultiGasData {
+	if x != nil {
+		return x.MultiGas
+	}
+	return nil
+}
+
+// Transactions gas data within a block with block metadata
+type BlockMultiGasData struct {
+	state          protoimpl.MessageState     `protogen:"open.v1"`
+	BlockNumber    uint64                     `protobuf:"varint,1,opt,name=block_number,json=blockNumber,proto3" json:"block_number,omitempty"`
+	BlockHash      []byte                     `protobuf:"bytes,2,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty"`
+	BlockTimestamp uint64                     `protobuf:"varint,3,opt,name=block_timestamp,json=blockTimestamp,proto3" json:"block_timestamp,omitempty"`
+	Transactions   []*TransactionMultiGasData `protobuf:"bytes,4,rep,name=transactions,proto3" json:"transactions,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
 func (x *BlockMultiGasData) Reset() {
 	*x = BlockMultiGasData{}
-	mi := &file_arbitrum_multigas_proto_multigas_proto_msgTypes[1]
+	mi := &file_arbitrum_multigas_proto_multigas_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -136,7 +192,7 @@ func (x *BlockMultiGasData) String() string {
 func (*BlockMultiGasData) ProtoMessage() {}
 
 func (x *BlockMultiGasData) ProtoReflect() protoreflect.Message {
-	mi := &file_arbitrum_multigas_proto_multigas_proto_msgTypes[1]
+	mi := &file_arbitrum_multigas_proto_multigas_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -149,7 +205,7 @@ func (x *BlockMultiGasData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockMultiGasData.ProtoReflect.Descriptor instead.
 func (*BlockMultiGasData) Descriptor() ([]byte, []int) {
-	return file_arbitrum_multigas_proto_multigas_proto_rawDescGZIP(), []int{1}
+	return file_arbitrum_multigas_proto_multigas_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *BlockMultiGasData) GetBlockNumber() uint64 {
@@ -159,31 +215,38 @@ func (x *BlockMultiGasData) GetBlockNumber() uint64 {
 	return 0
 }
 
-func (x *BlockMultiGasData) GetBlockHash() string {
+func (x *BlockMultiGasData) GetBlockHash() []byte {
 	if x != nil {
 		return x.BlockHash
-	}
-	return ""
-}
-
-func (x *BlockMultiGasData) GetGasData() *MultiGasData {
-	if x != nil {
-		return x.GasData
 	}
 	return nil
 }
 
+func (x *BlockMultiGasData) GetBlockTimestamp() uint64 {
+	if x != nil {
+		return x.BlockTimestamp
+	}
+	return 0
+}
+
+func (x *BlockMultiGasData) GetTransactions() []*TransactionMultiGasData {
+	if x != nil {
+		return x.Transactions
+	}
+	return nil
+}
+
+// Batch of multiple blocks for efficient disk storage
 type BlockMultiGasBatch struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Data           []*BlockMultiGasData   `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
-	BatchTimestamp uint64                 `protobuf:"varint,2,opt,name=batch_timestamp,json=batchTimestamp,proto3" json:"batch_timestamp,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Data          []*BlockMultiGasData   `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BlockMultiGasBatch) Reset() {
 	*x = BlockMultiGasBatch{}
-	mi := &file_arbitrum_multigas_proto_multigas_proto_msgTypes[2]
+	mi := &file_arbitrum_multigas_proto_multigas_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -195,7 +258,7 @@ func (x *BlockMultiGasBatch) String() string {
 func (*BlockMultiGasBatch) ProtoMessage() {}
 
 func (x *BlockMultiGasBatch) ProtoReflect() protoreflect.Message {
-	mi := &file_arbitrum_multigas_proto_multigas_proto_msgTypes[2]
+	mi := &file_arbitrum_multigas_proto_multigas_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -208,7 +271,7 @@ func (x *BlockMultiGasBatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockMultiGasBatch.ProtoReflect.Descriptor instead.
 func (*BlockMultiGasBatch) Descriptor() ([]byte, []int) {
-	return file_arbitrum_multigas_proto_multigas_proto_rawDescGZIP(), []int{2}
+	return file_arbitrum_multigas_proto_multigas_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *BlockMultiGasBatch) GetData() []*BlockMultiGasData {
@@ -218,34 +281,33 @@ func (x *BlockMultiGasBatch) GetData() []*BlockMultiGasData {
 	return nil
 }
 
-func (x *BlockMultiGasBatch) GetBatchTimestamp() uint64 {
-	if x != nil {
-		return x.BatchTimestamp
-	}
-	return 0
-}
-
 var File_arbitrum_multigas_proto_multigas_proto protoreflect.FileDescriptor
 
 const file_arbitrum_multigas_proto_multigas_proto_rawDesc = "" +
 	"\n" +
-	"&arbitrum/multigas/proto/multigas.proto\x12\x0emultigas.proto\"\xf4\x01\n" +
+	"&arbitrum/multigas/proto/multigas.proto\x12\x0emultigas.proto\"\xf8\x01\n" +
 	"\fMultiGasData\x12 \n" +
 	"\vcomputation\x18\x01 \x01(\x04R\vcomputation\x12%\n" +
 	"\x0ehistory_growth\x18\x02 \x01(\x04R\rhistoryGrowth\x12%\n" +
 	"\x0estorage_access\x18\x03 \x01(\x04R\rstorageAccess\x12%\n" +
-	"\x0estorage_growth\x18\x04 \x01(\x04R\rstorageGrowth\x12\x18\n" +
-	"\aunknown\x18\x05 \x01(\x04R\aunknown\x12\x1b\n" +
-	"\ttotal_gas\x18\x06 \x01(\x04R\btotalGas\x12\x16\n" +
-	"\x06refund\x18\a \x01(\x04R\x06refund\"\x8e\x01\n" +
+	"\x0estorage_growth\x18\x04 \x01(\x04R\rstorageGrowth\x12\x1d\n" +
+	"\aunknown\x18\x05 \x01(\x04H\x00R\aunknown\x88\x01\x01\x12\x1b\n" +
+	"\x06refund\x18\x06 \x01(\x04H\x01R\x06refund\x88\x01\x01B\n" +
+	"\n" +
+	"\b_unknownB\t\n" +
+	"\a_refund\"\x88\x01\n" +
+	"\x17TransactionMultiGasData\x12\x17\n" +
+	"\atx_hash\x18\x01 \x01(\fR\x06txHash\x12\x19\n" +
+	"\btx_index\x18\x02 \x01(\rR\atxIndex\x129\n" +
+	"\tmulti_gas\x18\x03 \x01(\v2\x1c.multigas.proto.MultiGasDataR\bmultiGas\"\xcb\x01\n" +
 	"\x11BlockMultiGasData\x12!\n" +
 	"\fblock_number\x18\x01 \x01(\x04R\vblockNumber\x12\x1d\n" +
 	"\n" +
-	"block_hash\x18\x02 \x01(\tR\tblockHash\x127\n" +
-	"\bgas_data\x18\x04 \x01(\v2\x1c.multigas.proto.MultiGasDataR\agasData\"t\n" +
+	"block_hash\x18\x02 \x01(\fR\tblockHash\x12'\n" +
+	"\x0fblock_timestamp\x18\x03 \x01(\x04R\x0eblockTimestamp\x12K\n" +
+	"\ftransactions\x18\x04 \x03(\v2'.multigas.proto.TransactionMultiGasDataR\ftransactions\"K\n" +
 	"\x12BlockMultiGasBatch\x125\n" +
-	"\x04data\x18\x01 \x03(\v2!.multigas.proto.BlockMultiGasDataR\x04data\x12'\n" +
-	"\x0fbatch_timestamp\x18\x02 \x01(\x04R\x0ebatchTimestampB9Z7github.com/ethereum/go-ethereum/arbitrum/multigas/protob\x06proto3"
+	"\x04data\x18\x01 \x03(\v2!.multigas.proto.BlockMultiGasDataR\x04dataB9Z7github.com/ethereum/go-ethereum/arbitrum/multigas/protob\x06proto3"
 
 var (
 	file_arbitrum_multigas_proto_multigas_proto_rawDescOnce sync.Once
@@ -259,20 +321,22 @@ func file_arbitrum_multigas_proto_multigas_proto_rawDescGZIP() []byte {
 	return file_arbitrum_multigas_proto_multigas_proto_rawDescData
 }
 
-var file_arbitrum_multigas_proto_multigas_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_arbitrum_multigas_proto_multigas_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_arbitrum_multigas_proto_multigas_proto_goTypes = []any{
-	(*MultiGasData)(nil),       // 0: multigas.proto.MultiGasData
-	(*BlockMultiGasData)(nil),  // 1: multigas.proto.BlockMultiGasData
-	(*BlockMultiGasBatch)(nil), // 2: multigas.proto.BlockMultiGasBatch
+	(*MultiGasData)(nil),            // 0: multigas.proto.MultiGasData
+	(*TransactionMultiGasData)(nil), // 1: multigas.proto.TransactionMultiGasData
+	(*BlockMultiGasData)(nil),       // 2: multigas.proto.BlockMultiGasData
+	(*BlockMultiGasBatch)(nil),      // 3: multigas.proto.BlockMultiGasBatch
 }
 var file_arbitrum_multigas_proto_multigas_proto_depIdxs = []int32{
-	0, // 0: multigas.proto.BlockMultiGasData.gas_data:type_name -> multigas.proto.MultiGasData
-	1, // 1: multigas.proto.BlockMultiGasBatch.data:type_name -> multigas.proto.BlockMultiGasData
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	0, // 0: multigas.proto.TransactionMultiGasData.multi_gas:type_name -> multigas.proto.MultiGasData
+	1, // 1: multigas.proto.BlockMultiGasData.transactions:type_name -> multigas.proto.TransactionMultiGasData
+	2, // 2: multigas.proto.BlockMultiGasBatch.data:type_name -> multigas.proto.BlockMultiGasData
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_arbitrum_multigas_proto_multigas_proto_init() }
@@ -280,13 +344,14 @@ func file_arbitrum_multigas_proto_multigas_proto_init() {
 	if File_arbitrum_multigas_proto_multigas_proto != nil {
 		return
 	}
+	file_arbitrum_multigas_proto_multigas_proto_msgTypes[0].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arbitrum_multigas_proto_multigas_proto_rawDesc), len(file_arbitrum_multigas_proto_multigas_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
