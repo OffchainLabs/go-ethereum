@@ -12,13 +12,15 @@ import (
 	protobuf "google.golang.org/protobuf/proto"
 )
 
-func TestBlockTransactionsMultiGasToProto(t *testing.T) {
-	blockTxsMultiGas := &BlockTransactionsMultiGas{
-		BlockNumber:    12345,
-		BlockHash:      []byte{0xab, 0xcd, 0xef},
-		BlockTimestamp: 1234567890,
-		Transactions: []TransactionMultiGas{
-			{
+func TestTransactionMultiGasToProto(t *testing.T) {
+	tests := []struct {
+		name     string
+		tx       *TransactionMultiGas
+		expected func(*testing.T, *proto.TransactionMultiGasData)
+	}{
+		{
+			name: "transaction with all gas dimensions and optional fields",
+			tx: &TransactionMultiGas{
 				TxHash:  []byte{0x12, 0x34, 0x56},
 				TxIndex: 0,
 				MultiGas: *MultiGasFromMap(map[ResourceKind]uint64{
@@ -29,44 +31,62 @@ func TestBlockTransactionsMultiGasToProto(t *testing.T) {
 					ResourceKindUnknown:       10,
 				}),
 			},
-			{
+			expected: func(t *testing.T, proto *proto.TransactionMultiGasData) {
+				assert.Equal(t, []byte{0x12, 0x34, 0x56}, proto.TxHash)
+				assert.Equal(t, uint32(0), proto.TxIndex)
+				assert.Equal(t, uint64(100), proto.MultiGas.Computation)
+				assert.Equal(t, uint64(50), proto.MultiGas.HistoryGrowth)
+				assert.Equal(t, uint64(200), proto.MultiGas.StorageAccess)
+				assert.Equal(t, uint64(1000), proto.MultiGas.StorageGrowth)
+				assert.NotNil(t, proto.MultiGas.Unknown)
+				assert.Equal(t, uint64(10), *proto.MultiGas.Unknown)
+				assert.Nil(t, proto.MultiGas.Refund) // No refund in test data
+			},
+		},
+		{
+			name: "transaction with minimal gas dimensions (no optional fields)",
+			tx: &TransactionMultiGas{
 				TxHash:  []byte{0x78, 0x9a, 0xbc},
 				TxIndex: 1,
 				MultiGas: *MultiGasFromMap(map[ResourceKind]uint64{
 					ResourceKindComputation: 150,
 				}),
 			},
+			expected: func(t *testing.T, proto *proto.TransactionMultiGasData) {
+				assert.Equal(t, []byte{0x78, 0x9a, 0xbc}, proto.TxHash)
+				assert.Equal(t, uint32(1), proto.TxIndex)
+				assert.Equal(t, uint64(150), proto.MultiGas.Computation)
+				assert.Equal(t, uint64(0), proto.MultiGas.HistoryGrowth)
+				assert.Equal(t, uint64(0), proto.MultiGas.StorageAccess)
+				assert.Equal(t, uint64(0), proto.MultiGas.StorageGrowth)
+				assert.Nil(t, proto.MultiGas.Unknown) // Should be nil since value was 0
+				assert.Nil(t, proto.MultiGas.Refund)  // Should be nil since value was 0
+			},
 		},
 	}
 
-	protoData := blockTxsMultiGas.ToProto()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			protoData := tt.tx.ToProto()
+			tt.expected(t, protoData)
+		})
+	}
+}
+
+func TestBlockInfoToProto(t *testing.T) {
+	blockInfo := &BlockInfo{
+		BlockNumber:    12345,
+		BlockHash:      []byte{0xab, 0xcd, 0xef},
+		BlockTimestamp: 1234567890,
+	}
+
+	protoData := blockInfo.ToProto()
 
 	// Verify block metadata
-	assert.Equal(t, blockTxsMultiGas.BlockNumber, protoData.BlockNumber)
-	assert.Equal(t, blockTxsMultiGas.BlockHash, protoData.BlockHash)
-	assert.Equal(t, blockTxsMultiGas.BlockTimestamp, protoData.BlockTimestamp)
-	assert.Len(t, protoData.Transactions, len(blockTxsMultiGas.Transactions))
-
-	// Verify first transaction
-	expectedTx1 := blockTxsMultiGas.Transactions[0]
-	tx1 := protoData.Transactions[0]
-	assert.Equal(t, expectedTx1.TxHash, tx1.TxHash)
-	assert.Equal(t, expectedTx1.TxIndex, tx1.TxIndex)
-	assert.Equal(t, expectedTx1.MultiGas.Get(ResourceKindComputation), tx1.MultiGas.Computation)
-	assert.Equal(t, expectedTx1.MultiGas.Get(ResourceKindHistoryGrowth), tx1.MultiGas.HistoryGrowth)
-	assert.Equal(t, expectedTx1.MultiGas.Get(ResourceKindStorageAccess), tx1.MultiGas.StorageAccess)
-	assert.Equal(t, expectedTx1.MultiGas.Get(ResourceKindStorageGrowth), tx1.MultiGas.StorageGrowth)
-	assert.NotNil(t, tx1.MultiGas.Unknown)
-	assert.Equal(t, expectedTx1.MultiGas.Get(ResourceKindUnknown), *tx1.MultiGas.Unknown)
-
-	// Verify second transaction (no unknown or refund)
-	expectedTx2 := blockTxsMultiGas.Transactions[1]
-	tx2 := protoData.Transactions[1]
-	assert.Equal(t, expectedTx2.TxHash, tx2.TxHash)
-	assert.Equal(t, expectedTx2.TxIndex, tx2.TxIndex)
-	assert.Equal(t, expectedTx2.MultiGas.Get(ResourceKindComputation), tx2.MultiGas.Computation)
-	assert.Nil(t, tx2.MultiGas.Unknown)
-	assert.Nil(t, tx2.MultiGas.Refund)
+	assert.Equal(t, blockInfo.BlockNumber, protoData.BlockNumber)
+	assert.Equal(t, blockInfo.BlockHash, protoData.BlockHash)
+	assert.Equal(t, blockInfo.BlockTimestamp, protoData.BlockTimestamp)
+	assert.Empty(t, protoData.Transactions) // No transactions initially
 }
 
 func TestNewCollector(t *testing.T) {
@@ -103,7 +123,7 @@ func TestNewCollector(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			input := make(chan *BlockTransactionsMultiGas)
+			input := make(chan *CollectorMessage)
 
 			collector, err := NewCollector(tt.config, input)
 
@@ -125,162 +145,196 @@ func TestNewCollector(t *testing.T) {
 }
 
 func TestDataCollection(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name        string
 		batchSize   uint64
-		inputData   []*BlockTransactionsMultiGas
+		inputData   []*CollectorMessage
 		expectFiles int
 	}{
-		{name: "empty input", batchSize: 10, inputData: nil, expectFiles: 0},
 		{
-			name:      "single block with transactions",
+			name:        "empty input",
+			batchSize:   10,
+			inputData:   nil,
+			expectFiles: 0,
+		},
+		{
+			name:      "single block - one transaction",
 			batchSize: 1,
-			inputData: []*BlockTransactionsMultiGas{
+			inputData: []*CollectorMessage{
 				{
-					BlockNumber:    12345,
-					BlockHash:      []byte{0xab, 0xcd, 0xef},
-					BlockTimestamp: 1234567890,
-					Transactions: []TransactionMultiGas{
-						{
-							TxHash:  []byte{0x12, 0x34, 0x56},
-							TxIndex: 0,
-							MultiGas: *MultiGasFromMap(map[ResourceKind]uint64{
-								ResourceKindComputation:   100,
-								ResourceKindHistoryGrowth: 50,
-								ResourceKindStorageAccess: 200,
-								ResourceKindStorageGrowth: 1000,
-								ResourceKindUnknown:       25,
-							}),
-						},
-						{
-							TxHash:  []byte{0x78, 0x9a, 0xbc},
-							TxIndex: 1,
-							MultiGas: *MultiGasFromMap(map[ResourceKind]uint64{
-								ResourceKindComputation:   75,
-								ResourceKindHistoryGrowth: 30,
-								ResourceKindStorageAccess: 150,
-								ResourceKindUnknown:       10,
-							}),
-						},
+					Type: CollectorMsgBlock,
+					Block: &BlockInfo{
+						BlockNumber:    12345,
+						BlockHash:      []byte{0xab, 0xcd, 0xef},
+						BlockTimestamp: 1234567890,
+					},
+				},
+				{
+					Type: CollectorMsgTransaction,
+					Transaction: &TransactionMultiGas{
+						TxHash:  []byte{0x12, 0x34, 0x56},
+						TxIndex: 0,
+						MultiGas: *MultiGasFromMap(map[ResourceKind]uint64{
+							ResourceKindComputation:   100,
+							ResourceKindHistoryGrowth: 50,
+							ResourceKindStorageAccess: 200,
+							ResourceKindStorageGrowth: 1000,
+							ResourceKindUnknown:       25,
+						}),
 					},
 				},
 			},
 			expectFiles: 1,
 		},
 		{
-			name:      "multiple blocks, single batch",
+			name:      "multiple blocks - single batch",
 			batchSize: 3,
-			inputData: []*BlockTransactionsMultiGas{
+			inputData: []*CollectorMessage{
 				{
-					BlockNumber:    12345,
-					BlockHash:      []byte{0xab, 0xcd, 0xef},
-					BlockTimestamp: 1234567890,
-					Transactions: []TransactionMultiGas{
-						{
-							TxHash:  []byte{0x12, 0x34, 0x56},
-							TxIndex: 0,
-							MultiGas: *MultiGasFromMap(map[ResourceKind]uint64{
-								ResourceKindComputation:   100,
-								ResourceKindHistoryGrowth: 25,
-								ResourceKindStorageAccess: 50,
-							}),
-						},
+					Type: CollectorMsgBlock,
+					Block: &BlockInfo{
+						BlockNumber:    12345,
+						BlockHash:      []byte{0xab, 0xcd, 0xef},
+						BlockTimestamp: 1234567890,
 					},
 				},
 				{
-					BlockNumber:    12346,
-					BlockHash:      []byte{0xde, 0xf1, 0x23},
-					BlockTimestamp: 1234567891,
-					Transactions: []TransactionMultiGas{
-						{
-							TxHash:  []byte{0x45, 0x67, 0x89},
-							TxIndex: 0,
-							MultiGas: *MultiGasFromMap(map[ResourceKind]uint64{
-								ResourceKindComputation:   200,
-								ResourceKindStorageGrowth: 500,
-								ResourceKindUnknown:       15,
-							}),
-						},
+					Type: CollectorMsgTransaction,
+					Transaction: &TransactionMultiGas{
+						TxHash:  []byte{0x12, 0x34, 0x56},
+						TxIndex: 0,
+						MultiGas: *MultiGasFromMap(map[ResourceKind]uint64{
+							ResourceKindComputation:   100,
+							ResourceKindHistoryGrowth: 25,
+							ResourceKindStorageAccess: 50,
+						}),
+					},
+				},
+				{
+					Type: CollectorMsgBlock,
+					Block: &BlockInfo{
+						BlockNumber:    12346,
+						BlockHash:      []byte{0xde, 0xf1, 0x23},
+						BlockTimestamp: 1234567891,
+					},
+				},
+				{
+					Type: CollectorMsgTransaction,
+					Transaction: &TransactionMultiGas{
+						TxHash:  []byte{0x45, 0x67, 0x89},
+						TxIndex: 1,
+						MultiGas: *MultiGasFromMap(map[ResourceKind]uint64{
+							ResourceKindComputation:   200,
+							ResourceKindStorageGrowth: 500,
+							ResourceKindUnknown:       15,
+						}),
+					},
+				},
+				{
+					Type: CollectorMsgTransaction,
+					Transaction: &TransactionMultiGas{
+						TxHash:  []byte{0x78, 0x9a, 0xbc},
+						TxIndex: 2,
+						MultiGas: *MultiGasFromMap(map[ResourceKind]uint64{
+							ResourceKindComputation:   75,
+							ResourceKindHistoryGrowth: 30,
+							ResourceKindStorageAccess: 150,
+						}),
 					},
 				},
 			},
 			expectFiles: 1,
 		},
 		{
-			name:      "multiple blocks, multiple batches",
+			name:      "multiple blocks - multiple batches",
 			batchSize: 2,
-			inputData: []*BlockTransactionsMultiGas{
+			inputData: []*CollectorMessage{
 				{
-					BlockNumber:    12345,
-					BlockHash:      []byte{0xab, 0xcd, 0xef},
-					BlockTimestamp: 1234567890,
-					Transactions: []TransactionMultiGas{
-						{
-							TxHash:  []byte{0x12, 0x34, 0x56},
-							TxIndex: 0,
-							MultiGas: *MultiGasFromMap(map[ResourceKind]uint64{
-								ResourceKindComputation:   100,
-								ResourceKindHistoryGrowth: 40,
-								ResourceKindStorageAccess: 80,
-								ResourceKindStorageGrowth: 300,
-							}),
-						},
+					Type: CollectorMsgBlock,
+					Block: &BlockInfo{
+						BlockNumber:    12345,
+						BlockHash:      []byte{0xab, 0xcd, 0xef},
+						BlockTimestamp: 1234567890,
 					},
 				},
 				{
-					BlockNumber:    12346,
-					BlockHash:      []byte{0xde, 0xf1, 0x23},
-					BlockTimestamp: 1234567891,
-					Transactions: []TransactionMultiGas{
-						{
-							TxHash:  []byte{0x78, 0x9a, 0xbc},
-							TxIndex: 0,
-							MultiGas: *MultiGasFromMap(map[ResourceKind]uint64{
-								ResourceKindComputation:   200,
-								ResourceKindHistoryGrowth: 60,
-								ResourceKindStorageAccess: 120,
-								ResourceKindUnknown:       20,
-							}),
-						},
+					Type: CollectorMsgTransaction,
+					Transaction: &TransactionMultiGas{
+						TxHash:  []byte{0x12, 0x34, 0x56},
+						TxIndex: 0,
+						MultiGas: *MultiGasFromMap(map[ResourceKind]uint64{
+							ResourceKindComputation:   100,
+							ResourceKindHistoryGrowth: 40,
+							ResourceKindStorageAccess: 80,
+							ResourceKindStorageGrowth: 300,
+						}),
 					},
 				},
 				{
-					BlockNumber:    12347,
-					BlockHash:      []byte{0x45, 0x67, 0x89},
-					BlockTimestamp: 1234567892,
-					Transactions: []TransactionMultiGas{
-						{
-							TxHash:  []byte{0xab, 0xcd, 0xef},
-							TxIndex: 0,
-							MultiGas: *MultiGasFromMap(map[ResourceKind]uint64{
-								ResourceKindComputation:   300,
-								ResourceKindStorageGrowth: 800,
-								ResourceKindUnknown:       35,
-							}),
-						},
+					Type: CollectorMsgBlock,
+					Block: &BlockInfo{
+						BlockNumber:    12346,
+						BlockHash:      []byte{0xde, 0xf1, 0x23},
+						BlockTimestamp: 1234567891,
+					},
+				},
+				{
+					Type: CollectorMsgTransaction,
+					Transaction: &TransactionMultiGas{
+						TxHash:  []byte{0x78, 0x9a, 0xbc},
+						TxIndex: 1,
+						MultiGas: *MultiGasFromMap(map[ResourceKind]uint64{
+							ResourceKindComputation:   200,
+							ResourceKindHistoryGrowth: 60,
+							ResourceKindStorageAccess: 120,
+						}),
+					},
+				},
+				{
+					Type: CollectorMsgBlock,
+					Block: &BlockInfo{
+						BlockNumber:    12347,
+						BlockHash:      []byte{0x45, 0x67, 0x89},
+						BlockTimestamp: 1234567892,
+					},
+				},
+				{
+					Type: CollectorMsgTransaction,
+					Transaction: &TransactionMultiGas{
+						TxHash:  []byte{0xab, 0xcd, 0xef},
+						TxIndex: 2,
+						MultiGas: *MultiGasFromMap(map[ResourceKind]uint64{
+							ResourceKindComputation:   300,
+							ResourceKindStorageGrowth: 800,
+							ResourceKindUnknown:       35,
+						}),
 					},
 				},
 			},
-			expectFiles: 2, // 2 + 1
+			expectFiles: 2, // Two batches expected
 		},
 	}
 
-	for _, tt := range tests {
+	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
-			input := make(chan *BlockTransactionsMultiGas, 10)
+			input := make(chan *CollectorMessage, 10)
 
 			config := Config{
 				OutputDir: tmpDir,
-				BatchSize: tt.batchSize,
+				BatchSize: int(tt.batchSize),
 			}
 
 			collector, err := NewCollector(config, input)
 			require.NoError(t, err)
 
-			// Send all input data
-			for _, blockData := range tt.inputData {
-				input <- blockData
+			// Send all input data and count blocks
+			var blockCount int
+			for _, msg := range tt.inputData {
+				input <- msg
+				if msg.Type == CollectorMsgBlock {
+					blockCount++
+				}
 			}
 
 			// Close input and wait for completion
@@ -305,42 +359,30 @@ func TestDataCollection(t *testing.T) {
 				allData = append(allData, batch.Data...)
 			}
 
-			// Verify all data was written correctly
-			assert.Len(t, allData, len(tt.inputData))
+			// Verify block count matches input
+			assert.Len(t, allData, blockCount)
 
-			for i, data := range allData {
-				expected := tt.inputData[i]
+			// Iterate through input messages and verify against output data
+			var blockIndex int
+			var txIndexInBlock int
+			for _, message := range tt.inputData {
+				switch message.Type {
+				case CollectorMsgBlock:
+					assert.Equal(t, message.Block.BlockNumber, allData[blockIndex].BlockNumber)
+					assert.Equal(t, message.Block.BlockHash, allData[blockIndex].BlockHash)
+					assert.Equal(t, message.Block.BlockTimestamp, allData[blockIndex].BlockTimestamp)
+					blockIndex++
+					txIndexInBlock = 0 // Reset transaction counter for new block
 
-				// Verify block metadata
-				assert.Equal(t, expected.BlockNumber, data.BlockNumber)
-				assert.Equal(t, expected.BlockHash, data.BlockHash)
-				assert.Equal(t, expected.BlockTimestamp, data.BlockTimestamp)
-				assert.Len(t, data.Transactions, len(expected.Transactions))
-
-				// Verify each transaction
-				for j, txData := range data.Transactions {
-					expectedTx := expected.Transactions[j]
-					assert.Equal(t, expectedTx.TxHash, txData.TxHash)
-					assert.Equal(t, expectedTx.TxIndex, txData.TxIndex)
-					assert.Equal(t, expectedTx.MultiGas.Get(ResourceKindComputation), txData.MultiGas.Computation)
-					assert.Equal(t, expectedTx.MultiGas.Get(ResourceKindHistoryGrowth), txData.MultiGas.HistoryGrowth)
-					assert.Equal(t, expectedTx.MultiGas.Get(ResourceKindStorageAccess), txData.MultiGas.StorageAccess)
-					assert.Equal(t, expectedTx.MultiGas.Get(ResourceKindStorageGrowth), txData.MultiGas.StorageGrowth)
-
-					// Verify optional fields
-					if unknown := expectedTx.MultiGas.Get(ResourceKindUnknown); unknown > 0 {
-						assert.NotNil(t, txData.MultiGas.Unknown)
-						assert.Equal(t, unknown, *txData.MultiGas.Unknown)
-					} else {
-						assert.Nil(t, txData.MultiGas.Unknown)
-					}
-
-					if refund := expectedTx.MultiGas.GetRefund(); refund > 0 {
-						assert.NotNil(t, txData.MultiGas.Refund)
-						assert.Equal(t, refund, *txData.MultiGas.Refund)
-					} else {
-						assert.Nil(t, txData.MultiGas.Refund)
-					}
+				case CollectorMsgTransaction:
+					txProto := allData[blockIndex-1].Transactions[txIndexInBlock]
+					assert.Equal(t, message.Transaction.TxHash, txProto.TxHash)
+					assert.Equal(t, message.Transaction.TxIndex, txProto.TxIndex)
+					assert.Equal(t, message.Transaction.MultiGas.Get(ResourceKindComputation), txProto.MultiGas.Computation)
+					assert.Equal(t, message.Transaction.MultiGas.Get(ResourceKindHistoryGrowth), txProto.MultiGas.HistoryGrowth)
+					assert.Equal(t, message.Transaction.MultiGas.Get(ResourceKindStorageAccess), txProto.MultiGas.StorageAccess)
+					assert.Equal(t, message.Transaction.MultiGas.Get(ResourceKindStorageGrowth), txProto.MultiGas.StorageGrowth)
+					txIndexInBlock++ // Move to next transaction in this block
 				}
 			}
 		})
@@ -349,7 +391,7 @@ func TestDataCollection(t *testing.T) {
 
 func TestCollectorChannelClosed(t *testing.T) {
 	tmpDir := t.TempDir()
-	input := make(chan *BlockTransactionsMultiGas, 10)
+	input := make(chan *CollectorMessage, 10)
 
 	config := Config{
 		OutputDir: tmpDir,
@@ -360,22 +402,16 @@ func TestCollectorChannelClosed(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add some data
-	blockData := &BlockTransactionsMultiGas{
-		BlockNumber:    12345,
-		BlockHash:      []byte{0xab, 0xcd, 0xef},
-		BlockTimestamp: 1234567890,
-		Transactions: []TransactionMultiGas{
-			{
-				TxHash:  []byte{0x12, 0x34, 0x56},
-				TxIndex: 0,
-				MultiGas: *MultiGasFromMap(map[ResourceKind]uint64{
-					ResourceKindComputation: 100,
-				}),
-			},
+	message := &CollectorMessage{
+		Type: CollectorMsgBlock,
+		Block: &BlockInfo{
+			BlockNumber:    12345,
+			BlockHash:      []byte{0xab, 0xcd, 0xef},
+			BlockTimestamp: 1234567890,
 		},
 	}
 
-	input <- blockData
+	input <- message
 
 	// Close input channel - should flush remaining data
 	close(input)
