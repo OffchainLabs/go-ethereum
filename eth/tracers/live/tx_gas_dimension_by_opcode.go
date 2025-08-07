@@ -102,7 +102,7 @@ func (t *TxGasDimensionByOpcodeLiveTracer) OnTxStart(
 	}
 
 	// we skip internal / system transactions
-	if tx.Type() == types.ArbitrumInternalTxType {
+	if tx.Type() == types.ArbitrumInternalTxType || tx.Type() == types.ArbitrumMessageExtractionTxType {
 		t.skip = true
 		return
 	}

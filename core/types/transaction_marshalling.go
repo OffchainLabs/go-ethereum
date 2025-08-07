@@ -19,6 +19,7 @@ package types
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -174,6 +175,9 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.L1BlockNumber = (*hexutil.Uint64)(&itx.L1BlockNumber)
 		enc.From = itx.Sender
 	case *ArbitrumInternalTx:
+		enc.ChainID = (*hexutil.Big)(itx.ChainId)
+		enc.Input = (*hexutil.Bytes)(&itx.Data)
+	case *ArbitrumMessageExtractionTx:
 		enc.ChainID = (*hexutil.Big)(itx.ChainId)
 		enc.Input = (*hexutil.Bytes)(&itx.Data)
 	case *ArbitrumDepositTx:
@@ -707,6 +711,18 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			RetryData:        *dec.RetryData,
 		}
 
+	case ArbitrumMessageExtractionTxType:
+		if dec.ChainID == nil {
+			return errors.New("missing required field 'chainId' in transaction")
+		}
+		if dec.Input == nil {
+			return errors.New("missing required field 'input' in transaction")
+		}
+		inner = &ArbitrumMessageExtractionTx{
+			ChainId: (*big.Int)(dec.ChainID),
+			Data:    *dec.Input,
+		}
+
 	case BlobTxType:
 		var itx BlobTx
 		inner = &itx
@@ -868,6 +884,7 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		}
 
 	default:
+		fmt.Println("hit here")
 		return ErrTxTypeNotSupported
 	}
 

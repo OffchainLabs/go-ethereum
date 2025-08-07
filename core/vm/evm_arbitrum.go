@@ -53,6 +53,7 @@ type TxProcessingHook interface {
 	FillReceiptInfo(receipt *types.Receipt)
 	MsgIsNonMutating() bool
 	ExecuteWASM(scope *ScopeContext, input []byte, interpreter *EVMInterpreter) ([]byte, error)
+	SetMessageExtractionProvider(provider any) error
 	IsCalldataPricingIncreaseEnabled() bool
 }
 
@@ -110,4 +111,8 @@ func (p DefaultTxProcessor) ExecuteWASM(scope *ScopeContext, input []byte, inter
 // The default behavior for go-ethereum is to enable calldata pricing increase. (EIP-7623)
 func (p DefaultTxProcessor) IsCalldataPricingIncreaseEnabled() bool {
 	return true
+}
+
+func (p DefaultTxProcessor) SetMessageExtractionProvider(provider any) error {
+	return nil
 }

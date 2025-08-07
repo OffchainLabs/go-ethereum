@@ -47,6 +47,8 @@ func (s arbitrumSigner) Sender(tx *Transaction) (common.Address, error) {
 		return inner.From, nil
 	case *ArbitrumSubmitRetryableTx:
 		return inner.From, nil
+	case *ArbitrumMessageExtractionTx:
+		return ArbosAddress, nil
 	case *ArbitrumLegacyTxData:
 		legacyData := tx.inner.(*ArbitrumLegacyTxData)
 		if legacyData.Sender != nil {

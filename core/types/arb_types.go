@@ -56,27 +56,29 @@ type FallbackClient interface {
 
 var bigZero = big.NewInt(0)
 
-func (tx *LegacyTx) skipNonceChecks() bool                  { return false }
-func (tx *AccessListTx) skipNonceChecks() bool              { return false }
-func (tx *DynamicFeeTx) skipNonceChecks() bool              { return false }
-func (tx *SetCodeTx) skipNonceChecks() bool                 { return false }
-func (tx *ArbitrumUnsignedTx) skipNonceChecks() bool        { return false }
-func (tx *ArbitrumContractTx) skipNonceChecks() bool        { return true }
-func (tx *ArbitrumRetryTx) skipNonceChecks() bool           { return true }
-func (tx *ArbitrumSubmitRetryableTx) skipNonceChecks() bool { return true }
-func (d *ArbitrumDepositTx) skipNonceChecks() bool          { return true }
-func (t *ArbitrumInternalTx) skipNonceChecks() bool         { return true }
+func (tx *LegacyTx) skipNonceChecks() bool                   { return false }
+func (tx *AccessListTx) skipNonceChecks() bool               { return false }
+func (tx *DynamicFeeTx) skipNonceChecks() bool               { return false }
+func (tx *SetCodeTx) skipNonceChecks() bool                  { return false }
+func (tx *ArbitrumUnsignedTx) skipNonceChecks() bool         { return false }
+func (tx *ArbitrumContractTx) skipNonceChecks() bool         { return true }
+func (tx *ArbitrumRetryTx) skipNonceChecks() bool            { return true }
+func (tx *ArbitrumSubmitRetryableTx) skipNonceChecks() bool  { return true }
+func (d *ArbitrumDepositTx) skipNonceChecks() bool           { return true }
+func (t *ArbitrumInternalTx) skipNonceChecks() bool          { return true }
+func (t *ArbitrumMessageExtractionTx) skipNonceChecks() bool { return true }
 
-func (tx *LegacyTx) skipFromEOACheck() bool                  { return false }
-func (tx *AccessListTx) skipFromEOACheck() bool              { return false }
-func (tx *DynamicFeeTx) skipFromEOACheck() bool              { return false }
-func (tx *SetCodeTx) skipFromEOACheck() bool                 { return false }
-func (tx *ArbitrumUnsignedTx) skipFromEOACheck() bool        { return false }
-func (tx *ArbitrumContractTx) skipFromEOACheck() bool        { return true }
-func (tx *ArbitrumRetryTx) skipFromEOACheck() bool           { return true }
-func (tx *ArbitrumSubmitRetryableTx) skipFromEOACheck() bool { return true }
-func (d *ArbitrumDepositTx) skipFromEOACheck() bool          { return true }
-func (t *ArbitrumInternalTx) skipFromEOACheck() bool         { return true }
+func (tx *LegacyTx) skipFromEOACheck() bool                   { return false }
+func (tx *AccessListTx) skipFromEOACheck() bool               { return false }
+func (tx *DynamicFeeTx) skipFromEOACheck() bool               { return false }
+func (tx *SetCodeTx) skipFromEOACheck() bool                  { return false }
+func (tx *ArbitrumUnsignedTx) skipFromEOACheck() bool         { return false }
+func (tx *ArbitrumContractTx) skipFromEOACheck() bool         { return true }
+func (tx *ArbitrumRetryTx) skipFromEOACheck() bool            { return true }
+func (tx *ArbitrumSubmitRetryableTx) skipFromEOACheck() bool  { return true }
+func (d *ArbitrumDepositTx) skipFromEOACheck() bool           { return true }
+func (t *ArbitrumInternalTx) skipFromEOACheck() bool          { return true }
+func (t *ArbitrumMessageExtractionTx) skipFromEOACheck() bool { return true }
 
 type ArbitrumUnsignedTx struct {
 	ChainId *big.Int
@@ -611,6 +613,60 @@ func (t *ArbitrumInternalTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *
 func (t *ArbitrumInternalTx) sigHash(chainID *big.Int) common.Hash {
 	return prefixedRlpHash(
 		ArbitrumInternalTxType,
+		[]any{
+			chainID,
+			t.Data,
+		})
+}
+
+type ArbitrumMessageExtractionTx struct {
+	ChainId *big.Int
+	Data    []byte
+}
+
+func (t *ArbitrumMessageExtractionTx) txType() byte {
+	return ArbitrumMessageExtractionTxType
+}
+
+func (t *ArbitrumMessageExtractionTx) copy() TxData {
+	return &ArbitrumMessageExtractionTx{
+		new(big.Int).Set(t.ChainId),
+		common.CopyBytes(t.Data),
+	}
+}
+
+func (t *ArbitrumMessageExtractionTx) chainID() *big.Int      { return t.ChainId }
+func (t *ArbitrumMessageExtractionTx) accessList() AccessList { return nil }
+func (t *ArbitrumMessageExtractionTx) data() []byte           { return t.Data }
+func (t *ArbitrumMessageExtractionTx) gas() uint64            { return 0 }
+func (t *ArbitrumMessageExtractionTx) gasPrice() *big.Int     { return bigZero }
+func (t *ArbitrumMessageExtractionTx) gasTipCap() *big.Int    { return bigZero }
+func (t *ArbitrumMessageExtractionTx) gasFeeCap() *big.Int    { return bigZero }
+func (t *ArbitrumMessageExtractionTx) value() *big.Int        { return common.Big0 }
+func (t *ArbitrumMessageExtractionTx) nonce() uint64          { return 0 }
+func (t *ArbitrumMessageExtractionTx) to() *common.Address    { return &ArbosAddress }
+func (t *ArbitrumMessageExtractionTx) encode(b *bytes.Buffer) error {
+	return rlp.Encode(b, t)
+}
+func (t *ArbitrumMessageExtractionTx) decode(input []byte) error {
+	return rlp.DecodeBytes(input, t)
+}
+
+func (t *ArbitrumMessageExtractionTx) rawSignatureValues() (v, r, s *big.Int) {
+	return bigZero, bigZero, bigZero
+}
+
+func (t *ArbitrumMessageExtractionTx) setSignatureValues(chainID, v, r, s *big.Int) {
+
+}
+
+func (t *ArbitrumMessageExtractionTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+	return dst.Set(bigZero)
+}
+
+func (t *ArbitrumMessageExtractionTx) sigHash(chainID *big.Int) common.Hash {
+	return prefixedRlpHash(
+		ArbitrumMessageExtractionTxType,
 		[]any{
 			chainID,
 			t.Data,
