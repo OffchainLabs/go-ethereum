@@ -29,6 +29,7 @@ import (
 type WasmTarget string
 
 const (
+	TargetWasm  WasmTarget = "wasm"
 	TargetWavm  WasmTarget = "wavm"
 	TargetArm64 WasmTarget = "arm64"
 	TargetAmd64 WasmTarget = "amd64"
@@ -71,7 +72,9 @@ func IsSupportedWasmTarget(target WasmTarget) bool {
 
 func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asmMap map[WasmTarget][]byte) {
 	for target, asm := range asmMap {
-		WriteActivatedAsm(db, target, moduleHash, asm)
+		if target != TargetWasm {
+			WriteActivatedAsm(db, target, moduleHash, asm)
+		}
 	}
 }
 
@@ -89,6 +92,9 @@ func WriteActivatedAsm(db ethdb.KeyValueWriter, target WasmTarget, moduleHash co
 
 // Retrieves the activated asm for a given moduleHash and target
 func ReadActivatedAsm(db ethdb.KeyValueReader, target WasmTarget, moduleHash common.Hash) []byte {
+	if target == TargetWasm {
+		return nil // wasm is not stored in the database
+	}
 	prefix, err := activatedAsmKeyPrefix(target)
 	if err != nil {
 		log.Crit("Failed to read activated wasm asm", "err", err)
