@@ -42,7 +42,7 @@ type TxProcessingHook interface {
 	GasChargingHook(gasRemaining *uint64) (common.Address, error)
 	PushContract(contract *Contract)
 	PopContract()
-	ForceRefundGas() uint64
+	HeldGas() uint64
 	NonrefundableGas() uint64
 	DropTip() bool
 	EndTxHook(totalGasUsed uint64, evmSuccess bool)
@@ -72,7 +72,7 @@ func (p DefaultTxProcessor) PushContract(contract *Contract) {}
 
 func (p DefaultTxProcessor) PopContract() {}
 
-func (p DefaultTxProcessor) ForceRefundGas() uint64 { return 0 }
+func (p DefaultTxProcessor) HeldGas() uint64 { return 0 }
 
 func (p DefaultTxProcessor) NonrefundableGas() uint64 { return 0 }
 
