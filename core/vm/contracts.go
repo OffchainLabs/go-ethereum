@@ -104,16 +104,23 @@ var PrecompiledContractsBerlin = PrecompiledContracts{
 // PrecompiledContractsCancun contains the default set of pre-compiled Ethereum
 // contracts used in the Cancun release.
 var PrecompiledContractsCancun = PrecompiledContracts{
-	common.BytesToAddress([]byte{0x1}): &ecrecover{},
-	common.BytesToAddress([]byte{0x2}): &sha256hash{},
-	common.BytesToAddress([]byte{0x3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{0x4}): &dataCopy{},
-	common.BytesToAddress([]byte{0x5}): &bigModExp{eip2565: true},
-	common.BytesToAddress([]byte{0x6}): &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{0x7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{0x8}): &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{0x9}): &blake2F{},
-	common.BytesToAddress([]byte{0xa}): &kzgPointEvaluation{},
+	common.BytesToAddress([]byte{0x1}):  &ecrecover{},
+	common.BytesToAddress([]byte{0x2}):  &sha256hash{},
+	common.BytesToAddress([]byte{0x3}):  &ripemd160hash{},
+	common.BytesToAddress([]byte{0x4}):  &dataCopy{},
+	common.BytesToAddress([]byte{0x5}):  &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{0x6}):  &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{0x7}):  &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{0x8}):  &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{0x9}):  &blake2F{},
+	common.BytesToAddress([]byte{0xa}):  &kzgPointEvaluation{},
+	common.BytesToAddress([]byte{0x0b}): &bls12381G1Add{},
+	common.BytesToAddress([]byte{0x0c}): &bls12381G1MultiExp{},
+	common.BytesToAddress([]byte{0x0d}): &bls12381G2Add{},
+	common.BytesToAddress([]byte{0x0e}): &bls12381G2MultiExp{},
+	common.BytesToAddress([]byte{0x0f}): &bls12381Pairing{},
+	common.BytesToAddress([]byte{0x10}): &bls12381MapG1{},
+	common.BytesToAddress([]byte{0x11}): &bls12381MapG2{},
 }
 
 // PrecompiledContractsP256Verify contains the precompiled Ethereum
@@ -180,10 +187,12 @@ func init() {
 
 func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 	switch {
+	case rules.IsDia:
+		return PrecompiledContractsAfterArbOS50
 	case rules.IsStylus:
-		return PrecompiledContractsArbOS30
+		return PrecompiledContractsAfterArbOS30
 	case rules.IsArbitrum:
-		return PrecompiledContractsArbitrum
+		return PrecompiledContractsBeforeArbOS30
 	case rules.IsVerkle:
 		return PrecompiledContractsVerkle
 	case rules.IsPrague:
@@ -209,21 +218,23 @@ func ActivePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 // ActivePrecompiles returns the precompile addresses enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
-	case rules.IsStylus:
-		return PrecompiledAddressesArbOS30
-	case rules.IsArbitrum:
-		return PrecompiledAddressesArbitrum
-	case rules.IsPrague:
+	case rules.IsDia: // Any ArbOS-enabled node with ArbOS >= 50
+		return PrecompiledAddressesAfterArbOS50
+	case rules.IsStylus: // Any ArbOS-enabled node with ArbOS >= 30
+		return PrecompiledAddressesAfterArbOS30
+	case rules.IsArbitrum: // Any ArbOS-enabled node
+		return PrecompiledAddressesBeforeArbOS30
+	case rules.IsPrague: // Any ArbOS-disabled node after Prague fork
 		return PrecompiledAddressesPrague
-	case rules.IsCancun:
+	case rules.IsCancun: // Any ArbOS-disabled node after Cancun fork
 		return PrecompiledAddressesCancun
-	case rules.IsBerlin:
+	case rules.IsBerlin: // Any ArbOS-disabled node after Berlin fork
 		return PrecompiledAddressesBerlin
-	case rules.IsIstanbul:
+	case rules.IsIstanbul: // Any ArbOS-disabled node after Istanbul fork
 		return PrecompiledAddressesIstanbul
-	case rules.IsByzantium:
+	case rules.IsByzantium: // Any ArbOS-disabled node after Byzantium fork
 		return PrecompiledAddressesByzantium
-	default:
+	default: // Any ArbOS-disabled node
 		return PrecompiledAddressesHomestead
 	}
 }
