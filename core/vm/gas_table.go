@@ -247,9 +247,46 @@ func makeGasLog(n uint64) gasFunc {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 
-		// LOG topic operations considered as computation.
-		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-		if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, n*params.LogTopicGas); overflow {
+		// LOG topic operations are split into history growth and computation.
+		// Research expectation: each topic contributes both computation (hash/bloom updates),
+		// and history growth. We therefore split the classic 375/topic into:
+		//
+		//   HistoryGrowth_per_topic = 32 bytes * LogDataGas (8 gas/byte) = 256
+		//   Computation_per_topic   = LogTopicGas (375) - HistoryGrowth_per_topic (256) = 119
+		//
+		// We derive these from params (not to hard-code 256/119) to avoid drift if gas constants change in the future.
+
+		// 32 bytes per topic represents the hash size that gets stored in history.
+		const topicBytes = 32
+
+		var topicHistPer uint64
+		// topicHistPer = 32 * LogDataGas (8 gas/byte)
+		if topicHistPer, overflow = math.SafeMul(topicBytes, params.LogDataGas); overflow {
+			return multigas.ZeroGas(), ErrGasUintOverflow
+		}
+		// LogTopicGas must cover at least the history portion.
+		if params.LogTopicGas < topicHistPer {
+			return multigas.ZeroGas(), ErrGasUintOverflow
+		}
+		// topicCompPer = 375 - 256 (derived from params)
+		topicCompPer := params.LogTopicGas - topicHistPer
+
+		// Scale by number of topics for LOG0..LOG4
+		var topicHistTotal, topicCompTotal uint64
+		if topicHistTotal, overflow = math.SafeMul(n, topicHistPer); overflow {
+			return multigas.ZeroGas(), ErrGasUintOverflow
+		}
+		if topicCompTotal, overflow = math.SafeMul(n, topicCompPer); overflow {
+			return multigas.ZeroGas(), ErrGasUintOverflow
+		}
+
+		// Apply the split:
+		// - HistoryGrowth gets the persisted 32 bytes per topic.
+		// - Computation gets the remainder for hashing/bloom work.
+		if overflow = multiGas.SafeIncrement(multigas.ResourceKindHistoryGrowth, topicHistTotal); overflow {
+			return multigas.ZeroGas(), ErrGasUintOverflow
+		}
+		if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, topicCompTotal); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 
