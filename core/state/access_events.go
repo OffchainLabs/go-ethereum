@@ -17,8 +17,10 @@
 package state
 
 import (
+	"fmt"
 	"maps"
 
+	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
@@ -149,6 +151,36 @@ func (ae *AccessEvents) AddTxOrigin(originAddr common.Address) {
 func (ae *AccessEvents) AddTxDestination(addr common.Address, sendsValue bool) {
 	ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, sendsValue)
 	ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, false)
+}
+
+// SlotMultigas returns the amount of gas to be charged for a cold storage access.
+func (ae *AccessEvents) SlotMultigas(addr common.Address, slot common.Hash, isWrite bool) (*multigas.MultiGas, error) {
+	treeIndex, subIndex := utils.StorageIndex(slot.Bytes())
+	return ae.touchAddressAndChargeMultigas(addr, *treeIndex, subIndex, isWrite)
+}
+
+// touchAddressAndChargeMultigas adds any missing access event to the access event list, and returns the cold
+// access cost to be charged, if need be.
+func (ae *AccessEvents) touchAddressAndChargeMultigas(addr common.Address, treeIndex uint256.Int, subIndex byte, isWrite bool) (*multigas.MultiGas, error) {
+	stemRead, selectorRead, stemWrite, selectorWrite, selectorFill := ae.touchAddress(addr, treeIndex, subIndex, isWrite)
+
+	gas := multigas.ZeroGas()
+	if stemRead && gas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WitnessBranchReadCost) {
+		return nil, fmt.Errorf("failed to increment gas for branch read due to overflow")
+	}
+	if selectorRead && gas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WitnessChunkReadCost) {
+		return nil, fmt.Errorf("failed to increment gas for chunk read due to overflow")
+	}
+	if stemWrite && gas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WitnessBranchWriteCost) {
+		return nil, fmt.Errorf("failed to increment gas for branch write due to overflow")
+	}
+	if selectorWrite && gas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WitnessChunkWriteCost) {
+		return nil, fmt.Errorf("failed to increment gas for chunk write due to overflow")
+	}
+	if selectorFill && gas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.WitnessChunkFillCost) {
+		return nil, fmt.Errorf("failed to increment gas for chunk fill due to overflow")
+	}
+	return gas, nil
 }
 
 // SlotGas returns the amount of gas to be charged for a cold storage access.

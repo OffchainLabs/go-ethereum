@@ -438,6 +438,120 @@ func TestGasSStore4762(t *testing.T) {
 	}
 }
 
+func TestGasSSload2929(t *testing.T) {
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	evm := NewEVM(BlockContext{}, statedb, params.TestChainConfig, Config{})
+
+	caller := common.Address{}
+	contractAddr := common.Address{1}
+	contractGas := uint64(100000)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+
+	mem := NewMemory()
+
+	// Setup access list and stack
+	accessList := state.NewAccessEvents(evm.StateDB.PointCache())
+	accessList.AddAccount(caller, false)
+	evm.AccessEvents = accessList
+
+	slotKey := common.HexToHash("0xdeadbeef") // any dummy key
+
+	// Not in access list
+
+	stack := newstack()
+	stack.push(new(uint256.Int).SetBytes(slotKey.Bytes()))
+
+	multiGas, err := gasSLoadEIP2929(evm, contract, stack, mem, 0)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	expectedMultiGas := multigas.StorageAccessGas(params.ColdSloadCostEIP2929)
+	if *multiGas != *expectedMultiGas {
+		t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+	}
+
+	// Load entry from access list
+
+	evm.StateDB.AddSlotToAccessList(contractAddr, slotKey)
+
+	stack = newstack()
+	stack.push(new(uint256.Int).SetBytes(slotKey.Bytes()))
+	multiGas, err = gasSLoadEIP2929(evm, contract, stack, mem, 0)
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	expectedMultiGas = multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929)
+	if *multiGas != *expectedMultiGas {
+		t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+	}
+}
+
+// Statelessness mode (EIP-4762) SLOAD gas function test
+func TestGasSLoad4762(t *testing.T) {
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	evm := NewEVM(BlockContext{}, statedb, params.TestChainConfig, Config{})
+
+	caller := common.Address{}
+	contractAddr := common.Address{1}
+	contractGas := uint64(100000)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+
+	mem := NewMemory()
+
+	// Setup access list and stack
+	accessList := state.NewAccessEvents(evm.StateDB.PointCache())
+	accessList.AddAccount(caller, false)
+	evm.AccessEvents = accessList
+
+	slotKey := common.HexToHash("0xdeadbeef") // any dummy key
+	stack := newstack()
+	stack.push(new(uint256.Int).SetBytes(slotKey.Bytes()))
+
+	multiGas, err := gasSLoad4762(evm, contract, stack, mem, 0)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	expectedMultiGas := multigas.StorageAccessGas(params.WitnessBranchReadCost + params.WitnessChunkReadCost)
+	if *multiGas != *expectedMultiGas {
+		t.Errorf("Failed loading: Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+	}
+
+	// Load same entry
+
+	stack = newstack()
+	stack.push(new(uint256.Int).SetBytes(slotKey.Bytes()))
+	multiGas, err = gasSLoad4762(evm, contract, stack, mem, 0)
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	expectedMultiGas = multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929)
+	if *multiGas != *expectedMultiGas {
+		t.Errorf("Failed loading same: Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+	}
+
+	// Load adjacent entry
+
+	slotKey = common.HexToHash("0xdeadbef0") // any dummy key
+	stack = newstack()
+	stack.push(new(uint256.Int).SetBytes(slotKey.Bytes()))
+
+	multiGas, err = gasSLoad4762(evm, contract, stack, mem, 0)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	expectedMultiGas = multigas.StorageAccessGas(params.WitnessChunkReadCost)
+	if *multiGas != *expectedMultiGas {
+		t.Errorf("Failed loading adjacent: Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+	}
+}
+
 type GasCallFuncTestCase struct {
 	name             string // descriptive name for the test case
 	slotInAccessList bool   // whether the slot is in the access list

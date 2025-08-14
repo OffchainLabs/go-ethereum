@@ -25,20 +25,25 @@ import (
 )
 
 func gasSStore4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
-	gas := evm.AccessEvents.SlotGas(contract.Address(), stack.peek().Bytes32(), true)
-	if gas == 0 {
-		gas = params.WarmStorageReadCostEIP2929
+	gas, err := evm.AccessEvents.SlotMultigas(contract.Address(), stack.peek().Bytes32(), true)
+	if err != nil {
+		return nil, err
 	}
-	return multigas.StorageAccessGas(gas), nil
+	if gas.SingleGas() == 0 {
+		gas = multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929)
+	}
+	return gas, nil
 }
 
 func gasSLoad4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
-	gas := evm.AccessEvents.SlotGas(contract.Address(), stack.peek().Bytes32(), false)
-	if gas == 0 {
-		gas = params.WarmStorageReadCostEIP2929
+	gas, err := evm.AccessEvents.SlotMultigas(contract.Address(), stack.peek().Bytes32(), false)
+	if err != nil {
+		return nil, err
 	}
-	// TODO(NIT-3484): Update multi dimensional gas here
-	return multigas.UnknownGas(gas), nil
+	if gas.SingleGas() == 0 {
+		gas = multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929)
+	}
+	return gas, nil
 }
 
 func gasBalance4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
