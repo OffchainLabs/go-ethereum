@@ -83,7 +83,11 @@ func TestAccountHeaderGas(t *testing.T) {
 
 	// Check that reading a slot from the account header only charges the
 	// chunk read cost.
-	gas = ae.SlotGas(testAddr, common.Hash{}, false)
+	multiGas, err := ae.SlotGas(testAddr, common.Hash{}, false)
+	if err != nil {
+		t.Fatalf("gas computation failed: %v", err)
+	}
+	gas = multiGas.SingleGas()
 	if gas != params.WitnessChunkReadCost {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, params.WitnessChunkReadCost)
 	}
