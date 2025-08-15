@@ -80,12 +80,23 @@ func memoryCopierGas(stackpos int) gasFunc {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 
-		if words, overflow = math.SafeMul(toWordSize(words), params.CopyGas); overflow {
+		var wordCopyGas uint64
+		if wordCopyGas, overflow = math.SafeMul(toWordSize(words), params.CopyGas); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 
-		// TODO(NIT-3484): Update multi dimensional gas here
-		if overflow = multiGas.SafeIncrement(multigas.ResourceKindUnknown, words); overflow {
+		// Distribute copy gas by dimension:
+		// - For EXTCODECOPY: count as ResourceKindStorageAccess since it is the only opcode
+		// using stack position 3 and reading from the state trie.
+		// - For others: count as ResourceKindComputation since they are in-memory operations
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
+		var dim multigas.ResourceKind
+		if stackpos == 3 {
+			dim = multigas.ResourceKindStorageAccess // EXTCODECOPY
+		} else {
+			dim = multigas.ResourceKindComputation // CALLDATACOPY, CODECOPY, MCOPY, RETURNDATACOPY
+		}
+		if overflow := multiGas.SafeIncrement(dim, wordCopyGas); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 		return multiGas, nil

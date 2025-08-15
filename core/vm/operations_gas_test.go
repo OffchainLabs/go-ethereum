@@ -1270,3 +1270,58 @@ func TestMakeGasLog(t *testing.T) {
 		}
 	}
 }
+
+// Memory copier gas function test (CALLDATACOPY/CODECOPY/MCOPY/EXTCODECOPY/RETURNDATACOPY)
+func TestMemoryCopierGas(t *testing.T) {
+	tests := []struct {
+		stackpos int
+		size     uint64
+		dim      multigas.ResourceKind
+	}{
+		// CALLDATACOPY, CODECOPY, MCOPY, RETURNDATACOPY → computation
+		{stackpos: 2, size: 64, dim: multigas.ResourceKindComputation},
+		// EXTCODECOPY → storage access
+		{stackpos: 3, size: 64, dim: multigas.ResourceKindStorageAccess},
+	}
+
+	for _, tt := range tests {
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		evm := NewEVM(BlockContext{}, statedb, params.TestChainConfig, Config{})
+
+		caller := common.Address{}
+		contractAddr := common.Address{1}
+		contractGas := uint64(100000)
+		contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+
+		stack := newstack()
+		mem := NewMemory()
+		memForExpected := NewMemory()
+
+		// Set up stack for memory copy operation
+		// Place size at Back(stackpos), fill the rest with dummy values
+		stack.push(new(uint256.Int).SetUint64(tt.size))
+		for i := 0; i < tt.stackpos; i++ {
+			stack.push(new(uint256.Int))
+		}
+
+		memorySize := uint64(96)
+
+		expectedMultiGas, err := memoryGasCost(memForExpected, memorySize)
+		if err != nil {
+			t.Fatalf("Failed memoryGasCost: %v", err)
+		}
+
+		// Copy cost → dimension depends on stackpos (opcode)
+		wordCopyGas := toWordSize(tt.size) * params.CopyGas
+		expectedMultiGas.SafeIncrement(tt.dim, wordCopyGas)
+
+		multiGas, err := memoryCopierGas(tt.stackpos)(evm, contract, stack, mem, memorySize)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+
+		if *multiGas != *expectedMultiGas {
+			t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+		}
+	}
+}
