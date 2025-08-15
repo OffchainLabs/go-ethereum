@@ -1277,7 +1277,21 @@ func TestMakeGasLog(t *testing.T) {
 			t.Fatalf("Failed memoryGasCost: %v", err)
 		}
 
-		expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, params.LogGas+n*params.LogTopicGas)
+		// Base LOG op → computation
+		expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, params.LogGas)
+
+		// Per-topic split
+		const topicBytes = uint64(32)
+		topicHistPer := topicBytes * params.LogDataGas
+		if params.LogTopicGas < topicHistPer {
+			t.Fatalf("invalid params: LogTopicGas < topicHistPer")
+		}
+		topicCompPer := params.LogTopicGas - topicHistPer
+
+		expectedMultiGas.SafeIncrement(multigas.ResourceKindHistoryGrowth, n*topicHistPer)
+		expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, n*topicCompPer)
+
+		// Data bytes → history growth
 		expectedMultiGas.SafeIncrement(multigas.ResourceKindHistoryGrowth, requestedSize*params.LogDataGas)
 
 		multiGas, err := makeGasLog(n)(evm, contract, stack, mem, memorySize)

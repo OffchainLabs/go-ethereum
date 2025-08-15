@@ -247,19 +247,54 @@ func makeGasLog(n uint64) gasFunc {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 
-		// LOG topic operations considered as computation.
-		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-		if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, n*params.LogTopicGas); overflow {
+		// Per-topic cost is split between history growth and computation:
+		// - A fixed number of bytes per topic is persisted in history (topicBytes),
+		//   and those bytes are charged at LogDataGas (gas per byte) as history growth.
+		// - The remainder of the per-topic cost is attributed to computation (e.g. hashing/bloom work).
+
+		// 32 bytes per topic represents the hash size that gets stored in history.
+		const topicBytes = 32
+
+		var topicHistPer uint64
+		// History growth per topic = topicBytes * LogDataGas
+		if topicHistPer, overflow = math.SafeMul(topicBytes, params.LogDataGas); overflow {
+			return multigas.ZeroGas(), ErrGasUintOverflow
+		}
+		// Sanity check: the per-topic total must be at least the history-growth portion.
+		if params.LogTopicGas < topicHistPer {
+			return multigas.ZeroGas(), fmt.Errorf(
+				"invalid gas params: LogTopicGas(%d) < topicBytes*LogDataGas(%d)",
+				params.LogTopicGas, topicHistPer,
+			)
+		}
+		// Computation per topic = LogTopicGas - (topicBytes * LogDataGas)
+		topicCompPer := params.LogTopicGas - topicHistPer
+
+		// Scale by number of topics for LOG0..LOG4
+		var topicHistTotal, topicCompTotal uint64
+		if topicHistTotal, overflow = math.SafeMul(n, topicHistPer); overflow {
+			return multigas.ZeroGas(), ErrGasUintOverflow
+		}
+		if topicCompTotal, overflow = math.SafeMul(n, topicCompPer); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 
-		var memorySizeGas uint64
-		if memorySizeGas, overflow = math.SafeMul(requestedSize, params.LogDataGas); overflow {
+		// Apply the split.
+		if overflow = multiGas.SafeIncrement(multigas.ResourceKindHistoryGrowth, topicHistTotal); overflow {
+			return multigas.ZeroGas(), ErrGasUintOverflow
+		}
+		if overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, topicCompTotal); overflow {
+			return multigas.ZeroGas(), ErrGasUintOverflow
+		}
+
+		// Data payload bytes → history growth at LogDataGas (gas per byte).
+		var dataHist uint64
+		if dataHist, overflow = math.SafeMul(requestedSize, params.LogDataGas); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 		// Event log data considered as history growth.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-		if overflow = multiGas.SafeIncrement(multigas.ResourceKindHistoryGrowth, memorySizeGas); overflow {
+		if overflow = multiGas.SafeIncrement(multigas.ResourceKindHistoryGrowth, dataHist); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 		return multiGas, nil
