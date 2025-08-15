@@ -153,8 +153,8 @@ func (ae *AccessEvents) AddTxDestination(addr common.Address, sendsValue bool) {
 	ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, false)
 }
 
-// SlotMultigas returns the amount of gas to be charged for a cold storage access.
-func (ae *AccessEvents) SlotMultigas(addr common.Address, slot common.Hash, isWrite bool) (*multigas.MultiGas, error) {
+// SlotGas returns the amount of gas to be charged for a cold storage access.
+func (ae *AccessEvents) SlotGas(addr common.Address, slot common.Hash, isWrite bool) (*multigas.MultiGas, error) {
 	treeIndex, subIndex := utils.StorageIndex(slot.Bytes())
 	return ae.touchAddressAndChargeMultigas(addr, *treeIndex, subIndex, isWrite)
 }
@@ -165,52 +165,40 @@ func (ae *AccessEvents) touchAddressAndChargeMultigas(addr common.Address, treeI
 	stemRead, selectorRead, stemWrite, selectorWrite, selectorFill := ae.touchAddress(addr, treeIndex, subIndex, isWrite)
 
 	gas := multigas.ZeroGas()
+	// Reading includes witness calculation (computation), and storage access
+	// The computation cost for the witness calculation is negligible compared to the storage access cost
 	if stemRead && gas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WitnessBranchReadCost) {
 		return nil, fmt.Errorf("failed to increment gas for branch read due to overflow")
 	}
 	if selectorRead && gas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WitnessChunkReadCost) {
 		return nil, fmt.Errorf("failed to increment gas for chunk read due to overflow")
 	}
+
+	// Writing includes witness calculation (computation), and the update of a slot value (storage access)
+	// The computation cost for the witness calculation is negligible compared to the storage access cost
+	// Potential new space allocation (growth) is not considered in this step
 	if stemWrite && gas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WitnessBranchWriteCost) {
 		return nil, fmt.Errorf("failed to increment gas for branch write due to overflow")
 	}
 	if selectorWrite && gas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WitnessChunkWriteCost) {
 		return nil, fmt.Errorf("failed to increment gas for chunk write due to overflow")
 	}
+
+	// New space allocation for the verkle tree
 	if selectorFill && gas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.WitnessChunkFillCost) {
 		return nil, fmt.Errorf("failed to increment gas for chunk fill due to overflow")
 	}
 	return gas, nil
 }
 
-// SlotGas returns the amount of gas to be charged for a cold storage access.
-func (ae *AccessEvents) SlotGas(addr common.Address, slot common.Hash, isWrite bool) uint64 {
-	treeIndex, subIndex := utils.StorageIndex(slot.Bytes())
-	return ae.touchAddressAndChargeGas(addr, *treeIndex, subIndex, isWrite)
-}
-
 // touchAddressAndChargeGas adds any missing access event to the access event list, and returns the cold
 // access cost to be charged, if need be.
 func (ae *AccessEvents) touchAddressAndChargeGas(addr common.Address, treeIndex uint256.Int, subIndex byte, isWrite bool) uint64 {
-	stemRead, selectorRead, stemWrite, selectorWrite, selectorFill := ae.touchAddress(addr, treeIndex, subIndex, isWrite)
-
-	var gas uint64
-	if stemRead {
-		gas += params.WitnessBranchReadCost
+	multiGas, err := ae.touchAddressAndChargeMultigas(addr, treeIndex, subIndex, isWrite)
+	if err != nil {
+		return 0
 	}
-	if selectorRead {
-		gas += params.WitnessChunkReadCost
-	}
-	if stemWrite {
-		gas += params.WitnessBranchWriteCost
-	}
-	if selectorWrite {
-		gas += params.WitnessChunkWriteCost
-	}
-	if selectorFill {
-		gas += params.WitnessChunkFillCost
-	}
-	return gas
+	return multiGas.SingleGas()
 }
 
 // touchAddress adds any missing access event to the access event list.

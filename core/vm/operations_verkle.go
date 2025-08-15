@@ -25,7 +25,7 @@ import (
 )
 
 func gasSStore4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
-	gas, err := evm.AccessEvents.SlotMultigas(contract.Address(), stack.peek().Bytes32(), true)
+	gas, err := evm.AccessEvents.SlotGas(contract.Address(), stack.peek().Bytes32(), true)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func gasSStore4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 }
 
 func gasSLoad4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
-	gas, err := evm.AccessEvents.SlotMultigas(contract.Address(), stack.peek().Bytes32(), false)
+	gas, err := evm.AccessEvents.SlotGas(contract.Address(), stack.peek().Bytes32(), false)
 	if err != nil {
 		return nil, err
 	}

@@ -122,8 +122,10 @@ func gasSLoadEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		// If the caller cannot afford the cost, this change will be rolled back
 		// If he does afford it, we can skip checking the same thing later on, during execution
 		evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
+		// Cold slot access considered as storage access.
 		return multigas.StorageAccessGas(params.ColdSloadCostEIP2929), nil
 	}
+	// Warm slot access considered as storage access.
 	return multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929), nil
 }
 
