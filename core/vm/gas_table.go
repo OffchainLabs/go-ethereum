@@ -247,28 +247,27 @@ func makeGasLog(n uint64) gasFunc {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 
-		// LOG topic operations are split into history growth and computation.
-		// Research expectation: each topic contributes both computation (hash/bloom updates),
-		// and history growth. We therefore split the classic 375/topic into:
-		//
-		//   HistoryGrowth_per_topic = 32 bytes * LogDataGas (8 gas/byte) = 256
-		//   Computation_per_topic   = LogTopicGas (375) - HistoryGrowth_per_topic (256) = 119
-		//
-		// We derive these from params (not to hard-code 256/119) to avoid drift if gas constants change in the future.
+		// Per-topic cost is split between history growth and computation:
+		// - A fixed number of bytes per topic is persisted in history (topicBytes),
+		//   and those bytes are charged at LogDataGas (gas per byte) as history growth.
+		// - The remainder of the per-topic cost is attributed to computation (e.g. hashing/bloom work).
 
 		// 32 bytes per topic represents the hash size that gets stored in history.
 		const topicBytes = 32
 
 		var topicHistPer uint64
-		// topicHistPer = 32 * LogDataGas (8 gas/byte)
+		// History growth per topic = topicBytes * LogDataGas
 		if topicHistPer, overflow = math.SafeMul(topicBytes, params.LogDataGas); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
-		// LogTopicGas must cover at least the history portion.
+		// Sanity check: the per-topic total must be at least the history-growth portion.
 		if params.LogTopicGas < topicHistPer {
-			return multigas.ZeroGas(), ErrGasUintOverflow
+			return multigas.ZeroGas(), fmt.Errorf(
+				"invalid gas params: LogTopicGas(%d) < topicBytes*LogDataGas(%d)",
+				params.LogTopicGas, topicHistPer,
+			)
 		}
-		// topicCompPer = 375 - 256 (derived from params)
+		// Computation per topic = LogTopicGas - (topicBytes * LogDataGas)
 		topicCompPer := params.LogTopicGas - topicHistPer
 
 		// Scale by number of topics for LOG0..LOG4
@@ -280,9 +279,7 @@ func makeGasLog(n uint64) gasFunc {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 
-		// Apply the split:
-		// - HistoryGrowth gets the persisted 32 bytes per topic.
-		// - Computation gets the remainder for hashing/bloom work.
+		// Apply the split.
 		if overflow = multiGas.SafeIncrement(multigas.ResourceKindHistoryGrowth, topicHistTotal); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
@@ -290,13 +287,14 @@ func makeGasLog(n uint64) gasFunc {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 
-		var memorySizeGas uint64
-		if memorySizeGas, overflow = math.SafeMul(requestedSize, params.LogDataGas); overflow {
+		// Data payload bytes → history growth at LogDataGas (gas per byte).
+		var dataHist uint64
+		if dataHist, overflow = math.SafeMul(requestedSize, params.LogDataGas); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 		// Event log data considered as history growth.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-		if overflow = multiGas.SafeIncrement(multigas.ResourceKindHistoryGrowth, memorySizeGas); overflow {
+		if overflow = multiGas.SafeIncrement(multigas.ResourceKindHistoryGrowth, dataHist); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 		return multiGas, nil

@@ -1282,7 +1282,7 @@ func TestMakeGasLog(t *testing.T) {
 
 		// Per-topic split
 		const topicBytes = uint64(32)
-		topicHistPer := topicBytes * params.LogDataGas // e.g., 256
+		topicHistPer := topicBytes * params.LogDataGas
 		if params.LogTopicGas < topicHistPer {
 			t.Fatalf("invalid params: LogTopicGas < topicHistPer")
 		}
