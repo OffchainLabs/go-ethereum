@@ -1,6 +1,10 @@
 package multigas
 
-import "github.com/ethereum/go-ethereum/common/math"
+import (
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/common/math"
+)
 
 // ResourceKind represents a dimension for the multi-dimensional gas.
 type ResourceKind uint8
@@ -13,6 +17,14 @@ const (
 	ResourceKindStorageGrowth
 	NumResourceKind
 )
+
+// CheckResourceKind checks whether the given id is a valid resource.
+func CheckResourceKind(id uint8) (ResourceKind, error) {
+	if id <= uint8(ResourceKindUnknown) || id >= uint8(NumResourceKind) {
+		return ResourceKindUnknown, fmt.Errorf("Invalid resource id: %v", id)
+	}
+	return ResourceKind(id), nil
+}
 
 // MultiGas tracks gas usage across multiple resource kinds, while also
 // maintaining a single-dimensional total gas sum and refund amount.
