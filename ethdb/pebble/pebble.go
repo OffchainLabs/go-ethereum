@@ -166,7 +166,7 @@ func (l panicLogger) Fatalf(format string, args ...interface{}) {
 
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string, readonly bool, ephemeral bool, extraOptions *ExtraOptions) (*Database, error) {
+func New(file string, cache int, handles int, namespace string, readonly bool, extraOptions *ExtraOptions) (*Database, error) {
 	if extraOptions == nil {
 		extraOptions = &ExtraOptions{}
 	}
@@ -238,7 +238,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		fn:           file,
 		log:          logger,
 		quitChan:     make(chan chan error),
-		writeOptions: &pebble.WriteOptions{Sync: !ephemeral && extraOptions.SyncMode},
+		writeOptions: &pebble.WriteOptions{Sync: extraOptions.SyncMode},
 	}
 	opt := &pebble.Options{
 		// Pebble has a single combined cache area and the write
@@ -490,6 +490,18 @@ func (d *Database) Compact(start []byte, limit []byte) error {
 // Path returns the path to the database directory.
 func (d *Database) Path() string {
 	return d.fn
+}
+
+// SyncKeyValue flushes all pending writes in the write-ahead-log to disk,
+// ensuring data durability up to that point.
+func (d *Database) SyncKeyValue() error {
+	// The entry (value=nil) is not written to the database; it is only
+	// added to the WAL. Writing this special log entry in sync mode
+	// automatically flushes all previous writes, ensuring database
+	// durability up to this point.
+	b := d.db.NewBatch()
+	b.LogData(nil, nil)
+	return d.db.Apply(b, pebble.Sync)
 }
 
 // meter periodically retrieves internal pebble counters and reports them to
