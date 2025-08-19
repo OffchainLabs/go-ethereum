@@ -85,6 +85,7 @@ type Database struct {
 	estimatedCompDebtGauge *metrics.Gauge   // Gauge for tracking the number of bytes that need to be compacted
 	liveCompGauge          *metrics.Gauge   // Gauge for tracking the number of in-progress compactions
 	liveCompSizeGauge      *metrics.Gauge   // Gauge for tracking the size of in-progress compactions
+	liveIterGauge          *metrics.Gauge   // Gauge for tracking the number of live database iterators
 	levelsGauge            []*metrics.Gauge // Gauge for tracking the number of tables in levels
 
 	compDebtGauge       *metrics.Gauge
@@ -364,6 +365,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	db.estimatedCompDebtGauge = metrics.GetOrRegisterGauge(namespace+"compact/estimateDebt", nil)
 	db.liveCompGauge = metrics.GetOrRegisterGauge(namespace+"compact/live/count", nil)
 	db.liveCompSizeGauge = metrics.GetOrRegisterGauge(namespace+"compact/live/size", nil)
+	db.liveIterGauge = metrics.GetOrRegisterGauge(namespace+"iter/count", nil)
 
 	db.compDebtGauge = metrics.GetOrRegisterGauge(namespace+"compact/debt", nil)
 	db.compInProgressGauge = metrics.GetOrRegisterGauge(namespace+"compact/inprogress", nil)
@@ -648,6 +650,7 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		d.seekCompGauge.Update(stats.Compact.ReadCount)
 		d.liveCompGauge.Update(stats.Compact.NumInProgress)
 		d.liveCompSizeGauge.Update(stats.Compact.InProgressBytes)
+		d.liveIterGauge.Update(stats.TableIters)
 
 		d.liveMemTablesGauge.Update(stats.MemTable.Count)
 		d.zombieMemTablesGauge.Update(stats.MemTable.ZombieCount)
