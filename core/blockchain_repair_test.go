@@ -1769,7 +1769,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	if err != nil {
 		t.Fatalf("Failed to create persistent key-value database: %v", err)
 	}
-	db, err := rawdb.NewDatabaseWithFreezer(pdb, ancient, "", false)
+	db, err := rawdb.Open(pdb, rawdb.OpenOptions{Ancient: ancient})
 	if err != nil {
 		t.Fatalf("Failed to create persistent freezer database: %v", err)
 	}
@@ -1858,7 +1858,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent key-value database: %v", err)
 	}
-	db, err = rawdb.NewDatabaseWithFreezer(pdb, ancient, "", false)
+	db, err = rawdb.Open(pdb, rawdb.OpenOptions{Ancient: ancient})
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent freezer database: %v", err)
 	}
@@ -1923,7 +1923,7 @@ func testIssue23496(t *testing.T, scheme string) {
 	if err != nil {
 		t.Fatalf("Failed to create persistent key-value database: %v", err)
 	}
-	db, err := rawdb.NewDatabaseWithFreezer(pdb, ancient, "", false)
+	db, err := rawdb.Open(pdb, rawdb.OpenOptions{Ancient: ancient})
 	if err != nil {
 		t.Fatalf("Failed to create persistent freezer database: %v", err)
 	}
@@ -1983,7 +1983,7 @@ func testIssue23496(t *testing.T, scheme string) {
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent key-value database: %v", err)
 	}
-	db, err = rawdb.NewDatabaseWithFreezer(pdb, ancient, "", false)
+	db, err = rawdb.Open(pdb, rawdb.OpenOptions{Ancient: ancient})
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent freezer database: %v", err)
 	}
