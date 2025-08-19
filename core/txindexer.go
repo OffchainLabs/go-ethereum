@@ -28,7 +28,11 @@ import (
 )
 
 type TxIndexerConfig struct {
-	Limit         uint64        // tx lookup limit
+	// Limit specifies the maximum number of blocks from head for which
+	// transaction hashes will be indexed.
+	//
+	// If the value is zero, all transactions of the entire chain will be indexed.
+	Limit         uint64
 	Threads       int           // number of threads used when RLP decoding blocks (0 = use geth default)
 	MinBatchDelay time.Duration // minimum time to delay indexing while waiting for more new blocks to batch
 }

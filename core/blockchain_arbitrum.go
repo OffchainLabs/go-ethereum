@@ -31,8 +31,8 @@ import (
 )
 
 func (bc *BlockChain) generateGcprocRandOffset() time.Duration {
-	if bc.cacheConfig.TrieTimeLimitRandomOffset > 0 {
-		return time.Duration(rand.Int64N(int64(bc.cacheConfig.TrieTimeLimitRandomOffset)))
+	if bc.cfg.TrieTimeLimitRandomOffset > 0 {
+		return time.Duration(rand.Int64N(int64(bc.cfg.TrieTimeLimitRandomOffset)))
 	}
 	return 0
 }

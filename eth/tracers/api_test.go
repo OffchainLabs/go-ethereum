@@ -77,19 +77,19 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 	_, blocks, _ := core.GenerateChainWithGenesis(gspec, backend.engine, n, generator)
 
 	// Import the canonical chain
-	cacheConfig := &core.CacheConfig{
+	options := &core.BlockChainConfig{
 
 		// Arbitrum
 		TriesInMemory: 128,
 		TrieRetention: 30 * time.Minute,
 
-		TrieCleanLimit:    256,
-		TrieDirtyLimit:    256,
-		TrieTimeLimit:     5 * time.Minute,
-		SnapshotLimit:     0,
-		TrieDirtyDisabled: true, // Archive mode
+		TrieCleanLimit: 256,
+		TrieDirtyLimit: 256,
+		TrieTimeLimit:  5 * time.Minute,
+		SnapshotLimit:  0,
+		ArchiveMode:    true, // Archive mode
 	}
-	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, nil, gspec, nil, backend.engine, vm.Config{}, nil)
+	chain, err := core.NewBlockChain(backend.chaindb, nil, gspec, backend.engine, options)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -1150,14 +1150,14 @@ func newTestMergedBackend(t *testing.T, n int, gspec *core.Genesis, generator fu
 	_, blocks, _ := core.GenerateChainWithGenesis(gspec, backend.engine, n, generator)
 
 	// Import the canonical chain
-	cacheConfig := &core.CacheConfig{
-		TrieCleanLimit:    256,
-		TrieDirtyLimit:    256,
-		TrieTimeLimit:     5 * time.Minute,
-		SnapshotLimit:     0,
-		TrieDirtyDisabled: true, // Archive mode
+	options := &core.BlockChainConfig{
+		TrieCleanLimit: 256,
+		TrieDirtyLimit: 256,
+		TrieTimeLimit:  5 * time.Minute,
+		SnapshotLimit:  0,
+		ArchiveMode:    true, // Archive mode
 	}
-	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, nil, gspec, nil, backend.engine, vm.Config{}, nil)
+	chain, err := core.NewBlockChain(backend.chaindb, nil, gspec, backend.engine, options)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
