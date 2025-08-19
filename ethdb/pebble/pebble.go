@@ -204,7 +204,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		extraOptions = &ExtraOptions{}
 	}
 	if extraOptions.MemTableStopWritesThreshold <= 0 {
-		extraOptions.MemTableStopWritesThreshold = 2
+		extraOptions.MemTableStopWritesThreshold = 4
 	}
 	if extraOptions.MaxConcurrentCompactions == nil {
 		extraOptions.MaxConcurrentCompactions = runtime.NumCPU
@@ -253,8 +253,11 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	// Taken from https://github.com/cockroachdb/pebble/blob/master/internal/constants/constants.go
 	maxMemTableSize := (1<<31)<<(^uint(0)>>63) - 1
 
-	// Two memory tables is configured which is identical to leveldb,
-	// including a frozen memory table and another live one.
+	// Four memory tables are configured, each with a default size of 256 MB.
+	// Having multiple smaller memory tables while keeping the total memory
+	// limit unchanged allows writes to be flushed more smoothly. This helps
+	// avoid compaction spikes and mitigates write stalls caused by heavy
+	// compaction workloads.
 	memTableLimit := extraOptions.MemTableStopWritesThreshold
 	memTableSize := cache * 1024 * 1024 / 2 / memTableLimit
 
