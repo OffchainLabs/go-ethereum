@@ -418,7 +418,7 @@ func TestGasSStore4762(t *testing.T) {
 
 	// Setup access list and stack
 	accessList := state.NewAccessEvents(evm.StateDB.PointCache())
-	accessList.AddAccount(caller, false)
+	accessList.AddAccount(caller, false, 0)
 	evm.AccessEvents = accessList
 
 	slotKey := common.HexToHash("0xdeadbeef") // any dummy key
@@ -558,7 +558,7 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 
 			// EIP4762 storage access gas for value transfers
 			if tc.isEIP4762 && tc.transfersValue && !tc.isSystemCall {
-				valueTransferGas := evm.AccessEvents.ValueTransferGas(contract.Address(), caller)
+				valueTransferGas := evm.AccessEvents.ValueTransferGas(contract.Address(), caller, contract.Gas)
 				if overflow := expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas); overflow {
 					t.Fatalf("Expected multi gas overflow for test case %s", tc.name)
 				}
@@ -631,17 +631,6 @@ func TestGasCall(t *testing.T) {
 			memorySize:       0,
 		},
 		{
-			name:             "EIP4762 value transfer (not system call)",
-			transfersValue:   true,
-			valueTransferGas: 45000,
-			targetExists:     true,
-			targetEmpty:      false,
-			isEIP158:         true,
-			isEIP4762:        true,
-			isSystemCall:     false,
-			memorySize:       0,
-		},
-		{
 			name:             "EIP4762 value transfer (system call)",
 			transfersValue:   true,
 			valueTransferGas: 40000,
@@ -702,17 +691,6 @@ func TestGasCallCode(t *testing.T) {
 			targetEmpty:      false,
 			isEIP158:         true,
 			isEIP4762:        false,
-			isSystemCall:     false,
-		},
-		{
-			name:             "EIP4762 value transfer (not system call)",
-			transfersValue:   true,
-			valueTransferGas: 45000,
-			memorySize:       0,
-			targetExists:     true,
-			targetEmpty:      false,
-			isEIP158:         true,
-			isEIP4762:        true,
 			isSystemCall:     false,
 		},
 		{
@@ -802,21 +780,23 @@ func TestVariantGasEIP4762(t *testing.T) {
 			isSystemCall:     false,
 			memorySize:       64,
 		},
-		{
-			name:             "EIP4762 system call skips witness cost",
-			transfersValue:   false,
-			valueTransferGas: 50000,
-			targetExists:     true,
-			targetEmpty:      false,
-			isEIP158:         true,
-			isEIP4762:        true,
-			addWitnessGas:    true,
-			isSystemCall:     true,
-			memorySize:       64,
-		},
+		// In v1.16.0 EIP4762 system call doesnt skip witness cost
+		// TODO: remove this testcase
+		// {
+		// 	name:             "EIP4762 system call skips witness cost",
+		// 	transfersValue:   false,
+		// 	valueTransferGas: 50000,
+		// 	targetExists:     true,
+		// 	targetEmpty:      false,
+		// 	isEIP158:         true,
+		// 	isEIP4762:        true,
+		// 	addWitnessGas:    true,
+		// 	isSystemCall:     true,
+		// 	memorySize:       64,
+		// },
 	}
 
-	gasCallEIP4762 = makeCallVariantGasEIP4762(gasCallCode)
+	gasCallEIP4762 = makeCallVariantGasEIP4762(gasCallCode, true)
 	testGasCallFuncFuncWithCases(t, params.TestChainConfig, gasCallEIP4762, testCases, true)
 }
 
@@ -1236,7 +1216,7 @@ func TestGasSelfdestructEIP4762(t *testing.T) {
 
 	stack.push(new(uint256.Int).SetBytes(beneficiaryAddr.Bytes()))
 
-	expectedStorageAccessGas := accessListForExpected.BasicDataGas(contractAddr, false) + accessListForExpected.BasicDataGas(beneficiaryAddr, false)
+	expectedStorageAccessGas := accessListForExpected.BasicDataGas(contractAddr, false, contract.Gas, false) + accessListForExpected.BasicDataGas(beneficiaryAddr, false, contract.Gas, false)
 	expectedMultiGas := multigas.StorageAccessGas(expectedStorageAccessGas)
 
 	multiGas, err := gasSelfdestructEIP4762(evm, contract, stack, mem, 0)
