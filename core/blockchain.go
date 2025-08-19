@@ -66,7 +66,7 @@ var (
 	headSafeBlockGauge      = metrics.NewRegisteredGauge("chain/head/safe", nil)
 
 	chainInfoGauge   = metrics.NewRegisteredGaugeInfo("chain/info", nil)
-	chainMgaspsGauge = metrics.NewRegisteredGauge("chain/mgasps", nil)
+	chainMgaspsMeter = metrics.NewRegisteredResettingTimer("chain/mgasps", nil)
 
 	accountReadTimer   = metrics.NewRegisteredResettingTimer("chain/account/reads", nil)
 	accountHashTimer   = metrics.NewRegisteredResettingTimer("chain/account/hashes", nil)
@@ -2238,11 +2238,15 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	triedbCommitTimer.Update(statedb.TrieDBCommits)     // Trie database commits are complete, we can mark them
 
 	blockWriteTimer.Update(time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.SnapshotCommits - statedb.TrieDBCommits)
-	insertDuration := time.Since(startTime)
-	blockInsertTimer.Update(insertDuration)
+	elapsed := time.Since(startTime) + 1 // prevent zero division
+	blockInsertTimer.Update(elapsed)
 	if bc.logger != nil && bc.logger.OnBlockEndMetrics != nil {
-		bc.logger.OnBlockEndMetrics(block.NumberU64(), insertDuration)
+		bc.logger.OnBlockEndMetrics(block.NumberU64(), elapsed)
 	}
+
+	// TODO(rjl493456442) generalize the ResettingTimer
+	mgasps := float64(res.GasUsed) * 1000 / float64(elapsed)
+	chainMgaspsMeter.Update(time.Duration(mgasps))
 
 	return &blockProcessingResult{
 		usedGas:  res.GasUsed,
