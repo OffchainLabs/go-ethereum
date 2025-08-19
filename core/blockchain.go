@@ -77,6 +77,16 @@ var (
 	storageUpdateTimer = metrics.NewRegisteredResettingTimer("chain/storage/updates", nil)
 	storageCommitTimer = metrics.NewRegisteredResettingTimer("chain/storage/commits", nil)
 
+	accountCacheHitMeter  = metrics.NewRegisteredMeter("chain/account/reads/cache/process/hit", nil)
+	accountCacheMissMeter = metrics.NewRegisteredMeter("chain/account/reads/cache/process/miss", nil)
+	storageCacheHitMeter  = metrics.NewRegisteredMeter("chain/storage/reads/cache/process/hit", nil)
+	storageCacheMissMeter = metrics.NewRegisteredMeter("chain/storage/reads/cache/process/miss", nil)
+
+	accountCacheHitPrefetchMeter  = metrics.NewRegisteredMeter("chain/account/reads/cache/prefetch/hit", nil)
+	accountCacheMissPrefetchMeter = metrics.NewRegisteredMeter("chain/account/reads/cache/prefetch/miss", nil)
+	storageCacheHitPrefetchMeter  = metrics.NewRegisteredMeter("chain/storage/reads/cache/prefetch/hit", nil)
+	storageCacheMissPrefetchMeter = metrics.NewRegisteredMeter("chain/storage/reads/cache/prefetch/miss", nil)
+
 	accountReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/account/single/reads", nil)
 	storageReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/storage/single/reads", nil)
 
@@ -156,9 +166,10 @@ const (
 // BlockChainConfig contains the configuration of the BlockChain object.
 type BlockChainConfig struct {
 	// Trie database related options
-	TrieCleanLimit int           // Memory allowance (MB) to use for caching trie nodes in memory
-	TrieDirtyLimit int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
-	TrieTimeLimit  time.Duration // Time limit after which to flush the current in-memory trie to disk
+	TrieCleanLimit   int           // Memory allowance (MB) to use for caching trie nodes in memory
+	TrieDirtyLimit   int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
+	TrieTimeLimit    time.Duration // Time limit after which to flush the current in-memory trie to disk
+	TrieNoAsyncFlush bool          // Whether the asynchronous buffer flushing is disallowed
 
 	Preimages    bool   // Whether to store preimage of trie key to the disk
 	StateHistory uint64 // Number of blocks from head whose state histories are reserved.
@@ -224,7 +235,7 @@ func DefaultConfig() *BlockChainConfig {
 	}
 }
 
-// WithArchive enabled/disables archive mode on the config.
+// WithArchive enables/disables archive mode on the config.
 func (cfg BlockChainConfig) WithArchive(on bool) *BlockChainConfig {
 	cfg.ArchiveMode = on
 	return &cfg
@@ -233,6 +244,12 @@ func (cfg BlockChainConfig) WithArchive(on bool) *BlockChainConfig {
 // WithStateScheme sets the state storage scheme on the config.
 func (cfg BlockChainConfig) WithStateScheme(scheme string) *BlockChainConfig {
 	cfg.StateScheme = scheme
+	return &cfg
+}
+
+// WithNoAsyncFlush enables/disables asynchronous buffer flushing mode on the config.
+func (cfg BlockChainConfig) WithNoAsyncFlush(on bool) *BlockChainConfig {
+	cfg.TrieNoAsyncFlush = on
 	return &cfg
 }
 
@@ -262,6 +279,7 @@ func (cfg *BlockChainConfig) triedbConfig(isVerkle bool) *triedb.Config {
 			// for flushing both trie data and state data to disk. The config name
 			// should be updated to eliminate the confusion.
 			WriteBufferSize: cfg.TrieDirtyLimit * 1024 * 1024,
+			NoAsyncFlush:    cfg.TrieNoAsyncFlush,
 		}
 	}
 	return config
@@ -2100,18 +2118,32 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		//
 		// Note: the main processor and prefetcher share the same reader with a local
 		// cache for mitigating the overhead of state access.
-		reader, err := bc.statedb.ReaderWithCache(parentRoot)
+		prefetch, process, err := bc.statedb.ReadersWithCacheStats(parentRoot)
 		if err != nil {
 			return nil, err
 		}
-		throwaway, err := state.NewWithReader(parentRoot, bc.statedb, reader)
+		throwaway, err := state.NewWithReader(parentRoot, bc.statedb, prefetch)
 		if err != nil {
 			return nil, err
 		}
-		statedb, err = state.NewWithReader(parentRoot, bc.statedb, reader)
+		statedb, err = state.NewWithReader(parentRoot, bc.statedb, process)
 		if err != nil {
 			return nil, err
 		}
+		// Upload the statistics of reader at the end
+		defer func() {
+			stats := prefetch.GetStats()
+			accountCacheHitPrefetchMeter.Mark(stats.AccountHit)
+			accountCacheMissPrefetchMeter.Mark(stats.AccountMiss)
+			storageCacheHitPrefetchMeter.Mark(stats.StorageHit)
+			storageCacheMissPrefetchMeter.Mark(stats.StorageMiss)
+			stats = process.GetStats()
+			accountCacheHitMeter.Mark(stats.AccountHit)
+			accountCacheMissMeter.Mark(stats.AccountMiss)
+			storageCacheHitMeter.Mark(stats.StorageHit)
+			storageCacheMissMeter.Mark(stats.StorageMiss)
+		}()
+
 		go func(start time.Time, throwaway *state.StateDB, block *types.Block) {
 			// Disable tracing for prefetcher executions.
 			vmCfg := bc.cfg.VmConfig
