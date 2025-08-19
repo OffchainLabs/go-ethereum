@@ -903,11 +903,11 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		return nil, err
 	}
 	defer release()
+
 	msg, err := core.TransactionToMessage(tx, types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time(), vmctx.ArbOSVersion), block.BaseFee(), core.NewMessageReplayContext())
 	if err != nil {
 		return nil, err
 	}
-
 	txctx := &Context{
 		BlockHash:   blockHash,
 		BlockNumber: block.Number(),
