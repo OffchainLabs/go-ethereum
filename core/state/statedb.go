@@ -1196,7 +1196,6 @@ func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root 
 func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*accountDelete, []*trienode.NodeSet, error) {
 	var (
 		nodes   []*trienode.NodeSet
-		buf     = crypto.NewKeccakState()
 		deletes = make(map[common.Hash]*accountDelete)
 	)
 	for addr, prevObj := range s.stateObjectsDestruct {
@@ -1211,7 +1210,7 @@ func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*acco
 			continue
 		}
 		// The account was existent, it can be either case (c) or (d).
-		addrHash := crypto.HashData(buf, addr.Bytes())
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
 		op := &accountDelete{
 			address: addr,
 			origin:  types.SlimAccountRLP(*prev),
