@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
@@ -200,8 +201,8 @@ type MessageRunContext struct {
 }
 
 func NewMessageCommitContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
-	if len(wasmTargets) == 0 {
-		wasmTargets = []rawdb.WasmTarget{rawdb.LocalTarget()}
+	if !slices.Contains(wasmTargets, rawdb.LocalTarget()) {
+		wasmTargets = append(wasmTargets, rawdb.LocalTarget())
 	}
 	return &MessageRunContext{
 		runMode:      messageCommitMode,
