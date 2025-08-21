@@ -72,7 +72,10 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 	if fb := backend.arb.BlockChain().CurrentFinalBlock(); fb != nil {
 		finalBlock = fb.Number.Uint64()
 	}
-	backend.filterMaps = filtermaps.NewFilterMaps(chainDb, chainView, historyCutoff, finalBlock, filtermaps.DefaultParams, fmConfig)
+	backend.filterMaps, err = filtermaps.NewFilterMaps(chainDb, chainView, historyCutoff, finalBlock, filtermaps.DefaultParams, fmConfig)
+	if err != nil {
+		return nil, nil, err
+	}
 	if len(config.AllowMethod) > 0 {
 		rpcFilter := make(map[string]bool)
 		for _, method := range config.AllowMethod {
