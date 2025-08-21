@@ -181,7 +181,7 @@ func init() {
 func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 	switch {
 	case rules.IsDia:
-		return PrecompiledContractsAfterArbOS50
+		return PrecompiledContractsStartingFromArbOS50
 	case rules.IsStylus:
 		return PrecompiledContractsAfterArbOS30
 	case rules.IsArbitrum:
@@ -211,21 +211,21 @@ func ActivePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 // ActivePrecompiles returns the precompile addresses enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
-	case rules.IsDia: // Any ArbOS-enabled node with ArbOS >= 50
-		return PrecompiledAddressesAfterArbOS50
-	case rules.IsStylus: // Any ArbOS-enabled node with ArbOS >= 30
+	case rules.IsDia:
+		return PrecompiledAddressesStartingFromArbOS50
+	case rules.IsStylus:
 		return PrecompiledAddressesAfterArbOS30
-	case rules.IsArbitrum: // Any ArbOS-enabled node
+	case rules.IsArbitrum:
 		return PrecompiledAddressesBeforeArbOS30
-	case rules.IsPrague: // Any ArbOS-disabled node after Prague fork
+	case rules.IsPrague:
 		return PrecompiledAddressesPrague
-	case rules.IsCancun: // Any ArbOS-disabled node after Cancun fork
+	case rules.IsCancun:
 		return PrecompiledAddressesCancun
-	case rules.IsBerlin: // Any ArbOS-disabled node after Berlin fork
+	case rules.IsBerlin:
 		return PrecompiledAddressesBerlin
-	case rules.IsIstanbul: // Any ArbOS-disabled node after Istanbul fork
+	case rules.IsIstanbul:
 		return PrecompiledAddressesIstanbul
-	case rules.IsByzantium: // Any ArbOS-disabled node after Byzantium fork
+	case rules.IsByzantium:
 		return PrecompiledAddressesByzantium
 	default: // Any ArbOS-disabled node
 		return PrecompiledAddressesHomestead

@@ -19,10 +19,10 @@ package vm
 import "github.com/ethereum/go-ethereum/common"
 
 var (
-	PrecompiledContractsBeforeArbOS30 = make(map[common.Address]PrecompiledContract)
-	PrecompiledAddressesBeforeArbOS30 []common.Address
-	PrecompiledContractsAfterArbOS30  = make(map[common.Address]PrecompiledContract)
-	PrecompiledAddressesAfterArbOS30  []common.Address
-	PrecompiledContractsAfterArbOS50  = make(map[common.Address]PrecompiledContract)
-	PrecompiledAddressesAfterArbOS50  []common.Address
+	PrecompiledContractsBeforeArbOS30       = make(map[common.Address]PrecompiledContract)
+	PrecompiledAddressesBeforeArbOS30       []common.Address
+	PrecompiledContractsAfterArbOS30        = make(map[common.Address]PrecompiledContract)
+	PrecompiledAddressesAfterArbOS30        []common.Address
+	PrecompiledContractsStartingFromArbOS50 = make(map[common.Address]PrecompiledContract)
+	PrecompiledAddressesStartingFromArbOS50 []common.Address
 )
