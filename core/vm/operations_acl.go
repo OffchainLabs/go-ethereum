@@ -146,8 +146,9 @@ func gasExtCodeCopyEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 		evm.StateDB.AddAddressToAccessList(addr)
 		var overflow bool
 		// We charge (cold-warm), since 'warm' is already charged as constantGas
-		// TODO(NIT-3484): Update multi dimensional gas here
-		if overflow = multiGas.SafeIncrement(multigas.ResourceKindUnknown, params.ColdAccountAccessCostEIP2929-params.WarmStorageReadCostEIP2929); overflow {
+		// Charge cold → warm delta as storage-access gas.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
+		if overflow = multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.ColdAccountAccessCostEIP2929-params.WarmStorageReadCostEIP2929); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 		return multiGas, nil
