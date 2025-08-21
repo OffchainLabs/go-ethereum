@@ -188,10 +188,11 @@ func gasCodeCopyEip4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 		}
 
 		_, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(contract.Code, uint64CodeOffset, length.Uint64())
-		// TODO(NIT-3484): Update multi dimensional gas here
+		// CODECOPY in EIP-4762: reading code chunks is an account state access.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		singleGas := multiGas.SingleGas()
 		_, wanted := evm.AccessEvents.CodeChunksRangeGas(contract.Address(), copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false, contract.Gas-singleGas)
-		multiGas.SafeIncrement(multigas.ResourceKindUnknown, wanted)
+		multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, wanted)
 	}
 	return multiGas, nil
 }
@@ -205,16 +206,18 @@ func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 	addr := common.Address(stack.peek().Bytes20())
 	_, isPrecompile := evm.precompile(addr)
 	if isPrecompile || addr == params.HistoryStorageAddress {
-		// TODO(NIT-3484): Update multi dimensional gas here
-		if overflow := multiGas.SafeIncrement(multigas.ResourceKindUnknown, params.WarmStorageReadCostEIP2929); overflow {
+		// Accessing precompile or history contract is treated as a warm state read.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
+		if overflow := multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 		return multiGas, nil
 	}
 	singleGas := multiGas.SingleGas()
 	wgas := evm.AccessEvents.BasicDataGas(addr, false, contract.Gas-singleGas, true)
-	// TODO(NIT-3484): Update multi dimensional gas here
-	if overflow := multiGas.SafeIncrement(multigas.ResourceKindUnknown, wgas); overflow {
+	// General EXTCODECOPY case: account lookup → state read.
+	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
+	if overflow := multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, wgas); overflow {
 		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 	return multiGas, nil
