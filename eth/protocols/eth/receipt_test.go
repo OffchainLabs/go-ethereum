@@ -44,23 +44,23 @@ var receiptsTests = []struct {
 	root  common.Hash
 }{
 	{
-		input: []types.ReceiptForStorage{{CumulativeGasUsed: 555, Status: 1, Logs: nil}},
+		input: []types.ReceiptForStorage{{CumulativeGasUsed: 555, GasUsedForL1: 1, Status: 1, Logs: nil}},
 		txs:   []*types.Transaction{types.NewTx(&types.LegacyTx{})},
 	},
 	{
-		input: []types.ReceiptForStorage{{CumulativeGasUsed: 555, Status: 1, Logs: nil}},
+		input: []types.ReceiptForStorage{{CumulativeGasUsed: 555, GasUsedForL1: 1, Status: 1, Logs: nil}},
 		txs:   []*types.Transaction{types.NewTx(&types.DynamicFeeTx{})},
 	},
 	{
-		input: []types.ReceiptForStorage{{CumulativeGasUsed: 555, Status: 1, Logs: nil}},
+		input: []types.ReceiptForStorage{{CumulativeGasUsed: 555, GasUsedForL1: 1, Status: 1, Logs: nil}},
 		txs:   []*types.Transaction{types.NewTx(&types.AccessListTx{})},
 	},
 	{
-		input: []types.ReceiptForStorage{{CumulativeGasUsed: 555, Status: 1, Logs: receiptsTestLogs1}},
+		input: []types.ReceiptForStorage{{CumulativeGasUsed: 555, GasUsedForL1: 1, Status: 1, Logs: receiptsTestLogs1}},
 		txs:   []*types.Transaction{types.NewTx(&types.LegacyTx{})},
 	},
 	{
-		input: []types.ReceiptForStorage{{CumulativeGasUsed: 555, Status: 1, Logs: receiptsTestLogs2}},
+		input: []types.ReceiptForStorage{{CumulativeGasUsed: 555, GasUsedForL1: 1, Status: 1, Logs: receiptsTestLogs2}},
 		txs:   []*types.Transaction{types.NewTx(&types.AccessListTx{})},
 	},
 }

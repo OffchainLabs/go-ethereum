@@ -35,11 +35,12 @@ type Receipt struct {
 	TxType            byte
 	PostStateOrStatus []byte
 	GasUsed           uint64
+	GasUsedForL1      uint64
 	Logs              rlp.RawValue
 }
 
 func newReceipt(tr *types.Receipt) Receipt {
-	r := Receipt{TxType: tr.Type, GasUsed: tr.CumulativeGasUsed}
+	r := Receipt{TxType: tr.Type, GasUsed: tr.CumulativeGasUsed, GasUsedForL1: tr.GasUsedForL1}
 	if tr.PostState != nil {
 		r.PostStateOrStatus = tr.PostState
 	} else {
@@ -107,6 +108,10 @@ func (r *Receipt) decodeInnerList(s *rlp.Stream, readTxType, readBloom bool) err
 	if err != nil {
 		return fmt.Errorf("invalid gasUsed: %w", err)
 	}
+	r.GasUsedForL1, err = s.Uint64()
+	if err != nil {
+		return fmt.Errorf("invalid gasUsedForL1: %w", err)
+	}
 	if readBloom {
 		var b types.Bloom
 		if err := s.ReadBytes(b[:]); err != nil {
@@ -126,6 +131,7 @@ func (r *Receipt) encodeForStorage(w *rlp.EncoderBuffer) {
 	list := w.List()
 	w.WriteBytes(r.PostStateOrStatus)
 	w.WriteUint64(r.GasUsed)
+	w.WriteUint64(r.GasUsedForL1)
 	w.Write(r.Logs)
 	w.ListEnd(list)
 }
@@ -137,6 +143,7 @@ func (r *Receipt) encodeForNetwork68(buf *receiptListBuffers, w *rlp.EncoderBuff
 		list := w.List()
 		w.WriteBytes(r.PostStateOrStatus)
 		w.WriteUint64(r.GasUsed)
+		w.WriteUint64(r.GasUsedForL1)
 		bloom := r.bloom(&buf.bloom)
 		w.WriteBytes(bloom[:])
 		w.Write(r.Logs)
@@ -161,6 +168,7 @@ func (r *Receipt) encodeForNetwork69(w *rlp.EncoderBuffer) {
 	w.WriteUint64(uint64(r.TxType))
 	w.WriteBytes(r.PostStateOrStatus)
 	w.WriteUint64(r.GasUsed)
+	w.WriteUint64(r.GasUsedForL1)
 	w.Write(r.Logs)
 	w.ListEnd(list)
 }
