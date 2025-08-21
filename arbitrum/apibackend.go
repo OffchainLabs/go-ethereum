@@ -657,6 +657,10 @@ func (a *APIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.R
 	return a.BlockChain().GetReceiptsByHash(hash), nil
 }
 
+func (a *APIBackend) GetCanonicalReceipt(tx *types.Transaction, blockHash common.Hash, blockNumber, blockIndex uint64) (*types.Receipt, error) {
+	return a.BlockChain().GetCanonicalReceipt(tx, blockHash, blockNumber, blockIndex)
+}
+
 func (a *APIBackend) GetEVM(ctx context.Context, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
 	if vmConfig == nil {
 		vmConfig = a.BlockChain().GetVMConfig()
@@ -687,8 +691,8 @@ func (a *APIBackend) SendConditionalTx(ctx context.Context, signedTx *types.Tran
 	return a.b.EnqueueL2Message(ctx, signedTx, options)
 }
 
-func (a *APIBackend) GetTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64) {
-	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(a.b.chainDb, txHash)
+func (a *APIBackend) GetCanonicalTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64) {
+	tx, blockHash, blockNumber, index := rawdb.ReadCanonicalTransaction(a.b.chainDb, txHash)
 	return tx != nil, tx, blockHash, blockNumber, index
 }
 
