@@ -102,7 +102,7 @@ func TestApplyMessageCalldataReturnsMultiGas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to calculate gas: %v", err)
 	}
-	expectedMultigas := multigas.CalldataGas(gas)
+	expectedMultigas := multigas.L2CalldataGas(gas)
 	if got, want := *res.UsedMultiGas, *expectedMultigas; got != want {
 		t.Errorf("unexpected multi gas: got %v, want %v", got, want)
 	}
