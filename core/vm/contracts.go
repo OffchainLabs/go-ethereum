@@ -180,10 +180,12 @@ func init() {
 
 func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 	switch {
+	case rules.IsDia:
+		return PrecompiledContractsStartingFromArbOS50
 	case rules.IsStylus:
-		return PrecompiledContractsArbOS30
+		return PrecompiledContractsAfterArbOS30
 	case rules.IsArbitrum:
-		return PrecompiledContractsArbitrum
+		return PrecompiledContractsBeforeArbOS30
 	case rules.IsVerkle:
 		return PrecompiledContractsVerkle
 	case rules.IsPrague:
@@ -209,10 +211,12 @@ func ActivePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 // ActivePrecompiles returns the precompile addresses enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
+	case rules.IsDia:
+		return PrecompiledAddressesStartingFromArbOS50
 	case rules.IsStylus:
-		return PrecompiledAddressesArbOS30
+		return PrecompiledAddressesAfterArbOS30
 	case rules.IsArbitrum:
-		return PrecompiledAddressesArbitrum
+		return PrecompiledAddressesBeforeArbOS30
 	case rules.IsPrague:
 		return PrecompiledAddressesPrague
 	case rules.IsCancun:
@@ -223,7 +227,7 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 		return PrecompiledAddressesIstanbul
 	case rules.IsByzantium:
 		return PrecompiledAddressesByzantium
-	default:
+	default: // Any ArbOS-disabled node
 		return PrecompiledAddressesHomestead
 	}
 }
