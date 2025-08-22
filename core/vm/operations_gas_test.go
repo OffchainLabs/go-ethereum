@@ -1497,7 +1497,7 @@ func TestGasExtCodeCopyEIP4762(t *testing.T) {
 	}
 }
 
-// EIP-2929 (access lists) copier gas function for  EXTCODECOPY
+// EIP-2929 (access lists) copier gas function for EXTCODECOPY
 func TestGasExtCodeCopyEIP2929(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -1557,6 +1557,7 @@ func TestGasExtCodeCopyEIP2929(t *testing.T) {
 	}
 }
 
+// Test `gasEip2929AccountCheck` gas helper separately
 func TestGasEip2929AccountCheck(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -1611,5 +1612,38 @@ func TestGasEip2929AccountCheck(t *testing.T) {
 				t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
 			}
 		})
+	}
+}
+
+// Statelessness mode (EIP-4762) BALANCE gas function test
+func TestGasBalance4762(t *testing.T) {
+	// EVM + AccessEvents
+	stateDb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	evm := NewEVM(BlockContext{BlockNumber: big.NewInt(0)}, stateDb, params.TestChainConfig, Config{})
+	evm.AccessEvents = state.NewAccessEvents(evm.StateDB.PointCache())
+
+	contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), 100000, nil)
+	addr := common.HexToAddress("0x00000000000000000000000000000000000000AA")
+
+	// Set up stack: top = address
+	stack := newstack()
+	stack.push(new(uint256.Int).SetBytes(addr.Bytes()))
+
+	mem := NewMemory()
+
+	// expectedMultiGas = what AccessEvents would charge for a single lookup
+	expectedGas := evm.AccessEvents.BasicDataGas(addr, false, contract.Gas, true)
+	expectedMultiGas := multigas.StorageAccessGas(expectedGas)
+
+	// Reset AccessEvents so the function under test sees the same (cold) state
+	evm.AccessEvents = state.NewAccessEvents(evm.StateDB.PointCache())
+
+	multiGas, err := gasBalance4762(evm, contract, stack, mem, 0)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if *multiGas != *expectedMultiGas {
+		t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
 	}
 }
