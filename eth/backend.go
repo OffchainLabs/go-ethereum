@@ -221,9 +221,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		}
 	}
 	var (
-		vmConfig = vm.Config{
-			EnablePreimageRecording: config.EnablePreimageRecording,
-		}
 		options = &core.BlockChainConfig{
 
 			// Arbitrum
@@ -243,7 +240,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			TxIndexer: &core.TxIndexerConfig{
 				Limit: min(config.TransactionHistory, math.MaxUint64),
 			},
-			VmConfig: vmConfig,
+			VmConfig: vm.Config{
+				EnablePreimageRecording: config.EnablePreimageRecording,
+			},
 		}
 	)
 
@@ -256,12 +255,12 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create tracer %s: %v", config.VMTrace, err)
 		}
-		vmConfig.Tracer = t
+		options.VmConfig.Tracer = t
 	}
 	// Override the chain config with provided settings.
 	var overrides core.ChainOverrides
-	if config.OverridePrague != nil {
-		overrides.OverridePrague = config.OverridePrague
+	if config.OverrideOsaka != nil {
+		overrides.OverrideOsaka = config.OverrideOsaka
 	}
 	if config.OverrideVerkle != nil {
 		overrides.OverrideVerkle = config.OverrideVerkle
@@ -286,7 +285,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if fb := eth.blockchain.CurrentFinalBlock(); fb != nil {
 		finalBlock = fb.Number.Uint64()
 	}
-	eth.filterMaps = filtermaps.NewFilterMaps(chainDb, chainView, historyCutoff, finalBlock, filtermaps.DefaultParams, fmConfig)
+	filterMaps, err := filtermaps.NewFilterMaps(chainDb, chainView, historyCutoff, finalBlock, filtermaps.DefaultParams, fmConfig)
+	if err != nil {
+		return nil, err
+	}
+	eth.filterMaps = filterMaps
 	eth.closeFilterMaps = make(chan chan struct{})
 
 	// TxPool
