@@ -780,20 +780,6 @@ func TestVariantGasEIP4762(t *testing.T) {
 			isSystemCall:     false,
 			memorySize:       64,
 		},
-		// In v1.16.0 EIP4762 system call doesnt skip witness cost
-		// TODO: remove this testcase
-		// {
-		// 	name:             "EIP4762 system call skips witness cost",
-		// 	transfersValue:   false,
-		// 	valueTransferGas: 50000,
-		// 	targetExists:     true,
-		// 	targetEmpty:      false,
-		// 	isEIP158:         true,
-		// 	isEIP4762:        true,
-		// 	addWitnessGas:    true,
-		// 	isSystemCall:     true,
-		// 	memorySize:       64,
-		// },
 	}
 
 	gasCallEIP4762 = makeCallVariantGasEIP4762(gasCallCode, true)
