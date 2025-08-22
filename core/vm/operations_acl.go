@@ -170,8 +170,9 @@ func gasEip2929AccountCheck(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 		// If the caller cannot afford the cost, this change will be rolled back
 		evm.StateDB.AddAddressToAccessList(addr)
 		// The warm storage read cost is already charged as constantGas
-		// TODO(NIT-3484): Update multi dimensional gas here
-		return multigas.UnknownGas(params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929), nil
+		// charge cold -> warm delta as storage access
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
+		return multigas.StorageAccessGas(params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929), nil
 	}
 	return multigas.ZeroGas(), nil
 }

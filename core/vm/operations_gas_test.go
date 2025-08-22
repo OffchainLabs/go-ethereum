@@ -1556,3 +1556,60 @@ func TestGasExtCodeCopyEIP2929(t *testing.T) {
 		})
 	}
 }
+
+func TestGasEip2929AccountCheck(t *testing.T) {
+	tests := []struct {
+		name    string
+		prewarm bool   // pre-add to access list
+		addrHex string // target address
+	}{
+		{
+			name:    "cold account → charge cold-warm delta",
+			prewarm: false,
+			addrHex: "0x00000000000000000000000000000000000000AA",
+		},
+		{
+			name:    "warm account → zero",
+			prewarm: true,
+			addrHex: "0x00000000000000000000000000000000000000BB",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// EVM
+			stateDb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+			evm := NewEVM(BlockContext{BlockNumber: big.NewInt(0)}, stateDb, params.TestChainConfig, Config{})
+
+			contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), 100000, nil)
+
+			addr := common.HexToAddress(tt.addrHex)
+			if tt.prewarm {
+				stateDb.AddAddressToAccessList(addr)
+			}
+
+			// Set up stack: top = address
+			stack := newstack()
+			stack.push(new(uint256.Int).SetBytes(addr.Bytes()))
+
+			mem := NewMemory()
+
+			var expectedMultiGas *multigas.MultiGas
+			if tt.prewarm {
+				expectedMultiGas = multigas.ZeroGas()
+			} else {
+				extra := params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
+				expectedMultiGas = multigas.StorageAccessGas(extra)
+			}
+
+			multiGas, err := gasEip2929AccountCheck(evm, contract, stack, mem, 0)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if *multiGas != *expectedMultiGas {
+				t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+			}
+		})
+	}
+}
