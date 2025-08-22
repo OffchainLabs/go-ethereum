@@ -244,6 +244,11 @@ func extractReceiptFields(receiptRLP rlp.RawValue) (uint64, uint, error) {
 	if err != nil {
 		return 0, 0, err
 	}
+	// Decode the field: GasUsedForL1 (type: uint64). Unused
+	_, rest, err = rlp.SplitUint64(rest)
+	if err != nil {
+		return 0, 0, err
+	}
 	// Decode the field: logs (type: rlp list)
 	logList, _, err := rlp.SplitList(rest)
 	if err != nil {
