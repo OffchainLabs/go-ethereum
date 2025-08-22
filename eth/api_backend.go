@@ -196,7 +196,9 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 	if hash, ok := blockNrOrHash.Hash(); ok {
 		header := b.eth.blockchain.GetHeaderByHash(hash)
 		if header == nil {
-			return nil, errors.New("header for hash not found")
+			// Return 'null' and no error if block is not found.
+			// This behavior is required by RPC spec.
+			return nil, nil
 		}
 		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
 			return nil, errors.New("hash is not currently canonical")
@@ -240,7 +242,10 @@ func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.B
 	}
 	stateDb, err := b.eth.BlockChain().StateAt(header.Root)
 	if err != nil {
-		return nil, nil, err
+		stateDb, err = b.eth.BlockChain().HistoricState(header.Root)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	return stateDb, header, nil
 }
@@ -262,7 +267,10 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 		}
 		stateDb, err := b.eth.BlockChain().StateAt(header.Root)
 		if err != nil {
-			return nil, nil, err
+			stateDb, err = b.eth.BlockChain().HistoricState(header.Root)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 		return stateDb, header, nil
 	}
@@ -403,6 +411,10 @@ func (b *EthAPIBackend) SyncProgress(ctx context.Context) ethereum.SyncProgress 
 	if txProg, err := b.eth.blockchain.TxIndexProgress(); err == nil {
 		prog.TxIndexFinishedBlocks = txProg.Indexed
 		prog.TxIndexRemainingBlocks = txProg.Remaining
+	}
+	remain, err := b.eth.blockchain.StateIndexProgress()
+	if err == nil {
+		prog.StateIndexRemaining = remain
 	}
 	return prog
 }

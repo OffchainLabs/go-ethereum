@@ -461,17 +461,6 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 
-	if evm.chainRules.IsEIP4762 && !contract.IsSystemCall {
-		if transfersValue {
-			valueTransferGas := evm.AccessEvents.ValueTransferGas(contract.Address(), address)
-			// Account lookups considered as storage access.
-			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-			if overflow := multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas); overflow {
-				return multigas.ZeroGas(), ErrGasUintOverflow
-			}
-		}
-	}
-
 	singleGas := multiGas.SingleGas()
 	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, singleGas, stack.Back(0))
 	if err != nil {
@@ -504,19 +493,6 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 	if overflow {
 		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
-	if evm.chainRules.IsEIP4762 && !contract.IsSystemCall {
-		address := common.Address(stack.Back(1).Bytes20())
-		transfersValue := !stack.Back(2).IsZero()
-		if transfersValue {
-			valueTransferGas := evm.AccessEvents.ValueTransferGas(contract.Address(), address)
-			// Account lookups considered as storage access.
-			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-			if overflow = multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas); overflow {
-				return multigas.ZeroGas(), ErrGasUintOverflow
-			}
-		}
-	}
-
 	singleGas := multiGas.SingleGas()
 	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, singleGas, stack.Back(0))
 	if err != nil {
@@ -594,21 +570,4 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		evm.StateDB.AddRefund(params.SelfdestructRefundGas)
 	}
 	return multiGas, nil
-}
-
-func gasExtCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
-	panic("not implemented")
-}
-
-func gasExtDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
-	panic("not implemented")
-}
-func gasExtStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
-	panic("not implemented")
-}
-
-// gasEOFCreate returns the gas-cost for EOF-Create. Hashing charge needs to be
-// deducted in the opcode itself, since it depends on the immediate
-func gasEOFCreate(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
-	panic("not implemented")
 }

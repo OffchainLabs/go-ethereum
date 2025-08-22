@@ -234,12 +234,22 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	return receipts
 }
 
-func (bc *BlockChain) GetRawReceiptsByHash(hash common.Hash) types.Receipts {
+// GetRawReceipts retrieves the receipts for all transactions in a given block
+// without deriving the internal fields and the Bloom.
+func (bc *BlockChain) GetRawReceipts(hash common.Hash, number uint64) types.Receipts {
+	if receipts, ok := bc.receiptsCache.Get(hash); ok {
+		return receipts
+	}
+	return rawdb.ReadRawReceipts(bc.db, hash, number)
+}
+
+// GetReceiptsRLP retrieves the receipts of a block.
+func (bc *BlockChain) GetReceiptsRLP(hash common.Hash) rlp.RawValue {
 	number := rawdb.ReadHeaderNumber(bc.db, hash)
 	if number == nil {
 		return nil
 	}
-	return rawdb.ReadRawReceipts(bc.db, hash, *number)
+	return rawdb.ReadReceiptsRLP(bc.db, hash, *number)
 }
 
 // GetUnclesInChain retrieves all the uncles from a given block backwards until
@@ -360,6 +370,13 @@ func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	return state.New(root, bc.statedb)
 }
 
+// HistoricState returns a historic state specified by the given root.
+// Live states are not available and won't be served, please use `State`
+// or `StateAt` instead.
+func (bc *BlockChain) HistoricState(root common.Hash) (*state.StateDB, error) {
+	return state.New(root, state.NewHistoricDatabase(bc.db, bc.triedb))
+}
+
 // Config retrieves the chain's fork configuration.
 func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
 
@@ -398,7 +415,7 @@ func (bc *BlockChain) Genesis() *types.Block {
 
 // GetVMConfig returns the block chain VM config.
 func (bc *BlockChain) GetVMConfig() *vm.Config {
-	return &bc.vmConfig
+	return &bc.cfg.VmConfig
 }
 
 // TxIndexProgress returns the transaction indexing progress.
@@ -407,6 +424,11 @@ func (bc *BlockChain) TxIndexProgress() (TxIndexProgress, error) {
 		return TxIndexProgress{}, errors.New("tx indexer is not enabled")
 	}
 	return bc.txIndexer.txIndexProgress(), nil
+}
+
+// StateIndexProgress returns the historical state indexing progress.
+func (bc *BlockChain) StateIndexProgress() (uint64, error) {
+	return bc.triedb.IndexProgress()
 }
 
 // HistoryPruningCutoff returns the configured history pruning point.
