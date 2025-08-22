@@ -1558,6 +1558,7 @@ func TestGasExtCodeCopyEIP2929(t *testing.T) {
 }
 
 // Test `gasEip2929AccountCheck` gas helper separately
+// Test `gasEip2929AccountCheck` gas helper test, checks only EIP-2929 cold -> warm delta charged.
 func TestGasEip2929AccountCheck(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -1565,12 +1566,12 @@ func TestGasEip2929AccountCheck(t *testing.T) {
 		addrHex string // target address
 	}{
 		{
-			name:    "cold account → charge cold-warm delta",
+			name:    "cold account -> charge cold-warm delta",
 			prewarm: false,
 			addrHex: "0x00000000000000000000000000000000000000AA",
 		},
 		{
-			name:    "warm account → zero",
+			name:    "warm account -> zero",
 			prewarm: true,
 			addrHex: "0x00000000000000000000000000000000000000BB",
 		},
@@ -1615,35 +1616,80 @@ func TestGasEip2929AccountCheck(t *testing.T) {
 	}
 }
 
-// Statelessness mode (EIP-4762) BALANCE gas function test
-func TestGasBalance4762(t *testing.T) {
-	// EVM + AccessEvents
-	stateDb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-	evm := NewEVM(BlockContext{BlockNumber: big.NewInt(0)}, stateDb, params.TestChainConfig, Config{})
-	evm.AccessEvents = state.NewAccessEvents(evm.StateDB.PointCache())
+// Unified gas function test for BALANCE, EXTCODESIZE and EXTCODEHASH
+func TestGasBalanceExtCodeSizeExtCodeHash4762(t *testing.T) {
+	tests := []struct {
+		name       string
+		gasFn      gasFunc
+		addr       common.Address
+		expectZero bool // for EXTCODESIZE
 
-	contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), 100000, nil)
-	addr := common.HexToAddress("0x00000000000000000000000000000000000000AA")
-
-	// Set up stack: top = address
-	stack := newstack()
-	stack.push(new(uint256.Int).SetBytes(addr.Bytes()))
-
-	mem := NewMemory()
-
-	// expectedMultiGas = what AccessEvents would charge for a single lookup
-	expectedGas := evm.AccessEvents.BasicDataGas(addr, false, contract.Gas, true)
-	expectedMultiGas := multigas.StorageAccessGas(expectedGas)
-
-	// Reset AccessEvents so the function under test sees the same (cold) state
-	evm.AccessEvents = state.NewAccessEvents(evm.StateDB.PointCache())
-
-	multiGas, err := gasBalance4762(evm, contract, stack, mem, 0)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
+	}{
+		{
+			name:  "BALANCE cold account -> BasicDataGas",
+			gasFn: gasBalance4762,
+			addr:  common.HexToAddress("0x00000000000000000000000000000000000000AA"),
+		},
+		// no precompile logic in balance
+		{
+			name:  "EXTCODESIZE cold account -> BasicDataGas",
+			gasFn: gasExtCodeSize4762,
+			addr:  common.HexToAddress("0x00000000000000000000000000000000000000AB"),
+		},
+		{
+			name:       "EXTCODESIZE precompile -> zero",
+			gasFn:      gasExtCodeSize4762,
+			addr:       common.HexToAddress("0x0000000000000000000000000000000000000001"),
+			expectZero: true,
+		},
+		{
+			name:  "EXTCODEHASH cold account -> BasicDataGas",
+			gasFn: gasExtCodeHash4762,
+			addr:  common.HexToAddress("0x00000000000000000000000000000000000000AC"),
+		},
+		{
+			name:       "EXTCODEHASH precompile -> zero",
+			gasFn:      gasExtCodeHash4762,
+			addr:       common.HexToAddress("0x0000000000000000000000000000000000000001"),
+			expectZero: true,
+		},
 	}
 
-	if *multiGas != *expectedMultiGas {
-		t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// EVM + AccessEvents
+			stateDb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+			evm := NewEVM(BlockContext{BlockNumber: big.NewInt(0)}, stateDb, params.TestChainConfig, Config{})
+			evm.AccessEvents = state.NewAccessEvents(evm.StateDB.PointCache())
+
+			contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), 100000, nil)
+
+			// Set up stack: top = address
+			stack := newstack()
+			stack.push(new(uint256.Int).SetBytes(tt.addr.Bytes()))
+
+			mem := NewMemory()
+
+			// expectedMultiGas
+			var expectedMultiGas *multigas.MultiGas
+			if tt.expectZero {
+				expectedMultiGas = multigas.ZeroGas()
+			} else {
+				basicDataGas := evm.AccessEvents.BasicDataGas(tt.addr, false, contract.Gas, true)
+				expectedMultiGas = multigas.StorageAccessGas(basicDataGas)
+			}
+
+			// Reset AccessEvents so the call sees the same state
+			evm.AccessEvents = state.NewAccessEvents(evm.StateDB.PointCache())
+
+			multiGas, err := tt.gasFn(evm, contract, stack, mem, 0)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if *multiGas != *expectedMultiGas {
+				t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+			}
+		})
 	}
 }
