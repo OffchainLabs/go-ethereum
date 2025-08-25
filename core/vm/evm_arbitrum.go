@@ -19,6 +19,7 @@ package vm
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -38,7 +39,7 @@ func (evm *EVM) DecrementDepth() {
 }
 
 type TxProcessingHook interface {
-	StartTxHook() (bool, uint64, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
+	StartTxHook() (bool, *multigas.MultiGas, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
 	GasChargingHook(gasRemaining *uint64) (common.Address, error)
 	PushContract(contract *Contract)
 	PopContract()
@@ -60,8 +61,8 @@ type DefaultTxProcessor struct {
 	evm *EVM
 }
 
-func (p DefaultTxProcessor) StartTxHook() (bool, uint64, error, []byte) {
-	return false, 0, nil, nil
+func (p DefaultTxProcessor) StartTxHook() (bool, *multigas.MultiGas, error, []byte) {
+	return false, multigas.ZeroGas(), nil, nil
 }
 
 func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) (common.Address, error) {
