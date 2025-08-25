@@ -14,6 +14,8 @@ const (
 	NumResourceKind
 )
 
+const ResourceKindL2Calldata = ResourceKindComputation
+
 // MultiGas tracks gas usage across multiple resource kinds, while also
 // maintaining a single-dimensional total gas sum and refund amount.
 type MultiGas struct {
@@ -59,6 +61,11 @@ func UnknownGas(amount uint64) *MultiGas {
 // ComputationGas returns a MultiGas initialized with computation gas.
 func ComputationGas(amount uint64) *MultiGas {
 	return NewMultiGas(ResourceKindComputation, amount)
+}
+
+// L2CalldataGas returns a MultiGas initialized with calldata gas.
+func L2CalldataGas(amount uint64) *MultiGas {
+	return NewMultiGas(ResourceKindL2Calldata, amount)
 }
 
 // HistoryGrowthGas returns a MultiGas initialized with history growth gas.
