@@ -1270,3 +1270,289 @@ func TestMakeGasLog(t *testing.T) {
 		}
 	}
 }
+
+// Memory copier gas function test (CALLDATACOPY/CODECOPY/MCOPY/EXTCODECOPY/RETURNDATACOPY)
+func TestMemoryCopierGas(t *testing.T) {
+	tests := []struct {
+		stackpos int
+		size     uint64
+		dim      multigas.ResourceKind
+	}{
+		// CALLDATACOPY, CODECOPY, MCOPY, RETURNDATACOPY -> computation
+		{stackpos: 2, size: 64, dim: multigas.ResourceKindComputation},
+		// EXTCODECOPY -> storage access
+		{stackpos: 3, size: 96, dim: multigas.ResourceKindStorageAccess},
+	}
+
+	for _, tt := range tests {
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		evm := NewEVM(BlockContext{}, statedb, params.TestChainConfig, Config{})
+
+		caller := common.Address{}
+		contractAddr := common.Address{1}
+		contractGas := uint64(100000)
+		contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+
+		stack := newstack()
+		mem := NewMemory()
+		memForExpected := NewMemory()
+
+		// Set up stack for memory copy operation
+		// Place size at Back(stackpos), fill the rest with dummy values
+		stack.push(new(uint256.Int).SetUint64(tt.size))
+		for i := 0; i < tt.stackpos; i++ {
+			stack.push(new(uint256.Int))
+		}
+
+		memorySize := uint64(96)
+
+		expectedMultiGas, err := memoryGasCost(memForExpected, memorySize)
+		if err != nil {
+			t.Fatalf("Failed memoryGasCost: %v", err)
+		}
+
+		// Copy cost dimension depends on stackpos
+		wordCopyGas := toWordSize(tt.size) * params.CopyGas
+		expectedMultiGas.SafeIncrement(tt.dim, wordCopyGas)
+
+		multiGas, err := memoryCopierGas(tt.stackpos)(evm, contract, stack, mem, memorySize)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+
+		if *multiGas != *expectedMultiGas {
+			t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+		}
+	}
+}
+
+// EIP-4762 copier gas function for CODECOPY
+func TestGasCodeCopyEIP4762(t *testing.T) {
+	type tc struct {
+		name         string
+		isDeployment bool
+		isSystemCall bool
+		codeLen      int
+		codeOffset   uint64
+		length       uint64
+		memorySize   uint64
+		expectChunks bool
+	}
+	cases := []tc{
+		{
+			name:         "cold access charges wanted storage access",
+			codeLen:      1024,
+			codeOffset:   64,
+			length:       200,
+			memorySize:   96,
+			expectChunks: true,
+		},
+		{
+			name:         "deployment skips chunk accounting",
+			isDeployment: true,
+			codeLen:      256,
+			codeOffset:   0,
+			length:       64,
+			memorySize:   64,
+			expectChunks: false,
+		},
+		{
+			name:         "system call skips chunk accounting",
+			isSystemCall: true,
+			codeLen:      256,
+			codeOffset:   8,
+			length:       96,
+			memorySize:   0,
+			expectChunks: false,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// EVM + access events
+			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+			evm := NewEVM(BlockContext{BlockNumber: big.NewInt(0)}, statedb, params.TestChainConfig, Config{})
+			evm.AccessEvents = state.NewAccessEvents(evm.StateDB.PointCache())
+
+			contract := NewContract(common.Address{}, common.HexToAddress("0x1234"), new(uint256.Int), 100000, nil)
+			contract.Code = make([]byte, c.codeLen)
+			contract.IsDeployment = c.isDeployment
+			contract.IsSystemCall = c.isSystemCall
+
+			// Setup stack: [memOffset, codeOffset, length] (bottom to top)
+			stack := newstack()
+			stack.push(uint256.NewInt(c.length))
+			stack.push(uint256.NewInt(c.codeOffset))
+			stack.push(uint256.NewInt(0))
+
+			mem := NewMemory()
+
+			// Expected: baseline = memory + per-word copy (computation)
+			memForExp := NewMemory()
+			expectedMultiGas, err := memoryGasCost(memForExp, c.memorySize)
+			if err != nil {
+				t.Fatalf("memoryGasCost failed: %v", err)
+			}
+			expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, toWordSize(c.length)*params.CopyGas)
+
+			// Expected: EIP-4762 extra storage access from code chunk reads
+			if c.expectChunks {
+				_, copyOff, nonPadded := getDataAndAdjustedBounds(contract.Code, c.codeOffset, c.length)
+				single := expectedMultiGas.SingleGas()
+				aeExp := state.NewAccessEvents(evm.StateDB.PointCache())
+				_, wanted := aeExp.CodeChunksRangeGas(contract.Address(), copyOff, nonPadded, uint64(len(contract.Code)), false, contract.Gas-single)
+				expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, wanted)
+			}
+
+			multiGas, err := gasCodeCopyEip4762(evm, contract, stack, mem, c.memorySize)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if *multiGas != *expectedMultiGas {
+				t.Errorf("expected multi gas %d, got %d", expectedMultiGas, multiGas)
+			}
+		})
+	}
+}
+
+// EIP-4762 copier gas function for EXTCODECOPY
+func TestGasExtCodeCopyEIP4762(t *testing.T) {
+	type tc struct {
+		name       string
+		addr       common.Address
+		length     uint64
+		memorySize uint64
+		expectWarm bool // precompile/history -> warm
+	}
+
+	testCases := []tc{
+		{
+			name:       "cold account -> BasicDataGas",
+			addr:       common.HexToAddress("0xAA"),
+			length:     128,
+			memorySize: 96,
+			expectWarm: false,
+		},
+		{
+			name:       "precompile -> WarmStorageReadCost",
+			addr:       common.HexToAddress("0x0000000000000000000000000000000000000001"),
+			length:     64,
+			memorySize: 64,
+			expectWarm: true,
+		},
+		{
+			name:       "history contract -> WarmStorageReadCost",
+			addr:       params.HistoryStorageAddress,
+			length:     96,
+			memorySize: 0,
+			expectWarm: true,
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			// EVM + access events
+			stateDb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+			evm := NewEVM(BlockContext{BlockNumber: big.NewInt(0)}, stateDb, params.TestChainConfig, Config{})
+			evm.AccessEvents = state.NewAccessEvents(evm.StateDB.PointCache())
+
+			contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), 100000, nil)
+
+			// Setup stack: [address, memOffset, codeOffset, size] (bottom to top)
+			stack := newstack()
+			stack.push(uint256.NewInt(c.length))
+			stack.push(uint256.NewInt(32))
+			stack.push(uint256.NewInt(0))
+			stack.push(new(uint256.Int).SetBytes(c.addr.Bytes()))
+
+			mem := NewMemory()
+
+			// expectedMultiGas: memory expansion + per-word copy (storage-access dim)
+			memForExpected := NewMemory()
+			expectedMultiGas, err := memoryGasCost(memForExpected, c.memorySize)
+			if err != nil {
+				t.Fatalf("memoryGasCost failed: %v", err)
+			}
+			expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, toWordSize(c.length)*params.CopyGas)
+
+			// expected EIP-4762 addition
+			if c.expectWarm {
+				expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929)
+			} else {
+				singleGas := expectedMultiGas.SingleGas()
+				accessEventsForExpected := state.NewAccessEvents(evm.StateDB.PointCache())
+				wgas := accessEventsForExpected.BasicDataGas(c.addr, false, contract.Gas-singleGas, true)
+				expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, wgas)
+			}
+
+			multiGas, err := gasExtCodeCopyEIP4762(evm, contract, stack, mem, c.memorySize)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if *multiGas != *expectedMultiGas {
+				t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+			}
+		})
+	}
+}
+
+// EIP-2929 (access lists) copier gas function for  EXTCODECOPY
+func TestGasExtCodeCopyEIP2929(t *testing.T) {
+	tests := []struct {
+		name        string
+		prewarm     bool
+		expectDelta uint64
+	}{
+		{
+			name:        "cold access charges storage-access gas",
+			prewarm:     false,
+			expectDelta: params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929,
+		},
+		{
+			name:        "warm access does not charge extra",
+			prewarm:     true,
+			expectDelta: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+			evm := NewEVM(BlockContext{}, statedb, params.TestChainConfig, Config{})
+
+			addr := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
+			if tt.prewarm {
+				evm.StateDB.AddAddressToAccessList(addr)
+			}
+
+			caller := common.Address{}
+			contractAddr := common.Address{1}
+			contractGas := uint64(100000)
+			contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+
+			stack := newstack()
+			stack.push(new(uint256.Int).SetUint64(0))
+			stack.push(new(uint256.Int).SetUint64(0))
+			stack.push(new(uint256.Int).SetUint64(0))
+			stack.push(new(uint256.Int).SetBytes(addr.Bytes())) // top of stack = address
+			mem := NewMemory()
+
+			// run
+			multiGas, err := gasExtCodeCopyEIP2929(evm, contract, stack, mem, 0)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			got := multiGas.Get(multigas.ResourceKindStorageAccess)
+			if got != tt.expectDelta {
+				t.Errorf("expected storage-access delta %d, got %d", tt.expectDelta, got)
+			}
+
+			// Cold access should promote address to warm
+			if !evm.StateDB.AddressInAccessList(addr) {
+				t.Errorf("expected address to be in access list after access")
+			}
+		})
+	}
+}
