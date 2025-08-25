@@ -116,12 +116,6 @@ var PrecompiledContractsCancun = PrecompiledContracts{
 	common.BytesToAddress([]byte{0xa}): &kzgPointEvaluation{},
 }
 
-// PrecompiledContractsP256Verify contains the precompiled Ethereum
-// contract specified in EIP-7212.
-var PrecompiledContractsP256Verify = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{0x01, 0x00}): &p256Verify{},
-}
-
 // PrecompiledContractsPrague contains the set of pre-compiled Ethereum
 // contracts used in the Prague release.
 var PrecompiledContractsPrague = PrecompiledContracts{
@@ -168,6 +162,18 @@ var PrecompiledContractsOsaka = PrecompiledContracts{
 	common.BytesToAddress([]byte{0x0f}): &bls12381Pairing{},
 	common.BytesToAddress([]byte{0x10}): &bls12381MapG1{},
 	common.BytesToAddress([]byte{0x11}): &bls12381MapG2{},
+
+	common.BytesToAddress([]byte{0x1, 0x00}): &p256Verify{},
+}
+
+// PrecompiledContractsP256Verify contains the precompiled Ethereum
+// contract specified in EIP-7212. This is exported for testing purposes.
+var PrecompiledContractsP256Verify = func(arbosVersion uint64) map[common.Address]PrecompiledContract {
+	return map[common.Address]PrecompiledContract{
+		common.BytesToAddress([]byte{0x01, 0x00}): &p256Verify{
+			arbosVersion: arbosVersion,
+		},
+	}
 }
 
 var (
@@ -1267,34 +1273,34 @@ func kZGToVersionedHash(kzg kzg4844.Commitment) common.Hash {
 }
 
 // P256VERIFY (secp256r1 signature verification)
-// implemented as a native contract.
-type p256Verify struct{}
+// implemented as a native contract
+type p256Verify struct {
+	arbosVersion uint64
+}
 
-// RequiredGas returns the gas required to execute the precompiled contract.
+// RequiredGas returns the gas required to execute the precompiled contract
 func (c *p256Verify) RequiredGas(input []byte) uint64 {
+	if c.arbosVersion != 0 && c.arbosVersion < params.ArbosVersion_50 {
+		return 3450 // Value of params.P256VerifyGas before ArbosVersion_50
+	}
 	return params.P256VerifyGas
 }
 
-// Run executes the precompiled contract with given 160 bytes of param, returning the output and the used gas.
+// Run executes the precompiled contract with given 160 bytes of param, returning the output and the used gas
 func (c *p256Verify) Run(input []byte) ([]byte, error) {
-	// Required input length is 160 bytes.
 	const p256VerifyInputLength = 160
-	// Check the input length.
 	if len(input) != p256VerifyInputLength {
-		// Input length is invalid.
 		return nil, nil
 	}
 
-	// Extract the hash, r, s, x, y from the input.
+	// Extract hash, r, s, x, y from the input.
 	hash := input[0:32]
 	r, s := new(big.Int).SetBytes(input[32:64]), new(big.Int).SetBytes(input[64:96])
 	x, y := new(big.Int).SetBytes(input[96:128]), new(big.Int).SetBytes(input[128:160])
 
-	// Verify the secp256r1 signature.
+	// Verify the signature.
 	if secp256r1.Verify(hash, r, s, x, y) {
-		// Signature is valid
-		return common.LeftPadBytes(common.Big1.Bytes(), 32), nil
+		return true32Byte, nil
 	}
-	// Signature is invalid.
 	return nil, nil
 }
