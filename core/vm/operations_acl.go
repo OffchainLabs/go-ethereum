@@ -34,10 +34,10 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 		}
 		// Gas sentry honoured, do the actual gas calculation based on the stored value
 		var (
-			y, x     = stack.Back(1), stack.peek()
-			slot     = common.Hash(x.Bytes32())
-			current  = evm.StateDB.GetState(contract.Address(), slot)
-			multiGas = multigas.ZeroGas()
+			y, x              = stack.Back(1), stack.peek()
+			slot              = common.Hash(x.Bytes32())
+			current, original = evm.StateDB.GetStateAndCommittedState(contract.Address(), slot)
+			multiGas          = multigas.ZeroGas()
 		)
 		// Check slot presence in the access list
 		if _, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
@@ -59,7 +59,6 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 			multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929)
 			return multiGas, nil // SLOAD_GAS
 		}
-		original := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
 		if original == current {
 			if original == (common.Hash{}) { // create slot (2.1.1)
 				// Creating a new slot considered as storage growth.
