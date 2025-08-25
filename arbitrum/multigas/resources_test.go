@@ -38,9 +38,11 @@ func TestMultiGasFromMap(t *testing.T) {
 		ResourceKindHistoryGrowth: 11,
 		ResourceKindStorageAccess: 12,
 		ResourceKindStorageGrowth: 13,
+		ResourceKindL1Calldata:    14,
+		ResourceKindL2Calldata:    15,
 	})
-	if got := fromMap.SingleGas(); got != 46 {
-		t.Errorf("MultiGasFromMap: expected SingleGas() == 46, got %d", got)
+	if got := fromMap.SingleGas(); got != 75 {
+		t.Errorf("MultiGasFromMap: expected SingleGas() == 75, got %d", got)
 	}
 	if got := fromMap.Get(ResourceKindComputation); got != 10 {
 		t.Errorf("MultiGasFromMap: expected Get(ResourceKindComputation) == 10, got %d", got)
@@ -53,6 +55,12 @@ func TestMultiGasFromMap(t *testing.T) {
 	}
 	if got := fromMap.Get(ResourceKindStorageGrowth); got != 13 {
 		t.Errorf("MultiGasFromMap: expected Get(ResourceKindStorageGrowth) == 13, got %d", got)
+	}
+	if got := fromMap.Get(ResourceKindL1Calldata); got != 14 {
+		t.Errorf("MultiGasFromMap: expected Get(ResourceKindL1Calldata) == 14, got %d", got)
+	}
+	if got := fromMap.Get(ResourceKindL2Calldata); got != 15 {
+		t.Errorf("MultiGasFromMap: expected Get(ResourceKindL2Calldata) == 15, got %d", got)
 	}
 }
 
@@ -72,6 +80,12 @@ func TestSafeAdd(t *testing.T) {
 	}
 	if got, want := gas.Get(ResourceKindStorageGrowth), uint64(0); got != want {
 		t.Errorf("unexpected storage growth gas: got %v, want %v", got, want)
+	}
+	if got, want := gas.Get(ResourceKindL1Calldata), uint64(0); got != want {
+		t.Errorf("unexpected L1 calldata gas: got %v, want %v", got, want)
+	}
+	if got, want := gas.Get(ResourceKindL2Calldata), uint64(0); got != want {
+		t.Errorf("unexpected L2 calldata gas: got %v, want %v", got, want)
 	}
 	if got, want := gas.SingleGas(), uint64(30); got != want {
 		t.Errorf("unexpected single gas: got %v, want %v", got, want)
