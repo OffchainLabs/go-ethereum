@@ -462,7 +462,7 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 	)
 
 	// Insert the blocks into the chain so filter can look them up
-	blockchain, err := core.NewBlockChain(db, genesis, ethash.NewFaker(), nil)
+	blockchain, err := core.NewBlockChain(db, nil, genesis, ethash.NewFaker(), nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
