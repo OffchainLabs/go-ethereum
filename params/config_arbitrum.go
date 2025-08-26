@@ -45,7 +45,7 @@ const ArbosVersion_Stylus = ArbosVersion_30
 const ArbosVersion_StylusFixes = ArbosVersion_31
 const ArbosVersion_StylusChargingFixes = ArbosVersion_32
 const MaxArbosVersionSupported = ArbosVersion_40
-const MaxDebugArbosVersionSupported = ArbosVersion_41
+const MaxDebugArbosVersionSupported = ArbosVersion_50
 
 type ArbitrumChainParams struct {
 	EnableArbOS               bool
