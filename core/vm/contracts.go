@@ -291,7 +291,7 @@ func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uin
 		return advanced.RunAdvanced(input, suppliedGas, advancedInfo)
 	}
 	precompileArbosAware, isPrecompileArbosAware := p.(arbosAwarePrecompile)
-	if isPrecompileArbosAware {
+	if isPrecompileArbosAware && advancedInfo != nil {
 		precompileArbosAware.SetArbosVersion(advancedInfo.Evm.Context.ArbOSVersion)
 		defer precompileArbosAware.ResetArbosVersion()
 	}
