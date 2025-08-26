@@ -11,10 +11,10 @@ const (
 	ResourceKindHistoryGrowth
 	ResourceKindStorageAccess
 	ResourceKindStorageGrowth
+	ResourceKindL1Calldata
+	ResourceKindL2Calldata
 	NumResourceKind
 )
-
-const ResourceKindL2Calldata = ResourceKindComputation
 
 // MultiGas tracks gas usage across multiple resource kinds, while also
 // maintaining a single-dimensional total gas sum and refund amount.
@@ -63,11 +63,6 @@ func ComputationGas(amount uint64) *MultiGas {
 	return NewMultiGas(ResourceKindComputation, amount)
 }
 
-// L2CalldataGas returns a MultiGas initialized with calldata gas.
-func L2CalldataGas(amount uint64) *MultiGas {
-	return NewMultiGas(ResourceKindL2Calldata, amount)
-}
-
 // HistoryGrowthGas returns a MultiGas initialized with history growth gas.
 func HistoryGrowthGas(amount uint64) *MultiGas {
 	return NewMultiGas(ResourceKindHistoryGrowth, amount)
@@ -81,6 +76,16 @@ func StorageAccessGas(amount uint64) *MultiGas {
 // StorageGrowthGas returns a MultiGas initialized with storage growth gas.
 func StorageGrowthGas(amount uint64) *MultiGas {
 	return NewMultiGas(ResourceKindStorageGrowth, amount)
+}
+
+// L1CalldataGas returns a MultiGas initialized with L1 calldata gas.
+func L1CalldataGas(amount uint64) *MultiGas {
+	return NewMultiGas(ResourceKindL1Calldata, amount)
+}
+
+// L2CalldataGas returns a MultiGas initialized with L2 calldata gas.
+func L2CalldataGas(amount uint64) *MultiGas {
+	return NewMultiGas(ResourceKindL2Calldata, amount)
 }
 
 // Get returns the gas amount for the specified resource kind.

@@ -551,15 +551,17 @@ func (st *stateTransition) preCheck() error {
 // However if any consensus issue encountered, return the error directly with
 // nil evm execution result.
 func (st *stateTransition) execute() (*ExecutionResult, error) {
-	endTxNow, startHookUsedGas, err, returnData := st.evm.ProcessingHook.StartTxHook()
+	endTxNow, startHookUsedMultiGas, err, returnData := st.evm.ProcessingHook.StartTxHook()
+	startHookUsedSingleGas := startHookUsedMultiGas.SingleGas()
+
 	if endTxNow {
 		return &ExecutionResult{
-			UsedGas:       startHookUsedGas,
-			MaxUsedGas:    startHookUsedGas,
+			UsedGas:       startHookUsedSingleGas,
+			MaxUsedGas:    startHookUsedSingleGas,
 			Err:           err,
 			ReturnData:    returnData,
 			ScheduledTxes: st.evm.ProcessingHook.ScheduledTxes(),
-			UsedMultiGas:  multigas.ZeroGas(),
+			UsedMultiGas:  startHookUsedMultiGas,
 		}, nil
 	}
 
