@@ -15,6 +15,7 @@ const (
 	ResourceKindStorageGrowth
 	ResourceKindL1Calldata
 	ResourceKindL2Calldata
+	ResourceKindWasmComputation
 	NumResourceKind
 )
 
@@ -94,6 +95,11 @@ func L1CalldataGas(amount uint64) MultiGas {
 // L2CalldataGas returns a MultiGas initialized with L2 calldata gas.
 func L2CalldataGas(amount uint64) MultiGas {
 	return NewMultiGas(ResourceKindL2Calldata, amount)
+}
+
+// WasmComputationGas returns a MultiGas initialized with computation gas used for WASM (Stylus contracts).
+func WasmComputationGas(amount uint64) MultiGas {
+	return NewMultiGas(ResourceKindWasmComputation, amount)
 }
 
 // Get returns the gas amount for the specified resource kind.
