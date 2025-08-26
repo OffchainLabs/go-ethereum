@@ -276,7 +276,6 @@ type AdvancedPrecompile interface {
 
 type arbosAwarePrecompile interface {
 	SetArbosVersion(arbosVersion uint64)
-	ResetArbosVersion() // TODO: not sure if needed, but safe?
 	PrecompiledContract
 }
 
@@ -293,7 +292,6 @@ func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uin
 	precompileArbosAware, isPrecompileArbosAware := p.(arbosAwarePrecompile)
 	if isPrecompileArbosAware && advancedInfo != nil {
 		precompileArbosAware.SetArbosVersion(advancedInfo.Evm.Context.ArbOSVersion)
-		defer precompileArbosAware.ResetArbosVersion()
 	}
 	gasCost := p.RequiredGas(input)
 	if suppliedGas < gasCost {
@@ -1288,7 +1286,6 @@ type p256Verify struct {
 }
 
 func (c *p256Verify) SetArbosVersion(arbosVersion uint64) { c.arbosVersion = arbosVersion }
-func (c *p256Verify) ResetArbosVersion()                  { c.arbosVersion = 0 }
 
 // RequiredGas returns the gas required to execute the precompiled contract
 func (c *p256Verify) RequiredGas(input []byte) uint64 {
