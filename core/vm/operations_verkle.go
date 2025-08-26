@@ -39,8 +39,9 @@ func gasSLoad4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 func gasBalance4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
 	address := stack.peek().Bytes20()
 	gas := evm.AccessEvents.BasicDataGas(address, false, contract.Gas, true)
-	// TODO(NIT-3484): Update multi dimensional gas here
-	return multigas.UnknownGas(gas), nil
+	// Account lookup -> storage-access gas
+	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
+	return multigas.StorageAccessGas(gas), nil
 }
 
 func gasExtCodeSize4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
@@ -49,8 +50,9 @@ func gasExtCodeSize4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 		return multigas.ZeroGas(), nil
 	}
 	gas := evm.AccessEvents.BasicDataGas(address, false, contract.Gas, true)
-	// TODO(NIT-3484): Update multi dimensional gas here
-	return multigas.UnknownGas(gas), nil
+	// Account lookup -> storage-access gas
+	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
+	return multigas.StorageAccessGas(gas), nil
 }
 
 func gasExtCodeHash4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (*multigas.MultiGas, error) {
@@ -59,8 +61,9 @@ func gasExtCodeHash4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 		return multigas.ZeroGas(), nil
 	}
 	gas := evm.AccessEvents.CodeHashGas(address, false, contract.Gas, true)
-	// TODO(NIT-3484): Update multi dimensional gas here
-	return multigas.UnknownGas(gas), nil
+	// Account lookup -> storage-access gas
+	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
+	return multigas.StorageAccessGas(gas), nil
 }
 
 func makeCallVariantGasEIP4762(oldCalculator gasFunc, withTransferCosts bool) gasFunc {
