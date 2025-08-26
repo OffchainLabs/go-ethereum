@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/params/forks"
 )
 
 var (
@@ -104,44 +103,55 @@ func CalcBlobFee(config *params.ChainConfig, header *types.Header) *big.Int {
 		// Arbitrum does not support blob transactions, so we return 0.
 		return big.NewInt(0)
 	}
-	var frac uint64
-	switch config.LatestFork(header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {
-	case forks.Osaka:
-		frac = config.BlobScheduleConfig.Osaka.UpdateFraction
-	case forks.Prague:
-		frac = config.BlobScheduleConfig.Prague.UpdateFraction
-	case forks.Cancun:
-		frac = config.BlobScheduleConfig.Cancun.UpdateFraction
-	default:
+	blobConfig := latestBlobConfig(config, header.Time)
+	if blobConfig == nil {
 		panic("calculating blob fee on unsupported fork")
 	}
-	return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(*header.ExcessBlobGas), new(big.Int).SetUint64(frac))
+	return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(*header.ExcessBlobGas), new(big.Int).SetUint64(blobConfig.UpdateFraction))
 }
 
 // MaxBlobsPerBlock returns the max blobs per block for a block at the given timestamp.
 func MaxBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
-	if cfg.BlobScheduleConfig == nil {
+	blobConfig := latestBlobConfig(cfg, time)
+	if blobConfig == nil {
 		return 0
+	}
+	return blobConfig.Max
+}
+
+func latestBlobConfig(cfg *params.ChainConfig, time uint64) *params.BlobConfig {
+	if cfg.BlobScheduleConfig == nil {
+		return nil
 	}
 	var (
 		london = cfg.LondonBlock
 		s      = cfg.BlobScheduleConfig
 	)
 	switch {
+	case cfg.IsBPO5(london, time) && s.BPO5 != nil:
+		return s.BPO5
+	case cfg.IsBPO4(london, time) && s.BPO4 != nil:
+		return s.BPO4
+	case cfg.IsBPO3(london, time) && s.BPO3 != nil:
+		return s.BPO3
+	case cfg.IsBPO2(london, time) && s.BPO2 != nil:
+		return s.BPO2
+	case cfg.IsBPO1(london, time) && s.BPO1 != nil:
+		return s.BPO1
 	case cfg.IsOsaka(london, time) && s.Osaka != nil:
-		return s.Osaka.Max
+		return s.Osaka
 	// we can use 0 here because arbitrum doesn't support Blob transactions.
 	case cfg.IsPrague(london, time, 0) && s.Prague != nil:
-		return s.Prague.Max
+		return s.Prague
 	// we can use 0 here because arbitrum doesn't support Blob transactions.
 	case cfg.IsCancun(london, time, 0) && s.Cancun != nil:
-		return s.Cancun.Max
+		return s.Cancun
 	default:
-		return 0
+		return nil
 	}
 }
 
-// MaxBlobsPerBlock returns the maximum blob gas that can be spent in a block at the given timestamp.
+// MaxBlobGasPerBlock returns the maximum blob gas that can be spent in a block at the given timestamp.
 func MaxBlobGasPerBlock(cfg *params.ChainConfig, time uint64) uint64 {
 	return uint64(MaxBlobsPerBlock(cfg, time)) * params.BlobTxBlobGasPerBlob
 }
@@ -154,6 +164,16 @@ func LatestMaxBlobsPerBlock(cfg *params.ChainConfig) int {
 		return 0
 	}
 	switch {
+	case s.BPO5 != nil:
+		return s.BPO5.Max
+	case s.BPO4 != nil:
+		return s.BPO4.Max
+	case s.BPO3 != nil:
+		return s.BPO3.Max
+	case s.BPO2 != nil:
+		return s.BPO2.Max
+	case s.BPO1 != nil:
+		return s.BPO1.Max
 	case s.Osaka != nil:
 		return s.Osaka.Max
 	case s.Prague != nil:
@@ -167,25 +187,11 @@ func LatestMaxBlobsPerBlock(cfg *params.ChainConfig) int {
 
 // targetBlobsPerBlock returns the target number of blobs in a block at the given timestamp.
 func targetBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
-	if cfg.BlobScheduleConfig == nil {
+	blobConfig := latestBlobConfig(cfg, time)
+	if blobConfig == nil {
 		return 0
 	}
-	var (
-		london = cfg.LondonBlock
-		s      = cfg.BlobScheduleConfig
-	)
-	switch {
-	case cfg.IsOsaka(london, time) && s.Osaka != nil:
-		return s.Osaka.Target
-	// we can use 0 here because arbitrum doesn't support Blob transactions.
-	case cfg.IsPrague(london, time, 0) && s.Prague != nil:
-		return s.Prague.Target
-	// we can use 0 here because arbitrum doesn't support Blob transactions.
-	case cfg.IsCancun(london, time, 0) && s.Cancun != nil:
-		return s.Cancun.Target
-	default:
-		return 0
-	}
+	return blobConfig.Target
 }
 
 // fakeExponential approximates factor * e ** (numerator / denominator) using
