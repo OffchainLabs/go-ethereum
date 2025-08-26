@@ -35,8 +35,8 @@ type Contract struct {
 	// Arbitrum
 	delegateOrCallcode bool
 
-	jumpdests map[common.Hash]bitvec // Aggregated result of JUMPDEST analysis.
-	analysis  bitvec                 // Locally cached result of JUMPDEST analysis
+	jumpDests JumpDestCache // Aggregated result of JUMPDEST analysis.
+	analysis  BitVec        // Locally cached result of JUMPDEST analysis
 
 	Code     []byte
 	CodeHash common.Hash
@@ -54,15 +54,15 @@ type Contract struct {
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
-func NewContract(caller common.Address, address common.Address, value *uint256.Int, gas uint64, jumpDests map[common.Hash]bitvec) *Contract {
-	// Initialize the jump analysis map if it's nil, mostly for tests
+func NewContract(caller common.Address, address common.Address, value *uint256.Int, gas uint64, jumpDests JumpDestCache) *Contract {
+	// Initialize the jump analysis cache if it's nil, mostly for tests
 	if jumpDests == nil {
-		jumpDests = make(map[common.Hash]bitvec)
+		jumpDests = newMapJumpDests()
 	}
 	return &Contract{
 		caller:       caller,
 		address:      address,
-		jumpdests:    jumpDests,
+		jumpDests:    jumpDests,
 		Gas:          gas,
 		value:        value,
 		UsedMultiGas: multigas.ZeroGas(),
@@ -95,12 +95,12 @@ func (c *Contract) isCode(udest uint64) bool {
 	// contracts ( not temporary initcode), we store the analysis in a map
 	if c.CodeHash != (common.Hash{}) {
 		// Does parent context have the analysis?
-		analysis, exist := c.jumpdests[c.CodeHash]
+		analysis, exist := c.jumpDests.Load(c.CodeHash)
 		if !exist {
 			// Do the analysis and save in parent context
 			// We do not need to store it in c.analysis
 			analysis = codeBitmap(c.Code)
-			c.jumpdests[c.CodeHash] = analysis
+			c.jumpDests.Store(c.CodeHash, analysis)
 		}
 		// Also stash it in current contract for faster access
 		c.analysis = analysis
@@ -134,8 +134,8 @@ func (c *Contract) Caller() common.Address {
 }
 
 // Jumpdest returns the jumpdests of the contract
-func (c *Contract) Jumpdest() map[common.Hash]bitvec {
-	return c.jumpdests
+func (c *Contract) Jumpdest() JumpDestCache {
+	return c.jumpDests
 }
 
 // UseGas attempts the use gas and subtracts it and returns true on success

@@ -130,9 +130,8 @@ type EVM struct {
 	// precompiles holds the precompiled contracts for the current epoch
 	precompiles map[common.Address]PrecompiledContract
 
-	// jumpDests is the aggregated result of JUMPDEST analysis made through
-	// the life cycle of EVM.
-	jumpDests map[common.Hash]bitvec
+	// jumpDests stores results of JUMPDEST analysis.
+	jumpDests JumpDestCache
 }
 
 // NewEVM constructs an EVM instance with the supplied block context, state
@@ -146,7 +145,7 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 		Config:      config,
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time, blockCtx.ArbOSVersion),
-		jumpDests:   make(map[common.Hash]bitvec),
+		jumpDests:   newMapJumpDests(),
 	}
 	evm.ProcessingHook = DefaultTxProcessor{evm: evm}
 	evm.precompiles = activePrecompiledContracts(evm.chainRules)
@@ -159,6 +158,11 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 // It is not thread-safe.
 func (evm *EVM) SetPrecompiles(precompiles PrecompiledContracts) {
 	evm.precompiles = precompiles
+}
+
+// SetJumpDestCache configures the analysis cache.
+func (evm *EVM) SetJumpDestCache(jumpDests JumpDestCache) {
+	evm.jumpDests = jumpDests
 }
 
 // SetTxContext resets the EVM with a new transaction context.
@@ -187,7 +191,7 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 }
 
 // JumpDests returns the aggregated result of JUMPDEST analysis made through
-func (evm *EVM) JumpDests() map[common.Hash]bitvec {
+func (evm *EVM) JumpDests() JumpDestCache {
 	return evm.jumpDests
 }
 
