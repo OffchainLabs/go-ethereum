@@ -167,13 +167,9 @@ var PrecompiledContractsOsaka = PrecompiledContracts{
 }
 
 // PrecompiledContractsP256Verify contains the precompiled Ethereum
-// contract specified in EIP-7212. This is exported for testing purposes.
-var PrecompiledContractsP256Verify = func(arbosVersion uint64) map[common.Address]PrecompiledContract {
-	return map[common.Address]PrecompiledContract{
-		common.BytesToAddress([]byte{0x01, 0x00}): &p256Verify{
-			arbosVersion: arbosVersion,
-		},
-	}
+// contract specified in EIP-7212.
+var PrecompiledContractsP256Verify = PrecompiledContracts{
+	common.BytesToAddress([]byte{0x1, 0x00}): &p256Verify{},
 }
 
 var (
@@ -278,6 +274,12 @@ type AdvancedPrecompile interface {
 	PrecompiledContract
 }
 
+type arbosAwarePrecompile interface {
+	SetArbosVersion(arbosVersion uint64)
+	ResetArbosVersion() // TODO: not sure if needed, but safe?
+	PrecompiledContract
+}
+
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
 // It returns
 // - the returned bytes,
@@ -287,6 +289,11 @@ func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uin
 	advanced, isAdvanced := p.(AdvancedPrecompile)
 	if isAdvanced {
 		return advanced.RunAdvanced(input, suppliedGas, advancedInfo)
+	}
+	precompileArbosAware, isPrecompileArbosAware := p.(arbosAwarePrecompile)
+	if isPrecompileArbosAware {
+		precompileArbosAware.SetArbosVersion(advancedInfo.Evm.Context.ArbOSVersion)
+		defer precompileArbosAware.ResetArbosVersion()
 	}
 	gasCost := p.RequiredGas(input)
 	if suppliedGas < gasCost {
@@ -1279,6 +1286,9 @@ func kZGToVersionedHash(kzg kzg4844.Commitment) common.Hash {
 type p256Verify struct {
 	arbosVersion uint64
 }
+
+func (c *p256Verify) SetArbosVersion(arbosVersion uint64) { c.arbosVersion = arbosVersion }
+func (c *p256Verify) ResetArbosVersion()                  { c.arbosVersion = 0 }
 
 // RequiredGas returns the gas required to execute the precompiled contract
 func (c *p256Verify) RequiredGas(input []byte) uint64 {
