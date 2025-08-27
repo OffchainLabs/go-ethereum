@@ -101,16 +101,19 @@ func (z MultiGas) Get(kind ResourceKind) uint64 {
 	return z.gas[kind]
 }
 
-// Set sets the gas for a given resource kind to `gas`, adjusting the total accordingly.
-// Returns a boolean indicating if an overflow occurred when updating the total.
-func (z *MultiGas) Set(kind ResourceKind, gas uint64) bool {
-	newTotal, c := bits.Add64(z.total-z.gas[kind], gas, 0)
+// With returns a copy of z with the given resource kind incremented by amount.
+// The total is incremented accordingly. It returns the updated value and true if an overflow occurred.
+func (z MultiGas) With(kind ResourceKind, amount uint64) (MultiGas, bool) {
+	res := z
+
+	newTotal, c := bits.Add64(z.total-z.gas[kind], amount, 0)
 	if c != 0 {
-		return true
+		return z, true
 	}
-	z.gas[kind] = gas
-	z.total = newTotal
-	return false
+
+	res.gas[kind] = amount
+	res.total = newTotal
+	return res, false
 }
 
 // GetRefund gets the SSTORE refund computed at the end of the transaction.
@@ -123,23 +126,33 @@ func (z *MultiGas) SetRefund(amount uint64) {
 	z.refund = amount
 }
 
-// SafeAdd sets z to the sum of x and y, per resource kind and total.
-// Returns the modified MultiGas and a boolean indicating if an overflow occurred in either the kind-specific or total value.
-func (z *MultiGas) SafeAdd(x, y *MultiGas) (MultiGas, bool) {
-	for i := range z.gas {
-		newValue, c := bits.Add64(x.gas[i], y.gas[i], 0)
+// SafeAdd returns a copy of z with the per-kind, total, and refund gas
+// added to the values from x. It returns the updated value and true if
+// an overflow occurred.
+func (z MultiGas) SafeAdd(x MultiGas) (MultiGas, bool) {
+	res := z
+
+	for i := 0; i < int(NumResourceKind); i++ {
+		v, c := bits.Add64(res.gas[i], x.gas[i], 0)
 		if c != 0 {
-			return *z, true
+			return z, true
 		}
-		z.gas[i] = newValue
+		res.gas[i] = v
 	}
 
-	newTotal, c := bits.Add64(x.total, y.total, 0)
+	t, c := bits.Add64(res.total, x.total, 0)
 	if c != 0 {
-		return *z, true
+		return z, true
 	}
-	z.total = newTotal
-	return *z, false
+	res.total = t
+
+	r, c := bits.Add64(res.refund, x.refund, 0)
+	if c != 0 {
+		return z, true
+	}
+	res.refund = r
+
+	return res, false
 }
 
 // SafeIncrement increments the given resource kind by the amount of gas and to the total.
@@ -158,6 +171,27 @@ func (z *MultiGas) SafeIncrement(kind ResourceKind, gas uint64) bool {
 	z.gas[kind] = newValue
 	z.total = newTotal
 	return false
+}
+
+// SaturatingIncrement returns a copy of z with the given resource kind
+// and the total incremented by gas. On overflow, the field(s) are clamped
+// to MaxUint64.
+func (z MultiGas) SaturatingIncrement(kind ResourceKind, gas uint64) MultiGas {
+	res := z
+
+	if v, c := bits.Add64(res.gas[kind], gas, 0); c != 0 {
+		res.gas[kind] = ^uint64(0) // clamp
+	} else {
+		res.gas[kind] = v
+	}
+
+	if t, c := bits.Add64(res.total, gas, 0); c != 0 {
+		res.total = ^uint64(0) // clamp
+	} else {
+		res.total = t
+	}
+
+	return res
 }
 
 // SingleGas returns single-dimensional gas sum.

@@ -309,7 +309,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			} else {
 				contract.Gas -= dynamicCost
 			}
-			contract.UsedMultiGas, _ = contract.UsedMultiGas.SafeAdd(&contract.UsedMultiGas, &multigasDynamicCost)
+			contract.UsedMultiGas, _ = contract.UsedMultiGas.SafeAdd(multigasDynamicCost)
 		}
 
 		// Do tracing before potential memory expansion

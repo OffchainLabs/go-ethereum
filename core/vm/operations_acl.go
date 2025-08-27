@@ -338,7 +338,7 @@ func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
 		contract.Gas += multiGas.Get(multigas.ResourceKindStorageAccess)
 
 		var overflow bool
-		if multiGas, overflow = multiGas.SafeAdd(&multiGas, &multiOld); overflow {
+		if multiGas, overflow = multiGas.SafeAdd(multiOld); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 

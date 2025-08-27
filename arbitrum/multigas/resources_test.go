@@ -66,9 +66,7 @@ func TestMultiGasFromPairs(t *testing.T) {
 }
 
 func TestSafeAdd(t *testing.T) {
-	computation := ComputationGas(10)
-	historyGrowth := HistoryGrowthGas(20)
-	gas, overflow := new(MultiGas).SafeAdd(&computation, &historyGrowth)
+	gas, overflow := ComputationGas(10).SafeAdd(HistoryGrowthGas(20))
 	if overflow {
 		t.Errorf("unexpected overflow: got %v, want %v", overflow, false)
 	}
@@ -96,18 +94,14 @@ func TestSafeAdd(t *testing.T) {
 }
 
 func TestSafeAddChecksOneDimensionalOverflow(t *testing.T) {
-	x := ComputationGas(math.MaxUint64)
-	y := ComputationGas(1)
-	_, overflow := new(MultiGas).SafeAdd(&x, &y)
+	_, overflow := ComputationGas(math.MaxUint64).SafeAdd(ComputationGas(1))
 	if !overflow {
 		t.Errorf("expected overflow: got %v, want %v", overflow, true)
 	}
 }
 
 func TestSafeAddChecksTotalOverflow(t *testing.T) {
-	x := ComputationGas(math.MaxUint64)
-	y := HistoryGrowthGas(1)
-	_, overflow := new(MultiGas).SafeAdd(&x, &y)
+	_, overflow := ComputationGas(math.MaxUint64).SafeAdd(HistoryGrowthGas(1))
 	if !overflow {
 		t.Errorf("expected overflow: got %v, want %v", overflow, true)
 	}
@@ -141,5 +135,41 @@ func TestSingleGas(t *testing.T) {
 	singleGas := gas.SingleGas()
 	if want := uint64(41); singleGas != want {
 		t.Errorf("unexpected storage growth gas: got %v, want %v", singleGas, want)
+	}
+}
+
+func TestSaturatingIncrement(t *testing.T) {
+	// normal increment
+	gas := ComputationGas(10)
+	newGas := gas.SaturatingIncrement(ResourceKindComputation, 5)
+	if got, want := newGas.Get(ResourceKindComputation), uint64(15); got != want {
+		t.Errorf("unexpected computation gas: got %v, want %v", got, want)
+	}
+	if got, want := newGas.SingleGas(), uint64(15); got != want {
+		t.Errorf("unexpected single gas: got %v, want %v", got, want)
+	}
+
+	// saturating increment on kind
+	gas = ComputationGas(math.MaxUint64)
+	newGas = gas.SaturatingIncrement(ResourceKindComputation, 1)
+	if got, want := newGas.Get(ResourceKindComputation), uint64(math.MaxUint64); got != want {
+		t.Errorf("expected computation gas to saturate: got %v, want %v", got, want)
+	}
+	if got, want := newGas.SingleGas(), uint64(math.MaxUint64); got != want {
+		t.Errorf("expected total to saturate: got %v, want %v", got, want)
+	}
+
+	// saturating increment on total only
+	gas = MultiGasFromPairs(
+		Pair{ResourceKindComputation, math.MaxUint64},
+		Pair{ResourceKindHistoryGrowth, 0},
+	)
+	// bump history growth so total overflows
+	newGas = gas.SaturatingIncrement(ResourceKindHistoryGrowth, 1)
+	if got, want := newGas.Get(ResourceKindHistoryGrowth), uint64(1); got != want {
+		t.Errorf("unexpected history growth gas: got %v, want %v", got, want)
+	}
+	if got, want := newGas.SingleGas(), uint64(math.MaxUint64); got != want {
+		t.Errorf("expected total to saturate: got %v, want %v", got, want)
 	}
 }

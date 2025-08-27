@@ -270,7 +270,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			contract.SetCallCode(evm.resolveCodeHash(addr), code)
 			ret, err = evm.interpreter.Run(contract, input, false)
 			gas = contract.Gas
-			usedMultiGas, _ = usedMultiGas.SafeAdd(&usedMultiGas, &contract.UsedMultiGas)
+			usedMultiGas, _ = usedMultiGas.SafeAdd(contract.UsedMultiGas)
 		}
 	}
 	// When an error was returned by the EVM or when setting the creation code

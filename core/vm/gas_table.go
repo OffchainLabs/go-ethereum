@@ -465,7 +465,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	if err != nil {
 		return multigas.ZeroGas(), err
 	}
-	multiGas, overflow := multiGas.SafeAdd(&multiGas, &memoryMultiGas)
+	multiGas, overflow := multiGas.SafeAdd(memoryMultiGas)
 	if overflow {
 		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
@@ -498,7 +498,7 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		multiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallValueTransferGas)
 	}
-	multiGas, overflow = multiGas.SafeAdd(&multiGas, &memoryMultiGas)
+	multiGas, overflow = multiGas.SafeAdd(memoryMultiGas)
 	if overflow {
 		return multigas.ZeroGas(), ErrGasUintOverflow
 	}

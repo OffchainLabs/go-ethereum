@@ -554,7 +554,7 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			expectedMultiGas, _ = expectedMultiGas.SafeAdd(&expectedMultiGas, &memoryMultiGas)
+			expectedMultiGas, _ = expectedMultiGas.SafeAdd(memoryMultiGas)
 
 			// EIP4762 storage access gas for value transfers
 			if tc.isEIP4762 && tc.transfersValue && !tc.isSystemCall {
