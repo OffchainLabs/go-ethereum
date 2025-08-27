@@ -275,7 +275,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		} else {
 			contract.Gas -= cost
 		}
-		contract.UsedMultiGas, _ = contract.UsedMultiGas.SafeAdd(contract.UsedMultiGas, constantMultiGas(cost, op))
+		addConstantMultiGas(contract.UsedMultiGas, cost, op)
 
 		// All ops with a dynamic memory usage also has a dynamic gas cost.
 		var memorySize uint64
