@@ -183,7 +183,7 @@ func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 	case rules.IsDia:
 		return PrecompiledContractsStartingFromArbOS50
 	case rules.IsStylus:
-		return PrecompiledContractsAfterArbOS30
+		return PrecompiledContractsStartingFromArbOS30
 	case rules.IsArbitrum:
 		return PrecompiledContractsBeforeArbOS30
 	case rules.IsVerkle:
@@ -214,7 +214,7 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 	case rules.IsDia:
 		return PrecompiledAddressesStartingFromArbOS50
 	case rules.IsStylus:
-		return PrecompiledAddressesAfterArbOS30
+		return PrecompiledAddressesStartingFromArbOS30
 	case rules.IsArbitrum:
 		return PrecompiledAddressesBeforeArbOS30
 	case rules.IsPrague:
@@ -227,7 +227,7 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 		return PrecompiledAddressesIstanbul
 	case rules.IsByzantium:
 		return PrecompiledAddressesByzantium
-	default: // Any ArbOS-disabled node
+	default:
 		return PrecompiledAddressesHomestead
 	}
 }
