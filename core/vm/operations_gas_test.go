@@ -442,12 +442,15 @@ func TestGasSSLoad2929(t *testing.T) {
 	testGasSLoad(t, gasSLoadEIP2929,
 		// Load new entry
 		func(_ *Contract, _ StateDB) (common.Hash, *multigas.MultiGas) {
-			return common.HexToHash("0xdeadbeef"), multigas.StorageAccessGas(params.ColdSloadCostEIP2929)
+			return common.HexToHash("0xdeadbeef"), multigas.MultiGasFromMap(map[multigas.ResourceKind]uint64{
+				multigas.ResourceKindStorageAccess: params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929,
+				multigas.ResourceKindComputation:   params.WarmStorageReadCostEIP2929,
+			})
 		},
 		// Load entry from access list
 		func(contract *Contract, stateDB StateDB) (common.Hash, *multigas.MultiGas) {
 			stateDB.AddSlotToAccessList(contract.Address(), common.HexToHash("0xdeadbeef"))
-			return common.HexToHash("0xdeadbeef"), multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929)
+			return common.HexToHash("0xdeadbeef"), multigas.ComputationGas(params.WarmStorageReadCostEIP2929)
 		},
 	)
 }
