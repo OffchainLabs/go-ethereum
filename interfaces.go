@@ -125,6 +125,9 @@ type SyncProgress struct {
 	// "transaction indexing" fields
 	TxIndexFinishedBlocks  uint64 // Number of blocks whose transactions are already indexed
 	TxIndexRemainingBlocks uint64 // Number of blocks whose transactions are not indexed yet
+
+	// "historical state indexing" fields
+	StateIndexRemaining uint64 // Number of states remain unindexed
 }
 
 // Done returns the indicator if the initial sync is finished or not.
@@ -132,7 +135,7 @@ func (prog SyncProgress) Done() bool {
 	if prog.CurrentBlock < prog.HighestBlock {
 		return false
 	}
-	return prog.TxIndexRemainingBlocks == 0
+	return prog.TxIndexRemainingBlocks == 0 && prog.StateIndexRemaining == 0
 }
 
 func (prog SyncProgress) ToMap() map[string]interface{} {
@@ -141,21 +144,24 @@ func (prog SyncProgress) ToMap() map[string]interface{} {
 	}
 	// Otherwise gather the block sync stats
 	return map[string]interface{}{
-		"startingBlock":       hexutil.Uint64(prog.StartingBlock),
-		"currentBlock":        hexutil.Uint64(prog.CurrentBlock),
-		"highestBlock":        hexutil.Uint64(prog.HighestBlock),
-		"syncedAccounts":      hexutil.Uint64(prog.SyncedAccounts),
-		"syncedAccountBytes":  hexutil.Uint64(prog.SyncedAccountBytes),
-		"syncedBytecodes":     hexutil.Uint64(prog.SyncedBytecodes),
-		"syncedBytecodeBytes": hexutil.Uint64(prog.SyncedBytecodeBytes),
-		"syncedStorage":       hexutil.Uint64(prog.SyncedStorage),
-		"syncedStorageBytes":  hexutil.Uint64(prog.SyncedStorageBytes),
-		"healedTrienodes":     hexutil.Uint64(prog.HealedTrienodes),
-		"healedTrienodeBytes": hexutil.Uint64(prog.HealedTrienodeBytes),
-		"healedBytecodes":     hexutil.Uint64(prog.HealedBytecodes),
-		"healedBytecodeBytes": hexutil.Uint64(prog.HealedBytecodeBytes),
-		"healingTrienodes":    hexutil.Uint64(prog.HealingTrienodes),
-		"healingBytecode":     hexutil.Uint64(prog.HealingBytecode),
+		"startingBlock":          hexutil.Uint64(prog.StartingBlock),
+		"currentBlock":           hexutil.Uint64(prog.CurrentBlock),
+		"highestBlock":           hexutil.Uint64(prog.HighestBlock),
+		"syncedAccounts":         hexutil.Uint64(prog.SyncedAccounts),
+		"syncedAccountBytes":     hexutil.Uint64(prog.SyncedAccountBytes),
+		"syncedBytecodes":        hexutil.Uint64(prog.SyncedBytecodes),
+		"syncedBytecodeBytes":    hexutil.Uint64(prog.SyncedBytecodeBytes),
+		"syncedStorage":          hexutil.Uint64(prog.SyncedStorage),
+		"syncedStorageBytes":     hexutil.Uint64(prog.SyncedStorageBytes),
+		"healedTrienodes":        hexutil.Uint64(prog.HealedTrienodes),
+		"healedTrienodeBytes":    hexutil.Uint64(prog.HealedTrienodeBytes),
+		"healedBytecodes":        hexutil.Uint64(prog.HealedBytecodes),
+		"healedBytecodeBytes":    hexutil.Uint64(prog.HealedBytecodeBytes),
+		"healingTrienodes":       hexutil.Uint64(prog.HealingTrienodes),
+		"healingBytecode":        hexutil.Uint64(prog.HealingBytecode),
+		"txIndexFinishedBlocks":  hexutil.Uint64(prog.TxIndexFinishedBlocks),
+		"txIndexRemainingBlocks": hexutil.Uint64(prog.TxIndexRemainingBlocks),
+		"stateIndexRemaining":    hexutil.Uint64(prog.StateIndexRemaining),
 	}
 }
 
