@@ -34,12 +34,12 @@ func TestStorageAccessGas(t *testing.T) {
 
 func TestMultiGasFromPairs(t *testing.T) {
 	fromPairs := MultiGasFromPairs(
-		MultiGasPair{ResourceKindComputation, 10},
-		MultiGasPair{ResourceKindHistoryGrowth, 11},
-		MultiGasPair{ResourceKindStorageAccess, 12},
-		MultiGasPair{ResourceKindStorageGrowth, 13},
-		MultiGasPair{ResourceKindL1Calldata, 14},
-		MultiGasPair{ResourceKindL2Calldata, 15},
+		Pair{ResourceKindComputation, 10},
+		Pair{ResourceKindHistoryGrowth, 11},
+		Pair{ResourceKindStorageAccess, 12},
+		Pair{ResourceKindStorageGrowth, 13},
+		Pair{ResourceKindL1Calldata, 14},
+		Pair{ResourceKindL2Calldata, 15},
 	)
 
 	if got := fromPairs.SingleGas(); got != 75 {
@@ -134,9 +134,9 @@ func TestSafeIncrementChecksOverflow(t *testing.T) {
 
 func TestSingleGas(t *testing.T) {
 	gas := MultiGasFromPairs(
-		MultiGasPair{ResourceKindComputation, 21},
-		MultiGasPair{ResourceKindHistoryGrowth, 15},
-		MultiGasPair{ResourceKindStorageAccess, 5},
+		Pair{ResourceKindComputation, 21},
+		Pair{ResourceKindHistoryGrowth, 15},
+		Pair{ResourceKindStorageAccess, 5},
 	)
 	singleGas := gas.SingleGas()
 	if want := uint64(41); singleGas != want {

@@ -52,9 +52,9 @@ func TestApplyMessageReturnsMultiGas(t *testing.T) {
 	}
 
 	expectedMultigas := multigas.MultiGasFromPairs(
-		multigas.MultiGasPair{Kind: multigas.ResourceKindComputation, Amount: 3 + 3},   // PUSH4+PUSH1
-		multigas.MultiGasPair{Kind: multigas.ResourceKindStorageAccess, Amount: 2100},  // SSTORE
-		multigas.MultiGasPair{Kind: multigas.ResourceKindStorageGrowth, Amount: 20000}, // SSTORE
+		multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: 3 + 3},   // PUSH4+PUSH1
+		multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: 2100},  // SSTORE
+		multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: 20000}, // SSTORE
 	)
 	if got, want := res.UsedMultiGas, expectedMultigas; got != want {
 		t.Errorf("unexpected multi gas: got %v, want %v", got, want)

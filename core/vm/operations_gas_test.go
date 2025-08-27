@@ -1130,8 +1130,8 @@ func TestGasSelfdestruct(t *testing.T) {
 			isEIP150:          true,
 			isEIP158:          true,
 			expectedMultiGas: multigas.MultiGasFromPairs(
-				multigas.MultiGasPair{Kind: multigas.ResourceKindStorageAccess, Amount: params.SelfdestructGasEIP150},
-				multigas.MultiGasPair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.CreateBySelfdestructGas},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.SelfdestructGasEIP150},
+				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.CreateBySelfdestructGas},
 			),
 			expectedRefund: params.SelfdestructRefundGas,
 		},
@@ -1146,8 +1146,8 @@ func TestMakeSelfdestructGasFn(t *testing.T) {
 		{
 			name: "selfdestruct - no access list - with refund",
 			expectedMultiGas: multigas.MultiGasFromPairs(
-				multigas.MultiGasPair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdAccountAccessCostEIP2929},
-				multigas.MultiGasPair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.CreateBySelfdestructGas},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdAccountAccessCostEIP2929},
+				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.CreateBySelfdestructGas},
 			),
 			expectedRefund: params.SelfdestructRefundGas,
 		},
@@ -1159,8 +1159,8 @@ func TestMakeSelfdestructGasFn(t *testing.T) {
 		{
 			name: "selfdestruct - in access list - with refund",
 			expectedMultiGas: multigas.MultiGasFromPairs(
-				multigas.MultiGasPair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdAccountAccessCostEIP2929},
-				multigas.MultiGasPair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.CreateBySelfdestructGas},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdAccountAccessCostEIP2929},
+				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.CreateBySelfdestructGas},
 			),
 			expectedRefund:   params.SelfdestructRefundGas,
 			slotInAccessList: true,

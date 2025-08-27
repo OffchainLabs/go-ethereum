@@ -26,8 +26,8 @@ type MultiGas struct {
 	refund uint64
 }
 
-// MultiGasPair represents a single resource kind and its associated gas amount.
-type MultiGasPair struct {
+// Pair represents a single resource kind and its associated gas amount.
+type Pair struct {
 	Kind   ResourceKind
 	Amount uint64
 }
@@ -48,7 +48,7 @@ func NewMultiGas(kind ResourceKind, amount uint64) MultiGas {
 
 // MultiGasFromMap creates a new MultiGas that contains multiple resources.
 // This is meant to be called with constant values and will panic if there is an overflow.
-func MultiGasFromPairs(pairs ...MultiGasPair) MultiGas {
+func MultiGasFromPairs(pairs ...Pair) MultiGas {
 	var mg MultiGas
 	for _, p := range pairs {
 		newTotal, c := bits.Add64(mg.total, p.Amount, 0)
