@@ -50,7 +50,7 @@ type Contract struct {
 	value *uint256.Int
 
 	// Arbitrum: total used multi-dimensional gas
-	UsedMultiGas *multigas.MultiGas
+	UsedMultiGas multigas.MultiGas
 }
 
 // NewContract returns a new contract environment for the execution of EVM.

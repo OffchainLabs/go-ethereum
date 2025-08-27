@@ -39,7 +39,7 @@ func (evm *EVM) DecrementDepth() {
 }
 
 type TxProcessingHook interface {
-	StartTxHook() (bool, *multigas.MultiGas, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
+	StartTxHook() (bool, multigas.MultiGas, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
 	GasChargingHook(gasRemaining *uint64) (common.Address, error)
 	PushContract(contract *Contract)
 	PopContract()
@@ -61,7 +61,7 @@ type DefaultTxProcessor struct {
 	evm *EVM
 }
 
-func (p DefaultTxProcessor) StartTxHook() (bool, *multigas.MultiGas, error, []byte) {
+func (p DefaultTxProcessor) StartTxHook() (bool, multigas.MultiGas, error, []byte) {
 	return false, multigas.ZeroGas(), nil, nil
 }
 

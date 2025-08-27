@@ -51,12 +51,12 @@ func TestApplyMessageReturnsMultiGas(t *testing.T) {
 		t.Fatalf("failed to apply tx: %v", err)
 	}
 
-	expectedMultigas := multigas.MultiGasFromMap(map[multigas.ResourceKind]uint64{
-		multigas.ResourceKindComputation:   3 + 3, // PUSH4+PUSH1
-		multigas.ResourceKindStorageAccess: 2100,  // SSTORE
-		multigas.ResourceKindStorageGrowth: 20000, // SSTORE
-	})
-	if got, want := *res.UsedMultiGas, *expectedMultigas; got != want {
+	expectedMultigas := multigas.MultiGasFromPairs(
+		multigas.MultiGasPair{Kind: multigas.ResourceKindComputation, Amount: 3 + 3},   // PUSH4+PUSH1
+		multigas.MultiGasPair{Kind: multigas.ResourceKindStorageAccess, Amount: 2100},  // SSTORE
+		multigas.MultiGasPair{Kind: multigas.ResourceKindStorageGrowth, Amount: 20000}, // SSTORE
+	)
+	if got, want := res.UsedMultiGas, expectedMultigas; got != want {
 		t.Errorf("unexpected multi gas: got %v, want %v", got, want)
 	}
 }
@@ -103,7 +103,7 @@ func TestApplyMessageCalldataReturnsMultiGas(t *testing.T) {
 		t.Fatalf("failed to calculate gas: %v", err)
 	}
 	expectedMultigas := multigas.L2CalldataGas(gas)
-	if got, want := *res.UsedMultiGas, *expectedMultigas; got != want {
+	if got, want := res.UsedMultiGas, expectedMultigas; got != want {
 		t.Errorf("unexpected multi gas: got %v, want %v", got, want)
 	}
 }
