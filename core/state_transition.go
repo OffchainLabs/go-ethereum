@@ -46,7 +46,7 @@ type ExecutionResult struct {
 	// Arbitrum: the contract deployed from the top-level transaction, or nil if not a contract creation tx
 	TopLevelDeployed *common.Address
 	// Arbitrum: total used multi-dimensional gas
-	UsedMultiGas *multigas.MultiGas
+	UsedMultiGas multigas.MultiGas
 }
 
 // Unwrap returns the internal evm error which allows us for further
@@ -541,9 +541,9 @@ func (st *stateTransition) preCheck() error {
 			return fmt.Errorf("%w (sender %v)", ErrEmptyAuthList, msg.From)
 		}
 	}
-	// Verify tx gas limit does not exceed EIP-7825 cap.
-	if isOsaka && msg.GasLimit > params.MaxTxGas {
-		return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxGas, msg.GasLimit)
+	// Verify tx gas limit does not exceed EIP-7825 cap. Skipped for arbitrum chains
+	if !st.evm.ChainConfig().IsArbitrum() && isOsaka && msg.GasLimit > params.MaxTxGasRenamedForNitroMerges {
+		return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxGasRenamedForNitroMerges, msg.GasLimit)
 	}
 	return st.buyGas()
 }

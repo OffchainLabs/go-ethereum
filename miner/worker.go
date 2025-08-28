@@ -64,8 +64,9 @@ type environment struct {
 }
 
 // txFits reports whether the transaction fits into the block size limit.
+// Always true for Arbitrum (since arbtrium does not need a block size cap)
 func (env *environment) txFitsSize(tx *types.Transaction) bool {
-	return env.size+tx.Size() < params.MaxBlockSize-maxBlockSizeBufferZone
+	return env.evm.ChainConfig().IsArbitrum() || env.size+tx.Size() < params.MaxBlockSize-maxBlockSizeBufferZone
 }
 
 const (
@@ -114,8 +115,9 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 	// Check withdrawals fit max block size.
 	// Due to the cap on withdrawal count, this can actually never happen, but we still need to
 	// check to ensure the CL notices there's a problem if the withdrawal cap is ever lifted.
+	// skip for Arbitrum (since arbtrium does not need a block size cap)
 	maxBlockSize := params.MaxBlockSize - maxBlockSizeBufferZone
-	if genParam.withdrawals.Size() > maxBlockSize {
+	if !miner.chainConfig.IsArbitrum() && genParam.withdrawals.Size() > maxBlockSize {
 		return &newPayloadResult{err: errors.New("withdrawals exceed max block size")}
 	}
 	// Also add size of withdrawals to work block size.
@@ -497,8 +499,8 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 	if env.header.ExcessBlobGas != nil {
 		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(miner.chainConfig, env.header))
 	}
-	if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
-		filter.GasLimitCap = params.MaxTxGas
+	if !miner.chainConfig.IsArbitrum() && miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
+		filter.GasLimitCap = params.MaxTxGasRenamedForNitroMerges
 	}
 	filter.OnlyPlainTxs, filter.OnlyBlobTxs = true, false
 	pendingPlainTxs := miner.txpool.Pending(filter)

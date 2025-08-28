@@ -1,6 +1,8 @@
 package multigas
 
-import "github.com/ethereum/go-ethereum/common/math"
+import (
+	"math/bits"
+)
 
 // ResourceKind represents a dimension for the multi-dimensional gas.
 type ResourceKind uint8
@@ -13,6 +15,7 @@ const (
 	ResourceKindStorageGrowth
 	ResourceKindL1Calldata
 	ResourceKindL2Calldata
+	ResourceKindWasmComputation
 	NumResourceKind
 )
 
@@ -24,15 +27,21 @@ type MultiGas struct {
 	refund uint64
 }
 
+// Pair represents a single resource kind and its associated gas amount.
+type Pair struct {
+	Kind   ResourceKind
+	Amount uint64
+}
+
 // ZeroGas creates a MultiGas value with all fields set to zero.
-func ZeroGas() *MultiGas {
-	return &MultiGas{}
+func ZeroGas() MultiGas {
+	return MultiGas{}
 }
 
 // NewMultiGas creates a new MultiGas with the given resource kind initialized to `amount`.
 // All other kinds are zero. The total is also set to `amount`.
-func NewMultiGas(kind ResourceKind, amount uint64) *MultiGas {
-	mg := ZeroGas()
+func NewMultiGas(kind ResourceKind, amount uint64) MultiGas {
+	var mg MultiGas
 	mg.gas[kind] = amount
 	mg.total = amount
 	return mg
@@ -40,112 +49,128 @@ func NewMultiGas(kind ResourceKind, amount uint64) *MultiGas {
 
 // MultiGasFromMap creates a new MultiGas that contains multiple resources.
 // This is meant to be called with constant values and will panic if there is an overflow.
-func MultiGasFromMap(gasMap map[ResourceKind]uint64) *MultiGas {
-	mg := ZeroGas()
-	for kind, gas := range gasMap {
-		var overflow bool
-		mg.total, overflow = math.SafeAdd(mg.total, gas)
-		if overflow {
+func MultiGasFromPairs(pairs ...Pair) MultiGas {
+	var mg MultiGas
+	for _, p := range pairs {
+		newTotal, c := bits.Add64(mg.total, p.Amount, 0)
+		if c != 0 {
 			panic("multigas overflow")
 		}
-		mg.gas[kind] = gas
+		mg.gas[p.Kind] = p.Amount
+		mg.total = newTotal
 	}
 	return mg
 }
 
 // UnknownGas returns a MultiGas initialized with unknown gas.
-func UnknownGas(amount uint64) *MultiGas {
+func UnknownGas(amount uint64) MultiGas {
 	return NewMultiGas(ResourceKindUnknown, amount)
 }
 
 // ComputationGas returns a MultiGas initialized with computation gas.
-func ComputationGas(amount uint64) *MultiGas {
+func ComputationGas(amount uint64) MultiGas {
 	return NewMultiGas(ResourceKindComputation, amount)
 }
 
 // HistoryGrowthGas returns a MultiGas initialized with history growth gas.
-func HistoryGrowthGas(amount uint64) *MultiGas {
+func HistoryGrowthGas(amount uint64) MultiGas {
 	return NewMultiGas(ResourceKindHistoryGrowth, amount)
 }
 
 // StorageAccessGas returns a MultiGas initialized with storage access gas.
-func StorageAccessGas(amount uint64) *MultiGas {
+func StorageAccessGas(amount uint64) MultiGas {
 	return NewMultiGas(ResourceKindStorageAccess, amount)
 }
 
 // StorageGrowthGas returns a MultiGas initialized with storage growth gas.
-func StorageGrowthGas(amount uint64) *MultiGas {
+func StorageGrowthGas(amount uint64) MultiGas {
 	return NewMultiGas(ResourceKindStorageGrowth, amount)
 }
 
 // L1CalldataGas returns a MultiGas initialized with L1 calldata gas.
-func L1CalldataGas(amount uint64) *MultiGas {
+func L1CalldataGas(amount uint64) MultiGas {
 	return NewMultiGas(ResourceKindL1Calldata, amount)
 }
 
 // L2CalldataGas returns a MultiGas initialized with L2 calldata gas.
-func L2CalldataGas(amount uint64) *MultiGas {
+func L2CalldataGas(amount uint64) MultiGas {
 	return NewMultiGas(ResourceKindL2Calldata, amount)
 }
 
+// WasmComputationGas returns a MultiGas initialized with computation gas used for WASM (Stylus contracts).
+func WasmComputationGas(amount uint64) MultiGas {
+	return NewMultiGas(ResourceKindWasmComputation, amount)
+}
+
 // Get returns the gas amount for the specified resource kind.
-func (z *MultiGas) Get(kind ResourceKind) uint64 {
+func (z MultiGas) Get(kind ResourceKind) uint64 {
 	return z.gas[kind]
 }
 
-// Set sets the gas for a given resource kind to `gas`, adjusting the total accordingly.
-// Returns the same MultiGas and a boolean indicating if an overflow occurred when updating the total.
-func (z *MultiGas) Set(kind ResourceKind, gas uint64) (*MultiGas, bool) {
-	newTotal, overflow := math.SafeAdd(z.total-z.gas[kind], gas)
-	if overflow {
+// With returns a copy of z with the given resource kind incremented by amount.
+// The total is incremented accordingly. It returns the updated value and true if an overflow occurred.
+func (z MultiGas) With(kind ResourceKind, amount uint64) (MultiGas, bool) {
+	res := z
+
+	newTotal, c := bits.Add64(z.total-z.gas[kind], amount, 0)
+	if c != 0 {
 		return z, true
 	}
 
-	z.gas[kind] = gas
-	z.total = newTotal
-	return z, false
+	res.gas[kind] = amount
+	res.total = newTotal
+	return res, false
 }
 
 // GetRefund gets the SSTORE refund computed at the end of the transaction.
-func (z *MultiGas) GetRefund() uint64 {
+func (z MultiGas) GetRefund() uint64 {
 	return z.refund
 }
 
-// SetRefund sets the SSTORE refund computed at the end of the transaction and returns the modified MultiGas.
-func (z *MultiGas) SetRefund(amount uint64) *MultiGas {
+// SetRefund sets the SSTORE refund computed at the end of the transaction.
+func (z *MultiGas) SetRefund(amount uint64) {
 	z.refund = amount
-	return z
 }
 
-// SafeAdd sets z to the sum of x and y, per resource kind and total.
-// Returns the modified MultiGas and a boolean indicating if an overflow occurred in either the kind-specific or total value.
-func (z *MultiGas) SafeAdd(x *MultiGas, y *MultiGas) (*MultiGas, bool) {
-	for i := range z.gas {
-		newValue, overflow := math.SafeAdd(x.gas[i], y.gas[i])
-		if overflow {
+// SafeAdd returns a copy of z with the per-kind, total, and refund gas
+// added to the values from x. It returns the updated value and true if
+// an overflow occurred.
+func (z MultiGas) SafeAdd(x MultiGas) (MultiGas, bool) {
+	res := z
+
+	for i := 0; i < int(NumResourceKind); i++ {
+		v, c := bits.Add64(res.gas[i], x.gas[i], 0)
+		if c != 0 {
 			return z, true
 		}
-		z.gas[i] = newValue
+		res.gas[i] = v
 	}
 
-	newTotal, overflow := math.SafeAdd(x.total, y.total)
-	if overflow {
+	t, c := bits.Add64(res.total, x.total, 0)
+	if c != 0 {
 		return z, true
 	}
-	z.total = newTotal
-	return z, false
+	res.total = t
+
+	r, c := bits.Add64(res.refund, x.refund, 0)
+	if c != 0 {
+		return z, true
+	}
+	res.refund = r
+
+	return res, false
 }
 
 // SafeIncrement increments the given resource kind by the amount of gas and to the total.
 // Returns true if an overflow occurred in either the kind-specific or total value.
 func (z *MultiGas) SafeIncrement(kind ResourceKind, gas uint64) bool {
-	newValue, overflow := math.SafeAdd(z.gas[kind], gas)
-	if overflow {
+	newValue, c := bits.Add64(z.gas[kind], gas, 0)
+	if c != 0 {
 		return true
 	}
 
-	newTotal, overflow := math.SafeAdd(z.total, gas)
-	if overflow {
+	newTotal, c := bits.Add64(z.total, gas, 0)
+	if c != 0 {
 		return true
 	}
 
@@ -154,7 +179,28 @@ func (z *MultiGas) SafeIncrement(kind ResourceKind, gas uint64) bool {
 	return false
 }
 
+// SaturatingIncrement returns a copy of z with the given resource kind
+// and the total incremented by gas. On overflow, the field(s) are clamped
+// to MaxUint64.
+func (z MultiGas) SaturatingIncrement(kind ResourceKind, gas uint64) MultiGas {
+	res := z
+
+	if v, c := bits.Add64(res.gas[kind], gas, 0); c != 0 {
+		res.gas[kind] = ^uint64(0) // clamp
+	} else {
+		res.gas[kind] = v
+	}
+
+	if t, c := bits.Add64(res.total, gas, 0); c != 0 {
+		res.total = ^uint64(0) // clamp
+	} else {
+		res.total = t
+	}
+
+	return res
+}
+
 // SingleGas returns single-dimensional gas sum.
-func (z *MultiGas) SingleGas() uint64 {
+func (z MultiGas) SingleGas() uint64 {
 	return z.total
 }

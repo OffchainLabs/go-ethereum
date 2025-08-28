@@ -1268,7 +1268,7 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 			if pool.chainconfig.IsOsaka(reset.newHead.Number, reset.newHead.Time) && !pool.chainconfig.IsOsaka(reset.oldHead.Number, reset.oldHead.Time) {
 				var hashes []common.Hash
 				pool.all.Range(func(hash common.Hash, tx *types.Transaction) bool {
-					if tx.Gas() > params.MaxTxGas {
+					if !pool.chainconfig.IsArbitrum() && tx.Gas() > params.MaxTxGasRenamedForNitroMerges {
 						hashes = append(hashes, hash)
 					}
 					return true
