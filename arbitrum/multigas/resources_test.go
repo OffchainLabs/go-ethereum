@@ -40,10 +40,11 @@ func TestMultiGasFromPairs(t *testing.T) {
 		Pair{ResourceKindStorageGrowth, 13},
 		Pair{ResourceKindL1Calldata, 14},
 		Pair{ResourceKindL2Calldata, 15},
+		Pair{ResourceKindWasmComputation, 16},
 	)
 
-	if got := fromPairs.SingleGas(); got != 75 {
-		t.Errorf("MultiGasFromPairs: expected SingleGas() == 75, got %d", got)
+	if got := fromPairs.SingleGas(); got != 91 {
+		t.Errorf("MultiGasFromPairs: expected SingleGas() == 91, got %d", got)
 	}
 	if got := fromPairs.Get(ResourceKindComputation); got != 10 {
 		t.Errorf("MultiGasFromPairs: expected Get(ResourceKindComputation) == 10, got %d", got)
@@ -62,6 +63,9 @@ func TestMultiGasFromPairs(t *testing.T) {
 	}
 	if got := fromPairs.Get(ResourceKindL2Calldata); got != 15 {
 		t.Errorf("MultiGasFromPairs: expected Get(ResourceKindL2Calldata) == 15, got %d", got)
+	}
+	if got := fromPairs.Get(ResourceKindWasmComputation); got != 16 {
+		t.Errorf("MultiGasFromPairs: expected Get(ResourceKindWasmComputation) == 16, got %d", got)
 	}
 }
 
@@ -87,6 +91,9 @@ func TestSafeAdd(t *testing.T) {
 	}
 	if got, want := gas.Get(ResourceKindL2Calldata), uint64(0); got != want {
 		t.Errorf("unexpected L2 calldata gas: got %v, want %v", got, want)
+	}
+	if got, want := gas.Get(ResourceKindWasmComputation), uint64(0); got != want {
+		t.Errorf("unexpected WASM computation gas: got %v, want %v", got, want)
 	}
 	if got, want := gas.SingleGas(), uint64(30); got != want {
 		t.Errorf("unexpected single gas: got %v, want %v", got, want)
@@ -131,9 +138,13 @@ func TestSingleGas(t *testing.T) {
 		Pair{ResourceKindComputation, 21},
 		Pair{ResourceKindHistoryGrowth, 15},
 		Pair{ResourceKindStorageAccess, 5},
+		Pair{ResourceKindStorageGrowth, 6},
+		Pair{ResourceKindL1Calldata, 7},
+		Pair{ResourceKindL2Calldata, 8},
+		Pair{ResourceKindWasmComputation, 9},
 	)
 	singleGas := gas.SingleGas()
-	if want := uint64(41); singleGas != want {
+	if want := uint64(71); singleGas != want {
 		t.Errorf("unexpected storage growth gas: got %v, want %v", singleGas, want)
 	}
 }
