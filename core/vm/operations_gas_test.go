@@ -15,14 +15,14 @@ import (
 )
 
 type GasSStoreFuncTestCase struct {
-	name             string             // descriptive name for the test case
-	slotInAccessList bool               // whether the slot is in the access list
-	originalValue    common.Hash        // committed state value
-	currentValue     common.Hash        // current state value (may differ from original)
-	newValue         common.Hash        // value to set
-	refundValue      uint64             // initial refund value to add (if any)
-	expectedMultiGas *multigas.MultiGas // expected multi gas after the operation
-	expectedRefund   uint64             // expected refund after the operation, if any
+	name             string            // descriptive name for the test case
+	slotInAccessList bool              // whether the slot is in the access list
+	originalValue    common.Hash       // committed state value
+	currentValue     common.Hash       // current state value (may differ from original)
+	newValue         common.Hash       // value to set
+	refundValue      uint64            // initial refund value to add (if any)
+	expectedMultiGas multigas.MultiGas // expected multi gas after the operation
+	expectedRefund   uint64            // expected refund after the operation, if any
 }
 
 func testGasSStoreFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasSStoreFunc gasFunc, testCases []GasSStoreFuncTestCase) {
@@ -72,7 +72,7 @@ func testGasSStoreFuncFuncWithCases(t *testing.T, config *params.ChainConfig, ga
 				t.Fatalf("Unexpected error for test case %s: %v", tc.name, err)
 			}
 
-			if *multiGas != *tc.expectedMultiGas {
+			if multiGas != tc.expectedMultiGas {
 				t.Errorf("Expected multi gas %d, got %d for test case: %s",
 					tc.expectedMultiGas, multiGas, tc.name)
 			}
@@ -433,7 +433,7 @@ func TestGasSStore4762(t *testing.T) {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
-	if *multiGas != *expectedMultiGas {
+	if multiGas != expectedMultiGas {
 		t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
 	}
 }
@@ -554,7 +554,7 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			expectedMultiGas, _ = expectedMultiGas.SafeAdd(expectedMultiGas, memoryMultiGas)
+			expectedMultiGas, _ = expectedMultiGas.SafeAdd(memoryMultiGas)
 
 			// EIP4762 storage access gas for value transfers
 			if tc.isEIP4762 && tc.transfersValue && !tc.isSystemCall {
@@ -576,7 +576,7 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 				t.Fatalf("Unexpected error: %v", err)
 			}
 
-			if *multiGas != *expectedMultiGas {
+			if multiGas != expectedMultiGas {
 				t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
 			}
 		})
@@ -890,7 +890,7 @@ func testGasDelegateOrStaticCall(t *testing.T, gasImplFunc gasFunc) {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
-	if *multiGas != *expectedMultiGas {
+	if multiGas != expectedMultiGas {
 		t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
 	}
 }
@@ -1009,7 +1009,7 @@ func testGasCreateFunc(t *testing.T, gasImplFunc gasFunc, includeHashCost bool, 
 
 			expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, totalComputationCost)
 
-			if *multiGas != *expectedMultiGas {
+			if multiGas != expectedMultiGas {
 				t.Errorf("Expected multi gas %+v, got %+v", expectedMultiGas, multiGas)
 			}
 		})
@@ -1029,14 +1029,14 @@ func TestGasCreate2Eip3860(t *testing.T) {
 }
 
 type GasSelfdestructFuncTestCase struct {
-	name              string             // descriptive name for the test case
-	isEIP150          bool               // whether the test is for EIP-150
-	isEIP158          bool               // whether the test is for EIP-158
-	beneficiaryExists bool               // whether beneficiary account exists
-	slotInAccessList  bool               // whether the slot is in the access list
-	hasBeenDestructed bool               // whether the contract has been destructed before
-	expectedMultiGas  *multigas.MultiGas // expected multi gas after the operation
-	expectedRefund    uint64             // expected refund after the operation, if any
+	name              string            // descriptive name for the test case
+	isEIP150          bool              // whether the test is for EIP-150
+	isEIP158          bool              // whether the test is for EIP-158
+	beneficiaryExists bool              // whether beneficiary account exists
+	slotInAccessList  bool              // whether the slot is in the access list
+	hasBeenDestructed bool              // whether the contract has been destructed before
+	expectedMultiGas  multigas.MultiGas // expected multi gas after the operation
+	expectedRefund    uint64            // expected refund after the operation, if any
 }
 
 func testGasSelfdestructFuncWithCases(t *testing.T, config *params.ChainConfig, gasSelfdestructFunc gasFunc, testCases []GasSelfdestructFuncTestCase) {
@@ -1083,7 +1083,7 @@ func testGasSelfdestructFuncWithCases(t *testing.T, config *params.ChainConfig, 
 				t.Fatalf("Unexpected error for test case %s: %v", tc.name, err)
 			}
 
-			if *multiGas != *tc.expectedMultiGas {
+			if multiGas != tc.expectedMultiGas {
 				t.Errorf("Expected multi gas %d, got %d for test case: %s",
 					tc.expectedMultiGas, multiGas, tc.name)
 			}
@@ -1129,10 +1129,10 @@ func TestGasSelfdestruct(t *testing.T) {
 			beneficiaryExists: false,
 			isEIP150:          true,
 			isEIP158:          true,
-			expectedMultiGas: func() *multigas.MultiGas {
-				mg, _ := multigas.StorageAccessGas(params.SelfdestructGasEIP150).Set(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas)
-				return mg
-			}(),
+			expectedMultiGas: multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.SelfdestructGasEIP150},
+				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.CreateBySelfdestructGas},
+			),
 			expectedRefund: params.SelfdestructRefundGas,
 		},
 	}
@@ -1145,10 +1145,10 @@ func TestMakeSelfdestructGasFn(t *testing.T) {
 	testCases := []GasSelfdestructFuncTestCase{
 		{
 			name: "selfdestruct - no access list - with refund",
-			expectedMultiGas: func() *multigas.MultiGas {
-				mg, _ := multigas.StorageAccessGas(params.ColdAccountAccessCostEIP2929).Set(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas)
-				return mg
-			}(),
+			expectedMultiGas: multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdAccountAccessCostEIP2929},
+				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.CreateBySelfdestructGas},
+			),
 			expectedRefund: params.SelfdestructRefundGas,
 		},
 		{
@@ -1158,10 +1158,10 @@ func TestMakeSelfdestructGasFn(t *testing.T) {
 		},
 		{
 			name: "selfdestruct - in access list - with refund",
-			expectedMultiGas: func() *multigas.MultiGas {
-				mg, _ := multigas.StorageAccessGas(params.ColdAccountAccessCostEIP2929).Set(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas)
-				return mg
-			}(),
+			expectedMultiGas: multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdAccountAccessCostEIP2929},
+				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.CreateBySelfdestructGas},
+			),
 			expectedRefund:   params.SelfdestructRefundGas,
 			slotInAccessList: true,
 		},
@@ -1210,7 +1210,7 @@ func TestGasSelfdestructEIP4762(t *testing.T) {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
-	if *multiGas != *expectedMultiGas {
+	if multiGas != expectedMultiGas {
 		t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
 	}
 }
@@ -1265,7 +1265,7 @@ func TestMakeGasLog(t *testing.T) {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 
-		if *multiGas != *expectedMultiGas {
+		if multiGas != expectedMultiGas {
 			t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
 		}
 	}
@@ -1320,7 +1320,7 @@ func TestMemoryCopierGas(t *testing.T) {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 
-		if *multiGas != *expectedMultiGas {
+		if multiGas != expectedMultiGas {
 			t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
 		}
 	}
@@ -1408,7 +1408,7 @@ func TestGasCodeCopyEIP4762(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if *multiGas != *expectedMultiGas {
+			if multiGas != expectedMultiGas {
 				t.Errorf("expected multi gas %d, got %d", expectedMultiGas, multiGas)
 			}
 		})
@@ -1490,7 +1490,7 @@ func TestGasExtCodeCopyEIP4762(t *testing.T) {
 				t.Fatalf("Unexpected error: %v", err)
 			}
 
-			if *multiGas != *expectedMultiGas {
+			if multiGas != expectedMultiGas {
 				t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
 			}
 		})
@@ -1596,7 +1596,7 @@ func TestGasEip2929AccountCheck(t *testing.T) {
 
 			mem := NewMemory()
 
-			var expectedMultiGas *multigas.MultiGas
+			var expectedMultiGas multigas.MultiGas
 			if tt.prewarm {
 				expectedMultiGas = multigas.ZeroGas()
 			} else {
@@ -1609,7 +1609,7 @@ func TestGasEip2929AccountCheck(t *testing.T) {
 				t.Fatalf("Unexpected error: %v", err)
 			}
 
-			if *multiGas != *expectedMultiGas {
+			if multiGas != expectedMultiGas {
 				t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
 			}
 		})
@@ -1671,7 +1671,7 @@ func TestGasBalanceExtCodeSizeExtCodeHash4762(t *testing.T) {
 			mem := NewMemory()
 
 			// expectedMultiGas
-			var expectedMultiGas *multigas.MultiGas
+			var expectedMultiGas multigas.MultiGas
 			if tt.expectZero {
 				expectedMultiGas = multigas.ZeroGas()
 			} else {
@@ -1687,7 +1687,7 @@ func TestGasBalanceExtCodeSizeExtCodeHash4762(t *testing.T) {
 				t.Fatalf("Unexpected error: %v", err)
 			}
 
-			if *multiGas != *expectedMultiGas {
+			if multiGas != expectedMultiGas {
 				t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
 			}
 		})
