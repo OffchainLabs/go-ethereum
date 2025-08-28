@@ -57,6 +57,9 @@ func initMatcher(st *testMatcher) {
 	// Broken tests:
 	// EOF is not part of cancun
 	st.skipLoad(`^stEOF/`)
+
+	// Skip all EIP-7825 gas limit cap tests as EIP-7825 is not implemented in nitro's geth fork
+	st.skipLoad(`eip7825_transaction_gas_limit_cap`)
 }
 
 func TestState(t *testing.T) {
