@@ -46,7 +46,7 @@ type ExecutionResult struct {
 	// Arbitrum: the contract deployed from the top-level transaction, or nil if not a contract creation tx
 	TopLevelDeployed *common.Address
 	// Arbitrum: total used multi-dimensional gas
-	UsedMultiGas *multigas.MultiGas
+	UsedMultiGas multigas.MultiGas
 }
 
 // Unwrap returns the internal evm error which allows us for further

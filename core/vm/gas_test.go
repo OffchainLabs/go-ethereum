@@ -11,16 +11,16 @@ func TestConstantMultiGas(t *testing.T) {
 		name string
 		cost uint64
 		op   OpCode
-		want *multigas.MultiGas
+		want multigas.MultiGas
 	}{
 		{
 			name: "SelfdestructEIP150",
 			cost: 5000,
 			op:   SELFDESTRUCT,
-			want: multigas.MultiGasFromMap(map[multigas.ResourceKind]uint64{
-				multigas.ResourceKindComputation:   100,
-				multigas.ResourceKindStorageAccess: 4900,
-			}),
+			want: multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: 100},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: 4900},
+			),
 		},
 		{
 			name: "SelfdestructLegacy",
@@ -37,7 +37,7 @@ func TestConstantMultiGas(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := multigas.ZeroGas()
-			if addConstantMultiGas(got, tc.cost, tc.op); *got != *tc.want {
+			if addConstantMultiGas(&got, tc.cost, tc.op); got != tc.want {
 				t.Errorf("wrong constant multigas: got %v, want %v", got, tc.want)
 			}
 		})
