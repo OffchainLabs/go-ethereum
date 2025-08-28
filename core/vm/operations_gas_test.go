@@ -486,7 +486,7 @@ func testGasSLoad(t *testing.T, gasFunc gasFunc, slotKeyProviders ...func(contra
 
 	// Setup access list and stack
 	accessList := state.NewAccessEvents(evm.StateDB.PointCache())
-	accessList.AddAccount(caller, false)
+	accessList.AddAccount(caller, false, 0)
 	evm.AccessEvents = accessList
 
 	for _, slotKeyProvider := range slotKeyProviders {
