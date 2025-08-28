@@ -36,7 +36,8 @@ func TestConstantMultiGas(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := constantMultiGas(tc.cost, tc.op); *got != *tc.want {
+			got := multigas.ZeroGas()
+			if addConstantMultiGas(got, tc.cost, tc.op); *got != *tc.want {
 				t.Errorf("wrong constant multigas: got %v, want %v", got, tc.want)
 			}
 		})

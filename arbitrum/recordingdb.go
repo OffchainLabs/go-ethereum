@@ -41,6 +41,10 @@ func newRecordingKV(inner *triedb.Database, diskDb ethdb.KeyValueStore) *Recordi
 	return &RecordingKV{inner, diskDb, make(map[common.Hash][]byte), sync.Mutex{}, false}
 }
 
+func (db *RecordingKV) SyncKeyValue() error {
+	return nil // recording KV doesn't support SyncKeyValue
+}
+
 func (db *RecordingKV) Has(key []byte) (bool, error) {
 	return false, errors.New("recording KV doesn't support Has")
 }
