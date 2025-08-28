@@ -441,14 +441,14 @@ func TestGasSStore4762(t *testing.T) {
 func TestGasSSLoad2929(t *testing.T) {
 	testGasSLoad(t, gasSLoadEIP2929,
 		// Load new entry
-		func(_ *Contract, _ StateDB) (common.Hash, *multigas.MultiGas) {
-			return common.HexToHash("0xdeadbeef"), multigas.MultiGasFromMap(map[multigas.ResourceKind]uint64{
-				multigas.ResourceKindStorageAccess: params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929,
-				multigas.ResourceKindComputation:   params.WarmStorageReadCostEIP2929,
-			})
+		func(_ *Contract, _ StateDB) (common.Hash, multigas.MultiGas) {
+			return common.HexToHash("0xdeadbeef"), multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929},
+				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.WarmStorageReadCostEIP2929},
+			)
 		},
 		// Load entry from access list
-		func(contract *Contract, stateDB StateDB) (common.Hash, *multigas.MultiGas) {
+		func(contract *Contract, stateDB StateDB) (common.Hash, multigas.MultiGas) {
 			stateDB.AddSlotToAccessList(contract.Address(), common.HexToHash("0xdeadbeef"))
 			return common.HexToHash("0xdeadbeef"), multigas.ComputationGas(params.WarmStorageReadCostEIP2929)
 		},
@@ -459,21 +459,21 @@ func TestGasSSLoad2929(t *testing.T) {
 func TestGasSLoad4762(t *testing.T) {
 	testGasSLoad(t, gasSLoad4762,
 		// Load a new entry
-		func(_ *Contract, _ StateDB) (common.Hash, *multigas.MultiGas) {
+		func(_ *Contract, _ StateDB) (common.Hash, multigas.MultiGas) {
 			return common.HexToHash("0xdeadbeef"), multigas.StorageAccessGas(params.WitnessBranchReadCost + params.WitnessChunkReadCost)
 		},
 		// Load same entry
-		func(_ *Contract, _ StateDB) (common.Hash, *multigas.MultiGas) {
+		func(_ *Contract, _ StateDB) (common.Hash, multigas.MultiGas) {
 			return common.HexToHash("0xdeadbeef"), multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929)
 		},
 		// Load adjacent entry
-		func(_ *Contract, _ StateDB) (common.Hash, *multigas.MultiGas) {
+		func(_ *Contract, _ StateDB) (common.Hash, multigas.MultiGas) {
 			return common.HexToHash("0xdeadbef0"), multigas.StorageAccessGas(params.WitnessChunkReadCost)
 		},
 	)
 }
 
-func testGasSLoad(t *testing.T, gasFunc gasFunc, slotKeyProviders ...func(contract *Contract, db StateDB) (common.Hash, *multigas.MultiGas)) {
+func testGasSLoad(t *testing.T, gasFunc gasFunc, slotKeyProviders ...func(contract *Contract, db StateDB) (common.Hash, multigas.MultiGas)) {
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	evm := NewEVM(BlockContext{}, statedb, params.TestChainConfig, Config{})
 
@@ -499,7 +499,7 @@ func testGasSLoad(t *testing.T, gasFunc gasFunc, slotKeyProviders ...func(contra
 			t.Fatalf("Unexpected error: %v", err)
 		}
 
-		if *gas != *expectedGas {
+		if gas != expectedGas {
 			t.Errorf("Failed loading: Expected multi gas %d, got %d", expectedGas, gas)
 		}
 	}
