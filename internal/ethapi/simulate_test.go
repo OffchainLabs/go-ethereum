@@ -65,7 +65,7 @@ func TestSimulateSanitizeBlockOrder(t *testing.T) {
 			baseNumber:    10,
 			baseTimestamp: 50,
 			blocks:        []simBlock{{BlockOverrides: &override.BlockOverrides{Number: newInt(13), Time: newUint64(74)}}},
-			err:           "block timestamps must be in order: 74 <= 74",
+			expected:      []result{{number: 11, timestamp: 62}, {number: 12, timestamp: 74}, {number: 13, timestamp: 74}},
 		},
 		{
 			baseNumber:    10,
@@ -77,7 +77,7 @@ func TestSimulateSanitizeBlockOrder(t *testing.T) {
 			baseNumber:    10,
 			baseTimestamp: 50,
 			blocks:        []simBlock{{BlockOverrides: &override.BlockOverrides{Number: newInt(11), Time: newUint64(60)}}, {BlockOverrides: &override.BlockOverrides{Number: newInt(13), Time: newUint64(72)}}},
-			err:           "block timestamps must be in order: 72 <= 72",
+			expected:      []result{{number: 11, timestamp: 60}, {number: 12, timestamp: 72}, {number: 13, timestamp: 72}},
 		},
 	} {
 		sim := &simulator{base: &types.Header{Number: big.NewInt(int64(tc.baseNumber)), Time: tc.baseTimestamp}}

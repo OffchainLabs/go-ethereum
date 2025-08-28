@@ -48,6 +48,8 @@ type Log struct {
 	TxIndex uint `json:"transactionIndex" rlp:"-"`
 	// hash of the block in which the transaction was included
 	BlockHash common.Hash `json:"blockHash" rlp:"-"`
+	// timestamp of the block in which the transaction was included
+	BlockTimestamp uint64 `json:"blockTimestamp" rlp:"-"`
 	// index of the log in the block
 	Index uint `json:"logIndex" rlp:"-"`
 
@@ -57,10 +59,11 @@ type Log struct {
 }
 
 type logMarshaling struct {
-	Data        hexutil.Bytes
-	BlockNumber hexutil.Uint64
-	TxIndex     hexutil.Uint
-	Index       hexutil.Uint
+	Data           hexutil.Bytes
+	BlockNumber    hexutil.Uint64
+	TxIndex        hexutil.Uint
+	BlockTimestamp hexutil.Uint64
+	Index          hexutil.Uint
 }
 
 // FilterLogs creates a slice of logs matching the given criteria.

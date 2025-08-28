@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
@@ -50,12 +51,59 @@ func TestApplyMessageReturnsMultiGas(t *testing.T) {
 		t.Fatalf("failed to apply tx: %v", err)
 	}
 
-	expectedMultigas := multigas.MultiGasFromMap(map[multigas.ResourceKind]uint64{
-		multigas.ResourceKindComputation:   3 + 3, // PUSH4+PUSH1
-		multigas.ResourceKindStorageAccess: 2100,  // SSTORE
-		multigas.ResourceKindStorageGrowth: 20000, // SSTORE
-	})
-	if got, want := *res.UsedMultiGas, *expectedMultigas; got != want {
+	expectedMultigas := multigas.MultiGasFromPairs(
+		multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: 3 + 3},   // PUSH4+PUSH1
+		multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: 2100},  // SSTORE
+		multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: 20000}, // SSTORE
+	)
+	if got, want := res.UsedMultiGas, expectedMultigas; got != want {
+		t.Errorf("unexpected multi gas: got %v, want %v", got, want)
+	}
+}
+
+func TestApplyMessageCalldataReturnsMultiGas(t *testing.T) {
+	contract := common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+
+	header := &types.Header{
+		Difficulty: common.Big1,
+		Number:     common.Big0,
+		BaseFee:    common.Big0,
+	}
+	types.HeaderInfo{ArbOSFormatVersion: params.ArbosVersion_40}.UpdateHeaderWithInfo(header)
+
+	blockContext := NewEVMBlockContext(header, nil, &common.Address{})
+
+	chainConfig := params.TestChainConfig
+	chainConfig.ArbitrumChainParams = params.ArbitrumChainParams{EnableArbOS: true, InitialArbOSVersion: params.ArbosVersion_40}
+
+	evm := vm.NewEVM(blockContext, statedb, chainConfig, vm.Config{})
+
+	data := bytes.Repeat([]byte{1, 0, 1}, 1000)
+	msg := &Message{
+		From:      params.SystemAddress,
+		Data:      data,
+		Value:     common.Big0,
+		GasLimit:  30_000_000,
+		GasPrice:  common.Big0,
+		GasFeeCap: common.Big0,
+		GasTipCap: common.Big0,
+		To:        &contract,
+	}
+
+	gp := new(GasPool).AddGas(30_000_000)
+
+	res, err := ApplyMessage(evm, msg, gp)
+	if err != nil {
+		t.Fatalf("failed to apply tx: %v", err)
+	}
+
+	gas, err := FloorDataGas(data)
+	if err != nil {
+		t.Fatalf("failed to calculate gas: %v", err)
+	}
+	expectedMultigas := multigas.L2CalldataGas(gas)
+	if got, want := res.UsedMultiGas, expectedMultigas; got != want {
 		t.Errorf("unexpected multi gas: got %v, want %v", got, want)
 	}
 }

@@ -46,7 +46,7 @@ type ExecutionResult struct {
 	// Arbitrum: the contract deployed from the top-level transaction, or nil if not a contract creation tx
 	TopLevelDeployed *common.Address
 	// Arbitrum: total used multi-dimensional gas
-	UsedMultiGas *multigas.MultiGas
+	UsedMultiGas multigas.MultiGas
 }
 
 // Unwrap returns the internal evm error which allows us for further
@@ -172,7 +172,9 @@ type Message struct {
 
 	// When SkipNonceChecks is true, the message nonce is not checked against the
 	// account nonce in state.
-	// This field will be set to true for operations like RPC eth_call.
+	//
+	// This field will be set to true for operations like RPC eth_call
+	// or the state prefetching.
 	SkipNonceChecks bool
 
 	// When SkipFromEOACheck is true, the message sender is not checked to be an EOA.
@@ -495,6 +497,7 @@ func (st *stateTransition) preCheck() error {
 		}
 	}
 	// Check the blob version validity
+	isOsaka := st.evm.ChainConfig().IsOsaka(st.evm.Context.BlockNumber, st.evm.Context.Time)
 	if msg.BlobHashes != nil {
 		// The to field of a blob tx type is mandatory, and a `BlobTx` transaction internally
 		// has it as a non-nillable value, so any msg derived from blob transaction has it non-nil.
@@ -504,6 +507,9 @@ func (st *stateTransition) preCheck() error {
 		}
 		if len(msg.BlobHashes) == 0 {
 			return ErrMissingBlobHashes
+		}
+		if isOsaka && len(msg.BlobHashes) > params.BlobTxMaxBlobs {
+			return ErrTooManyBlobs
 		}
 		for i, hash := range msg.BlobHashes {
 			if !kzg4844.IsValidVersionedHash(hash[:]) {
@@ -535,6 +541,10 @@ func (st *stateTransition) preCheck() error {
 			return fmt.Errorf("%w (sender %v)", ErrEmptyAuthList, msg.From)
 		}
 	}
+	// Verify tx gas limit does not exceed EIP-7825 cap.
+	if isOsaka && msg.GasLimit > params.MaxTxGas {
+		return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxGas, msg.GasLimit)
+	}
 	return st.buyGas()
 }
 
@@ -549,15 +559,17 @@ func (st *stateTransition) preCheck() error {
 // However if any consensus issue encountered, return the error directly with
 // nil evm execution result.
 func (st *stateTransition) execute() (*ExecutionResult, error) {
-	endTxNow, startHookUsedGas, err, returnData := st.evm.ProcessingHook.StartTxHook()
+	endTxNow, startHookUsedMultiGas, err, returnData := st.evm.ProcessingHook.StartTxHook()
+	startHookUsedSingleGas := startHookUsedMultiGas.SingleGas()
+
 	if endTxNow {
 		return &ExecutionResult{
-			UsedGas:       startHookUsedGas,
-			MaxUsedGas:    startHookUsedGas,
+			UsedGas:       startHookUsedSingleGas,
+			MaxUsedGas:    startHookUsedSingleGas,
 			Err:           err,
 			ReturnData:    returnData,
 			ScheduledTxes: st.evm.ProcessingHook.ScheduledTxes(),
-			UsedMultiGas:  multigas.ZeroGas(),
+			UsedMultiGas:  startHookUsedMultiGas,
 		}, nil
 	}
 
@@ -622,7 +634,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		st.evm.AccessEvents.AddTxOrigin(msg.From)
 
 		if targetAddr := msg.To; targetAddr != nil {
-			st.evm.AccessEvents.AddTxDestination(*targetAddr, msg.Value.Sign() != 0)
+			st.evm.AccessEvents.AddTxDestination(*targetAddr, msg.Value.Sign() != 0, !st.state.Exist(*targetAddr))
 		}
 	}
 
@@ -692,6 +704,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if rules.IsPrague && st.evm.ProcessingHook.IsCalldataPricingIncreaseEnabled() {
 		// After EIP-7623: Data-heavy transactions pay the floor gas.
 		if st.gasUsed() < floorDataGas {
+			usedMultiGas.SafeIncrement(multigas.ResourceKindL2Calldata, floorDataGas-usedMultiGas.SingleGas())
 			prev := st.gasRemaining
 			st.gasRemaining = st.initialGas - floorDataGas
 			if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
@@ -709,10 +722,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 	effectiveTip := msg.GasPrice
 	if rules.IsLondon {
-		effectiveTip = new(big.Int).Sub(msg.GasFeeCap, st.evm.Context.BaseFee)
-		if effectiveTip.Cmp(msg.GasTipCap) > 0 {
-			effectiveTip = msg.GasTipCap
-		}
+		effectiveTip = new(big.Int).Sub(msg.GasPrice, st.evm.Context.BaseFee)
 	}
 	effectiveTipU256, _ := uint256.FromBig(effectiveTip)
 
@@ -727,7 +737,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		tipAmount = fee.ToBig()
 		// add the coinbase to the witness iff the fee is greater than 0
 		if rules.IsEIP4762 && fee.Sign() != 0 {
-			st.evm.AccessEvents.AddAccount(st.evm.Context.Coinbase, true)
+			st.evm.AccessEvents.AddAccount(st.evm.Context.Coinbase, true, math.MaxUint64)
 		}
 	}
 

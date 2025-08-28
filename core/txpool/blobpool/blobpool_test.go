@@ -238,11 +238,7 @@ func makeMultiBlobTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCa
 		BlobFeeCap: uint256.NewInt(blobFeeCap),
 		BlobHashes: blobHashes,
 		Value:      uint256.NewInt(100),
-		Sidecar: &types.BlobTxSidecar{
-			Blobs:       blobs,
-			Commitments: commitments,
-			Proofs:      proofs,
-		},
+		Sidecar:    types.NewBlobTxSidecar(types.BlobSidecarVersion0, blobs, commitments, proofs),
 	}
 	return types.MustSignNewTx(key, types.LatestSigner(params.MainnetChainConfig), blobtx)
 }
@@ -265,11 +261,7 @@ func makeUnsignedTxWithTestBlob(nonce uint64, gasTipCap uint64, gasFeeCap uint64
 		BlobFeeCap: uint256.NewInt(blobFeeCap),
 		BlobHashes: []common.Hash{testBlobVHashes[blobIdx]},
 		Value:      uint256.NewInt(100),
-		Sidecar: &types.BlobTxSidecar{
-			Blobs:       []kzg4844.Blob{*testBlobs[blobIdx]},
-			Commitments: []kzg4844.Commitment{testBlobCommits[blobIdx]},
-			Proofs:      []kzg4844.Proof{testBlobProofs[blobIdx]},
-		},
+		Sidecar:    types.NewBlobTxSidecar(types.BlobSidecarVersion0, []kzg4844.Blob{*testBlobs[blobIdx]}, []kzg4844.Commitment{testBlobCommits[blobIdx]}, []kzg4844.Proof{testBlobProofs[blobIdx]}),
 	}
 }
 
@@ -417,8 +409,23 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 	for i := range testBlobVHashes {
 		copy(hashes[i][:], testBlobVHashes[i][:])
 	}
-	blobs, proofs := pool.GetBlobs(hashes)
-
+	sidecars := pool.GetBlobs(hashes)
+	var blobs []*kzg4844.Blob
+	var proofs []*kzg4844.Proof
+	for idx, sidecar := range sidecars {
+		if sidecar == nil {
+			blobs = append(blobs, nil)
+			proofs = append(proofs, nil)
+			continue
+		}
+		blobHashes := sidecar.BlobHashes()
+		for i, hash := range blobHashes {
+			if hash == hashes[idx] {
+				blobs = append(blobs, &sidecar.Blobs[i])
+				proofs = append(proofs, &sidecar.Proofs[i])
+			}
+		}
+	}
 	// Cross validate what we received vs what we wanted
 	if len(blobs) != len(hashes) || len(proofs) != len(hashes) {
 		t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want %d", len(blobs), len(proofs), len(hashes))
@@ -1142,6 +1149,65 @@ func TestChangingSlotterSize(t *testing.T) {
 	}
 }
 
+// TestBlobCountLimit tests the blobpool enforced limits on the max blob count.
+func TestBlobCountLimit(t *testing.T) {
+	var (
+		key1, _ = crypto.GenerateKey()
+		key2, _ = crypto.GenerateKey()
+
+		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
+	)
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(0, true, false)
+
+	// Make Prague-enabled custom chain config.
+	cancunTime := uint64(0)
+	pragueTime := uint64(0)
+	config := &params.ChainConfig{
+		ChainID:     big.NewInt(1),
+		LondonBlock: big.NewInt(0),
+		BerlinBlock: big.NewInt(0),
+		CancunTime:  &cancunTime,
+		PragueTime:  &pragueTime,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Cancun: params.DefaultCancunBlobConfig,
+			Prague: params.DefaultPragueBlobConfig,
+		},
+	}
+	chain := &testBlockChain{
+		config:  config,
+		basefee: uint256.NewInt(1050),
+		blobfee: uint256.NewInt(105),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: t.TempDir()}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+
+	// Attempt to add transactions.
+	var (
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, key1)
+		tx2 = makeMultiBlobTx(0, 1, 800, 70, 7, key2)
+	)
+	errs := pool.Add([]*types.Transaction{tx1, tx2}, true)
+
+	// Check that first succeeds second fails.
+	if errs[0] != nil {
+		t.Fatalf("expected tx with 7 blobs to succeed")
+	}
+	if !errors.Is(errs[1], txpool.ErrTxBlobLimitExceeded) {
+		t.Fatalf("expected tx with 8 blobs to fail, got: %v", errs[1])
+	}
+
+	verifyPoolInternals(t, pool)
+	pool.Close()
+}
+
 // Tests that adding transaction will correctly store it in the persistent store
 // and update all the indices.
 //
@@ -1658,12 +1724,6 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 	// Make the pool not use disk (just drop everything). This test never reads
 	// back the data, it just iterates over the pool in-memory items
 	pool.store = &fakeBilly{pool.store, 0}
-	// Avoid validation - verifying all blob proofs take significant time
-	// when the capacity is large. The purpose of this bench is to measure assembling
-	// the lazies, not the kzg verifications.
-	pool.txValidationFn = func(tx *types.Transaction, head *types.Header, signer types.Signer, opts *txpool.ValidationOptions) error {
-		return nil // accept all
-	}
 	// Fill the pool up with one random transaction from each account with the
 	// same price and everything to maximize the worst case scenario
 	for i := 0; i < int(capacity); i++ {
