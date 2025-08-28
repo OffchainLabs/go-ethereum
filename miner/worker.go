@@ -499,8 +499,8 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 	if env.header.ExcessBlobGas != nil {
 		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(miner.chainConfig, env.header))
 	}
-	if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
-		filter.GasLimitCap = params.MaxTxGas
+	if !miner.chainConfig.IsArbitrum() && miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
+		filter.GasLimitCap = params.MaxTxGasRenamedForNitroMerges
 	}
 	filter.OnlyPlainTxs, filter.OnlyBlobTxs = true, false
 	pendingPlainTxs := miner.txpool.Pending(filter)
