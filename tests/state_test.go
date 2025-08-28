@@ -57,9 +57,6 @@ func initMatcher(st *testMatcher) {
 	// Broken tests:
 	// EOF is not part of cancun
 	st.skipLoad(`^stEOF/`)
-
-	// Skip all EIP-7825 gas limit cap tests as EIP-7825 is not implemented in nitro's geth fork
-	st.skipLoad(`eip7825_transaction_gas_limit_cap`)
 }
 
 func TestState(t *testing.T) {
@@ -94,6 +91,8 @@ func TestExecutionSpecState(t *testing.T) {
 		t.Skipf("directory %s does not exist", executionSpecStateTestDir)
 	}
 	st := new(testMatcher)
+	// Skip all EIP-7825 gas limit cap tests as EIP-7825 is not implemented in nitro's geth fork
+	st.skipLoad(`eip7825_transaction_gas_limit_cap`)
 
 	st.walk(t, executionSpecStateTestDir, func(t *testing.T, name string, test *StateTest) {
 		execStateTest(t, st, test)
