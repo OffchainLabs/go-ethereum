@@ -438,6 +438,73 @@ func TestGasSStore4762(t *testing.T) {
 	}
 }
 
+func TestGasSSLoad2929(t *testing.T) {
+	testGasSLoad(t, gasSLoadEIP2929,
+		// Load new entry
+		func(_ *Contract, _ StateDB) (common.Hash, multigas.MultiGas) {
+			return common.HexToHash("0xdeadbeef"), multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929},
+				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.WarmStorageReadCostEIP2929},
+			)
+		},
+		// Load entry from access list
+		func(contract *Contract, stateDB StateDB) (common.Hash, multigas.MultiGas) {
+			stateDB.AddSlotToAccessList(contract.Address(), common.HexToHash("0xdeadbeef"))
+			return common.HexToHash("0xdeadbeef"), multigas.ComputationGas(params.WarmStorageReadCostEIP2929)
+		},
+	)
+}
+
+// Statelessness mode (EIP-4762) SLOAD gas function test
+func TestGasSLoad4762(t *testing.T) {
+	testGasSLoad(t, gasSLoad4762,
+		// Load a new entry
+		func(_ *Contract, _ StateDB) (common.Hash, multigas.MultiGas) {
+			return common.HexToHash("0xdeadbeef"), multigas.StorageAccessGas(params.WitnessBranchReadCost + params.WitnessChunkReadCost)
+		},
+		// Load same entry
+		func(_ *Contract, _ StateDB) (common.Hash, multigas.MultiGas) {
+			return common.HexToHash("0xdeadbeef"), multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929)
+		},
+		// Load adjacent entry
+		func(_ *Contract, _ StateDB) (common.Hash, multigas.MultiGas) {
+			return common.HexToHash("0xdeadbef0"), multigas.StorageAccessGas(params.WitnessChunkReadCost)
+		},
+	)
+}
+
+func testGasSLoad(t *testing.T, gasFunc gasFunc, slotKeyProviders ...func(contract *Contract, db StateDB) (common.Hash, multigas.MultiGas)) {
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	evm := NewEVM(BlockContext{}, statedb, params.TestChainConfig, Config{})
+
+	caller := common.Address{}
+	contractAddr := common.Address{1}
+	contractGas := uint64(100000)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+
+	mem := NewMemory()
+
+	// Setup access list and stack
+	accessList := state.NewAccessEvents(evm.StateDB.PointCache())
+	accessList.AddAccount(caller, false, 0)
+	evm.AccessEvents = accessList
+
+	for _, slotKeyProvider := range slotKeyProviders {
+		slotKey, expectedGas := slotKeyProvider(contract, evm.StateDB)
+		stack := newstack()
+		stack.push(new(uint256.Int).SetBytes(slotKey.Bytes()))
+
+		gas, err := gasFunc(evm, contract, stack, mem, 0)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+
+		if gas != expectedGas {
+			t.Errorf("Failed loading: Expected multi gas %d, got %d", expectedGas, gas)
+		}
+	}
+}
+
 type GasCallFuncTestCase struct {
 	name             string // descriptive name for the test case
 	slotInAccessList bool   // whether the slot is in the access list
