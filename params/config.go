@@ -695,7 +695,10 @@ func (c *ChainConfig) IsPrague(num *big.Int, time uint64, currentArbosVersion ui
 }
 
 // IsOsaka returns whether time is either equal to the Osaka fork time or greater.
-func (c *ChainConfig) IsOsaka(num *big.Int, time uint64) bool {
+func (c *ChainConfig) IsOsaka(num *big.Int, time uint64, currentArbosVersion uint64) bool {
+	if c.IsArbitrum() {
+		return currentArbosVersion >= ArbosVersion_50
+	}
 	return c.IsLondon(num) && isTimestampForked(c.OsakaTime, time)
 }
 
@@ -1001,7 +1004,7 @@ func (c *ChainConfig) LatestFork(time uint64, currentArbosVersion uint64) forks.
 	london := c.LondonBlock
 
 	switch {
-	case c.IsOsaka(london, time):
+	case c.IsOsaka(london, time, currentArbosVersion):
 		return forks.Osaka
 	case c.IsPrague(london, time, currentArbosVersion):
 		return forks.Prague
@@ -1207,7 +1210,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, curren
 		IsShanghai:       isMerge && c.IsShanghai(num, timestamp, currentArbosVersion),
 		IsCancun:         isMerge && c.IsCancun(num, timestamp, currentArbosVersion),
 		IsPrague:         isMerge && c.IsPrague(num, timestamp, currentArbosVersion),
-		IsOsaka:          isMerge && c.IsOsaka(num, timestamp),
+		IsOsaka:          isMerge && c.IsOsaka(num, timestamp, currentArbosVersion),
 		IsVerkle:         isVerkle,
 		IsEIP4762:        isVerkle,
 	}
