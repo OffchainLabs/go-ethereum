@@ -497,7 +497,7 @@ func (st *stateTransition) preCheck() error {
 		}
 	}
 	// Check the blob version validity
-	isOsaka := st.evm.ChainConfig().IsOsaka(st.evm.Context.BlockNumber, st.evm.Context.Time)
+	isOsaka := st.evm.ChainConfig().IsOsaka(st.evm.Context.BlockNumber, st.evm.Context.Time, st.evm.Context.ArbOSVersion)
 	if msg.BlobHashes != nil {
 		// The to field of a blob tx type is mandatory, and a `BlobTx` transaction internally
 		// has it as a non-nillable value, so any msg derived from blob transaction has it non-nil.

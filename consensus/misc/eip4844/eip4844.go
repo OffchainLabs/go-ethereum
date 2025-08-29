@@ -78,7 +78,8 @@ func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTim
 	if excessBlobGas < targetGas {
 		return 0
 	}
-	if !config.IsOsaka(config.LondonBlock, headTimestamp) {
+	// we can use 0 here because arbitrum doesn't support Blob transactions.
+	if !config.IsOsaka(config.LondonBlock, headTimestamp, 0) {
 		// Pre-Osaka, we use the formula defined by EIP-4844.
 		return excessBlobGas - targetGas
 	}
@@ -138,7 +139,8 @@ func latestBlobConfig(cfg *params.ChainConfig, time uint64) *params.BlobConfig {
 		return s.BPO2
 	case cfg.IsBPO1(london, time) && s.BPO1 != nil:
 		return s.BPO1
-	case cfg.IsOsaka(london, time) && s.Osaka != nil:
+	// we can use 0 here because arbitrum doesn't support Blob transactions.
+	case cfg.IsOsaka(london, time, 0) && s.Osaka != nil:
 		return s.Osaka
 	// we can use 0 here because arbitrum doesn't support Blob transactions.
 	case cfg.IsPrague(london, time, 0) && s.Prague != nil:
