@@ -348,9 +348,10 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 }
 
 func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
+	arbosVersion := types.DeserializeHeaderExtraInformation(env.header).ArbOSFormatVersion
 	var (
-		isOsaka  = miner.chainConfig.IsOsaka(env.header.Number, env.header.Time)
-		isCancun = miner.chainConfig.IsCancun(env.header.Number, env.header.Time, types.DeserializeHeaderExtraInformation(env.header).ArbOSFormatVersion)
+		isOsaka  = miner.chainConfig.IsOsaka(env.header.Number, env.header.Time, arbosVersion)
+		isCancun = miner.chainConfig.IsCancun(env.header.Number, env.header.Time, arbosVersion)
 		gasLimit = env.header.GasLimit
 	)
 	if env.gasPool == nil {
@@ -499,7 +500,7 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 	if env.header.ExcessBlobGas != nil {
 		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(miner.chainConfig, env.header))
 	}
-	if !miner.chainConfig.IsArbitrum() && miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
+	if !miner.chainConfig.IsArbitrum() && miner.chainConfig.IsOsaka(env.header.Number, env.header.Time, 0) {
 		filter.GasLimitCap = params.MaxTxGasRenamedForNitroMerges
 	}
 	filter.OnlyPlainTxs, filter.OnlyBlobTxs = true, false
