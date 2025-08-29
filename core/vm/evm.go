@@ -640,6 +640,11 @@ func (evm *EVM) resolveCode(addr common.Address) []byte {
 		return code
 	}
 	if target, ok := types.ParseDelegation(code); ok {
+		// This is a workaround for the fact that calls delegated to precompiles should always return empty code.
+		// This starts happening with Arbos version 50(due to EIP 7702)
+		if _, ok := evm.precompile(target); ok && evm.Context.ArbOSVersion >= params.ArbosVersion_50 {
+			return nil
+		}
 		// Note we only follow one level of delegation.
 		return evm.StateDB.GetCode(target)
 	}
