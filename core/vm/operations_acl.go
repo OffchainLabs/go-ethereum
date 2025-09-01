@@ -121,11 +121,14 @@ func gasSLoadEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		// If the caller cannot afford the cost, this change will be rolled back
 		// If he does afford it, we can skip checking the same thing later on, during execution
 		evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
-		// TODO(NIT-3484): Update multi dimensional gas here
-		return multigas.UnknownGas(params.ColdSloadCostEIP2929), nil
+		// Cold slot access considered as storage access.
+		return multigas.MultiGasFromPairs(
+			multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929},
+			multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.WarmStorageReadCostEIP2929},
+		), nil
 	}
-	// TODO(NIT-3484): Update multi dimensional gas here
-	return multigas.UnknownGas(params.WarmStorageReadCostEIP2929), nil
+	// Warm slot access considered as storage access.
+	return multigas.ComputationGas(params.WarmStorageReadCostEIP2929), nil
 }
 
 // gasExtCodeCopyEIP2929 implements extcodecopy according to EIP-2929
