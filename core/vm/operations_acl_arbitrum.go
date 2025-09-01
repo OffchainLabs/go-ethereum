@@ -19,6 +19,7 @@ package vm
 import (
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -26,15 +27,21 @@ import (
 
 // Computes the cost of doing a state load in wasm
 // Note: the code here is adapted from gasSLoadEIP2929
-func WasmStateLoadCost(db StateDB, program common.Address, key common.Hash) uint64 {
+func WasmStateLoadCost(db StateDB, program common.Address, key common.Hash) multigas.MultiGas {
 	// Check slot presence in the access list
 	if _, slotPresent := db.SlotInAccessList(program, key); !slotPresent {
 		// If the caller cannot afford the cost, this change will be rolled back
 		// If he does afford it, we can skip checking the same thing later on, during execution
 		db.AddSlotToAccessList(program, key)
-		return params.ColdSloadCostEIP2929
+
+		// Cold slot access considered as storage access + computation
+		return multigas.MultiGasFromPairs(
+			multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929},
+			multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.WarmStorageReadCostEIP2929},
+		)
 	}
-	return params.WarmStorageReadCostEIP2929
+	// Warm slot access considered as computation
+	return multigas.ComputationGas(params.WarmStorageReadCostEIP2929)
 }
 
 // Computes the cost of doing a state store in wasm
