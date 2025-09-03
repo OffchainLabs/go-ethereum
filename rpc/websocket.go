@@ -47,10 +47,7 @@ var wsBufferPool = new(sync.Pool)
 //
 // allowedOrigins should be a comma-separated list of allowed origin URLs.
 // To allow connections with any origin, pass "*".
-func (s *Server) WebsocketHandler(allowedOrigins []string, wsReadLimit int64) http.Handler {
-	if wsReadLimit == 0 {
-		wsReadLimit = wsDefaultReadLimit
-	}
+func (s *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize:  wsReadBuffer,
 		WriteBufferSize: wsWriteBuffer,
@@ -63,7 +60,7 @@ func (s *Server) WebsocketHandler(allowedOrigins []string, wsReadLimit int64) ht
 			log.Debug("WebSocket upgrade failed", "err", err)
 			return
 		}
-		codec := newWebsocketCodec(conn, r.Host, r.Header, wsReadLimit)
+		codec := newWebsocketCodec(conn, r.Host, r.Header, s.wsReadLimit)
 		s.ServeCodec(codec, 0)
 	})
 }
