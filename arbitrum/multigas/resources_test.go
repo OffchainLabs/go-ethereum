@@ -114,9 +114,66 @@ func TestSafeAddChecksTotalOverflow(t *testing.T) {
 	}
 }
 
+func TestSaturatingAdd(t *testing.T) {
+	a := ComputationGas(10)
+	b := ComputationGas(20)
+	res := a.SaturatingAdd(b)
+
+	if got, want := res.Get(ResourceKindComputation), uint64(30); got != want {
+		t.Errorf("unexpected computation gas: got %v, want %v", got, want)
+	}
+	if got, want := res.SingleGas(), uint64(30); got != want {
+		t.Errorf("unexpected total gas: got %v, want %v", got, want)
+	}
+}
+
+func TestSaturatingAddClampsOnOverflow(t *testing.T) {
+	a := ComputationGas(math.MaxUint64)
+	b := ComputationGas(1)
+	res := a.SaturatingAdd(b)
+
+	if got, want := res.Get(ResourceKindComputation), uint64(math.MaxUint64); got != want {
+		t.Errorf("expected computation gas to clamp: got %v, want %v", got, want)
+	}
+	if got, want := res.SingleGas(), uint64(math.MaxUint64); got != want {
+		t.Errorf("expected total gas to clamp: got %v, want %v", got, want)
+	}
+}
+
+func TestSaturatingAddInto_AddsKindsTotalRefund(t *testing.T) {
+	// z: comp=5, sa=2, total=7
+	z := MultiGasFromPairs(
+		Pair{ResourceKindComputation, 5},
+		Pair{ResourceKindStorageAccess, 2},
+	)
+	// x: l2=3, refund=4, total=3
+	x := MultiGasFromPairs(
+		Pair{ResourceKindL2Calldata, 3},
+	)
+	x = x.WithRefund(4)
+
+	z.SaturatingAddInto(x)
+
+	if got, want := z.Get(ResourceKindComputation), uint64(5); got != want {
+		t.Errorf("unexpected computation: got %v, want %v", got, want)
+	}
+	if got, want := z.Get(ResourceKindStorageAccess), uint64(2); got != want {
+		t.Errorf("unexpected storage access: got %v, want %v", got, want)
+	}
+	if got, want := z.Get(ResourceKindL2Calldata), uint64(3); got != want {
+		t.Errorf("unexpected l2 calldata: got %v, want %v", got, want)
+	}
+	if got, want := z.GetRefund(), uint64(4); got != want {
+		t.Errorf("unexpected refund: got %v, want %v", got, want)
+	}
+	if got, want := z.SingleGas(), uint64(10); got != want { // 7 + 3
+		t.Errorf("unexpected total: got %v, want %v", got, want)
+	}
+}
+
 func TestSafeIncrement(t *testing.T) {
 	gas := ComputationGas(10)
-	overflow := gas.SafeIncrement(ResourceKindComputation, 11)
+	gas, overflow := gas.SafeIncrement(ResourceKindComputation, 11)
 	if overflow {
 		t.Errorf("unexpected overflow: got %v, want %v", overflow, false)
 	}
@@ -127,7 +184,7 @@ func TestSafeIncrement(t *testing.T) {
 
 func TestSafeIncrementChecksOverflow(t *testing.T) {
 	gas := ComputationGas(10)
-	overflow := gas.SafeIncrement(ResourceKindComputation, math.MaxUint64)
+	_, overflow := gas.SafeIncrement(ResourceKindComputation, math.MaxUint64)
 	if !overflow {
 		t.Errorf("expected overflow: got %v, want %v", overflow, true)
 	}
@@ -182,5 +239,68 @@ func TestSaturatingIncrement(t *testing.T) {
 	}
 	if got, want := newGas.SingleGas(), uint64(math.MaxUint64); got != want {
 		t.Errorf("expected total to saturate: got %v, want %v", got, want)
+	}
+}
+
+func TestSaturatingIncrementIntoClampsOnOverflow(t *testing.T) {
+	// total is at Max, so any increment must clamp total; the kind may or may not clamp.
+	g := ComputationGas(math.MaxUint64)
+
+	// Increment a different kind by 1: kind won't overflow, total will clamp.
+	g.SaturatingIncrementInto(ResourceKindStorageAccess, 1)
+	if got, want := g.Get(ResourceKindStorageAccess), uint64(1); got != want {
+		t.Errorf("unexpected storage-access gas: got %v, want %v", got, want)
+	}
+	if got, want := g.SingleGas(), uint64(math.MaxUint64); got != want {
+		t.Errorf("expected total to clamp: got %v, want %v", got, want)
+	}
+
+	// Now force kind overflow too: computation already Max, +1 should clamp kind as well.
+	g.SaturatingIncrementInto(ResourceKindComputation, 1)
+	if got, want := g.Get(ResourceKindComputation), uint64(math.MaxUint64); got != want {
+		t.Errorf("expected computation to remain clamped: got %v, want %v", got, want)
+	}
+	if got, want := g.SingleGas(), uint64(math.MaxUint64); got != want {
+		t.Errorf("expected total to remain clamped: got %v, want %v", got, want)
+	}
+}
+
+func TestMultiGasSingleGasTracking(t *testing.T) {
+	g := ZeroGas()
+	if got := g.SingleGas(); got != 0 {
+		t.Fatalf("initial total: got %v, want 0", got)
+	}
+
+	var overflow bool
+	g, overflow = g.With(ResourceKindComputation, 5)
+	if overflow {
+		t.Fatalf("unexpected overflow in With")
+	}
+	if got, want := g.SingleGas(), uint64(5); got != want {
+		t.Fatalf("after With: got total %v, want %v", got, want)
+	}
+
+	g, overflow = g.SafeIncrement(ResourceKindComputation, 7)
+	if overflow {
+		t.Fatalf("unexpected overflow in SafeIncrement")
+	}
+	if got, want := g.SingleGas(), uint64(12); got != want {
+		t.Fatalf("after SafeIncrement: got total %v, want %v", got, want)
+	}
+
+	other := StorageAccessGas(8)
+	g, overflow = g.SafeAdd(other)
+	if overflow {
+		t.Fatalf("unexpected overflow in SafeAdd")
+	}
+	if got, want := g.SingleGas(), uint64(20); got != want {
+		t.Fatalf("after SafeAdd: got total %v, want %v", got, want)
+	}
+
+	overflowing := L1CalldataGas(math.MaxUint64)
+	g = g.SaturatingAdd(overflowing)
+
+	if got := g.SingleGas(); got != math.MaxUint64 {
+		t.Fatalf("after SaturatingAdd: got total %v, want MaxUint64", got)
 	}
 }

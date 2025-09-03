@@ -597,22 +597,22 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 			// For EIP-2929 (access lists)
 			wasColdAccess := !tc.isEIP2929 || !evm.StateDB.AddressInAccessList(targetAddr)
 			if tc.isEIP2929 && wasColdAccess && !tc.slotInAccessList {
-				expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.ColdAccountAccessCostEIP2929-params.WarmStorageReadCostEIP2929)
+				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, params.ColdAccountAccessCostEIP2929-params.WarmStorageReadCostEIP2929)
 			}
 
-			// Apply cahin rules
+			// Apply chain rules
 			if tc.transfersValue && !tc.isEIP4762 {
-				expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, params.CallValueTransferGas)
+				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindComputation, params.CallValueTransferGas)
 			}
 
 			// Account creation gas only applies to gasCall, not gasCallCode
 			if !isCallCode && wasColdAccess {
 				if tc.isEIP158 {
 					if tc.transfersValue && tc.targetEmpty {
-						expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.CallNewAccountGas)
+						expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageGrowth, params.CallNewAccountGas)
 					}
 				} else if !tc.targetExists {
-					expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.CallNewAccountGas)
+					expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageGrowth, params.CallNewAccountGas)
 				}
 			}
 
@@ -621,20 +621,18 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			expectedMultiGas, _ = expectedMultiGas.SafeAdd(memoryMultiGas)
+			expectedMultiGas = expectedMultiGas.SaturatingAdd(memoryMultiGas)
 
 			// EIP4762 storage access gas for value transfers
 			if tc.isEIP4762 && tc.transfersValue && !tc.isSystemCall {
 				valueTransferGas := evm.AccessEvents.ValueTransferGas(contract.Address(), caller, contract.Gas)
-				if overflow := expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, valueTransferGas); overflow {
-					t.Fatalf("Expected multi gas overflow for test case %s", tc.name)
-				}
+				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, valueTransferGas)
 			}
 
 			// For EIP-4762 (Witnesses gas)
 			if tc.addWitnessGas && !contract.IsSystemCall {
 				// Calculated in `touchAddressAndChargeGas` WitnessBranchReadCost + WitnessChunkReadCost = 2100
-				expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, 2100)
+				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, 2100)
 			}
 
 			// Call the function
@@ -949,7 +947,7 @@ func testGasDelegateOrStaticCall(t *testing.T, gasImplFunc gasFunc) {
 		t.Fatalf("Failed callGas: %v", err)
 	}
 
-	expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, callGas)
+	expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindComputation, callGas)
 
 	// Call gasImplFunc
 	multiGas, err := gasImplFunc(evm, contract, stack, mem, memorySize)
@@ -1074,7 +1072,7 @@ func testGasCreateFunc(t *testing.T, gasImplFunc gasFunc, includeHashCost bool, 
 				}
 			}
 
-			expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, totalComputationCost)
+			expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindComputation, totalComputationCost)
 
 			if multiGas != expectedMultiGas {
 				t.Errorf("Expected multi gas %+v, got %+v", expectedMultiGas, multiGas)
@@ -1311,7 +1309,7 @@ func TestMakeGasLog(t *testing.T) {
 		}
 
 		// Base LOG op → computation
-		expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, params.LogGas)
+		expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindComputation, params.LogGas)
 
 		// Per-topic split
 		const topicBytes = uint64(32)
@@ -1321,11 +1319,11 @@ func TestMakeGasLog(t *testing.T) {
 		}
 		topicCompPer := params.LogTopicGas - topicHistPer
 
-		expectedMultiGas.SafeIncrement(multigas.ResourceKindHistoryGrowth, n*topicHistPer)
-		expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, n*topicCompPer)
+		expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindHistoryGrowth, n*topicHistPer)
+		expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindComputation, n*topicCompPer)
 
 		// Data bytes → history growth
-		expectedMultiGas.SafeIncrement(multigas.ResourceKindHistoryGrowth, requestedSize*params.LogDataGas)
+		expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindHistoryGrowth, requestedSize*params.LogDataGas)
 
 		multiGas, err := makeGasLog(n)(evm, contract, stack, mem, memorySize)
 		if err != nil {
@@ -1380,7 +1378,7 @@ func TestMemoryCopierGas(t *testing.T) {
 
 		// Copy cost dimension depends on stackpos
 		wordCopyGas := toWordSize(tt.size) * params.CopyGas
-		expectedMultiGas.SafeIncrement(tt.dim, wordCopyGas)
+		expectedMultiGas = expectedMultiGas.SaturatingIncrement(tt.dim, wordCopyGas)
 
 		multiGas, err := memoryCopierGas(tt.stackpos)(evm, contract, stack, mem, memorySize)
 		if err != nil {
@@ -1460,7 +1458,7 @@ func TestGasCodeCopyEIP4762(t *testing.T) {
 			if err != nil {
 				t.Fatalf("memoryGasCost failed: %v", err)
 			}
-			expectedMultiGas.SafeIncrement(multigas.ResourceKindComputation, toWordSize(c.length)*params.CopyGas)
+			expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindComputation, toWordSize(c.length)*params.CopyGas)
 
 			// Expected: EIP-4762 extra storage access from code chunk reads
 			if c.expectChunks {
@@ -1468,7 +1466,7 @@ func TestGasCodeCopyEIP4762(t *testing.T) {
 				single := expectedMultiGas.SingleGas()
 				aeExp := state.NewAccessEvents(evm.StateDB.PointCache())
 				_, wanted := aeExp.CodeChunksRangeGas(contract.Address(), copyOff, nonPadded, uint64(len(contract.Code)), false, contract.Gas-single)
-				expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, wanted)
+				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, wanted)
 			}
 
 			multiGas, err := gasCodeCopyEip4762(evm, contract, stack, mem, c.memorySize)
@@ -1540,16 +1538,16 @@ func TestGasExtCodeCopyEIP4762(t *testing.T) {
 			if err != nil {
 				t.Fatalf("memoryGasCost failed: %v", err)
 			}
-			expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, toWordSize(c.length)*params.CopyGas)
+			expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, toWordSize(c.length)*params.CopyGas)
 
 			// expected EIP-4762 addition
 			if c.expectWarm {
-				expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929)
+				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929)
 			} else {
 				singleGas := expectedMultiGas.SingleGas()
 				accessEventsForExpected := state.NewAccessEvents(evm.StateDB.PointCache())
 				wgas := accessEventsForExpected.BasicDataGas(c.addr, false, contract.Gas-singleGas, true)
-				expectedMultiGas.SafeIncrement(multigas.ResourceKindStorageAccess, wgas)
+				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, wgas)
 			}
 
 			multiGas, err := gasExtCodeCopyEIP4762(evm, contract, stack, mem, c.memorySize)
@@ -1624,7 +1622,6 @@ func TestGasExtCodeCopyEIP2929(t *testing.T) {
 	}
 }
 
-// Test `gasEip2929AccountCheck` gas helper separately
 // Test `gasEip2929AccountCheck` gas helper test, checks only EIP-2929 cold -> warm delta charged.
 func TestGasEip2929AccountCheck(t *testing.T) {
 	tests := []struct {

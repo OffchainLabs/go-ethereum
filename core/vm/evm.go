@@ -314,7 +314,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			contract.SetCallCode(evm.resolveCodeHash(addr), code)
 			ret, err = evm.Run(contract, input, false)
 			gas = contract.Gas
-			usedMultiGas, _ = usedMultiGas.SafeAdd(contract.UsedMultiGas)
+			usedMultiGas.SaturatingAddInto(contract.UsedMultiGas)
 		}
 	}
 	// When an error was returned by the EVM or when setting the creation code
@@ -327,7 +327,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 				evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
 			}
 
-			usedMultiGas.SafeIncrement(multigas.ResourceKindComputation, gas)
+			usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
 			gas = 0
 		}
 		// TODO: consider clearing up unused snapshots:

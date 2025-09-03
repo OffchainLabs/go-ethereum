@@ -43,7 +43,7 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 		if _, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
 			// Cold slot access considered as storage access.
 			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-			multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.ColdSloadCostEIP2929)
+			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, params.ColdSloadCostEIP2929)
 
 			// If the caller cannot afford the cost, this change will be rolled back
 			evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
@@ -56,14 +56,14 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 
 			// Warm slot access considered as storage access.
 			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-			multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929)
+			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929)
 			return multiGas, nil // SLOAD_GAS
 		}
 		if original == current {
 			if original == (common.Hash{}) { // create slot (2.1.1)
 				// Creating a new slot considered as storage growth.
 				// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-				multiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.SstoreSetGasEIP2200)
+				multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageGrowth, params.SstoreSetGasEIP2200)
 				return multiGas, nil
 			}
 			if value == (common.Hash{}) { // delete slot (2.1.2b)
@@ -74,7 +74,7 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 
 			//  Storage slot writes (nonzero → zero) considered as storage access.
 			//  See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-			multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.SstoreResetGasEIP2200-params.ColdSloadCostEIP2929)
+			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, params.SstoreResetGasEIP2200-params.ColdSloadCostEIP2929)
 			return multiGas, nil // write existing slot (2.1.2)
 		}
 		if original != (common.Hash{}) {
@@ -103,7 +103,7 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 
 		// Warm slot access considered as storage access.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-		multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929)
+		multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929)
 		return multiGas, nil // dirty update (2.2)
 	}
 }
@@ -150,7 +150,7 @@ func gasExtCodeCopyEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 		// We charge (cold-warm), since 'warm' is already charged as constantGas
 		// Charge cold → warm delta as storage-access gas.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-		if overflow = multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.ColdAccountAccessCostEIP2929-params.WarmStorageReadCostEIP2929); overflow {
+		if multiGas, overflow = multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.ColdAccountAccessCostEIP2929-params.WarmStorageReadCostEIP2929); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 		return multiGas, nil
@@ -212,7 +212,8 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc, addressPosition int) g
 
 		// Cold slot access considered as storage access.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-		if overflow := multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, coldCost); overflow {
+		var overflow bool
+		if multiGas, overflow = multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, coldCost); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 
@@ -260,13 +261,13 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 			evm.StateDB.AddAddressToAccessList(address)
 			// Cold account access considered as storage access.
 			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-			multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.ColdAccountAccessCostEIP2929)
+			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, params.ColdAccountAccessCostEIP2929)
 		}
 		// if empty and transfers value
 		if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
 			// New account creation considered as storage growth.
 			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-			multiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas)
+			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageGrowth, params.CreateBySelfdestructGas)
 		}
 		if refundsEnabled && !evm.StateDB.HasSelfDestructed(contract.Address()) {
 			evm.StateDB.AddRefund(params.SelfdestructRefundGas)
@@ -303,7 +304,7 @@ func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
 			}
 			// Cold slot access considered as storage access.
 			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-			multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, coldCost)
+			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, coldCost)
 		}
 
 		// Check if code is a delegation and if so, charge for resolution.
@@ -321,7 +322,7 @@ func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
 
 			// Target address resolution considered as storage access.
 			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-			multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, cost)
+			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, cost)
 		}
 
 		// Now call the old calculator, which takes into account
