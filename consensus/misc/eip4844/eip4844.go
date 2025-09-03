@@ -135,6 +135,9 @@ func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTim
 	// we can use 0 here because arbitrum doesn't support Blob transactions.
 	isOsaka := config.IsOsaka(config.LondonBlock, headTimestamp, 0)
 	bcfg := latestBlobConfig(config, headTimestamp)
+	if bcfg == nil {
+		return 0
+	}
 	return calcExcessBlobGas(isOsaka, bcfg, parent)
 }
 
