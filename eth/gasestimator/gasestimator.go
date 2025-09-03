@@ -80,7 +80,7 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 				blockTime = uint64(*opts.BlockOverrides.Time)
 			}
 		}
-		if opts.Config.IsOsaka(blockNumber, blockTime, types.DeserializeHeaderExtraInformation(opts.Header).ArbOSFormatVersion) {
+		if !opts.Config.IsArbitrum() && opts.Config.IsOsaka(blockNumber, blockTime, 0) {
 			hi = params.MaxTxGasRenamedForNitroMerges
 		}
 	}
