@@ -38,6 +38,10 @@ func (evm *EVM) DecrementDepth() {
 	evm.depth -= 1
 }
 
+func (evm *EVM) JumpDests() JumpDestCache {
+	return evm.jumpDests
+}
+
 type TxProcessingHook interface {
 	StartTxHook() (bool, multigas.MultiGas, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
 	GasChargingHook(gasRemaining *uint64) (common.Address, error)
@@ -53,7 +57,7 @@ type TxProcessingHook interface {
 	GasPriceOp(evm *EVM) *big.Int
 	FillReceiptInfo(receipt *types.Receipt)
 	MsgIsNonMutating() bool
-	ExecuteWASM(scope *ScopeContext, input []byte, interpreter *EVMInterpreter) ([]byte, error)
+	ExecuteWASM(scope *ScopeContext, input []byte, evm *EVM) ([]byte, error)
 	IsCalldataPricingIncreaseEnabled() bool
 }
 
@@ -103,7 +107,7 @@ func (p DefaultTxProcessor) MsgIsNonMutating() bool {
 	return false
 }
 
-func (p DefaultTxProcessor) ExecuteWASM(scope *ScopeContext, input []byte, interpreter *EVMInterpreter) ([]byte, error) {
+func (p DefaultTxProcessor) ExecuteWASM(scope *ScopeContext, input []byte, evm *EVM) ([]byte, error) {
 	log.Crit("tried to execute WASM with default processing hook")
 	return nil, nil
 }

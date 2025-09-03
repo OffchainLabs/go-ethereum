@@ -24,7 +24,7 @@ import (
 )
 
 type (
-	executionFunc func(pc *uint64, interpreter *EVMInterpreter, callContext *ScopeContext) ([]byte, error)
+	executionFunc func(pc *uint64, evm *EVM, callContext *ScopeContext) ([]byte, error)
 	// last parameter is the requested memory size as a uint64
 	// gasFunc returns multi-dimensional gas usage (that can be converted to single-dimensional gas)
 	gasFunc func(*EVM, *Contract, *Stack, *Memory, uint64) (multigas.MultiGas, error)

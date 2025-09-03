@@ -358,12 +358,15 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 		srv.SetHTTPBodyLimit(config.httpBodyLimit)
 	}
 	srv.ApplyAPIFilter(config.apiFilter)
+	if config.wsReadLimit > 0 {
+		srv.SetWebsocketReadLimit(config.wsReadLimit)
+	}
 	if err := RegisterApis(apis, config.Modules, srv); err != nil {
 		return err
 	}
 	h.wsConfig = config
 	h.wsHandler.Store(&rpcHandler{
-		Handler: NewWSHandlerStack(srv.WebsocketHandler(config.Origins, config.wsReadLimit), config.jwtSecret),
+		Handler: NewWSHandlerStack(srv.WebsocketHandler(config.Origins), config.jwtSecret),
 		prefix:  config.prefix,
 		server:  srv,
 	})
