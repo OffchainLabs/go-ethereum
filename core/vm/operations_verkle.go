@@ -106,7 +106,8 @@ func makeCallVariantGasEIP4762(oldCalculator gasFunc, withTransferCosts bool) ga
 		contract.Gas += witnessGas // restore witness gas so that it can be charged at the callsite
 		// Witness gas considered as storage access.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-		if overflow := multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, witnessGas); overflow {
+		var overflow bool
+		if multiGas, overflow = multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, witnessGas); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 		return multiGas, err
@@ -194,7 +195,7 @@ func gasCodeCopyEip4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		singleGas := multiGas.SingleGas()
 		_, wanted := evm.AccessEvents.CodeChunksRangeGas(contract.Address(), copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false, contract.Gas-singleGas)
-		multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, wanted)
+		multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, wanted)
 	}
 	return multiGas, nil
 }
@@ -210,7 +211,8 @@ func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 	if isPrecompile || addr == params.HistoryStorageAddress {
 		// Accessing precompile or history contract is treated as a warm state read.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-		if overflow := multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929); overflow {
+		var overflow bool
+		if multiGas, overflow = multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 		return multiGas, nil
@@ -219,7 +221,8 @@ func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 	wgas := evm.AccessEvents.BasicDataGas(addr, false, contract.Gas-singleGas, true)
 	// General EXTCODECOPY case: account lookup → state read.
 	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-	if overflow := multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, wgas); overflow {
+	var overflow bool
+	if multiGas, overflow = multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, wgas); overflow {
 		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 	return multiGas, nil

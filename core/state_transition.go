@@ -704,7 +704,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if rules.IsPrague && st.evm.ProcessingHook.IsCalldataPricingIncreaseEnabled() {
 		// After EIP-7623: Data-heavy transactions pay the floor gas.
 		if st.gasUsed() < floorDataGas {
-			usedMultiGas.SafeIncrement(multigas.ResourceKindL2Calldata, floorDataGas-usedMultiGas.SingleGas())
+			usedMultiGas = usedMultiGas.SaturatingIncrement(multigas.ResourceKindL2Calldata, floorDataGas-usedMultiGas.SingleGas())
 			prev := st.gasRemaining
 			st.gasRemaining = st.initialGas - floorDataGas
 			if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
@@ -718,7 +718,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	st.returnGas()
 
 	// Arbitrum: set the multigas refunds
-	usedMultiGas.SetRefund(refund)
+	usedMultiGas = usedMultiGas.WithRefund(refund)
 
 	effectiveTip := msg.GasPrice
 	if rules.IsLondon {
