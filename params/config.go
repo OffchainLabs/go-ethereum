@@ -1033,8 +1033,8 @@ func (c *ChainConfig) BlobConfig(fork forks.Fork) *BlobConfig {
 
 // ActiveSystemContracts returns the currently active system contracts at the
 // given timestamp.
-func (c *ChainConfig) ActiveSystemContracts(time uint64) map[string]common.Address {
-	fork := c.LatestFork(time)
+func (c *ChainConfig) ActiveSystemContracts(time uint64, currentArbosVersion uint64) map[string]common.Address {
+	fork := c.LatestFork(time, currentArbosVersion)
 	active := make(map[string]common.Address)
 	if fork >= forks.Osaka {
 		// no new system contracts

@@ -953,7 +953,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 			return 0, err
 		}
 	}
-	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
+	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time, blockCtx.ArbOSVersion)
 	precompiles := vm.ActivePrecompiledContracts(rules)
 	if err := overrides.Apply(state, precompiles); err != nil {
 		return 0, err
@@ -1420,9 +1420,10 @@ func (api *BlockChainAPI) Config(ctx context.Context) (*configResponse, error) {
 			return nil
 		}
 		t := *ts
+		arbOSVersion := types.DeserializeHeaderExtraInformation(api.b.CurrentHeader()).ArbOSFormatVersion
 
 		var (
-			rules       = c.Rules(c.LondonBlock, true, t)
+			rules       = c.Rules(c.LondonBlock, true, t, arbOSVersion)
 			precompiles = make(map[string]common.Address)
 		)
 		for addr, c := range vm.ActivePrecompiledContracts(rules) {
@@ -1436,21 +1437,22 @@ func (api *BlockChainAPI) Config(ctx context.Context) (*configResponse, error) {
 		forkid := forkid.NewID(c, types.NewBlockWithHeader(genesis), ^uint64(0), t).Hash
 		return &config{
 			ActivationTime:  activationTime,
-			BlobSchedule:    c.BlobConfig(c.LatestFork(t)),
+			BlobSchedule:    c.BlobConfig(c.LatestFork(t, arbOSVersion)),
 			ChainId:         (*hexutil.Big)(c.ChainID),
 			ForkId:          forkid[:],
 			Precompiles:     precompiles,
-			SystemContracts: c.ActiveSystemContracts(t),
+			SystemContracts: c.ActiveSystemContracts(t, arbOSVersion),
 		}
 	}
 	var (
-		c = api.b.ChainConfig()
-		t = api.b.CurrentHeader().Time
+		c            = api.b.ChainConfig()
+		t            = api.b.CurrentHeader().Time
+		arbOSVersion = types.DeserializeHeaderExtraInformation(api.b.CurrentHeader()).ArbOSFormatVersion
 	)
 	resp := configResponse{
-		Next:    assemble(c, c.Timestamp(c.LatestFork(t)+1)),
-		Current: assemble(c, c.Timestamp(c.LatestFork(t))),
-		Last:    assemble(c, c.Timestamp(c.LatestFork(^uint64(0)))),
+		Next:    assemble(c, c.Timestamp(c.LatestFork(t, arbOSVersion)+1)),
+		Current: assemble(c, c.Timestamp(c.LatestFork(t, arbOSVersion))),
+		Last:    assemble(c, c.Timestamp(c.LatestFork(^uint64(0), ^uint64(0)))),
 	}
 	// Nil out last if no future-fork is configured.
 	if resp.Next == nil {
@@ -1895,7 +1897,7 @@ func (api *TransactionAPI) FillTransaction(ctx context.Context, args Transaction
 	sidecarVersion := types.BlobSidecarVersion0
 	if len(args.Blobs) > 0 {
 		h := api.b.CurrentHeader()
-		if api.b.ChainConfig().IsOsaka(h.Number, h.Time) {
+		if api.b.ChainConfig().IsOsaka(h.Number, h.Time, types.DeserializeHeaderExtraInformation(h).ArbOSFormatVersion) {
 			sidecarVersion = types.BlobSidecarVersion1
 		}
 	}
@@ -1972,7 +1974,7 @@ func (api *TransactionAPI) SignTransaction(ctx context.Context, args Transaction
 	sidecarVersion := types.BlobSidecarVersion0
 	if len(args.Blobs) > 0 {
 		h := api.b.CurrentHeader()
-		if api.b.ChainConfig().IsOsaka(h.Number, h.Time) {
+		if api.b.ChainConfig().IsOsaka(h.Number, h.Time, types.DeserializeHeaderExtraInformation(h).ArbOSFormatVersion) {
 			sidecarVersion = types.BlobSidecarVersion1
 		}
 	}

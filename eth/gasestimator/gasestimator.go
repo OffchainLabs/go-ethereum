@@ -70,7 +70,7 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	}
 
 	// Cap the maximum gas allowance according to EIP-7825 if the estimation targets Osaka
-	if hi > params.MaxTxGas {
+	if hi > params.MaxTxGasRenamedForNitroMerges {
 		blockNumber, blockTime := opts.Header.Number, opts.Header.Time
 		if opts.BlockOverrides != nil {
 			if opts.BlockOverrides.Number != nil {
@@ -80,8 +80,8 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 				blockTime = uint64(*opts.BlockOverrides.Time)
 			}
 		}
-		if opts.Config.IsOsaka(blockNumber, blockTime) {
-			hi = params.MaxTxGas
+		if opts.Config.IsOsaka(blockNumber, blockTime, types.DeserializeHeaderExtraInformation(opts.Header).ArbOSFormatVersion) {
+			hi = params.MaxTxGasRenamedForNitroMerges
 		}
 	}
 

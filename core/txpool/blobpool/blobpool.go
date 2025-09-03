@@ -1403,7 +1403,7 @@ func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) int {
 // if Osaka fork has been activated.
 func (p *BlobPool) convertSidecar(txs []*types.Transaction) ([]*types.Transaction, []error) {
 	head := p.chain.CurrentBlock()
-	if !p.chain.Config().IsOsaka(head.Number, head.Time) {
+	if !p.chain.Config().IsOsaka(head.Number, head.Time, types.DeserializeHeaderExtraInformation(head).ArbOSFormatVersion) {
 		return txs, make([]error, len(txs))
 	}
 	var errs []error
