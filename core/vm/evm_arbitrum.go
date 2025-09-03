@@ -38,6 +38,10 @@ func (evm *EVM) DecrementDepth() {
 	evm.depth -= 1
 }
 
+func (evm *EVM) JumpDests() JumpDestCache {
+	return evm.jumpDests
+}
+
 type TxProcessingHook interface {
 	StartTxHook() (bool, multigas.MultiGas, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
 	GasChargingHook(gasRemaining *uint64) (common.Address, error)

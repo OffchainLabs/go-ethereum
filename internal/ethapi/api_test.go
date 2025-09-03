@@ -3809,7 +3809,8 @@ func TestEstimateGasWithMovePrecompile(t *testing.T) {
 			},
 		}
 	)
-	gas, err := api.EstimateGas(context.Background(), args, nil, overrides, nil)
+	blockNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+	gas, err := api.EstimateGas(context.Background(), args, &blockNrOrHash, overrides, nil)
 	if err != nil {
 		t.Fatalf("EstimateGas failed: %v", err)
 	}
