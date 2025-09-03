@@ -21,7 +21,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -69,7 +68,7 @@ func makeCallVariantGasEIP4762(oldCalculator gasFunc, withTransferCosts bool) ga
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
 		var (
 			target           = common.Address(stack.Back(1).Bytes20())
-			witnessGas       uint64
+			witnessGas       multigas.MultiGas
 			_, isPrecompile  = evm.precompile(target)
 			isSystemContract = target == params.HistoryStorageAddress
 		)
@@ -81,33 +80,33 @@ func makeCallVariantGasEIP4762(oldCalculator gasFunc, withTransferCosts bool) ga
 			if wantedValueTransferWitnessGas > contract.Gas {
 				return multigas.StorageAccessGas(wantedValueTransferWitnessGas), nil
 			}
-			witnessGas = wantedValueTransferWitnessGas
+			witnessGas = multigas.StorageAccessGas(wantedValueTransferWitnessGas)
 		} else if isPrecompile || isSystemContract {
-			witnessGas = params.WarmStorageReadCostEIP2929
+			witnessGas = multigas.ComputationGas(params.WarmStorageReadCostEIP2929)
 		} else {
 			// The charging for the value transfer is done BEFORE subtracting
 			// the 1/64th gas, as this is considered part of the CALL instruction.
 			// (so before we get to this point)
 			// But the message call is part of the subcall, for which only 63/64th
 			// of the gas should be available.
-			wantedMessageCallWitnessGas := evm.AccessEvents.MessageCallGas(target, contract.Gas-witnessGas)
+			wantedMessageCallWitnessGas := evm.AccessEvents.MessageCallGas(target, contract.Gas-witnessGas.SingleGas())
 			var overflow bool
-			if witnessGas, overflow = math.SafeAdd(witnessGas, wantedMessageCallWitnessGas); overflow {
+			if witnessGas, overflow = witnessGas.SafeIncrement(multigas.ResourceKindStorageAccess, wantedMessageCallWitnessGas); overflow {
 				return multigas.ZeroGas(), ErrGasUintOverflow
 			}
-			if witnessGas > contract.Gas {
-				return multigas.StorageAccessGas(witnessGas), nil
+			if witnessGas.SingleGas() > contract.Gas {
+				return witnessGas, nil
 			}
 		}
 
-		contract.Gas -= witnessGas
+		contract.Gas -= witnessGas.SingleGas()
 		// if the operation fails, adds witness gas to the gas before returning the error
 		multiGas, err := oldCalculator(evm, contract, stack, mem, memorySize)
-		contract.Gas += witnessGas // restore witness gas so that it can be charged at the callsite
+		contract.Gas += witnessGas.SingleGas() // restore witness gas so that it can be charged at the callsite
 		// Witness gas considered as storage access.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		var overflow bool
-		if multiGas, overflow = multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, witnessGas); overflow {
+		if multiGas, overflow = multiGas.SafeAdd(witnessGas); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 		return multiGas, err
@@ -209,10 +208,10 @@ func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 	addr := common.Address(stack.peek().Bytes20())
 	_, isPrecompile := evm.precompile(addr)
 	if isPrecompile || addr == params.HistoryStorageAddress {
-		// Accessing precompile or history contract is treated as a warm state read.
+		// Accessing precompile or history contract is treated as a warm state read, computation (access lists).
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		var overflow bool
-		if multiGas, overflow = multiGas.SafeIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929); overflow {
+		if multiGas, overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 		return multiGas, nil

@@ -95,7 +95,10 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.HexToHash("0x1234"),
-			expectedMultiGas: multigas.StorageAccessGas(params.ColdSloadCostEIP2929 + params.WarmStorageReadCostEIP2929),
+			expectedMultiGas: multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929},
+				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.WarmStorageReadCostEIP2929},
+			),
 		},
 		{
 			name:             "noop - warm slot access",
@@ -103,7 +106,7 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.HexToHash("0x1234"),
-			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929),
+			expectedMultiGas: multigas.ComputationGas(params.WarmStorageReadCostEIP2929),
 		},
 		// Cases where original == current
 		{
@@ -139,7 +142,7 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			currentValue:     common.Hash{}, // was deleted in current tx
 			newValue:         common.HexToHash("0x5678"),
 			refundValue:      params.SstoreClearsScheduleRefundEIP2200,
-			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929),
+			expectedMultiGas: multigas.ComputationGas(params.WarmStorageReadCostEIP2929),
 		},
 		{
 			name:             "dirty update - delete slot - warm access",
@@ -147,7 +150,7 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x5678"), // was changed in current tx
 			newValue:         common.Hash{},              // delete
-			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929),
+			expectedMultiGas: multigas.ComputationGas(params.WarmStorageReadCostEIP2929),
 			expectedRefund:   params.SstoreClearsScheduleRefundEIP2200,
 		},
 		{
@@ -156,7 +159,7 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x5678"),
 			newValue:         common.HexToHash("0x9abc"),
-			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929),
+			expectedMultiGas: multigas.ComputationGas(params.WarmStorageReadCostEIP2929),
 		},
 		// Reset to original cases (original == value but original != current)
 		{
@@ -165,7 +168,7 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.Hash{},
 			currentValue:     common.HexToHash("0x1234"), // was created in current tx
 			newValue:         common.Hash{},              // back to original empty
-			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929),
+			expectedMultiGas: multigas.ComputationGas(params.WarmStorageReadCostEIP2929),
 			expectedRefund:   params.SstoreSetGasEIP2200 - params.WarmStorageReadCostEIP2929,
 		},
 		{
@@ -174,7 +177,7 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x5678"), // was changed in current tx
 			newValue:         common.HexToHash("0x1234"), // back to original value
-			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929),
+			expectedMultiGas: multigas.ComputationGas(params.WarmStorageReadCostEIP2929),
 			expectedRefund:   (params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929) - params.WarmStorageReadCostEIP2929,
 		},
 		{
@@ -183,7 +186,7 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.Hash{},
 			currentValue:     common.HexToHash("0x1234"), // was created in current tx
 			newValue:         common.HexToHash("0x5678"), // change to different value
-			expectedMultiGas: multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929),
+			expectedMultiGas: multigas.ComputationGas(params.WarmStorageReadCostEIP2929),
 		},
 	}
 
@@ -1542,7 +1545,7 @@ func TestGasExtCodeCopyEIP4762(t *testing.T) {
 
 			// expected EIP-4762 addition
 			if c.expectWarm {
-				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929)
+				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929)
 			} else {
 				singleGas := expectedMultiGas.SingleGas()
 				accessEventsForExpected := state.NewAccessEvents(evm.StateDB.PointCache())

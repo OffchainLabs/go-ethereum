@@ -54,9 +54,9 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 			// EIP 2200 original clause:
 			//		return params.SloadGasEIP2200, nil
 
-			// Warm slot access considered as storage access.
+			// Warm slot read considered as computation (access lists).
 			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929)
+			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929)
 			return multiGas, nil // SLOAD_GAS
 		}
 		if original == current {
@@ -101,9 +101,9 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 		// EIP-2200 original clause:
 		//return params.SloadGasEIP2200, nil // dirty update (2.2)
 
-		// Warm slot access considered as storage access.
+		// Warm slot read considered as computation (access lists).
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-		multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, params.WarmStorageReadCostEIP2929)
+		multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929)
 		return multiGas, nil // dirty update (2.2)
 	}
 }
