@@ -642,7 +642,7 @@ var knownMetadataKeys = [][]byte{
 	snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
 	uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
 	persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
-	filterMapsRangeKey, headStateHistoryIndexKey,
+	filterMapsRangeKey, headStateHistoryIndexKey, VerkleTransitionStatePrefix,
 }
 
 // printChainMetadata prints out chain metadata to stderr.
