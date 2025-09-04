@@ -1052,6 +1052,13 @@ func (c *ChainConfig) ActiveSystemContracts(time uint64, currentArbosVersion uin
 	if fork >= forks.Cancun {
 		active["BEACON_ROOTS_ADDRESS"] = BeaconRootsAddress
 	}
+	// When Arbitrum is active, only HISTORY_STORAGE_ADDRESS is available.
+	if c.IsArbitrum() {
+		delete(active, "CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS")
+		delete(active, "DEPOSIT_CONTRACT_ADDRESS")
+		delete(active, "WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS")
+		delete(active, "BEACON_ROOTS_ADDRESS")
+	}
 	return active
 }
 
