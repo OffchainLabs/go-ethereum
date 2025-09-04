@@ -1019,6 +1019,10 @@ func (c *ChainConfig) LatestFork(time uint64, currentArbosVersion uint64) forks.
 
 // BlobConfig returns the blob config associated with the provided fork.
 func (c *ChainConfig) BlobConfig(fork forks.Fork) *BlobConfig {
+	// When Arbitrum is active, the chain doesn't support blobs.
+	if c.IsArbitrum() {
+		return nil
+	}
 	switch fork {
 	case forks.Osaka:
 		return DefaultOsakaBlobConfig
@@ -1048,20 +1052,42 @@ func (c *ChainConfig) ActiveSystemContracts(time uint64, currentArbosVersion uin
 	if fork >= forks.Cancun {
 		active["BEACON_ROOTS_ADDRESS"] = BeaconRootsAddress
 	}
+	// When Arbitrum is active, only HISTORY_STORAGE_ADDRESS is available.
+	if c.IsArbitrum() {
+		delete(active, "CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS")
+		delete(active, "DEPOSIT_CONTRACT_ADDRESS")
+		delete(active, "WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS")
+		delete(active, "BEACON_ROOTS_ADDRESS")
+	}
 	return active
 }
 
 // Timestamp returns the timestamp associated with the fork or returns nil if
 // the fork isn't defined or isn't a time-based fork.
 func (c *ChainConfig) Timestamp(fork forks.Fork) *uint64 {
+	// When the active chain is Arbitrum, the activation of a fork is not
+	// time-based. So, all forks are considered to be enabled.
+	arbTime := uint64(0)
 	switch {
 	case fork == forks.Osaka:
+		if c.IsArbitrum() {
+			return &arbTime
+		}
 		return c.OsakaTime
 	case fork == forks.Prague:
+		if c.IsArbitrum() {
+			return &arbTime
+		}
 		return c.PragueTime
 	case fork == forks.Cancun:
+		if c.IsArbitrum() {
+			return &arbTime
+		}
 		return c.CancunTime
 	case fork == forks.Shanghai:
+		if c.IsArbitrum() {
+			return &arbTime
+		}
 		return c.ShanghaiTime
 	default:
 		return nil
