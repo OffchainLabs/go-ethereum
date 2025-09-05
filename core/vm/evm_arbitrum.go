@@ -44,7 +44,7 @@ func (evm *EVM) JumpDests() JumpDestCache {
 
 type TxProcessingHook interface {
 	StartTxHook() (bool, multigas.MultiGas, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
-	GasChargingHook(gasRemaining *uint64) (common.Address, error)
+	GasChargingHook(gasRemaining *uint64) (common.Address, multigas.MultiGas, error)
 	PushContract(contract *Contract)
 	PopContract()
 	HeldGas() uint64
@@ -69,8 +69,8 @@ func (p DefaultTxProcessor) StartTxHook() (bool, multigas.MultiGas, error, []byt
 	return false, multigas.ZeroGas(), nil, nil
 }
 
-func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) (common.Address, error) {
-	return p.evm.Context.Coinbase, nil
+func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) (common.Address, multigas.MultiGas, error) {
+	return p.evm.Context.Coinbase, multigas.ZeroGas(), nil
 }
 
 func (p DefaultTxProcessor) PushContract(contract *Contract) {}

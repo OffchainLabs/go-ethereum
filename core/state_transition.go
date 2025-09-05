@@ -626,10 +626,12 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	st.gasRemaining -= gas
 
 	tipAmount := big.NewInt(0)
-	tipReceipient, err := st.evm.ProcessingHook.GasChargingHook(&st.gasRemaining)
+	tipReceipient, multiGas, err := st.evm.ProcessingHook.GasChargingHook(&st.gasRemaining)
 	if err != nil {
 		return nil, err
 	}
+	usedMultiGas = usedMultiGas.SaturatingAdd(multiGas)
+
 	if rules.IsEIP4762 {
 		st.evm.AccessEvents.AddTxOrigin(msg.From)
 
@@ -688,7 +690,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 
 		// Execute the transaction's call.
-		ret, st.gasRemaining, usedMultiGas, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining, value)
+		ret, st.gasRemaining, multiGas, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining, value)
+		usedMultiGas = usedMultiGas.SaturatingAdd(multiGas)
 	}
 
 	// Refund the gas that was held to limit the amount of computation done.
