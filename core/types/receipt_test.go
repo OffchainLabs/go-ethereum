@@ -25,6 +25,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -548,4 +549,59 @@ func clearComputedFieldsOnLogs(logs []*Log) []*Log {
 		l[i] = &cpy
 	}
 	return l
+}
+
+func TestReceiptStorageRLPNonLegacyOmitsZeroMultiGas(t *testing.T) {
+	// Build a non-legacy receipt
+	r := &Receipt{
+		Type:              DynamicFeeTxType,
+		PostState:         nil,
+		Status:            ReceiptStatusSuccessful,
+		CumulativeGasUsed: 12345,
+		GasUsedForL1:      678,
+		Logs:              nil,
+		BlockHash:         common.BytesToHash([]byte{1, 2, 3}),
+		BlockNumber:       big.NewInt(42),
+		TxHash:            common.BytesToHash([]byte{9, 9, 9}),
+		MultiGasUsed:      multigas.ZeroGas(),
+	}
+
+	b, err := rlp.EncodeToBytes((*ReceiptForStorage)(r))
+	if err != nil {
+		t.Fatalf("encode storage rlp: %v", err)
+	}
+
+	var out ReceiptForStorage
+	if err := rlp.DecodeBytes(b, &out); err != nil {
+		t.Fatalf("decode storage rlp: %v", err)
+	}
+
+	got := (Receipt)(out)
+
+	if !reflect.DeepEqual(got.MultiGasUsed, multigas.ZeroGas()) {
+		t.Fatalf("expected zero multigas, got %#v", got.MultiGasUsed)
+	}
+}
+
+func TestReceiptStorageRLPNonLegacyIncludesMultiGasWhenNonZero(t *testing.T) {
+	r := &Receipt{
+		Type:              ArbitrumInternalTxType,
+		Status:            ReceiptStatusSuccessful,
+		CumulativeGasUsed: 222,
+		GasUsedForL1:      333,
+		BlockNumber:       big.NewInt(5),
+		MultiGasUsed:      multigas.ComputationGas(100),
+	}
+
+	b, err := rlp.EncodeToBytes((*ReceiptForStorage)(r))
+	if err != nil {
+		t.Fatalf("encode storage rlp: %v", err)
+	}
+	var out ReceiptForStorage
+	if err := rlp.DecodeBytes(b, &out); err != nil {
+		t.Fatalf("decode storage rlp: %v", err)
+	}
+	if !reflect.DeepEqual(out.MultiGasUsed, r.MultiGasUsed) {
+		t.Fatalf("expected non-zero multigas after roundtrip")
+	}
 }
