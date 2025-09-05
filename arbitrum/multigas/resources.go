@@ -1,7 +1,12 @@
 package multigas
 
 import (
+	"encoding/json"
+	"io"
 	"math/bits"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // ResourceKind represents a dimension for the multi-dimensional gas.
@@ -274,4 +279,89 @@ func (z *MultiGas) SaturatingIncrementInto(kind ResourceKind, gas uint64) {
 // SingleGas returns the single-dimensional total gas.
 func (z MultiGas) SingleGas() uint64 {
 	return z.total
+}
+
+func (z MultiGas) IsZero() bool {
+	return z.total == 0 && z.refund == 0 && z.gas == [NumResourceKind]uint64{}
+}
+
+// MarshalJSON implements json.Marshaler for MultiGas.
+func (z MultiGas) MarshalJSON() ([]byte, error) {
+	type multiGasJSON struct {
+		Computation     hexutil.Uint64 `json:"computation"`
+		HistoryGrowth   hexutil.Uint64 `json:"historyGrowth"`
+		StorageAccess   hexutil.Uint64 `json:"storageAccess"`
+		StorageGrowth   hexutil.Uint64 `json:"storageGrowth"`
+		L1Calldata      hexutil.Uint64 `json:"l1Calldata"`
+		L2Calldata      hexutil.Uint64 `json:"l2Calldata"`
+		WasmComputation hexutil.Uint64 `json:"wasmComputation"`
+		Refund          hexutil.Uint64 `json:"refund"`
+		Total           hexutil.Uint64 `json:"total"`
+	}
+	return json.Marshal(multiGasJSON{
+		Computation:     hexutil.Uint64(z.gas[ResourceKindComputation]),
+		HistoryGrowth:   hexutil.Uint64(z.gas[ResourceKindHistoryGrowth]),
+		StorageAccess:   hexutil.Uint64(z.gas[ResourceKindStorageAccess]),
+		StorageGrowth:   hexutil.Uint64(z.gas[ResourceKindStorageGrowth]),
+		L1Calldata:      hexutil.Uint64(z.gas[ResourceKindL1Calldata]),
+		L2Calldata:      hexutil.Uint64(z.gas[ResourceKindL2Calldata]),
+		WasmComputation: hexutil.Uint64(z.gas[ResourceKindWasmComputation]),
+		Refund:          hexutil.Uint64(z.refund),
+		Total:           hexutil.Uint64(z.total),
+	})
+}
+
+// EncodeRLP encodes MultiGas as:
+// [ total, refund, gas[0], gas[1], ..., gas[NumResourceKind-1] ]
+func (z *MultiGas) EncodeRLP(w io.Writer) error {
+	enc := rlp.NewEncoderBuffer(w)
+	l := enc.List()
+
+	enc.WriteUint64(z.total)
+	enc.WriteUint64(z.refund)
+	for i := 0; i < int(NumResourceKind); i++ {
+		enc.WriteUint64(z.gas[i])
+	}
+
+	enc.ListEnd(l)
+	return enc.Flush()
+}
+
+// DecodeRLP decodes MultiGas in a forward/backward-compatible way.
+// Extra per-dimension entries are skipped; missing ones are treated as zero.
+func (z *MultiGas) DecodeRLP(s *rlp.Stream) error {
+	if _, err := s.List(); err != nil {
+		return err
+	}
+
+	total, err := s.Uint64()
+	if err != nil {
+		return err
+	}
+	refund, err := s.Uint64()
+	if err != nil {
+		return err
+	}
+
+	for i := 0; ; i++ {
+		val, err := s.Uint64()
+		if err == rlp.EOL {
+			break // end of list
+		}
+		if err != nil {
+			return err
+		}
+		if i < int(NumResourceKind) {
+			z.gas[i] = val
+		}
+		// if i >= NumResourceKind, just skip extra lines
+	}
+
+	if err := s.ListEnd(); err != nil {
+		return err
+	}
+
+	z.total = total
+	z.refund = refund
+	return nil
 }
