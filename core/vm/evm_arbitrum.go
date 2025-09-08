@@ -44,6 +44,10 @@ func (evm *EVM) JumpDests() JumpDestCache {
 
 type TxProcessingHook interface {
 	StartTxHook() (bool, multigas.MultiGas, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
+	// TxGasLimitHook is called with the remaining gas at the start of each EVM
+	// transaction to ensure that no transaction exceeds the tx gas limit. It
+	// does not take ownership of the gasRemaining pointer, but can modify it.
+	TxGasLimitHook(gasRemaining *uint64) error
 	GasChargingHook(gasRemaining *uint64) (common.Address, multigas.MultiGas, error)
 	PushContract(contract *Contract)
 	PopContract()
@@ -67,6 +71,10 @@ type DefaultTxProcessor struct {
 
 func (p DefaultTxProcessor) StartTxHook() (bool, multigas.MultiGas, error, []byte) {
 	return false, multigas.ZeroGas(), nil, nil
+}
+
+func (p DefaultTxProcessor) TxGasLimitHook(gasRemaining *uint64) error {
+	return nil
 }
 
 func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) (common.Address, multigas.MultiGas, error) {
