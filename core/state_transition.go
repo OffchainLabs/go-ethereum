@@ -602,13 +602,13 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		usedMultiGas     = multigas.ZeroGas()
 	)
 
-	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
+	// Check clauses 4-5, subtract intrinsic iGas if everything is correct
+	iGas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
 	if err != nil {
 		return nil, err
 	}
-	if st.gasRemaining < gas {
-		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, gas)
+	if st.gasRemaining < iGas {
+		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, iGas)
 	}
 	// Gas limit suffices for the floor data cost (EIP-7623)
 	if rules.IsPrague && st.evm.ProcessingHook.IsCalldataPricingIncreaseEnabled() {
@@ -621,34 +621,16 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 	}
 	if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
-		t.OnGasChange(st.gasRemaining, st.gasRemaining-gas, tracing.GasChangeTxIntrinsicGas)
+		t.OnGasChange(st.gasRemaining, st.gasRemaining-iGas, tracing.GasChangeTxIntrinsicGas)
 	}
-	// For ArbOS50 and later, the logic of capping the TxGas to the transaction
-	// gas limit is applied before deducting the intrinsic gas to ensure that
-	// the entire L2 gas used will not exceed the per-transaction gas limit.
-	if st.evm.Context.ArbOSVersion >= params.ArbosVersion_50 {
-		err := st.evm.ProcessingHook.TxGasLimitHook(&st.gasRemaining)
-		if err != nil {
-			return nil, err
-		}
-	}
-	st.gasRemaining -= gas
+	st.gasRemaining -= iGas
 
 	tipAmount := big.NewInt(0)
-	tipReceipient, multiGas, err := st.evm.ProcessingHook.GasChargingHook(&st.gasRemaining)
+	tipReceipient, multiGas, err := st.evm.ProcessingHook.GasChargingHook(&st.gasRemaining, iGas)
 	if err != nil {
 		return nil, err
 	}
-	// Before Arbos50, the logic of capping the TxGas to the block gas limit was
-	// applied at the end of the GasCharingHook. This lead to a bug where some
-	// transactions could use more gas than the block gas limit because the
-	// intrinsic gas was already deducted from the gas remaining.
-	if st.evm.Context.ArbOSVersion < params.ArbosVersion_50 {
-		err := st.evm.ProcessingHook.TxGasLimitHook(&st.gasRemaining)
-		if err != nil {
-			return nil, err
-		}
-	}
+
 	usedMultiGas = usedMultiGas.SaturatingAdd(multiGas)
 
 	if rules.IsEIP4762 {

@@ -44,11 +44,7 @@ func (evm *EVM) JumpDests() JumpDestCache {
 
 type TxProcessingHook interface {
 	StartTxHook() (bool, multigas.MultiGas, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
-	// TxGasLimitHook is called with the remaining gas at the start of each EVM
-	// transaction to ensure that no transaction exceeds the tx gas limit. It
-	// does not take ownership of the gasRemaining pointer, but can modify it.
-	TxGasLimitHook(gasRemaining *uint64) error
-	GasChargingHook(gasRemaining *uint64) (common.Address, multigas.MultiGas, error)
+	GasChargingHook(gasRemaining *uint64, intrinsicGas uint64) (common.Address, multigas.MultiGas, error)
 	PushContract(contract *Contract)
 	PopContract()
 	HeldGas() uint64
@@ -73,15 +69,11 @@ func (p DefaultTxProcessor) StartTxHook() (bool, multigas.MultiGas, error, []byt
 	return false, multigas.ZeroGas(), nil, nil
 }
 
-func (p DefaultTxProcessor) TxGasLimitHook(gasRemaining *uint64) error {
-	return nil
-}
-
-func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) (common.Address, multigas.MultiGas, error) {
+func (p DefaultTxProcessor) GasChargingHook(_ *uint64, _ uint64) (common.Address, multigas.MultiGas, error) {
 	return p.evm.Context.Coinbase, multigas.ZeroGas(), nil
 }
 
-func (p DefaultTxProcessor) PushContract(contract *Contract) {}
+func (p DefaultTxProcessor) PushContract(_ *Contract) {}
 
 func (p DefaultTxProcessor) PopContract() {}
 
@@ -91,7 +83,7 @@ func (p DefaultTxProcessor) NonrefundableGas() uint64 { return 0 }
 
 func (p DefaultTxProcessor) DropTip() bool { return false }
 
-func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, evmSuccess bool) {}
+func (p DefaultTxProcessor) EndTxHook(_ uint64, _ bool) {}
 
 func (p DefaultTxProcessor) ScheduledTxes() types.Transactions {
 	return types.Transactions{}
@@ -115,7 +107,7 @@ func (p DefaultTxProcessor) MsgIsNonMutating() bool {
 	return false
 }
 
-func (p DefaultTxProcessor) ExecuteWASM(scope *ScopeContext, input []byte, evm *EVM) ([]byte, error) {
+func (p DefaultTxProcessor) ExecuteWASM(_ *ScopeContext, _ []byte, evm *EVM) ([]byte, error) {
 	log.Crit("tried to execute WASM with default processing hook")
 	return nil, nil
 }
