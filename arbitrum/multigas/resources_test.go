@@ -1,6 +1,7 @@
 package multigas
 
 import (
+	"encoding/json"
 	"math"
 	"testing"
 
@@ -315,7 +316,44 @@ func TestMultiGasSingleGasTracking(t *testing.T) {
 	}
 }
 
-func TestMultiGasRLPRoundTrip(t *testing.T) {
+func TestMultiGasJsonRoundTrip(t *testing.T) {
+	mgs := []MultiGas{
+		ZeroGas(),
+		ComputationGas(100),
+		L1CalldataGas(50).WithRefund(20),
+		MultiGasFromPairs(
+			Pair{ResourceKindUnknown, 1},
+			Pair{ResourceKindComputation, 10},
+			Pair{ResourceKindHistoryGrowth, 11},
+			Pair{ResourceKindStorageGrowth, 13},
+		),
+		MultiGasFromPairs(
+			Pair{ResourceKindComputation, 10},
+			Pair{ResourceKindHistoryGrowth, 11},
+			Pair{ResourceKindStorageAccess, 12},
+			Pair{ResourceKindStorageGrowth, 13},
+			Pair{ResourceKindL1Calldata, 14},
+			Pair{ResourceKindL2Calldata, 15},
+			Pair{ResourceKindWasmComputation, 16},
+		).WithRefund(7),
+	}
+
+	for _, mg := range mgs {
+		b, err := json.Marshal(mg)
+		require.NoError(t, err)
+
+		var out MultiGas
+		require.NoError(t, json.Unmarshal(b, &out))
+
+		for i := 0; i < int(NumResourceKind); i++ {
+			require.Equal(t, mg.Get(ResourceKind(i)), out.Get(ResourceKind(i)))
+		}
+		require.Equal(t, mg.GetRefund(), out.GetRefund())
+		require.Equal(t, mg.SingleGas(), out.SingleGas())
+	}
+}
+
+func TestMultiGasRlpRoundTrip(t *testing.T) {
 	mgs := []MultiGas{
 		ZeroGas(),
 		ComputationGas(100),

@@ -285,20 +285,24 @@ func (z MultiGas) IsZero() bool {
 	return z.total == 0 && z.refund == 0 && z.gas == [NumResourceKind]uint64{}
 }
 
+// multiGasJSON is an auxiliary type for JSON marshaling/unmarshaling of MultiGas.
+type multiGasJSON struct {
+	Unknown         hexutil.Uint64 `json:"unknown"`
+	Computation     hexutil.Uint64 `json:"computation"`
+	HistoryGrowth   hexutil.Uint64 `json:"historyGrowth"`
+	StorageAccess   hexutil.Uint64 `json:"storageAccess"`
+	StorageGrowth   hexutil.Uint64 `json:"storageGrowth"`
+	L1Calldata      hexutil.Uint64 `json:"l1Calldata"`
+	L2Calldata      hexutil.Uint64 `json:"l2Calldata"`
+	WasmComputation hexutil.Uint64 `json:"wasmComputation"`
+	Refund          hexutil.Uint64 `json:"refund"`
+	Total           hexutil.Uint64 `json:"total"`
+}
+
 // MarshalJSON implements json.Marshaler for MultiGas.
 func (z MultiGas) MarshalJSON() ([]byte, error) {
-	type multiGasJSON struct {
-		Computation     hexutil.Uint64 `json:"computation"`
-		HistoryGrowth   hexutil.Uint64 `json:"historyGrowth"`
-		StorageAccess   hexutil.Uint64 `json:"storageAccess"`
-		StorageGrowth   hexutil.Uint64 `json:"storageGrowth"`
-		L1Calldata      hexutil.Uint64 `json:"l1Calldata"`
-		L2Calldata      hexutil.Uint64 `json:"l2Calldata"`
-		WasmComputation hexutil.Uint64 `json:"wasmComputation"`
-		Refund          hexutil.Uint64 `json:"refund"`
-		Total           hexutil.Uint64 `json:"total"`
-	}
 	return json.Marshal(multiGasJSON{
+		Unknown:         hexutil.Uint64(z.gas[ResourceKindUnknown]),
 		Computation:     hexutil.Uint64(z.gas[ResourceKindComputation]),
 		HistoryGrowth:   hexutil.Uint64(z.gas[ResourceKindHistoryGrowth]),
 		StorageAccess:   hexutil.Uint64(z.gas[ResourceKindStorageAccess]),
@@ -309,6 +313,26 @@ func (z MultiGas) MarshalJSON() ([]byte, error) {
 		Refund:          hexutil.Uint64(z.refund),
 		Total:           hexutil.Uint64(z.total),
 	})
+}
+
+// UnmarshalJSON implements json.Unmarshaler for MultiGas.
+func (z *MultiGas) UnmarshalJSON(data []byte) error {
+	var j multiGasJSON
+	if err := json.Unmarshal(data, &j); err != nil {
+		return err
+	}
+	*z = ZeroGas()
+	z.gas[ResourceKindUnknown] = uint64(j.Unknown)
+	z.gas[ResourceKindComputation] = uint64(j.Computation)
+	z.gas[ResourceKindHistoryGrowth] = uint64(j.HistoryGrowth)
+	z.gas[ResourceKindStorageAccess] = uint64(j.StorageAccess)
+	z.gas[ResourceKindStorageGrowth] = uint64(j.StorageGrowth)
+	z.gas[ResourceKindL1Calldata] = uint64(j.L1Calldata)
+	z.gas[ResourceKindL2Calldata] = uint64(j.L2Calldata)
+	z.gas[ResourceKindWasmComputation] = uint64(j.WasmComputation)
+	z.refund = uint64(j.Refund)
+	z.total = uint64(j.Total)
+	return nil
 }
 
 // EncodeRLP encodes MultiGas as:
