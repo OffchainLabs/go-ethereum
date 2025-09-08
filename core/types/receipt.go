@@ -371,15 +371,22 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 		}
 	}
 	w.ListEnd(logList)
-	if r.Type >= ArbitrumDepositTxType && r.Type != ArbitrumLegacyTxType && r.ContractAddress != (common.Address{}) {
-		w.WriteBytes(r.ContractAddress[:])
-	} else {
-		var zeroAddr common.Address
-		w.WriteBytes(zeroAddr[:]) // occupy ContractAddress slot
-	}
-	if r.Type != ArbitrumLegacyTxType && !r.MultiGasUsed.IsZero() {
-		if err := (&r.MultiGasUsed).EncodeRLP(w); err != nil {
-			return err
+
+	// Append arbitrum-specific fields
+	if r.Type >= ArbitrumDepositTxType && r.Type != ArbitrumLegacyTxType {
+		wroteAddr := false
+		if r.ContractAddress != (common.Address{}) {
+			w.WriteBytes(r.ContractAddress[:])
+			wroteAddr = true
+		}
+		if !r.MultiGasUsed.IsZero() {
+			if !wroteAddr {
+				var zero common.Address
+				w.WriteBytes(zero[:]) // occupy ContractAddress slot
+			}
+			if err := (&r.MultiGasUsed).EncodeRLP(w); err != nil {
+				return err
+			}
 		}
 	}
 
