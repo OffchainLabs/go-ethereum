@@ -25,12 +25,14 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/holiman/uint256"
+	"github.com/kylelemons/godebug/diff"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/holiman/uint256"
-	"github.com/kylelemons/godebug/diff"
 )
 
 var (
@@ -551,57 +553,79 @@ func clearComputedFieldsOnLogs(logs []*Log) []*Log {
 	return l
 }
 
-func TestReceiptStorageRLPNonLegacyOmitsZeroMultiGas(t *testing.T) {
-	// Build a non-legacy receipt
-	r := &Receipt{
-		Type:              DynamicFeeTxType,
-		PostState:         nil,
-		Status:            ReceiptStatusSuccessful,
-		CumulativeGasUsed: 12345,
-		GasUsedForL1:      678,
-		Logs:              nil,
-		BlockHash:         common.BytesToHash([]byte{1, 2, 3}),
-		BlockNumber:       big.NewInt(42),
-		TxHash:            common.BytesToHash([]byte{9, 9, 9}),
-		MultiGasUsed:      multigas.ZeroGas(),
+func TestReceiptStorageRlpRoundTripVariants(t *testing.T) {
+	addr := common.HexToAddress("0x0102030405060708090a0b0c0d0e0f1011121314")
+
+	cases := []struct {
+		name string
+		in   *Receipt
+	}{
+		{
+			name: "DynamicFeeTxTypeZeroMultiGas",
+			in: &Receipt{
+				Type:              DynamicFeeTxType,
+				Status:            ReceiptStatusSuccessful,
+				CumulativeGasUsed: 111,
+				GasUsedForL1:      0,
+				MultiGasUsed:      multigas.ZeroGas(),
+			},
+		},
+		{
+			name: "ArbitrumContractTxTypeWithContractAddr",
+			in: &Receipt{
+				Type:              ArbitrumContractTxType,
+				Status:            ReceiptStatusSuccessful,
+				CumulativeGasUsed: 222,
+				GasUsedForL1:      80,
+				ContractAddress:   addr,
+				MultiGasUsed:      multigas.ZeroGas(),
+			},
+		},
+		{
+			name: "DynamicFeeTxTypeWithNonZeroMultiGas",
+			in: &Receipt{
+				Type:              DynamicFeeTxType,
+				Status:            ReceiptStatusSuccessful,
+				CumulativeGasUsed: 333,
+				GasUsedForL1:      450,
+				ContractAddress:   common.Address{},
+				MultiGasUsed:      multigas.ComputationGas(100),
+			},
+		},
+		{
+			name: "ArbitrumRetryTxTypeWithContractAddrAndNonZeroMultiGas",
+			in: &Receipt{
+				Type:              ArbitrumRetryTxType,
+				Status:            ReceiptStatusSuccessful,
+				CumulativeGasUsed: 444,
+				GasUsedForL1:      60,
+				ContractAddress:   addr,
+				Logs:              nil,
+				MultiGasUsed: multigas.MultiGasFromPairs(
+					multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: 10},
+					multigas.Pair{Kind: multigas.ResourceKindL2Calldata, Amount: 20},
+				),
+			},
+		},
 	}
 
-	b, err := rlp.EncodeToBytes((*ReceiptForStorage)(r))
-	if err != nil {
-		t.Fatalf("encode storage rlp: %v", err)
-	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Encode to storage RLP
+			b, err := rlp.EncodeToBytes((*ReceiptForStorage)(tc.in))
+			require.NoError(t, err, "encode storage rlp")
 
-	var out ReceiptForStorage
-	if err := rlp.DecodeBytes(b, &out); err != nil {
-		t.Fatalf("decode storage rlp: %v", err)
-	}
+			// Decode back from storage RLP
+			var out ReceiptForStorage
+			require.NoError(t, rlp.DecodeBytes(b, &out), "decode storage rlp")
 
-	got := (Receipt)(out)
+			got := (Receipt)(out)
 
-	if !reflect.DeepEqual(got.MultiGasUsed, multigas.ZeroGas()) {
-		t.Fatalf("expected zero multigas, got %#v", got.MultiGasUsed)
-	}
-}
-
-func TestReceiptStorageRLPNonLegacyIncludesMultiGasWhenNonZero(t *testing.T) {
-	r := &Receipt{
-		Type:              ArbitrumInternalTxType,
-		Status:            ReceiptStatusSuccessful,
-		CumulativeGasUsed: 222,
-		GasUsedForL1:      333,
-		BlockNumber:       big.NewInt(5),
-		MultiGasUsed:      multigas.ComputationGas(100),
-	}
-
-	b, err := rlp.EncodeToBytes((*ReceiptForStorage)(r))
-	if err != nil {
-		t.Fatalf("encode storage rlp: %v", err)
-	}
-	var out ReceiptForStorage
-	if err := rlp.DecodeBytes(b, &out); err != nil {
-		t.Fatalf("decode storage rlp: %v", err)
-	}
-	if !reflect.DeepEqual(out.MultiGasUsed, r.MultiGasUsed) {
-		t.Fatalf("expected non-zero multigas after roundtrip")
+			require.Equal(t, tc.in.Status, got.Status, "status")
+			require.Equal(t, tc.in.CumulativeGasUsed, got.CumulativeGasUsed, "cumulativeGasUsed")
+			require.Equal(t, tc.in.GasUsedForL1, got.GasUsedForL1, "gasUsedForL1")
+			require.Equal(t, tc.in.ContractAddress, got.ContractAddress, "contractAddress")
+			require.True(t, reflect.DeepEqual(tc.in.MultiGasUsed, got.MultiGasUsed), "multigasUsed")
+		})
 	}
 }
