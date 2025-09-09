@@ -24,6 +24,18 @@
     "receipts": [
       {
         "gasUsedForL1": "0x0",
+        "multiGasUsed": {
+          "unknown": "0x0",
+          "computation": "0x0",
+          "historyGrowth": "0x0",
+          "storageAccess": "0x0",
+          "storageGrowth": "0x0",
+          "l1Calldata": "0x0",
+          "l2Calldata": "0x0",
+          "wasmComputation": "0x0",
+          "refund": "0x0",
+          "total": "0x0"
+        },
         "type": "0x3",
         "root": "0x",
         "status": "0x1",

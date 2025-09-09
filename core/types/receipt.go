@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"unsafe"
 
+	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -53,7 +54,8 @@ const (
 // Receipt represents the results of a transaction.
 type Receipt struct {
 	// Arbitrum Implementation fields
-	GasUsedForL1 uint64 `json:"gasUsedForL1"`
+	GasUsedForL1 uint64            `json:"gasUsedForL1"`
+	MultiGasUsed multigas.MultiGas `json:"multiGasUsed"`
 
 	// Consensus fields: These fields are defined by the Yellow Paper
 	Type              uint8  `json:"type,omitempty"`
@@ -108,7 +110,8 @@ type storedReceiptRLP struct {
 	CumulativeGasUsed uint64
 	L1GasUsed         uint64
 	Logs              []*Log
-	ContractAddress   *common.Address `rlp:"optional"` // set on new versions if an Arbitrum tx type
+	ContractAddress   *common.Address    `rlp:"optional"` // set on new versions if an Arbitrum tx type
+	MultiGasUsed      *multigas.MultiGas `rlp:"optional"`
 }
 
 type arbLegacyStoredReceiptRLP struct {
@@ -128,6 +131,7 @@ func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
 		Type:              LegacyTxType,
 		PostState:         common.CopyBytes(root),
 		CumulativeGasUsed: cumulativeGasUsed,
+		MultiGasUsed:      multigas.ZeroGas(),
 	}
 	if failed {
 		r.Status = ReceiptStatusFailed
@@ -367,9 +371,23 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 		}
 	}
 	w.ListEnd(logList)
+
+	// Append arbitrum-specific fields
+	wroteAddr := false
 	if r.Type >= ArbitrumDepositTxType && r.Type != ArbitrumLegacyTxType && r.ContractAddress != (common.Address{}) {
 		w.WriteBytes(r.ContractAddress[:])
+		wroteAddr = true
 	}
+	if !r.MultiGasUsed.IsZero() {
+		if !wroteAddr {
+			var zero common.Address
+			w.WriteBytes(zero[:]) // occupy ContractAddress slot
+		}
+		if err := (&r.MultiGasUsed).EncodeRLP(w); err != nil {
+			return err
+		}
+	}
+
 	w.ListEnd(outerList)
 	return w.Flush()
 }
@@ -405,6 +423,7 @@ func decodeArbitrumLegacyStoredReceiptRLP(r *ReceiptForStorage, blob []byte) err
 	r.CumulativeGasUsed = stored.CumulativeGasUsed
 	r.GasUsed = stored.GasUsed
 	r.GasUsedForL1 = stored.L1GasUsed
+	r.MultiGasUsed = multigas.ZeroGas() // zero for legacy receipts
 	r.ContractAddress = stored.ContractAddress
 	r.Logs = stored.Logs
 	r.Bloom = CreateBloom((*Receipt)(r))
@@ -425,6 +444,12 @@ func decodeStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
 	r.Logs = stored.Logs
 	if stored.ContractAddress != nil {
 		r.ContractAddress = *stored.ContractAddress
+	}
+
+	if stored.MultiGasUsed != nil {
+		r.MultiGasUsed = *stored.MultiGasUsed
+	} else {
+		r.MultiGasUsed = multigas.ZeroGas()
 	}
 
 	return nil
