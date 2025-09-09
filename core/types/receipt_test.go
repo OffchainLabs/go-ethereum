@@ -25,11 +25,14 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/holiman/uint256"
+	"github.com/kylelemons/godebug/diff"
+	"github.com/stretchr/testify/require"
+
+	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/holiman/uint256"
-	"github.com/kylelemons/godebug/diff"
 )
 
 var (
@@ -548,4 +551,81 @@ func clearComputedFieldsOnLogs(logs []*Log) []*Log {
 		l[i] = &cpy
 	}
 	return l
+}
+
+func TestReceiptStorageRlpRoundTripVariants(t *testing.T) {
+	addr := common.HexToAddress("0x0102030405060708090a0b0c0d0e0f1011121314")
+
+	cases := []struct {
+		name string
+		in   *Receipt
+	}{
+		{
+			name: "DynamicFeeTxTypeZeroMultiGas",
+			in: &Receipt{
+				Type:              DynamicFeeTxType,
+				Status:            ReceiptStatusSuccessful,
+				CumulativeGasUsed: 111,
+				GasUsedForL1:      0,
+				MultiGasUsed:      multigas.ZeroGas(),
+			},
+		},
+		{
+			name: "ArbitrumContractTxTypeWithContractAddr",
+			in: &Receipt{
+				Type:              ArbitrumContractTxType,
+				Status:            ReceiptStatusSuccessful,
+				CumulativeGasUsed: 222,
+				GasUsedForL1:      80,
+				ContractAddress:   addr,
+				MultiGasUsed:      multigas.ZeroGas(),
+			},
+		},
+		{
+			name: "DynamicFeeTxTypeWithNonZeroMultiGas",
+			in: &Receipt{
+				Type:              DynamicFeeTxType,
+				Status:            ReceiptStatusSuccessful,
+				CumulativeGasUsed: 333,
+				GasUsedForL1:      450,
+				ContractAddress:   common.Address{},
+				MultiGasUsed:      multigas.ComputationGas(100),
+			},
+		},
+		{
+			name: "ArbitrumRetryTxTypeWithContractAddrAndNonZeroMultiGas",
+			in: &Receipt{
+				Type:              ArbitrumRetryTxType,
+				Status:            ReceiptStatusSuccessful,
+				CumulativeGasUsed: 444,
+				GasUsedForL1:      60,
+				ContractAddress:   addr,
+				Logs:              nil,
+				MultiGasUsed: multigas.MultiGasFromPairs(
+					multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: 10},
+					multigas.Pair{Kind: multigas.ResourceKindL2Calldata, Amount: 20},
+				),
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Encode to storage RLP
+			b, err := rlp.EncodeToBytes((*ReceiptForStorage)(tc.in))
+			require.NoError(t, err, "encode storage rlp")
+
+			// Decode back from storage RLP
+			var out ReceiptForStorage
+			require.NoError(t, rlp.DecodeBytes(b, &out), "decode storage rlp")
+
+			got := (Receipt)(out)
+
+			require.Equal(t, tc.in.Status, got.Status, "status")
+			require.Equal(t, tc.in.CumulativeGasUsed, got.CumulativeGasUsed, "cumulativeGasUsed")
+			require.Equal(t, tc.in.GasUsedForL1, got.GasUsedForL1, "gasUsedForL1")
+			require.Equal(t, tc.in.ContractAddress, got.ContractAddress, "contractAddress")
+			require.True(t, reflect.DeepEqual(tc.in.MultiGasUsed, got.MultiGasUsed), "multigasUsed")
+		})
+	}
 }

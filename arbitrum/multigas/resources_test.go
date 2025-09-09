@@ -1,14 +1,22 @@
 package multigas
 
 import (
+	"encoding/json"
 	"math"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func TestZeroGas(t *testing.T) {
 	zero := ZeroGas()
 	if zero.SingleGas() != 0 {
 		t.Errorf("ZeroGas total should be 0, got %d", zero.SingleGas())
+	}
+	if zero.IsZero() != true {
+		t.Errorf("ZeroGas should be zero, got %v", zero.IsZero())
 	}
 }
 
@@ -19,6 +27,9 @@ func TestComputationGas(t *testing.T) {
 	}
 	if comp.SingleGas() != 100 {
 		t.Errorf("ComputationGas: expected SingleGas() == 100, got %d", comp.SingleGas())
+	}
+	if comp.IsZero() != false {
+		t.Errorf("ComputationGas should not be zero, got %v", comp.IsZero())
 	}
 }
 
@@ -302,5 +313,82 @@ func TestMultiGasSingleGasTracking(t *testing.T) {
 
 	if got := g.SingleGas(); got != math.MaxUint64 {
 		t.Fatalf("after SaturatingAdd: got total %v, want MaxUint64", got)
+	}
+}
+
+func TestMultiGasJsonRoundTrip(t *testing.T) {
+	mgs := []MultiGas{
+		ZeroGas(),
+		ComputationGas(100),
+		L1CalldataGas(50).WithRefund(20),
+		MultiGasFromPairs(
+			Pair{ResourceKindUnknown, 1},
+			Pair{ResourceKindComputation, 10},
+			Pair{ResourceKindHistoryGrowth, 11},
+			Pair{ResourceKindStorageGrowth, 13},
+		),
+		MultiGasFromPairs(
+			Pair{ResourceKindComputation, 10},
+			Pair{ResourceKindHistoryGrowth, 11},
+			Pair{ResourceKindStorageAccess, 12},
+			Pair{ResourceKindStorageGrowth, 13},
+			Pair{ResourceKindL1Calldata, 14},
+			Pair{ResourceKindL2Calldata, 15},
+			Pair{ResourceKindWasmComputation, 16},
+		).WithRefund(7),
+	}
+
+	for _, mg := range mgs {
+		b, err := json.Marshal(mg)
+		require.NoError(t, err)
+
+		var out MultiGas
+		require.NoError(t, json.Unmarshal(b, &out))
+
+		for i := 0; i < int(NumResourceKind); i++ {
+			require.Equal(t, mg.Get(ResourceKind(i)), out.Get(ResourceKind(i)))
+		}
+		require.Equal(t, mg.GetRefund(), out.GetRefund())
+		require.Equal(t, mg.SingleGas(), out.SingleGas())
+	}
+}
+
+func TestMultiGasRlpRoundTrip(t *testing.T) {
+	mgs := []MultiGas{
+		ZeroGas(),
+		ComputationGas(100),
+		L1CalldataGas(50).WithRefund(20),
+
+		MultiGasFromPairs(
+			Pair{ResourceKindUnknown, 1},
+			Pair{ResourceKindComputation, 10},
+			Pair{ResourceKindHistoryGrowth, 11},
+			Pair{ResourceKindStorageGrowth, 13},
+		),
+		MultiGasFromPairs(
+			Pair{ResourceKindComputation, 10},
+			Pair{ResourceKindHistoryGrowth, 11},
+			Pair{ResourceKindStorageAccess, 12},
+			Pair{ResourceKindStorageGrowth, 13},
+			Pair{ResourceKindL1Calldata, 14},
+			Pair{ResourceKindL2Calldata, 15},
+			Pair{ResourceKindWasmComputation, 16},
+		).WithRefund(7),
+	}
+
+	for _, mg := range mgs {
+		b, err := rlp.EncodeToBytes(&mg)
+		if err != nil {
+			t.Fatalf("encode: %v", err)
+		}
+
+		var out MultiGas
+		if err := rlp.DecodeBytes(b, &out); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+
+		for i := range int(NumResourceKind) {
+			require.Equal(t, mg.Get(ResourceKind(i)), out.Get(ResourceKind(i)))
+		}
 	}
 }
