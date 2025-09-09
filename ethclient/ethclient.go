@@ -369,6 +369,27 @@ func (ec *Client) SyncProgress(ctx context.Context) (*ethereum.SyncProgress, err
 	return p.toSyncProgress(), nil
 }
 
+// Arbitrum: This is the same as SyncProgress, but it doesn't unmarshal the result of
+// the RPC call into an rpcProgress struct, which due to the Arbitrum sync fields having
+// different names, succeeds but creates an empty struct, which is confusing. This just
+// returns the full map as returned by eth_syncing, if there is one.
+func (ec *Client) SyncProgressMap(ctx context.Context) (map[string]interface{}, error) {
+	var raw json.RawMessage
+	if err := ec.c.CallContext(ctx, &raw, "eth_syncing"); err != nil {
+		return nil, err
+	}
+	// Handle the possible response types
+	var syncing bool
+	if err := json.Unmarshal(raw, &syncing); err == nil {
+		return nil, nil // Not syncing (always false)
+	}
+	var p map[string]interface{}
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
 // SubscribeNewHead subscribes to notifications about the current blockchain head
 // on the given channel.
 func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
