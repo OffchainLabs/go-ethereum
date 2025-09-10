@@ -1772,7 +1772,9 @@ func marshalReceipt(ctx context.Context, receipt *types.Receipt, blockHash commo
 	}
 	if backend.ChainConfig().IsArbitrum() {
 		fields["gasUsedForL1"] = hexutil.Uint64(receipt.GasUsedForL1)
-		fields["multiGasUsed"] = receipt.MultiGasUsed
+		if !receipt.MultiGasUsed.IsZero() {
+			fields["multiGasUsed"] = receipt.MultiGasUsed
+		}
 
 		header, err := backend.HeaderByHash(ctx, blockHash)
 		if err != nil {

@@ -192,7 +192,10 @@ func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 	}
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = result.UsedGas
-	receipt.MultiGasUsed = result.UsedMultiGas
+
+	if evm.Config.ExposeMultiGas {
+		receipt.MultiGasUsed = result.UsedMultiGas
+	}
 
 	if tx.Type() == types.BlobTxType {
 		receipt.BlobGasUsed = uint64(len(tx.BlobHashes()) * params.BlobTxBlobGasPerBlob)
