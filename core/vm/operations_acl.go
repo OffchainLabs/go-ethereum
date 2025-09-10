@@ -209,6 +209,7 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc, addressPosition int) g
 		// outside of this function, as part of the dynamic gas, and that will make it
 		// also become correctly reported to tracers.
 		contract.Gas += coldCost
+		contract.RetainedMultiGas.SaturatingIncrementInto(multigas.ResourceKindStorageAccess, coldCost)
 
 		// Cold slot access considered as storage access.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
@@ -339,7 +340,8 @@ func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
 		// adding it to the return, it will be charged outside of this function, as
 		// part of the dynamic gas. This will ensure it is correctly reported to
 		// tracers.
-		contract.Gas += multiGas.Get(multigas.ResourceKindStorageAccess)
+		contract.Gas += multiGas.SingleGas()
+		contract.RetainedMultiGas.SaturatingAddInto(multiGas)
 
 		var overflow bool
 		if multiGas, overflow = multiGas.SafeAdd(multiOld); overflow {

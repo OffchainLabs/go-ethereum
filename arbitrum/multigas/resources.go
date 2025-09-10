@@ -218,6 +218,35 @@ func (z *MultiGas) SaturatingAddInto(x MultiGas) {
 	}
 }
 
+// SafeSub returns a copy of z with the per-kind, total, and refund gas
+// subtracted by the values from x. It returns the updated value and true if
+// a underflow occurred.
+func (z MultiGas) SafeSub(x MultiGas) (MultiGas, bool) {
+	res := z
+
+	for i := 0; i < int(NumResourceKind); i++ {
+		v, b := bits.Sub64(res.gas[i], x.gas[i], 0)
+		if b != 0 {
+			return z, true
+		}
+		res.gas[i] = v
+	}
+
+	t, b := bits.Sub64(res.total, x.total, 0)
+	if b != 0 {
+		return z, true
+	}
+	res.total = t
+
+	r, b := bits.Sub64(res.refund, x.refund, 0)
+	if b != 0 {
+		return z, true
+	}
+	res.refund = r
+
+	return res, false
+}
+
 // SafeIncrement returns a copy of z with the given resource kind
 // and the total incremented by gas. It returns the updated value and true if
 // an overflow occurred.
@@ -269,6 +298,7 @@ func (z *MultiGas) SaturatingIncrementInto(kind ResourceKind, gas uint64) {
 	} else {
 		z.gas[kind] = v
 	}
+
 	if t, c := bits.Add64(z.total, gas, 0); c != 0 {
 		z.total = ^uint64(0)
 	} else {

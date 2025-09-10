@@ -50,7 +50,8 @@ type Contract struct {
 	value *uint256.Int
 
 	// Arbitrum: total used multi-dimensional gas
-	UsedMultiGas multigas.MultiGas
+	UsedMultiGas     multigas.MultiGas
+	RetainedMultiGas multigas.MultiGas
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
@@ -60,12 +61,13 @@ func NewContract(caller common.Address, address common.Address, value *uint256.I
 		jumpDests = newMapJumpDests()
 	}
 	return &Contract{
-		caller:       caller,
-		address:      address,
-		jumpDests:    jumpDests,
-		Gas:          gas,
-		value:        value,
-		UsedMultiGas: multigas.ZeroGas(),
+		caller:           caller,
+		address:          address,
+		jumpDests:        jumpDests,
+		Gas:              gas,
+		value:            value,
+		UsedMultiGas:     multigas.ZeroGas(),
+		RetainedMultiGas: multigas.ZeroGas(),
 	}
 }
 
