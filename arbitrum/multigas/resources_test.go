@@ -125,6 +125,66 @@ func TestSafeAddChecksTotalOverflow(t *testing.T) {
 	}
 }
 
+func TestSafeSub(t *testing.T) {
+	gas, underflow := MultiGasFromPairs(
+		Pair{ResourceKindComputation, 30},
+		Pair{ResourceKindHistoryGrowth, 40},
+		Pair{ResourceKindStorageAccess, 50},
+	).SafeSub(MultiGasFromPairs(
+		Pair{ResourceKindComputation, 10},
+		Pair{ResourceKindHistoryGrowth, 20},
+	))
+	if underflow {
+		t.Errorf("unexpected underflow: got %v, want %v", underflow, false)
+	}
+	if got, want := gas.Get(ResourceKindComputation), uint64(20); got != want {
+		t.Errorf("unexpected computation gas: got %v, want %v", got, want)
+	}
+	if got, want := gas.Get(ResourceKindHistoryGrowth), uint64(20); got != want {
+		t.Errorf("unexpected history growth gas: got %v, want %v", got, want)
+	}
+	if got, want := gas.Get(ResourceKindStorageAccess), uint64(50); got != want {
+		t.Errorf("unexpected storage access gas: got %v, want %v", got, want)
+	}
+	if got, want := gas.Get(ResourceKindStorageGrowth), uint64(0); got != want {
+		t.Errorf("unexpected storage growth gas: got %v, want %v", got, want)
+	}
+	if got, want := gas.Get(ResourceKindL1Calldata), uint64(0); got != want {
+		t.Errorf("unexpected L1 calldata gas: got %v, want %v", got, want)
+	}
+	if got, want := gas.Get(ResourceKindL2Calldata), uint64(0); got != want {
+		t.Errorf("unexpected L2 calldata gas: got %v, want %v", got, want)
+	}
+	if got, want := gas.Get(ResourceKindWasmComputation), uint64(0); got != want {
+		t.Errorf("unexpected WASM computation gas: got %v, want %v", got, want)
+	}
+	if got, want := gas.SingleGas(), uint64(90); got != want {
+		t.Errorf("unexpected single gas: got %v, want %v", got, want)
+	}
+}
+
+func TestSafeSubChecksOneDimensionalUnderflow(t *testing.T) {
+	_, underflow := MultiGasFromPairs(
+		Pair{ResourceKindComputation, 10},
+	).SafeSub(MultiGasFromPairs(
+		Pair{ResourceKindComputation, 11},
+	))
+	if !underflow {
+		t.Errorf("expected underflow: got %v, want %v", underflow, true)
+	}
+}
+
+func TestSafeSubChecksTotalUnderflow(t *testing.T) {
+	_, underflow := MultiGasFromPairs(
+		Pair{ResourceKindComputation, 10},
+	).SafeSub(MultiGasFromPairs(
+		Pair{ResourceKindHistoryGrowth, 1},
+	))
+	if !underflow {
+		t.Errorf("expected underflow: got %v, want %v", underflow, true)
+	}
+}
+
 func TestSaturatingAdd(t *testing.T) {
 	a := ComputationGas(10)
 	b := ComputationGas(20)
