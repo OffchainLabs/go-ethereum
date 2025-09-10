@@ -526,7 +526,7 @@ type GasCallFuncTestCase struct {
 func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasCallFunc gasFunc, testCases []GasCallFuncTestCase, isCallCode bool) {
 	t.Helper()
 
-	contractGas := uint64(100000)
+	initialContractGas := uint64(100000)
 	slotKey := common.HexToHash("0xdeadbeef") // any dummy key
 
 	for _, tc := range testCases {
@@ -571,9 +571,8 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 			}
 
 			// Setup contract
-			contract := NewContract(caller, caller, new(uint256.Int), contractGas, nil)
+			contract := NewContract(caller, caller, new(uint256.Int), initialContractGas, nil)
 			contract.IsSystemCall = tc.isSystemCall
-			contract.Gas = contractGas
 
 			// Setup stack: [value, address, gas] (bottom to top)
 			if tc.transfersValue {
@@ -646,6 +645,11 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 
 			if multiGas != expectedMultiGas {
 				t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
+			}
+
+			usedMultiGasDiff, _ := contract.UsedMultiGas.SafeSub(contract.RetainedMultiGas)
+			if initialContractGas-contract.Gas != usedMultiGasDiff.SingleGas() {
+				t.Errorf("Expected used gas %d, got %d", initialContractGas-contract.Gas, usedMultiGasDiff.SingleGas())
 			}
 		})
 	}

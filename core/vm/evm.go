@@ -314,7 +314,14 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			contract.SetCallCode(evm.resolveCodeHash(addr), code)
 			ret, err = evm.Run(contract, input, false)
 			gas = contract.Gas
-			usedMultiGas.SaturatingAddInto(contract.UsedMultiGas)
+
+			var usedMultiGasDiff multigas.MultiGas
+			var underflow bool
+			if usedMultiGasDiff, underflow = contract.UsedMultiGas.SafeSub(contract.RetainedMultiGas); underflow {
+				// NOTE: This should never happen, but if it does, log it and continue
+				log.Error("used contract gas underflow", "used", contract.UsedMultiGas, "retained", contract.RetainedMultiGas)
+			}
+			usedMultiGas.SaturatingAddInto(usedMultiGasDiff)
 		}
 	}
 	// When an error was returned by the EVM or when setting the creation code
