@@ -35,6 +35,8 @@ type Config struct {
 
 	StatelessSelfValidation bool // Generate execution witnesses and self-check against them (testing purpose)
 	EnableWitnessStats      bool // Whether trie access statistics collection is enabled
+
+	ExposeMultiGas bool // Arbitrum: Expose multi-gas used in transaction receipts
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
