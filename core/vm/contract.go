@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
 )
 
@@ -177,4 +178,22 @@ func (c *Contract) Value() *uint256.Int {
 func (c *Contract) SetCallCode(hash common.Hash, code []byte) {
 	c.Code = code
 	c.CodeHash = hash
+}
+
+func (c *Contract) UseMultiGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason, kind multigas.ResourceKind) (ok bool) {
+	if !c.UseGas(gas, logger, reason) {
+		return false
+	}
+	c.UsedMultiGas.SaturatingIncrementInto(kind, gas)
+	return true
+}
+
+func (c *Contract) GetTotalUsedMultiGas() multigas.MultiGas {
+	var total multigas.MultiGas
+	var underflow bool
+	if total, underflow = c.UsedMultiGas.SafeSub(c.RetainedMultiGas); underflow {
+		// NOTE: This should never happen, but if it does, log it and continue
+		log.Error("used contract gas underflow", "used", c.UsedMultiGas, "retained", c.RetainedMultiGas)
+	}
+	return total
 }
