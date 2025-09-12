@@ -180,12 +180,17 @@ func (c *Contract) SetCallCode(hash common.Hash, code []byte) {
 	c.CodeHash = hash
 }
 
-func (c *Contract) UseMultiGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason, kind multigas.ResourceKind) (ok bool) {
-	if !c.UseGas(gas, logger, reason) {
+func (c *Contract) UseMultiGas(multiGas multigas.MultiGas, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
+	if !c.UseGas(multiGas.SingleGas(), logger, reason) {
 		return false
 	}
-	c.UsedMultiGas.SaturatingIncrementInto(kind, gas)
+	c.UsedMultiGas.SaturatingAddInto(multiGas)
 	return true
+}
+
+func (c *Contract) RefundMultiGas(multiGas multigas.MultiGas, logger *tracing.Hooks, reason tracing.GasChangeReason) {
+	c.RefundGas(multiGas.SingleGas(), logger, reason)
+	c.RetainedMultiGas.SaturatingAddInto(multiGas)
 }
 
 func (c *Contract) GetTotalUsedMultiGas() multigas.MultiGas {
@@ -194,6 +199,8 @@ func (c *Contract) GetTotalUsedMultiGas() multigas.MultiGas {
 	if total, underflow = c.UsedMultiGas.SafeSub(c.RetainedMultiGas); underflow {
 		// NOTE: This should never happen, but if it does, log it and continue
 		log.Error("used contract gas underflow", "used", c.UsedMultiGas, "retained", c.RetainedMultiGas)
+		// But since not all places are instrumented yet, clamp to zero for safety
+		return c.UsedMultiGas.SaturatingSub(c.RetainedMultiGas)
 	}
 	return total
 }

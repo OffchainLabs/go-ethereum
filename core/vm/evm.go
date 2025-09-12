@@ -625,7 +625,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
-			contract.UseMultiGas(contract.Gas, evm.Config.Tracer, tracing.GasChangeCallFailedExecution, multigas.ResourceKindComputation)
+			contract.UseMultiGas(multigas.ComputationGas(contract.Gas), evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
 		}
 	}
 	return ret, address, contract.Gas, contract.GetTotalUsedMultiGas(), err
