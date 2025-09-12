@@ -613,7 +613,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
 	contract := NewContract(caller, address, value, gas, evm.jumpDests)
-	// Delegatea all used multi gas to contract
+	// Delegate all used multi gas to contract
 	contract.UsedMultiGas = usedMultiGas
 
 	// Explicitly set the code to a null hash to prevent caching of jump analysis
