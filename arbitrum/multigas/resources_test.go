@@ -198,6 +198,28 @@ func TestSaturatingAdd(t *testing.T) {
 	}
 }
 
+func TestSaturatingSub(t *testing.T) {
+	a := MultiGasFromPairs(
+		Pair{ResourceKindComputation, 30},
+		Pair{ResourceKindHistoryGrowth, 40},
+		Pair{ResourceKindStorageAccess, 50},
+	)
+	b := MultiGasFromPairs(
+		Pair{ResourceKindComputation, 10},
+		Pair{ResourceKindHistoryGrowth, 20},
+	)
+	res := a.SaturatingSub(b)
+	if got, want := res.Get(ResourceKindComputation), uint64(20); got != want {
+		t.Errorf("unexpected computation gas: got %v, want %v", got, want)
+	}
+	if got, want := res.Get(ResourceKindHistoryGrowth), uint64(20); got != want {
+		t.Errorf("unexpected history growth gas: got %v, want %v", got, want)
+	}
+	if got, want := res.Get(ResourceKindStorageAccess), uint64(50); got != want {
+		t.Errorf("unexpected storage access gas: got %v, want %v", got, want)
+	}
+}
+
 func TestSaturatingAddClampsOnOverflow(t *testing.T) {
 	a := ComputationGas(math.MaxUint64)
 	b := ComputationGas(1)
@@ -207,6 +229,18 @@ func TestSaturatingAddClampsOnOverflow(t *testing.T) {
 		t.Errorf("expected computation gas to clamp: got %v, want %v", got, want)
 	}
 	if got, want := res.SingleGas(), uint64(math.MaxUint64); got != want {
+		t.Errorf("expected total gas to clamp: got %v, want %v", got, want)
+	}
+}
+
+func TestSaturatingSubClampsOnUnderflow(t *testing.T) {
+	a := ComputationGas(10)
+	b := ComputationGas(20)
+	res := a.SaturatingSub(b)
+	if got, want := res.Get(ResourceKindComputation), uint64(0); got != want {
+		t.Errorf("expected computation gas to clamp: got %v, want %v", got, want)
+	}
+	if got, want := res.SingleGas(), uint64(0); got != want {
 		t.Errorf("expected total gas to clamp: got %v, want %v", got, want)
 	}
 }

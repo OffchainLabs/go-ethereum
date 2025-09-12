@@ -7,9 +7,11 @@ import (
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 func TestApplyMessageReturnsMultiGas(t *testing.T) {
@@ -105,5 +107,59 @@ func TestApplyMessageCalldataReturnsMultiGas(t *testing.T) {
 	expectedMultigas := multigas.L2CalldataGas(gas)
 	if got, want := res.UsedMultiGas, expectedMultigas; got != want {
 		t.Errorf("unexpected multi gas: got %v, want %v", got, want)
+	}
+}
+
+func TestCreateReturnsMultiGas(t *testing.T) {
+	creator := common.HexToAddress("0xcccccccccccccccccccccccccccccccccccccccc")
+	initcode := []byte{
+		byte(vm.PUSH1), 0x01,
+		byte(vm.PUSH1), 0x00,
+		byte(vm.SSTORE),
+		byte(vm.STOP),
+	}
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.CreateAccount(creator)
+	statedb.SetNonce(creator, 1, tracing.NonceChangeUnspecified)
+
+	header := &types.Header{
+		Number:     common.Big0,
+		BaseFee:    common.Big0,
+		Difficulty: common.Big0,
+	}
+	evm := vm.NewEVM(NewEVMBlockContext(header, nil, &creator), statedb, params.TestChainConfig, vm.Config{})
+
+	gasLimit := uint64(500_000)
+	value := uint256.NewInt(0)
+
+	ret, _, leftoverGas, usedMultigas, err := evm.Create(
+		creator,
+		initcode,
+		gasLimit,
+		value,
+	)
+	if err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+
+	// Expected gas dimensions:
+	// - PUSH1 (x2): 2 * 3 = 6 computation
+	// - SSTORE (new slot): 2100 access + 20000 growth
+	expectedMultigas := multigas.MultiGasFromPairs(
+		multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: 6},
+		multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929},
+		multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.SstoreSetGasEIP2200},
+	)
+
+	if got, want := usedMultigas, expectedMultigas; got != want {
+		t.Errorf("unexpected multigas:\n  got:  %v\n  want: %v", got, want)
+	}
+
+	if len(ret) != 0 {
+		t.Errorf("expected no return from initcode, got: %x", ret)
+	}
+	if leftoverGas >= gasLimit {
+		t.Errorf("no gas consumed: leftover %d >= limit %d", leftoverGas, gasLimit)
 	}
 }
