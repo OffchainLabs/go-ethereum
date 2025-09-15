@@ -668,7 +668,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	)
 	if contractCreation {
 		deployedContract = &common.Address{}
-		ret, *deployedContract, st.gasRemaining, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value)
+		ret, *deployedContract, st.gasRemaining, multiGas, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value)
+		usedMultiGas = usedMultiGas.SaturatingAdd(multiGas)
 	} else {
 		// Increment the nonce for the next transaction.
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)

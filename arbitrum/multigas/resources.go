@@ -247,6 +247,35 @@ func (z MultiGas) SafeSub(x MultiGas) (MultiGas, bool) {
 	return res, false
 }
 
+// SaturatingSub returns a copy of z with the per-kind, total, and refund gas
+// subtracted by the values from x. On underflow, the affected field(s) are
+// clamped to zero.
+func (z MultiGas) SaturatingSub(x MultiGas) MultiGas {
+	res := z
+
+	for i := 0; i < int(NumResourceKind); i++ {
+		if v, c := bits.Sub64(res.gas[i], x.gas[i], 0); c != 0 {
+			res.gas[i] = uint64(0) // clamp
+		} else {
+			res.gas[i] = v
+		}
+	}
+
+	if t, c := bits.Sub64(res.total, x.total, 0); c != 0 {
+		res.total = uint64(0) // clamp
+	} else {
+		res.total = t
+	}
+
+	if r, c := bits.Sub64(res.refund, x.refund, 0); c != 0 {
+		res.refund = uint64(0) // clamp
+	} else {
+		res.refund = r
+	}
+
+	return res
+}
+
 // SafeIncrement returns a copy of z with the given resource kind
 // and the total incremented by gas. It returns the updated value and true if
 // an overflow occurred.
