@@ -265,6 +265,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	}
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
+	startingGas := gas
 	usedMultiGas = multigas.ZeroGas()
 
 	if !evm.StateDB.Exist(addr) {
@@ -328,7 +329,11 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 				evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
 			}
 
-			usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
+			// Attribute all leftover gas to computation
+			if startingGas > usedMultiGas.SingleGas() {
+				leftOverGas := startingGas - usedMultiGas.SingleGas()
+				usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, leftOverGas)
+			}
 			gas = 0
 		}
 		// TODO: consider clearing up unused snapshots:
@@ -345,7 +350,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 //
 // CallCode differs from Call in the sense that it executes the given address'
 // code with the caller as context.
-func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, usedMultiGas multigas.MultiGas, err error) {
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, CALLCODE, caller, addr, input, gas, value.ToBig())
@@ -355,16 +360,18 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, gas, ErrDepth
+		return nil, gas, multigas.ZeroGas(), ErrDepth
 	}
 	// Fail if we're trying to transfer more than the available balance
 	// Note although it's noop to transfer X ether to caller itself. But
 	// if caller doesn't have enough balance, it would be an error to allow
 	// over-charging itself. So the check here is necessary.
 	if !evm.Context.CanTransfer(evm.StateDB, caller, value) {
-		return nil, gas, ErrInsufficientBalance
+		return nil, gas, multigas.ZeroGas(), ErrInsufficientBalance
 	}
 	var snapshot = evm.StateDB.Snapshot()
+	var startingGas = gas
+	usedMultiGas = multigas.ZeroGas()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -377,6 +384,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 			Evm:               evm,
 		}
 		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer, info)
+		usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
@@ -388,6 +396,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 
 		ret, err = evm.Run(contract, input, false)
 		gas = contract.Gas
+		usedMultiGas.SaturatingAddInto(contract.GetTotalUsedMultiGas())
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
@@ -395,10 +404,16 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
 			}
+
+			// Attribute all leftover gas to computation
+			if startingGas > usedMultiGas.SingleGas() {
+				leftOverGas := startingGas - usedMultiGas.SingleGas()
+				usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, leftOverGas)
+			}
 			gas = 0
 		}
 	}
-	return ret, gas, err
+	return ret, gas, usedMultiGas, err
 }
 
 // DelegateCall executes the contract associated with the addr with the given input
@@ -406,7 +421,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 //
 // DelegateCall differs from CallCode in the sense that it executes the given address'
 // code with the caller as context and the caller is set to the caller of the caller.
-func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, usedMultiGas multigas.MultiGas, err error) {
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
 		// DELEGATECALL inherits value from parent call
@@ -417,9 +432,11 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, gas, ErrDepth
+		return nil, gas, multigas.ZeroGas(), ErrDepth
 	}
 	var snapshot = evm.StateDB.Snapshot()
+	var startingGas = gas
+	usedMultiGas = multigas.ZeroGas()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -432,6 +449,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 			Evm:               evm,
 		}
 		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer, info)
+		usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
 	} else {
 		// Initialise a new contract and make initialise the delegate values
 		//
@@ -444,6 +462,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 
 		ret, err = evm.Run(contract, input, false)
 		gas = contract.Gas
+		usedMultiGas.SaturatingAddInto(contract.GetTotalUsedMultiGas())
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
@@ -451,17 +470,22 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
 			}
+			// Attribute all leftover gas to computation
+			if startingGas > usedMultiGas.SingleGas() {
+				leftOverGas := startingGas - usedMultiGas.SingleGas()
+				usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, leftOverGas)
+			}
 			gas = 0
 		}
 	}
-	return ret, gas, err
+	return ret, gas, usedMultiGas, err
 }
 
 // StaticCall executes the contract associated with the addr with the given input
 // as parameters while disallowing any modifications to the state during the call.
 // Opcodes that attempt to perform such modifications will result in exceptions
 // instead of performing the modifications.
-func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, usedMultiGas multigas.MultiGas, err error) {
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, STATICCALL, caller, addr, input, gas, nil)
@@ -471,7 +495,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, gas, ErrDepth
+		return nil, gas, multigas.ZeroGas(), ErrDepth
 	}
 	// We take a snapshot here. This is a bit counter-intuitive, and could probably be skipped.
 	// However, even a staticcall is considered a 'touch'. On mainnet, static calls were introduced
@@ -479,6 +503,8 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	// then certain tests start failing; stRevertTest/RevertPrecompiledTouchExactOOG.json.
 	// We could change this, but for now it's left for legacy reasons
 	var snapshot = evm.StateDB.Snapshot()
+	var startingGas = gas
+	usedMultiGas = multigas.ZeroGas()
 
 	// We do an AddBalance of zero here, just in order to trigger a touch.
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
@@ -496,6 +522,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 			Evm:               evm,
 		}
 		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer, info)
+		usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
@@ -507,6 +534,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 		// when we're in Homestead this also counts for code storage gas errors.
 		ret, err = evm.Run(contract, input, true)
 		gas = contract.Gas
+		usedMultiGas.SaturatingAddInto(contract.GetTotalUsedMultiGas())
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
@@ -514,11 +542,15 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
 			}
-
+			// Attribute all leftover gas to computation
+			if startingGas > usedMultiGas.SingleGas() {
+				leftOverGas := startingGas - usedMultiGas.SingleGas()
+				usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, leftOverGas)
+			}
 			gas = 0
 		}
 	}
-	return ret, gas, err
+	return ret, gas, usedMultiGas, err
 }
 
 // create creates a new contract using code as deployment code.
