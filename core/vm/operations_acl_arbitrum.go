@@ -151,15 +151,19 @@ func WasmCallCost(db StateDB, contract common.Address, value *uint256.Int, budge
 
 // Computes the cost of touching an account in wasm
 // Note: the code here is adapted from gasEip2929AccountCheck with the most recent parameters as of The Merge
-func WasmAccountTouchCost(cfg *params.ChainConfig, db StateDB, addr common.Address, withCode bool) uint64 {
-	cost := uint64(0)
+func WasmAccountTouchCost(cfg *params.ChainConfig, db StateDB, addr common.Address, withCode bool) multigas.MultiGas {
+	cost := multigas.ZeroGas()
 	if withCode {
-		cost = cfg.MaxCodeSize() / 24576 * params.ExtcodeSizeGasEIP150
+		extCodeCost := cfg.MaxCodeSize() / 24576 * params.ExtcodeSizeGasEIP150
+		cost.SaturatingIncrementInto(multigas.ResourceKindComputation, extCodeCost)
 	}
 
 	if !db.AddressInAccessList(addr) {
 		db.AddAddressToAccessList(addr)
-		return cost + params.ColdAccountAccessCostEIP2929
+		return cost.SaturatingAdd(multigas.MultiGasFromPairs(
+			multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929},
+			multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.WarmStorageReadCostEIP2929},
+		))
 	}
-	return cost + params.WarmStorageReadCostEIP2929
+	return cost.SaturatingIncrement(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929)
 }
