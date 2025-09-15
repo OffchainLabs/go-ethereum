@@ -163,3 +163,99 @@ func TestCreateReturnsMultiGas(t *testing.T) {
 		t.Errorf("no gas consumed: leftover %d >= limit %d", leftoverGas, gasLimit)
 	}
 }
+
+func TestIntrinsicGas(t *testing.T) {
+	tests := []struct {
+		name               string
+		data               []byte
+		accessList         types.AccessList
+		authList           []types.SetCodeAuthorization
+		isContractCreation bool
+		isHomestead        bool
+		isEIP2028          bool
+		isEIP3860          bool
+		want               multigas.MultiGas
+	}{
+		{
+			name: "NoData",
+			data: []byte{},
+			want: multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.TxGas},
+			),
+		},
+		{
+			name: "NonZeroData",
+			data: []byte{1, 2, 3, 4, 5},
+			want: multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.TxGas},
+				multigas.Pair{Kind: multigas.ResourceKindL2Calldata, Amount: 5 * params.TxDataNonZeroGasFrontier},
+			),
+		},
+		{
+			name: "ZeroAndNonZeroData",
+			data: []byte{0, 1, 0, 2, 0, 3},
+			want: multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.TxGas},
+				multigas.Pair{Kind: multigas.ResourceKindL2Calldata, Amount: 3*params.TxDataZeroGas + 3*params.TxDataNonZeroGasFrontier},
+			),
+		},
+		{
+			name:               "ContractCreation",
+			data:               []byte{},
+			isContractCreation: true,
+			isHomestead:        true,
+			want: multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.TxGasContractCreation},
+			),
+		},
+		{
+			name:       "AccessList",
+			data:       []byte{},
+			accessList: types.AccessList{{Address: common.Address{1}, StorageKeys: []common.Hash{{2}, {3}}}},
+			want: multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.TxGas},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.TxAccessListAddressGas + 2*params.TxAccessListStorageKeyGas},
+			),
+		},
+		{
+			name:     "AuthList",
+			data:     []byte{},
+			authList: []types.SetCodeAuthorization{{}},
+			want: multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.TxGas},
+				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.CallNewAccountGas},
+			),
+		},
+		{
+			name:      "EIP2028",
+			data:      []byte{1, 2, 3, 4, 5},
+			isEIP2028: true,
+			want: multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.TxGas},
+				multigas.Pair{Kind: multigas.ResourceKindL2Calldata, Amount: 5 * params.TxDataNonZeroGasEIP2028},
+			),
+		},
+		{
+			name:               "EIP3860",
+			data:               []byte{1, 2, 3, 4, 5},
+			isContractCreation: true,
+			isEIP3860:          true,
+			want: multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.TxGas + toWordSize(5)*params.InitCodeWordGas},
+				multigas.Pair{Kind: multigas.ResourceKindL2Calldata, Amount: 5 * params.TxDataNonZeroGasFrontier},
+			),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := IntrinsicMultiGas(tt.data, tt.accessList, tt.authList, tt.isContractCreation, tt.isHomestead, tt.isEIP2028, tt.isEIP3860)
+			if err != nil {
+				t.Fatalf("unexpected IntrinsicMultiGas() error: got %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("wrong IntrinsicGas() result: got %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}

@@ -78,12 +78,21 @@ func (result *ExecutionResult) Revert() []byte {
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
 func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool) (uint64, error) {
+	multiGas, err := IntrinsicMultiGas(data, accessList, authList, isContractCreation, isHomestead, isEIP2028, isEIP3860)
+	if err != nil {
+		return 0, err
+	}
+	return multiGas.SingleGas(), err
+}
+
+// IntrinsicMultiGas returns the intrinsic gas as a multi-gas.
+func IntrinsicMultiGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool) (multigas.MultiGas, error) {
 	// Set the starting gas for the raw transaction
-	var gas uint64
+	var gas multigas.MultiGas
 	if isContractCreation && isHomestead {
-		gas = params.TxGasContractCreation
+		gas.SaturatingIncrementInto(multigas.ResourceKindComputation, params.TxGasContractCreation)
 	} else {
-		gas = params.TxGas
+		gas.SaturatingIncrementInto(multigas.ResourceKindComputation, params.TxGas)
 	}
 	dataLen := uint64(len(data))
 	// Bump the required gas by the amount of transactional data
@@ -97,30 +106,30 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 		if isEIP2028 {
 			nonZeroGas = params.TxDataNonZeroGasEIP2028
 		}
-		if (math.MaxUint64-gas)/nonZeroGas < nz {
-			return 0, ErrGasUintOverflow
+		if (math.MaxUint64-gas.SingleGas())/nonZeroGas < nz {
+			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
-		gas += nz * nonZeroGas
+		gas.SaturatingIncrementInto(multigas.ResourceKindL2Calldata, nz*nonZeroGas)
 
-		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
-			return 0, ErrGasUintOverflow
+		if (math.MaxUint64-gas.SingleGas())/params.TxDataZeroGas < z {
+			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
-		gas += z * params.TxDataZeroGas
+		gas.SaturatingIncrementInto(multigas.ResourceKindL2Calldata, z*params.TxDataZeroGas)
 
 		if isContractCreation && isEIP3860 {
 			lenWords := toWordSize(dataLen)
-			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
-				return 0, ErrGasUintOverflow
+			if (math.MaxUint64-gas.SingleGas())/params.InitCodeWordGas < lenWords {
+				return multigas.ZeroGas(), ErrGasUintOverflow
 			}
-			gas += lenWords * params.InitCodeWordGas
+			gas.SaturatingIncrementInto(multigas.ResourceKindComputation, lenWords*params.InitCodeWordGas)
 		}
 	}
 	if accessList != nil {
-		gas += uint64(len(accessList)) * params.TxAccessListAddressGas
-		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
+		gas.SaturatingIncrementInto(multigas.ResourceKindStorageAccess, uint64(len(accessList))*params.TxAccessListAddressGas)
+		gas.SaturatingIncrementInto(multigas.ResourceKindStorageAccess, uint64(accessList.StorageKeys())*params.TxAccessListStorageKeyGas)
 	}
 	if authList != nil {
-		gas += uint64(len(authList)) * params.CallNewAccountGas
+		gas.SaturatingIncrementInto(multigas.ResourceKindStorageGrowth, uint64(len(authList))*params.CallNewAccountGas)
 	}
 	return gas, nil
 }
@@ -603,11 +612,11 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	)
 
 	// Check clauses 4-5, subtract intrinsic iGas if everything is correct
-	iGas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
+	iGas, err := IntrinsicMultiGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
 	if err != nil {
 		return nil, err
 	}
-	if st.gasRemaining < iGas {
+	if st.gasRemaining < iGas.SingleGas() {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, iGas)
 	}
 	// Gas limit suffices for the floor data cost (EIP-7623)
@@ -621,12 +630,13 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 	}
 	if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
-		t.OnGasChange(st.gasRemaining, st.gasRemaining-iGas, tracing.GasChangeTxIntrinsicGas)
+		t.OnGasChange(st.gasRemaining, st.gasRemaining-iGas.SingleGas(), tracing.GasChangeTxIntrinsicGas)
 	}
-	st.gasRemaining -= iGas
+	st.gasRemaining -= iGas.SingleGas()
+	usedMultiGas = usedMultiGas.SaturatingAdd(iGas)
 
 	tipAmount := big.NewInt(0)
-	tipReceipient, multiGas, err := st.evm.ProcessingHook.GasChargingHook(&st.gasRemaining, iGas)
+	tipReceipient, multiGas, err := st.evm.ProcessingHook.GasChargingHook(&st.gasRemaining, iGas.SingleGas())
 	if err != nil {
 		return nil, err
 	}
