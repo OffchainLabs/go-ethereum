@@ -82,7 +82,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 	if err != nil {
 		return 0, err
 	}
-	return multiGas.SingleGas(), err
+	return multiGas.SingleGas(), nil
 }
 
 // IntrinsicMultiGas returns the intrinsic gas as a multi-gas.
