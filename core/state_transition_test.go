@@ -54,9 +54,9 @@ func TestApplyMessageReturnsMultiGas(t *testing.T) {
 	}
 
 	expectedMultigas := multigas.MultiGasFromPairs(
-		multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: 3 + 3},   // PUSH4+PUSH1
-		multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: 2100},  // SSTORE
-		multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: 20000}, // SSTORE
+		multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.TxGas + 3 + 3}, // IntrinsicGas+PUSH4+PUSH1
+		multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: 2100},               // SSTORE
+		multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: 20000},              // SSTORE
 	)
 	if got, want := res.UsedMultiGas, expectedMultigas; got != want {
 		t.Errorf("unexpected multi gas: got %v, want %v", got, want)
@@ -100,11 +100,14 @@ func TestApplyMessageCalldataReturnsMultiGas(t *testing.T) {
 		t.Fatalf("failed to apply tx: %v", err)
 	}
 
-	gas, err := FloorDataGas(data)
+	floorDataGas, err := FloorDataGas(data)
 	if err != nil {
 		t.Fatalf("failed to calculate gas: %v", err)
 	}
-	expectedMultigas := multigas.L2CalldataGas(gas)
+	expectedMultigas := multigas.MultiGasFromPairs(
+		multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.TxGas}, // IntrinsicGas
+		multigas.Pair{Kind: multigas.ResourceKindL2Calldata, Amount: floorDataGas - params.TxGas},
+	)
 	if got, want := res.UsedMultiGas, expectedMultigas; got != want {
 		t.Errorf("unexpected multi gas: got %v, want %v", got, want)
 	}
