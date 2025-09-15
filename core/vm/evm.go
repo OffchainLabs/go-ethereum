@@ -265,7 +265,6 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	}
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
-	startingGas := gas
 	usedMultiGas = multigas.ZeroGas()
 
 	if !evm.StateDB.Exist(addr) {
@@ -330,10 +329,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			}
 
 			// Attribute all leftover gas to computation
-			if startingGas > usedMultiGas.SingleGas() {
-				leftOverGas := startingGas - usedMultiGas.SingleGas()
-				usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, leftOverGas)
-			}
+			usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
 			gas = 0
 		}
 		// TODO: consider clearing up unused snapshots:
@@ -370,7 +366,6 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 		return nil, gas, multigas.ZeroGas(), ErrInsufficientBalance
 	}
 	var snapshot = evm.StateDB.Snapshot()
-	var startingGas = gas
 	usedMultiGas = multigas.ZeroGas()
 
 	// It is allowed to call precompiles, even via delegatecall
@@ -383,6 +378,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 			ReadOnly:          false,
 			Evm:               evm,
 		}
+		// TODO(NIT-3557): Instrument multi-gas in Arbitrum pre-compiles
 		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer, info)
 		usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
 	} else {
@@ -406,10 +402,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 			}
 
 			// Attribute all leftover gas to computation
-			if startingGas > usedMultiGas.SingleGas() {
-				leftOverGas := startingGas - usedMultiGas.SingleGas()
-				usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, leftOverGas)
-			}
+			usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
 			gas = 0
 		}
 	}
@@ -435,7 +428,6 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 		return nil, gas, multigas.ZeroGas(), ErrDepth
 	}
 	var snapshot = evm.StateDB.Snapshot()
-	var startingGas = gas
 	usedMultiGas = multigas.ZeroGas()
 
 	// It is allowed to call precompiles, even via delegatecall
@@ -471,10 +463,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 				evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
 			}
 			// Attribute all leftover gas to computation
-			if startingGas > usedMultiGas.SingleGas() {
-				leftOverGas := startingGas - usedMultiGas.SingleGas()
-				usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, leftOverGas)
-			}
+			usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
 			gas = 0
 		}
 	}
@@ -503,7 +492,6 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	// then certain tests start failing; stRevertTest/RevertPrecompiledTouchExactOOG.json.
 	// We could change this, but for now it's left for legacy reasons
 	var snapshot = evm.StateDB.Snapshot()
-	var startingGas = gas
 	usedMultiGas = multigas.ZeroGas()
 
 	// We do an AddBalance of zero here, just in order to trigger a touch.
@@ -543,10 +531,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 				evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
 			}
 			// Attribute all leftover gas to computation
-			if startingGas > usedMultiGas.SingleGas() {
-				leftOverGas := startingGas - usedMultiGas.SingleGas()
-				usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, leftOverGas)
-			}
+			usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
 			gas = 0
 		}
 	}
