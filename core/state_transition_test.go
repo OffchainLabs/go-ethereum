@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
@@ -150,7 +151,7 @@ func TestCreateReturnsMultiGas(t *testing.T) {
 	// - PUSH1 (x2): 2 * 3 = 6 computation
 	// - SSTORE (new slot): 2100 access + 20000 growth
 	expectedMultigas := multigas.MultiGasFromPairs(
-		multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: 6},
+		multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: vm.GasFastestStep * 2},
 		multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929},
 		multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.SstoreSetGasEIP2200},
 	)
@@ -258,6 +259,113 @@ func TestIntrinsicGas(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("wrong IntrinsicGas() result: got %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCallVariantsMultiGas(t *testing.T) {
+	const gasLimit = 100_000
+	const refinedComputationGas = gasLimit - params.ColdSloadCostEIP2929 - params.SstoreSetGasEIP2200
+
+	// PUSH1 0x01, PUSH1 0x00, SSTORE, STOP
+	code := []byte{
+		byte(vm.PUSH1), 0x01,
+		byte(vm.PUSH1), 0x00,
+		byte(vm.SSTORE),
+		byte(vm.STOP),
+	}
+
+	caller := common.HexToAddress("0xc0ffee0000000000000000000000000000000000")
+	delegate := common.HexToAddress("0xdeadbeef00000000000000000000000000000000")
+	contractAddr := common.HexToAddress("0xc0de000000000000000000000000000000000000")
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.CreateAccount(caller)
+	statedb.CreateAccount(contractAddr)
+	statedb.SetCode(contractAddr, code)
+	statedb.SetNonce(caller, 1, tracing.NonceChangeUnspecified)
+	statedb.Finalise(true)
+
+	header := &types.Header{
+		Number:     common.Big0,
+		BaseFee:    common.Big0,
+		Difficulty: common.Big0,
+	}
+	evm := vm.NewEVM(NewEVMBlockContext(header, nil, &caller), statedb, params.TestChainConfig, vm.Config{})
+
+	tests := []struct {
+		name             string
+		callFn           func() (ret []byte, leftOver uint64, mg multigas.MultiGas, err error)
+		expectErr        error
+		expectedMultiGas multigas.MultiGas
+	}{
+		{
+			name: "callcode_success",
+			callFn: func() ([]byte, uint64, multigas.MultiGas, error) {
+				return evm.CallCode(caller, contractAddr, nil, gasLimit, uint256.NewInt(0))
+			},
+			expectErr: nil,
+			expectedMultiGas: multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: vm.GasFastestStep * 2},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929},
+				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.SstoreSetGasEIP2200},
+			),
+		},
+		{
+			name: "delegatecall_success_same_caller",
+			callFn: func() ([]byte, uint64, multigas.MultiGas, error) {
+				return evm.DelegateCall(caller, caller, contractAddr, nil, gasLimit, uint256.NewInt(0))
+			},
+			expectErr: nil,
+			expectedMultiGas: multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.WarmStorageReadCostEIP2929 + 6},
+			),
+		},
+		{
+			name: "delegatecall_success_delegate_caller",
+			callFn: func() ([]byte, uint64, multigas.MultiGas, error) {
+				return evm.DelegateCall(caller, delegate, contractAddr, nil, gasLimit, uint256.NewInt(0))
+			},
+			expectErr: nil,
+			expectedMultiGas: multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: vm.GasFastestStep * 2},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929},
+				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.SstoreSetGasEIP2200},
+			),
+		},
+		{
+			name: "staticcall_err_write_protection",
+			callFn: func() ([]byte, uint64, multigas.MultiGas, error) {
+				return evm.StaticCall(caller, contractAddr, nil, gasLimit)
+			},
+			expectErr: vm.ErrWriteProtection,
+			expectedMultiGas: multigas.MultiGasFromPairs(
+				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: refinedComputationGas},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929},
+				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.SstoreSetGasEIP2200},
+			),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ret, leftover, usedMultiGas, err := tt.callFn()
+
+			if !errors.Is(err, tt.expectErr) {
+				t.Fatalf("unexpected error: got %v, want %v", err, tt.expectErr)
+			}
+
+			if gasLimit-leftover != usedMultiGas.SingleGas() {
+				t.Errorf("mismatch single gas and leftover gas:\n got:  %v\n want: %v", (gasLimit - leftover), usedMultiGas.SingleGas())
+			}
+
+			if usedMultiGas != tt.expectedMultiGas {
+				t.Errorf("unexpected multigas:\n got:  %v\n want: %v", usedMultiGas, tt.expectedMultiGas)
+			}
+
+			if tt.expectErr == nil && len(ret) != 0 {
+				t.Errorf("expected empty return data, got: %x", ret)
 			}
 		})
 	}
