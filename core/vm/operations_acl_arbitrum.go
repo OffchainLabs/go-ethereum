@@ -154,8 +154,8 @@ func WasmCallCost(db StateDB, contract common.Address, value *uint256.Int, budge
 func WasmAccountTouchCost(cfg *params.ChainConfig, db StateDB, addr common.Address, withCode bool) multigas.MultiGas {
 	cost := multigas.ZeroGas()
 	if withCode {
-		extCodeCost := cfg.MaxCodeSize() / 24576 * params.ExtcodeSizeGasEIP150
-		cost.SaturatingIncrementInto(multigas.ResourceKindComputation, extCodeCost)
+		extCodeCost := cfg.MaxCodeSize() / params.DefaultMaxCodeSize * params.ExtcodeSizeGasEIP150
+		cost.SaturatingIncrementInto(multigas.ResourceKindStorageAccess, extCodeCost)
 	}
 
 	if !db.AddressInAccessList(addr) {
