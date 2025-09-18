@@ -111,15 +111,17 @@ func WasmStateStoreCost(db StateDB, program common.Address, key, value common.Ha
 // The code here is adapted from the following functions with the most recent parameters as of The Merge
 //   - operations_acl.go makeCallVariantGasCallEIP2929()
 //   - gas_table.go      gasCall()
-func WasmCallCost(db StateDB, contract common.Address, value *uint256.Int, budget uint64) (uint64, error) {
-	total := uint64(0)
-	apply := func(amount uint64) bool {
-		total += amount
-		return total > budget
+func WasmCallCost(db StateDB, contract common.Address, value *uint256.Int, budget uint64) (multigas.MultiGas, error) {
+	total := multigas.ZeroGas()
+	apply := func(resource multigas.ResourceKind, amount uint64) bool {
+		total.SaturatingIncrementInto(resource, amount)
+		return total.SingleGas() > budget
 	}
 
-	// EIP 2929: the static cost
-	if apply(params.WarmStorageReadCostEIP2929) {
+	// NOTE: keep ResourceKindWasmComputation, it is used to calculate base cost single gas
+
+	// EIP 2929: the static cost considered as computation
+	if apply(multigas.ResourceKindWasmComputation, params.WarmStorageReadCostEIP2929) {
 		return total, ErrOutOfGas
 	}
 
@@ -129,7 +131,8 @@ func WasmCallCost(db StateDB, contract common.Address, value *uint256.Int, budge
 	if !warmAccess {
 		db.AddAddressToAccessList(contract)
 
-		if apply(coldCost) {
+		// Cold slot access considered as storage access.
+		if apply(multigas.ResourceKindStorageAccess, coldCost) {
 			return total, ErrOutOfGas
 		}
 	}
@@ -137,12 +140,14 @@ func WasmCallCost(db StateDB, contract common.Address, value *uint256.Int, budge
 	// gasCall()
 	transfersValue := value.Sign() != 0
 	if transfersValue && db.Empty(contract) {
-		if apply(params.CallNewAccountGas) {
+		// Storage slot writes (zero -> nonzero) considered as storage growth.
+		if apply(multigas.ResourceKindStorageGrowth, params.CallNewAccountGas) {
 			return total, ErrOutOfGas
 		}
 	}
 	if transfersValue {
-		if apply(params.CallValueTransferGas) {
+		// Value transfer to non-empty account considered as computation.
+		if apply(multigas.ResourceKindWasmComputation, params.CallValueTransferGas) {
 			return total, ErrOutOfGas
 		}
 	}
@@ -160,11 +165,13 @@ func WasmAccountTouchCost(cfg *params.ChainConfig, db StateDB, addr common.Addre
 
 	if !db.AddressInAccessList(addr) {
 		db.AddAddressToAccessList(addr)
+		// Cold slot read -> storage access + computation
 		return cost.SaturatingAdd(multigas.MultiGasFromPairs(
 			multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929},
 			multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.WarmStorageReadCostEIP2929},
 		))
 	}
+	// Warm slot read considered as computation.
 	return cost.SaturatingIncrement(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929)
 }
 
