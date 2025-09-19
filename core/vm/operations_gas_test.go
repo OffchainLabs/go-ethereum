@@ -1319,9 +1319,8 @@ func TestMakeGasLog(t *testing.T) {
 		expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindComputation, params.LogGas)
 
 		// Per-topic split
-		topicCompPer := params.LogTopicGas - params.LogTopicHistoryGas
 		expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindHistoryGrowth, n*params.LogTopicHistoryGas)
-		expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindComputation, n*topicCompPer)
+		expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindComputation, n*params.LogTopicComputationGas)
 
 		// Data bytes → history growth
 		expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindHistoryGrowth, requestedSize*params.LogDataGas)
