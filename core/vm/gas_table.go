@@ -261,27 +261,12 @@ func makeGasLog(n uint64) gasFunc {
 		//   and those bytes are charged at LogDataGas (gas per byte) as history growth.
 		// - The remainder of the per-topic cost is attributed to computation (e.g. hashing/bloom work).
 
-		// 32 bytes per topic represents the hash size that gets stored in history.
-		const topicBytes = 32
-
-		var topicHistPer uint64
-		// History growth per topic = topicBytes * LogDataGas
-		if topicHistPer, overflow = math.SafeMul(topicBytes, params.LogDataGas); overflow {
-			return multigas.ZeroGas(), ErrGasUintOverflow
-		}
-		// Sanity check: the per-topic total must be at least the history-growth portion.
-		if params.LogTopicGas < topicHistPer {
-			return multigas.ZeroGas(), fmt.Errorf(
-				"invalid gas params: LogTopicGas(%d) < topicBytes*LogDataGas(%d)",
-				params.LogTopicGas, topicHistPer,
-			)
-		}
 		// Computation per topic = LogTopicGas - (topicBytes * LogDataGas)
-		topicCompPer := params.LogTopicGas - topicHistPer
+		topicCompPer := params.LogTopicGas - params.LogTopicHistoryGas
 
 		// Scale by number of topics for LOG0..LOG4
 		var topicHistTotal, topicCompTotal uint64
-		if topicHistTotal, overflow = math.SafeMul(n, topicHistPer); overflow {
+		if topicHistTotal, overflow = math.SafeMul(n, params.LogTopicHistoryGas); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 		if topicCompTotal, overflow = math.SafeMul(n, topicCompPer); overflow {

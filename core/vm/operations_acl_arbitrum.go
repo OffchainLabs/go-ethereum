@@ -167,3 +167,17 @@ func WasmAccountTouchCost(cfg *params.ChainConfig, db StateDB, addr common.Addre
 	}
 	return cost.SaturatingIncrement(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929)
 }
+
+// Computes the history growth part cost of log operation in wasm,
+// Full cost is charged on the WASM side at the emit_log function
+// Note: the code here is adapted from makeGasLog
+func WasmLogCost(numTopics uint64, dataBytes uint64) multigas.MultiGas {
+	// History growth per topic
+	mgCost := multigas.HistoryGrowthGas(params.LogTopicHistoryGas * numTopics)
+
+	// Data payload (excluding topic hashes)
+	payloadBytes := dataBytes - params.LogTopicBytes*numTopics
+	mgCost.SaturatingIncrementInto(multigas.ResourceKindHistoryGrowth, payloadBytes*params.LogDataGas)
+
+	return mgCost
+}

@@ -1319,14 +1319,8 @@ func TestMakeGasLog(t *testing.T) {
 		expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindComputation, params.LogGas)
 
 		// Per-topic split
-		const topicBytes = uint64(32)
-		topicHistPer := topicBytes * params.LogDataGas
-		if params.LogTopicGas < topicHistPer {
-			t.Fatalf("invalid params: LogTopicGas < topicHistPer")
-		}
-		topicCompPer := params.LogTopicGas - topicHistPer
-
-		expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindHistoryGrowth, n*topicHistPer)
+		topicCompPer := params.LogTopicGas - params.LogTopicHistoryGas
+		expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindHistoryGrowth, n*params.LogTopicHistoryGas)
 		expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindComputation, n*topicCompPer)
 
 		// Data bytes → history growth
