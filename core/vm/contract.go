@@ -198,7 +198,7 @@ func (c *Contract) GetTotalUsedMultiGas() multigas.MultiGas {
 	var underflow bool
 	if total, underflow = c.UsedMultiGas.SafeSub(c.RetainedMultiGas); underflow {
 		// NOTE: This should never happen, but if it does, log it and continue
-		log.Error("used contract gas underflow", "used", c.UsedMultiGas, "retained", c.RetainedMultiGas)
+		log.Info("used contract gas underflow", "used", c.UsedMultiGas, "retained", c.RetainedMultiGas)
 		// But since not all places are instrumented yet, clamp to zero for safety
 		return c.UsedMultiGas.SaturatingSub(c.RetainedMultiGas)
 	}
