@@ -118,10 +118,8 @@ func WasmCallCost(db StateDB, contract common.Address, value *uint256.Int, budge
 		return total.SingleGas() > budget
 	}
 
-	// NOTE: keep ResourceKindWasmComputation, it is used to calculate base cost single gas
-
 	// EIP 2929: the static cost considered as computation
-	if apply(multigas.ResourceKindWasmComputation, params.WarmStorageReadCostEIP2929) {
+	if apply(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929) {
 		return total, ErrOutOfGas
 	}
 
@@ -147,7 +145,7 @@ func WasmCallCost(db StateDB, contract common.Address, value *uint256.Int, budge
 	}
 	if transfersValue {
 		// Value transfer to non-empty account considered as computation.
-		if apply(multigas.ResourceKindWasmComputation, params.CallValueTransferGas) {
+		if apply(multigas.ResourceKindComputation, params.CallValueTransferGas) {
 			return total, ErrOutOfGas
 		}
 	}
