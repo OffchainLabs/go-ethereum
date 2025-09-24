@@ -29,6 +29,7 @@ import (
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -276,7 +277,7 @@ type AdvancedPrecompileCall struct {
 }
 
 type AdvancedPrecompile interface {
-	RunAdvanced(input []byte, suppliedGas uint64, advancedInfo *AdvancedPrecompileCall) (ret []byte, remainingGas uint64, err error)
+	RunAdvanced(input []byte, suppliedGas uint64, advancedInfo *AdvancedPrecompileCall) (ret []byte, remainingGas uint64, usedMultiGas multigas.MultiGas, err error)
 	PrecompiledContract
 }
 
@@ -290,7 +291,7 @@ type arbosAwarePrecompile interface {
 // - the returned bytes,
 // - the _remaining_ gas,
 // - any error that occurred
-func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64, logger *tracing.Hooks, advancedInfo *AdvancedPrecompileCall) (ret []byte, remainingGas uint64, err error) {
+func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64, logger *tracing.Hooks, advancedInfo *AdvancedPrecompileCall) (ret []byte, remainingGas uint64, usedMultiGas multigas.MultiGas, err error) {
 	advanced, isAdvanced := p.(AdvancedPrecompile)
 	if isAdvanced {
 		return advanced.RunAdvanced(input, suppliedGas, advancedInfo)
@@ -301,14 +302,14 @@ func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uin
 	}
 	gasCost := p.RequiredGas(input)
 	if suppliedGas < gasCost {
-		return nil, 0, ErrOutOfGas
+		return nil, 0, multigas.ComputationGas(suppliedGas), ErrOutOfGas
 	}
 	if logger != nil && logger.OnGasChange != nil {
 		logger.OnGasChange(suppliedGas, suppliedGas-gasCost, tracing.GasChangeCallPrecompiledContract)
 	}
 	suppliedGas -= gasCost
 	output, err := p.Run(input)
-	return output, suppliedGas, err
+	return output, suppliedGas, multigas.ComputationGas(gasCost), err
 }
 
 // ecrecover implemented as a native contract.
