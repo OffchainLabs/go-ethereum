@@ -44,6 +44,7 @@ type Config struct {
 	ClassicRedirect        string        `koanf:"classic-redirect"`
 	ClassicRedirectTimeout time.Duration `koanf:"classic-redirect-timeout"`
 	MaxRecreateStateDepth  int64         `koanf:"max-recreate-state-depth"`
+	ErrorWhenTriedbBusy    bool          `koanf:"error-when-triedb-busy"`
 
 	AllowMethod []string `koanf:"allow-method"`
 
@@ -89,6 +90,7 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.Int(prefix+".filter-log-cache-size", DefaultConfig.FilterLogCacheSize, "log filter system maximum number of cached blocks")
 	f.Duration(prefix+".filter-timeout", DefaultConfig.FilterTimeout, "log filter system maximum time filters stay active")
 	f.Int64(prefix+".max-recreate-state-depth", DefaultConfig.MaxRecreateStateDepth, "maximum depth for recreating state, measured in l2 gas (0=don't recreate state, -1=infinite, -2=use default value for archive or non-archive node (whichever is configured))")
+	f.Bool(prefix+".error-when-triedb-busy", DefaultConfig.ErrorWhenTriedbBusy, "if enabled, rpc calls requiring state access will return an error when triedb is busy committing state; otherwise the request will wait and might timeout")
 	f.StringSlice(prefix+".allow-method", DefaultConfig.AllowMethod, "list of whitelisted rpc methods")
 	arbDebug := DefaultConfig.ArbDebug
 	f.Uint64(prefix+".arbdebug.block-range-bound", arbDebug.BlockRangeBound, "bounds the number of blocks arbdebug calls may return")
@@ -114,6 +116,7 @@ var DefaultConfig = Config{
 	FeeHistoryMaxBlockCount: 1024,
 	ClassicRedirect:         "",
 	MaxRecreateStateDepth:   UninitializedMaxRecreateStateDepth, // default value should be set for depending on node type (archive / non-archive)
+	ErrorWhenTriedbBusy:     false,
 	AllowMethod:             []string{},
 	ArbDebug: ArbDebugConfig{
 		BlockRangeBound:   256,
