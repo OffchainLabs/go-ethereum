@@ -782,7 +782,9 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 	scope.Contract.RefundGas(returnGas, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 	scope.Contract.UsedMultiGas.SaturatingAddInto(usedMultiGas)
-	scope.Contract.RetainedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, evm.callGasTemp)
+
+	// Use original gas value, since evm.callGasTemp may be updated by a nested call.
+	scope.Contract.RetainedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
 
 	evm.returnData = ret
 	return ret, nil
@@ -816,8 +818,10 @@ func opCallCode(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	}
 
 	scope.Contract.RefundGas(returnGas, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
-	scope.Contract.RetainedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, evm.callGasTemp)
 	scope.Contract.UsedMultiGas.SaturatingAddInto(usedMultiGas)
+
+	// Use original gas value, since evm.callGasTemp may be updated by a nested call.
+	scope.Contract.RetainedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
 
 	evm.returnData = ret
 	return ret, nil
@@ -847,8 +851,10 @@ func opDelegateCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	}
 
 	scope.Contract.RefundGas(returnGas, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
-	scope.Contract.RetainedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, evm.callGasTemp)
 	scope.Contract.UsedMultiGas.SaturatingAddInto(usedMultiGas)
+
+	// Use original gas value, since evm.callGasTemp may be updated by a nested call.
+	scope.Contract.RetainedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
 
 	evm.returnData = ret
 	return ret, nil
@@ -878,8 +884,10 @@ func opStaticCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	}
 
 	scope.Contract.RefundGas(returnGas, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
-	scope.Contract.RetainedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, evm.callGasTemp)
 	scope.Contract.UsedMultiGas.SaturatingAddInto(usedMultiGas)
+
+	// Use original gas value, since evm.callGasTemp may be updated by a nested call.
+	scope.Contract.RetainedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
 
 	evm.returnData = ret
 	return ret, nil

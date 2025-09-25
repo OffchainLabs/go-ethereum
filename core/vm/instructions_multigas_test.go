@@ -6,6 +6,7 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -22,13 +23,16 @@ func TestOpCallsMultiGas(t *testing.T) {
 		Transfer: func(db StateDB, from, to common.Address, amount *uint256.Int) {},
 		GetHash:  func(uint64) common.Hash { return common.Hash{} },
 	}
-	evm := NewEVM(blockCtx, statedb, params.TestChainConfig, Config{})
 
 	var (
 		contractAddr = common.HexToAddress("0xc0de000000000000000000000000000000000000")
 		caller       = common.HexToAddress("0xc0ffee0000000000000000000000000000000000")
 		initialGas   = uint64(100_000)
+		callGasTemp  = uint64(55_000)
 	)
+
+	evm := NewEVM(blockCtx, statedb, params.TestChainConfig, Config{})
+	evm.callGasTemp = callGasTemp
 
 	tests := []struct {
 		name      string
@@ -100,29 +104,25 @@ func TestOpCallsMultiGas(t *testing.T) {
 			}
 			tt.pushStack(scope.Stack)
 
+			// Preset like in gas table
+			scope.Contract.CallGasTemp = callGasTemp
+			scope.Contract.UsedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, callGasTemp)
+
 			pc := uint64(0)
 			ret, err := tt.opFn(&pc, evm, scope)
 			require.NoError(t, err)
 
 			// Stack top must be 1 (success)
 			require.Equal(t, uint64(1), scope.Stack.peek().Uint64())
-
-			require.Equal(t, scope.Contract.Gas, initialGas-scope.Contract.GetTotalUsedMultiGas().SingleGas()) // No gas used
-
-			// // Multigas: assertaions
-			// // - callGasTemp should be fully retained (no gas refund on call)
-			// // - no used multigas for empty callee
-			// // - net multigas should be zero
-			// require.Equal(t, evm.callGasTemp,
-			// 	scope.Contract.RetainedMultiGas.Get(multigas.ResourceKindComputation),
-			// 	"expected retained callGasTemp")
-			// require.True(t, scope.Contract.UsedMultiGas.IsZero(),
-			// 	"expected no used multigas for empty callee")
-			// require.True(t, scope.Contract.GetTotalUsedMultiGas().IsZero(),
-			// 	"expected net multigas to be zero")
-
-			// Return data should be empty
 			require.Len(t, ret, 0)
+
+			// Expect retain
+			require.Equal(t, callGasTemp, scope.Contract.RetainedMultiGas.Get(multigas.ResourceKindComputation))
+
+			// Total multigas should be annihilated
+			totalMultiGas := scope.Contract.GetTotalUsedMultiGas()
+			require.Equal(t, scope.Contract.Gas-callGasTemp, initialGas-totalMultiGas.SingleGas()) // No gas used
+			require.Equal(t, uint64(0), totalMultiGas.SingleGas())
 		})
 	}
 }
