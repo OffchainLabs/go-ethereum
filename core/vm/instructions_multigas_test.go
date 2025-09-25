@@ -13,6 +13,75 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+func TestOpCreatesMultiGas(t *testing.T) {
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+
+	blockCtx := BlockContext{
+		CanTransfer: func(db StateDB, addr common.Address, amount *uint256.Int) bool { return true },
+		Transfer:    func(db StateDB, from, to common.Address, amount *uint256.Int) {},
+		GetHash:     func(uint64) common.Hash { return common.Hash{} },
+	}
+
+	var (
+		caller     = common.HexToAddress("0xc0ffee0000000000000000000000000000000000")
+		initialGas = uint64(100_000)
+	)
+
+	evm := NewEVM(blockCtx, statedb, params.TestChainConfig, Config{})
+
+	tests := []struct {
+		name      string
+		pushStack func(stack *Stack)
+		opFn      func(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error)
+	}{
+		{
+			name: "opCreate",
+			pushStack: func(stack *Stack) {
+				// value, offset, size
+				stack.push(uint256.NewInt(0)) // endowment
+				stack.push(uint256.NewInt(0)) // offset
+				stack.push(uint256.NewInt(0)) // size
+			},
+			opFn: opCreate,
+		},
+		{
+			name: "opCreate2",
+			pushStack: func(stack *Stack) {
+				// value, offset, size, salt
+				stack.push(uint256.NewInt(0)) // endowment
+				stack.push(uint256.NewInt(0)) // offset
+				stack.push(uint256.NewInt(0)) // size
+				stack.push(uint256.NewInt(0)) // salt
+			},
+			opFn: opCreate2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scope := &ScopeContext{
+				Contract: NewContract(caller, common.Address{}, uint256.NewInt(0), initialGas, nil),
+				Stack:    newstack(),
+				Memory:   NewMemory(),
+			}
+			tt.pushStack(scope.Stack)
+
+			pc := uint64(0)
+			_, err := tt.opFn(&pc, evm, scope)
+			require.NoError(t, err)
+
+			// Top of stack must be nonzero (addr) or 0 on failure.
+			require.NotNil(t, scope.Stack.peek())
+
+			require.True(t, scope.Contract.RetainedMultiGas.IsZero())
+			total := scope.Contract.GetTotalUsedMultiGas()
+			require.Equal(t, total, scope.Contract.UsedMultiGas)
+
+			require.LessOrEqual(t, total.SingleGas(), initialGas)
+		})
+	}
+}
+
 func TestOpCallsMultiGas(t *testing.T) {
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 
@@ -105,7 +174,6 @@ func TestOpCallsMultiGas(t *testing.T) {
 			tt.pushStack(scope.Stack)
 
 			// Preset like in gas table
-			scope.Contract.CallGasTemp = callGasTemp
 			scope.Contract.UsedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, callGasTemp)
 
 			pc := uint64(0)
