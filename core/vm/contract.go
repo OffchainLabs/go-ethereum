@@ -188,11 +188,6 @@ func (c *Contract) UseMultiGas(multiGas multigas.MultiGas, logger *tracing.Hooks
 	return true
 }
 
-func (c *Contract) RefundMultiGas(multiGas multigas.MultiGas, logger *tracing.Hooks, reason tracing.GasChangeReason) {
-	c.RefundGas(multiGas.SingleGas(), logger, reason)
-	c.RetainedMultiGas.SaturatingAddInto(multiGas)
-}
-
 func (c *Contract) GetTotalUsedMultiGas() multigas.MultiGas {
 	var total multigas.MultiGas
 	var underflow bool
