@@ -55,9 +55,10 @@ type ArbitrumChainParams struct {
 	InitialArbOSVersion       uint64
 	InitialChainOwner         common.Address
 	GenesisBlockNum           uint64
-	MaxCodeSize               uint64 `json:"MaxCodeSize,omitempty"`     // Maximum bytecode to permit for a contract. 0 value implies params.DefaultMaxCodeSize
-	MaxInitCodeSize           uint64 `json:"MaxInitCodeSize,omitempty"` // Maximum initcode to permit in a creation transaction and create instructions. 0 value implies params.DefaultMaxInitCodeSize
-	DebugBlock                uint64 `json:"DebugBlock,omitempty"`
+	MaxCodeSize               uint64         `json:"MaxCodeSize,omitempty"`     // Maximum bytecode to permit for a contract. 0 value implies params.DefaultMaxCodeSize
+	MaxInitCodeSize           uint64         `json:"MaxInitCodeSize,omitempty"` // Maximum initcode to permit in a creation transaction and create instructions. 0 value implies params.DefaultMaxInitCodeSize
+	DebugBlock                uint64         `json:"DebugBlock,omitempty"`
+	DebugAddress              common.Address `json: "DebugAddress,omitempty"`
 }
 
 func (c *ChainConfig) IsArbitrum() bool {
@@ -84,13 +85,6 @@ func (c *ChainConfig) MaxInitCodeSize() uint64 {
 
 func (c *ChainConfig) DebugMode() bool {
 	return c.ArbitrumChainParams.AllowDebugPrecompiles
-}
-
-func (c *ChainConfig) DebugBlock() uint64 {
-	if !c.DebugMode() {
-		return 0
-	}
-	return c.ArbitrumChainParams.DebugBlock
 }
 
 func (c *ChainConfig) checkArbitrumCompatible(newcfg *ChainConfig, head *big.Int) *ConfigCompatError {
