@@ -47,15 +47,15 @@ func WasmStateLoadCost(db StateDB, program common.Address, key common.Hash) mult
 // Computes the cost of doing a state store in wasm
 // Note: the code here is adapted from makeGasSStoreFunc with the most recent parameters as of The Merge
 // Note: the sentry check must be done by the caller
-func WasmStateStoreCost(db StateDB, program common.Address, key, value common.Hash) uint64 {
+func WasmStateStoreCost(db StateDB, program common.Address, key, value common.Hash) multigas.MultiGas {
 	clearingRefund := params.SstoreClearsScheduleRefundEIP3529
 
-	cost := uint64(0)
+	cost := multigas.ZeroGas()
 	current := db.GetState(program, key)
 
 	// Check slot presence in the access list
 	if addrPresent, slotPresent := db.SlotInAccessList(program, key); !slotPresent {
-		cost = params.ColdSloadCostEIP2929
+		cost.SaturatingIncrementInto(multigas.ResourceKindStorageAccess, params.ColdSloadCostEIP2929)
 		// If the caller cannot afford the cost, this change will be rolled back
 		db.AddSlotToAccessList(program, key)
 		if !addrPresent {
@@ -66,19 +66,19 @@ func WasmStateStoreCost(db StateDB, program common.Address, key, value common.Ha
 	if current == value { // noop (1)
 		// EIP 2200 original clause:
 		//		return params.SloadGasEIP2200, nil
-		return cost + params.WarmStorageReadCostEIP2929 // SLOAD_GAS
+		return cost.SaturatingIncrement(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929) // SLOAD_GAS
 	}
 	_, original := db.GetStateAndCommittedState(program, key)
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
-			return cost + params.SstoreSetGasEIP2200
+			return cost.SaturatingIncrement(multigas.ResourceKindStorageGrowth, params.SstoreSetGasEIP2200)
 		}
 		if value == (common.Hash{}) { // delete slot (2.1.2b)
 			db.AddRefund(clearingRefund)
 		}
 		// EIP-2200 original clause:
 		//		return params.SstoreResetGasEIP2200, nil // write existing slot (2.1.2)
-		return cost + (params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929) // write existing slot (2.1.2)
+		return cost.SaturatingIncrement(multigas.ResourceKindStorageAccess, params.SstoreResetGasEIP2200-params.ColdSloadCostEIP2929)
 	}
 	if original != (common.Hash{}) {
 		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
@@ -103,7 +103,7 @@ func WasmStateStoreCost(db StateDB, program common.Address, key, value common.Ha
 	}
 	// EIP-2200 original clause:
 	//return params.SloadGasEIP2200, nil // dirty update (2.2)
-	return cost + params.WarmStorageReadCostEIP2929 // dirty update (2.2)
+	return cost.SaturatingIncrement(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929) // dirty update (2.2)
 }
 
 // Computes the cost of starting a call from wasm
