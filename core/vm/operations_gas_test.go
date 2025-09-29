@@ -647,7 +647,7 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 				t.Errorf("Expected multi gas %d, got %d", expectedMultiGas, multiGas)
 			}
 
-			usedMultiGasDiff, _ := contract.UsedMultiGas.SafeSub(contract.RetainedMultiGas)
+			usedMultiGasDiff := contract.GetTotalUsedMultiGas()
 			if initialContractGas-contract.Gas != usedMultiGasDiff.SingleGas() {
 				t.Errorf("Expected used gas %d, got %d", initialContractGas-contract.Gas, usedMultiGasDiff.SingleGas())
 			}
