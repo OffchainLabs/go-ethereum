@@ -552,8 +552,10 @@ func TestExceedLogQueryLimit(t *testing.T) {
 	chain, _ := core.GenerateChain(gspec.Config, gspec.ToBlock(), ethash.NewFaker(), db, 1000, func(i int, gen *core.BlockGen) {})
 
 	options := core.DefaultConfig().WithStateScheme(rawdb.HashScheme)
-	options.TxLookupLimit = 0 // index all txs
-	bc, err := core.NewBlockChain(db, gspec, ethash.NewFaker(), options)
+	options.TxIndexer = &core.TxIndexerConfig{
+		Limit: 0, // index all txs
+	}
+	bc, err := core.NewBlockChain(db, nil, gspec, ethash.NewFaker(), options)
 	if err != nil {
 		t.Fatal(err)
 	}

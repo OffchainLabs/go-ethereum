@@ -491,7 +491,7 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 	pendingPlainTxs := miner.txpool.Pending(filter)
 
 	filter.BlobTxs = true
-	if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
+	if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time, types.DeserializeHeaderExtraInformation(env.header).ArbOSFormatVersion) {
 		filter.BlobVersion = types.BlobSidecarVersion1
 	} else {
 		filter.BlobVersion = types.BlobSidecarVersion0
