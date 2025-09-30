@@ -682,7 +682,7 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 		}
 	}
 
-	evm.StateDB.SetCode(address, ret)
+	evm.StateDB.SetCode(address, ret, tracing.CodeChangeContractCreation)
 	return ret, nil
 }
 
