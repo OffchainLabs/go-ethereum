@@ -72,7 +72,7 @@ func (c *SimulatedBeacon) GetBlobs(ctx context.Context, batchBlockHash common.Ha
 }
 
 func (c *SimulatedBeacon) Initialize(ctx context.Context) error {
-	c.blobsBundleProvider = make(map[common.Hash]*engine.BlobsBundleV1)
+	c.blobsBundleProvider = make(map[common.Hash]*engine.BlobsBundle)
 	return nil
 }
 
