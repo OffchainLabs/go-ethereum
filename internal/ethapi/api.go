@@ -722,15 +722,15 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 	} else {
 		gp.AddGas(globalGasCap)
 	}
-	return applyMessage(ctx, b, args, state, header, timeout, gp, &blockCtx, &vm.Config{NoBaseFee: true}, precompiles, true, runCtx)
+	return applyMessage(ctx, b, args, state, header, timeout, gp, &blockCtx, &vm.Config{NoBaseFee: true}, precompiles, runCtx)
 }
 
-func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, timeout time.Duration, gp *core.GasPool, blockContext *vm.BlockContext, vmConfig *vm.Config, precompiles vm.PrecompiledContracts, skipChecks bool, runCtx *core.MessageRunContext) (*core.ExecutionResult, error) {
+func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, timeout time.Duration, gp *core.GasPool, blockContext *vm.BlockContext, vmConfig *vm.Config, precompiles vm.PrecompiledContracts, runCtx *core.MessageRunContext) (*core.ExecutionResult, error) {
 	// Get a new instance of the EVM.
 	if err := args.CallDefaults(gp.Gas(), blockContext.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return nil, err
 	}
-	msg := args.ToMessage(blockContext.BaseFee, gp.Gas(), header, state, runCtx, skipChecks, skipChecks)
+	msg := args.ToMessage(blockContext.BaseFee, gp.Gas(), header, state, runCtx, true)
 
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	if gp.Gas() > 0 {
@@ -981,7 +981,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	// Run the gas estimation and wrap any revertals into a custom return
 	// Arbitrum: this also appropriately recursively calls another args.ToMessage with increased gasCap by posterCostInL2Gas amount
-	call := args.ToMessage(header.BaseFee, gasCap, header, state, core.NewMessageGasEstimationContext(), true, true)
+	call := args.ToMessage(header.BaseFee, gasCap, header, state, core.NewMessageGasEstimationContext(), true)
 
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	if gasCap > 0 {
@@ -1544,7 +1544,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		statedb := db.Copy()
 		// Set the accesslist to the last al
 		args.AccessList = &accessList
-		msg := args.ToMessage(header.BaseFee, b.RPCGasCap(), header, statedb, runCtx, true, true)
+		msg := args.ToMessage(header.BaseFee, b.RPCGasCap(), header, statedb, runCtx, true)
 
 		// Apply the transaction with the access list tracer
 		tracer := logger.NewAccessListTracer(accessList, addressesToExclude)

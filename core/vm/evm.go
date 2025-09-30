@@ -301,7 +301,9 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			ReadOnly:          false,
 			Evm:               evm,
 		}
-		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer, info)
+		var precompileMultiGas multigas.MultiGas
+		ret, gas, precompileMultiGas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer, info)
+		usedMultiGas.SaturatingAddInto(precompileMultiGas)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		code := evm.resolveCode(addr)
@@ -378,9 +380,9 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 			ReadOnly:          false,
 			Evm:               evm,
 		}
-		// TODO(NIT-3557): Instrument multi-gas in Arbitrum pre-compiles
-		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer, info)
-		usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
+		var precompileMultiGas multigas.MultiGas
+		ret, gas, precompileMultiGas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer, info)
+		usedMultiGas.SaturatingAddInto(precompileMultiGas)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
@@ -440,8 +442,9 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 			ReadOnly:          false,
 			Evm:               evm,
 		}
-		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer, info)
-		usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
+		var precompileMultiGas multigas.MultiGas
+		ret, gas, precompileMultiGas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer, info)
+		usedMultiGas.SaturatingAddInto(precompileMultiGas)
 	} else {
 		// Initialise a new contract and make initialise the delegate values
 		//
@@ -509,8 +512,9 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 			ReadOnly:          true,
 			Evm:               evm,
 		}
-		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer, info)
-		usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
+		var precompileMultiGas multigas.MultiGas
+		ret, gas, precompileMultiGas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer, info)
+		usedMultiGas.SaturatingAddInto(precompileMultiGas)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
@@ -682,7 +686,7 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 		}
 	}
 
-	evm.StateDB.SetCode(address, ret)
+	evm.StateDB.SetCode(address, ret, tracing.CodeChangeContractCreation)
 	return ret, nil
 }
 

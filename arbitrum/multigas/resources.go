@@ -12,6 +12,7 @@ import (
 // ResourceKind represents a dimension for the multi-dimensional gas.
 type ResourceKind uint8
 
+//go:generate stringer -type=ResourceKind -trimprefix=ResourceKind
 const (
 	ResourceKindUnknown ResourceKind = iota
 	ResourceKindComputation

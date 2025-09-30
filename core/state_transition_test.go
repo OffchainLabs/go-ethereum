@@ -25,7 +25,7 @@ func TestApplyMessageReturnsMultiGas(t *testing.T) {
 	}
 
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-	statedb.SetCode(contract, code)
+	statedb.SetCode(contract, code, tracing.CodeChangeUnspecified)
 	statedb.Finalise(true)
 
 	header := &types.Header{
@@ -283,7 +283,7 @@ func TestCallVariantsMultiGas(t *testing.T) {
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	statedb.CreateAccount(caller)
 	statedb.CreateAccount(contractAddr)
-	statedb.SetCode(contractAddr, code)
+	statedb.SetCode(contractAddr, code, tracing.CodeChangeUnspecified)
 	statedb.SetNonce(caller, 1, tracing.NonceChangeUnspecified)
 	statedb.Finalise(true)
 
