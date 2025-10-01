@@ -685,7 +685,7 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// reuse size int for stackvalue
 	stackvalue := size
 
-	scope.Contract.UseGas(gas, evm.Config.Tracer, tracing.GasChangeCallContractCreation)
+	scope.Contract.UseMultiGas(multigas.ComputationGas(gas), evm.Config.Tracer, tracing.GasChangeCallContractCreation)
 
 	res, addr, returnGas, usedMultiGas, suberr := evm.Create(scope.Contract.Address(), input, gas, &value)
 	// Push item on the stack based on the returned error. If the ruleset is
@@ -702,6 +702,7 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(&stackvalue)
 
 	scope.Contract.RefundGas(returnGas, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.RetainedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
 	scope.Contract.UsedMultiGas.SaturatingAddInto(usedMultiGas)
 
 	if suberr == ErrExecutionReverted {
@@ -726,7 +727,7 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 	// Apply EIP150
 	gas -= gas / 64
-	scope.Contract.UseGas(gas, evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
+	scope.Contract.UseMultiGas(multigas.ComputationGas(gas), evm.Config.Tracer, tracing.GasChangeCallContractCreation)
 	// reuse size int for stackvalue
 	stackvalue := size
 	res, addr, returnGas, usedMultiGas, suberr := evm.Create2(scope.Contract.Address(), input, gas,
@@ -740,6 +741,7 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(&stackvalue)
 
 	scope.Contract.RefundGas(returnGas, evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+	scope.Contract.RetainedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, gas)
 	scope.Contract.UsedMultiGas.SaturatingAddInto(usedMultiGas)
 
 	if suberr == ErrExecutionReverted {
