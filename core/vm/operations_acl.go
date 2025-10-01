@@ -191,7 +191,7 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc, addressPosition int) g
 			evm.StateDB.AddAddressToAccessList(addr)
 			// Charge the remaining difference here already, to correctly calculate available
 			// gas for call
-			if !contract.UseGas(coldCost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
+			if !contract.UseMultiGas(multigas.StorageAccessGas(coldCost), evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
 				return multigas.ZeroGas(), ErrOutOfGas
 			}
 		}
@@ -300,7 +300,7 @@ func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
 			coldCost := params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
 			// Charge the remaining difference here already, to correctly calculate available
 			// gas for call
-			if !contract.UseGas(coldCost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
+			if !contract.UseMultiGas(multigas.StorageAccessGas(coldCost), evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
 				return multigas.ZeroGas(), ErrOutOfGas
 			}
 			// Cold slot access considered as storage access.
@@ -317,7 +317,7 @@ func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
 				evm.StateDB.AddAddressToAccessList(target)
 				cost = params.ColdAccountAccessCostEIP2929
 			}
-			if !contract.UseGas(cost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
+			if !contract.UseMultiGas(multigas.StorageAccessGas(cost), evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
 				return multigas.ZeroGas(), ErrOutOfGas
 			}
 

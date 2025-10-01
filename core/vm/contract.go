@@ -141,8 +141,8 @@ func (c *Contract) Jumpdest() JumpDestCache {
 	return c.jumpDests
 }
 
-// UseGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) UseGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
+// useGas attempts the use gas and subtracts it and returns true on success
+func (c *Contract) useGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
 	if c.Gas < gas {
 		return false
 	}
@@ -180,8 +180,9 @@ func (c *Contract) SetCallCode(hash common.Hash, code []byte) {
 	c.CodeHash = hash
 }
 
+// UseMultiGas attempts the use gas, subtracts it, increments usedMultiGas, and returns true on success
 func (c *Contract) UseMultiGas(multiGas multigas.MultiGas, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
-	if !c.UseGas(multiGas.SingleGas(), logger, reason) {
+	if !c.useGas(multiGas.SingleGas(), logger, reason) {
 		return false
 	}
 	c.UsedMultiGas.SaturatingAddInto(multiGas)

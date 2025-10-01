@@ -271,7 +271,7 @@ func TestSaturatingAddInto_AddsKindsTotalRefund(t *testing.T) {
 	if got, want := z.GetRefund(), uint64(4); got != want {
 		t.Errorf("unexpected refund: got %v, want %v", got, want)
 	}
-	if got, want := z.SingleGas(), uint64(10); got != want { // 7 + 3
+	if got, want := z.SingleGas(), uint64(6); got != want { // 7 + 3 - 4
 		t.Errorf("unexpected total: got %v, want %v", got, want)
 	}
 }

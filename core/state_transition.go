@@ -721,6 +721,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// Compute refund counter, capped to a refund quotient.
 	refund := st.calcRefund()
 	st.gasRemaining += refund
+	// Arbitrum: set the multigas refunds
+	usedMultiGas = usedMultiGas.WithRefund(refund)
 	if rules.IsPrague && st.evm.ProcessingHook.IsCalldataPricingIncreaseEnabled() {
 		// After EIP-7623: Data-heavy transactions pay the floor gas.
 		if st.gasUsed() < floorDataGas {
@@ -736,9 +738,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 	}
 	st.returnGas()
-
-	// Arbitrum: set the multigas refunds
-	usedMultiGas = usedMultiGas.WithRefund(refund)
 
 	effectiveTip := msg.GasPrice
 	if rules.IsLondon {

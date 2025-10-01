@@ -143,7 +143,7 @@ func runStateTest(ctx *cli.Context, fname string) ([]testResult, error) {
 				// Collect bench stats if requested.
 				if ctx.Bool(BenchFlag.Name) {
 					_, stats, _ := timedExec(true, func() ([]byte, uint64, error) {
-						_, _, gasUsed, _ := test.RunNoVerify(st, cfg, false, rawdb.HashScheme)
+						_, _, gasUsed, _, _ := test.RunNoVerify(st, cfg, false, rawdb.HashScheme)
 						return nil, gasUsed, nil
 					})
 					result.Stats = &stats
