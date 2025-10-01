@@ -20,9 +20,9 @@ func (tx *Transaction) SkipNonceChecks() bool {
 	return tx.inner.skipNonceChecks()
 }
 
-// Returns true if disables requiring that sender is an EOA and not a contract
-func (tx *Transaction) SkipFromEOACheck() bool {
-	return tx.inner.skipFromEOACheck()
+// Returns true if disables requiring that transaction checks.
+func (tx *Transaction) SkipTransactionChecks() bool {
+	return tx.inner.skipTransactionChecks()
 }
 
 type fallbackError struct {
@@ -67,16 +67,16 @@ func (tx *ArbitrumSubmitRetryableTx) skipNonceChecks() bool { return true }
 func (d *ArbitrumDepositTx) skipNonceChecks() bool          { return true }
 func (t *ArbitrumInternalTx) skipNonceChecks() bool         { return true }
 
-func (tx *LegacyTx) skipFromEOACheck() bool                  { return false }
-func (tx *AccessListTx) skipFromEOACheck() bool              { return false }
-func (tx *DynamicFeeTx) skipFromEOACheck() bool              { return false }
-func (tx *SetCodeTx) skipFromEOACheck() bool                 { return false }
-func (tx *ArbitrumUnsignedTx) skipFromEOACheck() bool        { return false }
-func (tx *ArbitrumContractTx) skipFromEOACheck() bool        { return true }
-func (tx *ArbitrumRetryTx) skipFromEOACheck() bool           { return true }
-func (tx *ArbitrumSubmitRetryableTx) skipFromEOACheck() bool { return true }
-func (d *ArbitrumDepositTx) skipFromEOACheck() bool          { return true }
-func (t *ArbitrumInternalTx) skipFromEOACheck() bool         { return true }
+func (tx *LegacyTx) skipTransactionChecks() bool                  { return false }
+func (tx *AccessListTx) skipTransactionChecks() bool              { return false }
+func (tx *DynamicFeeTx) skipTransactionChecks() bool              { return false }
+func (tx *SetCodeTx) skipTransactionChecks() bool                 { return false }
+func (tx *ArbitrumUnsignedTx) skipTransactionChecks() bool        { return false }
+func (tx *ArbitrumContractTx) skipTransactionChecks() bool        { return true }
+func (tx *ArbitrumRetryTx) skipTransactionChecks() bool           { return true }
+func (tx *ArbitrumSubmitRetryableTx) skipTransactionChecks() bool { return true }
+func (d *ArbitrumDepositTx) skipTransactionChecks() bool          { return true }
+func (t *ArbitrumInternalTx) skipTransactionChecks() bool         { return true }
 
 type ArbitrumUnsignedTx struct {
 	ChainId *big.Int
