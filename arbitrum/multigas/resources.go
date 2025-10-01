@@ -338,7 +338,7 @@ func (z *MultiGas) SaturatingIncrementInto(kind ResourceKind, gas uint64) {
 
 // SingleGas returns the single-dimensional total gas.
 func (z MultiGas) SingleGas() uint64 {
-	return z.total
+	return z.total - z.refund
 }
 
 func (z MultiGas) IsZero() bool {
