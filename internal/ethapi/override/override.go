@@ -94,7 +94,7 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 		}
 		// Override account(contract) code.
 		if account.Code != nil {
-			statedb.SetCode(addr, *account.Code)
+			statedb.SetCode(addr, *account.Code, tracing.CodeChangeUnspecified)
 		}
 		// Override account balance.
 		if account.Balance != nil {

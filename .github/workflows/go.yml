@@ -57,4 +57,4 @@ jobs:
           cache: false
 
       - name: Run tests
-        run: go test ./...
+        run: go run build/ci.go test

@@ -97,7 +97,7 @@ type SimulatedBeacon struct {
 	curForkchoiceState engine.ForkchoiceStateV1
 	lastBlockTime      uint64
 
-	blobsBundleProvider map[common.Hash]*engine.BlobsBundleV1
+	blobsBundleProvider map[common.Hash]*engine.BlobsBundle
 }
 
 func payloadVersion(config *params.ChainConfig, time uint64, header *types.Header) engine.PayloadVersion {

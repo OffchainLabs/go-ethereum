@@ -487,10 +487,15 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 	if !miner.chainConfig.IsArbitrum() && miner.chainConfig.IsOsaka(env.header.Number, env.header.Time, 0) {
 		filter.GasLimitCap = params.MaxTxGasRenamedForNitroMerges
 	}
-	filter.OnlyPlainTxs, filter.OnlyBlobTxs = true, false
+	filter.BlobTxs = false
 	pendingPlainTxs := miner.txpool.Pending(filter)
 
-	filter.OnlyPlainTxs, filter.OnlyBlobTxs = false, true
+	filter.BlobTxs = true
+	if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time, types.DeserializeHeaderExtraInformation(env.header).ArbOSFormatVersion) {
+		filter.BlobVersion = types.BlobSidecarVersion1
+	} else {
+		filter.BlobVersion = types.BlobSidecarVersion0
+	}
 	pendingBlobTxs := miner.txpool.Pending(filter)
 
 	// Split the pending transactions into locals and remotes.
