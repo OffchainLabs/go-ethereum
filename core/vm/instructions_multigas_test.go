@@ -73,11 +73,8 @@ func TestOpCreatesMultiGas(t *testing.T) {
 			// Top of stack must be nonzero (addr) or 0 on failure.
 			require.NotNil(t, scope.Stack.peek())
 
-			require.True(t, scope.Contract.RetainedMultiGas.IsZero())
 			total := scope.Contract.GetTotalUsedMultiGas()
-			require.Equal(t, total, scope.Contract.UsedMultiGas)
-
-			require.LessOrEqual(t, total.SingleGas(), initialGas)
+			require.Equal(t, total.SingleGas(), initialGas-scope.Contract.Gas)
 		})
 	}
 }
