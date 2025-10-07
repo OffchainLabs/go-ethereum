@@ -334,7 +334,7 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 	returnedBlockNumber := header.Number.Uint64()
 	for ctx.Err() == nil {
 		var block *types.Block
-		state, block, err = AdvanceStateByBlock(ctx, r.bc, state, blockToRecreate, prevHash, logFunc)
+		state, block, _, err = AdvanceStateByBlock(ctx, r.bc, state, blockToRecreate, prevHash, logFunc, false)
 		if err != nil {
 			return nil, err
 		}
