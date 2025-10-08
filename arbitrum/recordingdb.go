@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -334,7 +335,7 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 	returnedBlockNumber := header.Number.Uint64()
 	for ctx.Err() == nil {
 		var block *types.Block
-		state, block, _, err = AdvanceStateByBlock(ctx, r.bc, state, blockToRecreate, prevHash, logFunc, false)
+		state, block, _, err = AdvanceStateByBlock(ctx, r.bc, state, blockToRecreate, prevHash, logFunc, vm.Config{})
 		if err != nil {
 			return nil, err
 		}

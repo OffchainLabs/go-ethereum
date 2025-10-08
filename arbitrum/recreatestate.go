@@ -69,7 +69,7 @@ func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor S
 	return state, currentHeader, release, ctx.Err()
 }
 
-func AdvanceStateByBlock(ctx context.Context, bc *core.BlockChain, state *state.StateDB, blockToRecreate uint64, prevBlockHash common.Hash, logFunc StateBuildingLogFunction, exposeMultiGas bool) (*state.StateDB, *types.Block, types.Receipts, error) {
+func AdvanceStateByBlock(ctx context.Context, bc *core.BlockChain, state *state.StateDB, blockToRecreate uint64, prevBlockHash common.Hash, logFunc StateBuildingLogFunction, vmConfig vm.Config) (*state.StateDB, *types.Block, types.Receipts, error) {
 	block := bc.GetBlockByNumber(blockToRecreate)
 	if block == nil {
 		return nil, nil, nil, fmt.Errorf("block not found while recreating: %d", blockToRecreate)
@@ -80,9 +80,7 @@ func AdvanceStateByBlock(ctx context.Context, bc *core.BlockChain, state *state.
 	if logFunc != nil {
 		logFunc(block.Header(), true)
 	}
-	result, err := bc.Processor().Process(block, state, vm.Config{
-		ExposeMultiGas: exposeMultiGas,
-	})
+	result, err := bc.Processor().Process(block, state, vmConfig)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed recreating state for block %d : %w", blockToRecreate, err)
 	}
