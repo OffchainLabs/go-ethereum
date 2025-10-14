@@ -231,12 +231,13 @@ func (args *SendTxArgs) validateTxSidecar() error {
 	}
 
 	// len(blobs) == len(commitments) == len(proofs) == len(hashes)
+	// Note: proofs can be either 1:1 (Version 0) or 128:1 cell proofs (Version 1)
 	n := len(args.Blobs)
 	if args.Commitments != nil && len(args.Commitments) != n {
 		return fmt.Errorf("number of blobs and commitments mismatch (have=%d, want=%d)", len(args.Commitments), n)
 	}
-	if args.Proofs != nil && len(args.Proofs) != n {
-		return fmt.Errorf("number of blobs and proofs mismatch (have=%d, want=%d)", len(args.Proofs), n)
+	if args.Proofs != nil && len(args.Proofs) != n && len(args.Proofs) != n*kzg4844.CellProofsPerBlob {
+		return fmt.Errorf("number of blobs and proofs mismatch (have=%d, want=%d or %d)", len(args.Proofs), n, n*kzg4844.CellProofsPerBlob)
 	}
 	if args.BlobHashes != nil && len(args.BlobHashes) != n {
 		return fmt.Errorf("number of blobs and hashes mismatch (have=%d, want=%d)", len(args.BlobHashes), n)
@@ -261,9 +262,18 @@ func (args *SendTxArgs) validateTxSidecar() error {
 		args.Commitments = commitments
 		args.Proofs = proofs
 	} else {
-		for i, b := range args.Blobs {
-			if err := kzg4844.VerifyBlobProof(&b, args.Commitments[i], args.Proofs[i]); err != nil {
-				return fmt.Errorf("failed to verify blob proof: %v", err)
+		// Verify proofs: either 1:1 blob proofs (Version 0) or 128:1 cell proofs (Version 1)
+		if len(args.Proofs) == n*kzg4844.CellProofsPerBlob {
+			// Version 1: Cell proofs - verify all at once
+			if err := kzg4844.VerifyCellProofs(args.Blobs, args.Commitments, args.Proofs); err != nil {
+				return fmt.Errorf("failed to verify cell proofs: %v", err)
+			}
+		} else {
+			// Version 0: Blob proofs - verify individually
+			for i, b := range args.Blobs {
+				if err := kzg4844.VerifyBlobProof(&b, args.Commitments[i], args.Proofs[i]); err != nil {
+					return fmt.Errorf("failed to verify blob proof: %v", err)
+				}
 			}
 		}
 	}
