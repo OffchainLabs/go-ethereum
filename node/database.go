@@ -41,6 +41,7 @@ type DatabaseOptions struct {
 	ReadOnly         bool   // if true, no writes can be performed
 
 	PebbleExtraOptions *pebble.ExtraOptions
+	NoFreezer          bool
 }
 
 type InternalOpenOptions struct {
@@ -58,6 +59,9 @@ func OpenDatabase(o InternalOpenOptions) (ethdb.Database, error) {
 	kvdb, err := openKeyValueDatabase(o)
 	if err != nil {
 		return nil, err
+	}
+	if o.DatabaseOptions.NoFreezer {
+		return rawdb.NewDatabase(kvdb), nil
 	}
 	opts := rawdb.OpenOptions{
 		Ancient:          o.AncientsDirectory,
