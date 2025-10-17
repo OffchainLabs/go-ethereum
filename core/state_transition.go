@@ -682,10 +682,10 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
 
-	// Check against hardcoded transaction hashes that has previously failed, so instead
+	// Check against hardcoded transaction hashes that have previously reverted, so instead
 	// of executing the transaction we just update state nonce and remaining gas to avoid
 	// state divergence.
-	if l2GasUsed, ok := HardcodedTxGasUsed[msg.Tx.Hash()]; ok {
+	if l2GasUsed, ok := RevertedTxGasUsed[msg.Tx.Hash()]; ok {
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
 		// l2GasUsed contains params.TxGas which is why we need to first subtract params.TxGas
 		// from l2GasUsed. The new l2GasUsed is the same amount of gas consumed as if we were
