@@ -685,18 +685,20 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// Check against hardcoded transaction hashes that have previously reverted, so instead
 	// of executing the transaction we just update state nonce and remaining gas to avoid
 	// state divergence.
-	if l2GasUsed, ok := RevertedTxGasUsed[msg.Tx.Hash()]; ok {
-		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
-		// l2GasUsed contains params.TxGas which is why we need to first subtract params.TxGas
-		// from l2GasUsed. The new l2GasUsed is the same amount of gas consumed as if we were
-		// to execute this transaction via st.evm.Call()
-		l2GasUsed -= params.TxGas
-		st.gasRemaining -= l2GasUsed
+	if msg.Tx != nil {
+		if l2GasUsed, ok := RevertedTxGasUsed[msg.Tx.Hash()]; ok {
+			st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
+			// l2GasUsed contains params.TxGas which is why we need to first subtract params.TxGas
+			// from l2GasUsed. The new l2GasUsed is the same amount of gas consumed as if we were
+			// to execute this transaction via st.evm.Call()
+			l2GasUsed -= params.TxGas
+			st.gasRemaining -= l2GasUsed
 
-		// Update multigas and set vmerr to ErrExecutionReverted
-		multiGas = multigas.ComputationGas(l2GasUsed)
-		usedMultiGas = usedMultiGas.SaturatingAdd(multiGas)
-		vmerr = vm.ErrExecutionReverted
+			// Update multigas and set vmerr to ErrExecutionReverted
+			multiGas = multigas.ComputationGas(l2GasUsed)
+			usedMultiGas = usedMultiGas.SaturatingAdd(multiGas)
+			vmerr = vm.ErrExecutionReverted
+		}
 	} else if contractCreation {
 		deployedContract = &common.Address{}
 		ret, *deployedContract, st.gasRemaining, multiGas, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value)
