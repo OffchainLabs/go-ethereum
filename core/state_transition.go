@@ -685,48 +685,39 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// Check against hardcoded transaction hashes that have previously reverted, so instead
 	// of executing the transaction we just update state nonce and remaining gas to avoid
 	// state divergence.
-	if msg.Tx != nil {
-		if l2GasUsed, ok := RevertedTxGasUsed[msg.Tx.Hash()]; ok {
-			st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
-			// l2GasUsed contains params.TxGas which is why we need to first subtract params.TxGas
-			// from l2GasUsed. The new l2GasUsed is the same amount of gas consumed as if we were
-			// to execute this transaction via st.evm.Call()
-			l2GasUsed -= params.TxGas
-			st.gasRemaining -= l2GasUsed
+	usedMultiGas, vmerr = st.handleRevertedTx(msg, usedMultiGas)
 
-			// Update multigas and set vmerr to ErrExecutionReverted
-			multiGas = multigas.ComputationGas(l2GasUsed)
+	// vmerr is only not nil when we find a previous reverted transaction
+	if vmerr == nil {
+		if contractCreation {
+			deployedContract = &common.Address{}
+			ret, *deployedContract, st.gasRemaining, multiGas, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value)
 			usedMultiGas = usedMultiGas.SaturatingAdd(multiGas)
-			vmerr = vm.ErrExecutionReverted
-		}
-	} else if contractCreation {
-		deployedContract = &common.Address{}
-		ret, *deployedContract, st.gasRemaining, multiGas, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value)
-		usedMultiGas = usedMultiGas.SaturatingAdd(multiGas)
-	} else {
-		// Increment the nonce for the next transaction.
-		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
+		} else {
+			// Increment the nonce for the next transaction.
+			st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
 
-		// Apply EIP-7702 authorizations.
-		if msg.SetCodeAuthorizations != nil {
-			for _, auth := range msg.SetCodeAuthorizations {
-				// Note errors are ignored, we simply skip invalid authorizations here.
-				st.applyAuthorization(&auth)
+			// Apply EIP-7702 authorizations.
+			if msg.SetCodeAuthorizations != nil {
+				for _, auth := range msg.SetCodeAuthorizations {
+					// Note errors are ignored, we simply skip invalid authorizations here.
+					st.applyAuthorization(&auth)
+				}
 			}
-		}
 
-		// Perform convenience warming of sender's delegation target. Although the
-		// sender is already warmed in Prepare(..), it's possible a delegation to
-		// the account was deployed during this transaction. To handle correctly,
-		// simply wait until the final state of delegations is determined before
-		// performing the resolution and warming.
-		if addr, ok := types.ParseDelegation(st.state.GetCode(*msg.To)); ok {
-			st.state.AddAddressToAccessList(addr)
-		}
+			// Perform convenience warming of sender's delegation target. Although the
+			// sender is already warmed in Prepare(..), it's possible a delegation to
+			// the account was deployed during this transaction. To handle correctly,
+			// simply wait until the final state of delegations is determined before
+			// performing the resolution and warming.
+			if addr, ok := types.ParseDelegation(st.state.GetCode(*msg.To)); ok {
+				st.state.AddAddressToAccessList(addr)
+			}
 
-		// Execute the transaction's call.
-		ret, st.gasRemaining, multiGas, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining, value)
-		usedMultiGas = usedMultiGas.SaturatingAdd(multiGas)
+			// Execute the transaction's call.
+			ret, st.gasRemaining, multiGas, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining, value)
+			usedMultiGas = usedMultiGas.SaturatingAdd(multiGas)
+		}
 	}
 
 	// Refund the gas that was held to limit the amount of computation done.
@@ -803,6 +794,30 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		TopLevelDeployed: deployedContract,
 		UsedMultiGas:     usedMultiGas,
 	}, nil
+}
+
+// handleRevertedTx attempts to process a reverted transaction. It returns
+// ErrExecutionReverted with the updated multiGas if a matching reverted
+// tx is found; otherwise, it returns nil error with unchangedmultiGas
+func (st *stateTransition) handleRevertedTx(msg *Message, usedMultiGas multigas.MultiGas) (multigas.MultiGas, error) {
+	if msg.Tx == nil {
+		return usedMultiGas, nil
+	}
+
+	txHash := msg.Tx.Hash()
+	if l2GasUsed, ok := RevertedTxGasUsed[txHash]; ok {
+		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
+
+		// Calculate adjusted gas since l2GasUsed contains params.TxGas
+		adjustedGas := l2GasUsed - params.TxGas
+		st.gasRemaining -= adjustedGas
+
+		// Update multigas and return ErrExecutionReverted error
+		usedMultiGas = usedMultiGas.SaturatingAdd(multigas.ComputationGas(adjustedGas))
+		return usedMultiGas, vm.ErrExecutionReverted
+	}
+
+	return usedMultiGas, nil
 }
 
 // validateAuthorization validates an EIP-7702 authorization against the state.
