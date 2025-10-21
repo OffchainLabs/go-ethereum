@@ -689,7 +689,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 	// vmerr is only not nil when we find a previous reverted transaction
 	if vmerr == nil {
-
 		if contractCreation {
 			deployedContract = &common.Address{}
 			ret, *deployedContract, st.gasRemaining, multiGas, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value)
