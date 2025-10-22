@@ -304,8 +304,7 @@ func gasKeccak256(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 	if wordGas, overflow = math.SafeMul(toWordSize(wordGas), params.Keccak256WordGas); overflow {
 		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
-	// TODO(NIT-3484): Update multi dimensional gas here
-	if multiGas, overflow = multiGas.SafeIncrement(multigas.ResourceKindUnknown, wordGas); overflow {
+	if multiGas, overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, wordGas); overflow {
 		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 	return multiGas, nil
@@ -402,8 +401,7 @@ func gasExpFrontier(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 	if gas, overflow = math.SafeAdd(gas, params.ExpGas); overflow {
 		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
-	// TODO(NIT-3484): Update multi dimensional gas here
-	return multigas.UnknownGas(gas), nil
+	return multigas.ComputationGas(gas), nil
 }
 
 func gasExpEIP158(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
@@ -416,8 +414,7 @@ func gasExpEIP158(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 	if gas, overflow = math.SafeAdd(gas, params.ExpGas); overflow {
 		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
-	// TODO(NIT-3484): Update multi dimensional gas here
-	return multigas.UnknownGas(gas), nil
+	return multigas.ComputationGas(gas), nil
 }
 
 func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {

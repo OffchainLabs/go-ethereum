@@ -77,11 +77,6 @@ func MultiGasFromPairs(pairs ...Pair) MultiGas {
 	return mg
 }
 
-// UnknownGas returns a MultiGas initialized with unknown gas.
-func UnknownGas(amount uint64) MultiGas {
-	return NewMultiGas(ResourceKindUnknown, amount)
-}
-
 // ComputationGas returns a MultiGas initialized with computation gas.
 func ComputationGas(amount uint64) MultiGas {
 	return NewMultiGas(ResourceKindComputation, amount)
