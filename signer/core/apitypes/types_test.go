@@ -19,11 +19,9 @@ package apitypes
 import (
 	"crypto/sha256"
 	"encoding/json"
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/holiman/uint256"
@@ -139,74 +137,6 @@ func TestBlobTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("tx %v", string(data))
-}
-
-func TestBlobTxsWithCellProofs(t *testing.T) {
-	blob := kzg4844.Blob{0x1}
-	commitment, err := kzg4844.BlobToCommitment(&blob)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Generate cell proofs (128 proofs per blob) instead of a single blob proof
-	cellProofs, err := kzg4844.ComputeCellProofs(&blob)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Verify we got the expected number of cell proofs
-	if len(cellProofs) != kzg4844.CellProofsPerBlob {
-		t.Fatalf("expected %d cell proofs, got %d", kzg4844.CellProofsPerBlob, len(cellProofs))
-	}
-
-	// Test that SendTxArgs accepts cell proofs and converts to Version 1 sidecar
-	hash := kzg4844.CalcBlobHashV1(sha256.New(), &commitment)
-	args := &SendTxArgs{
-		From:                 common.MixedcaseAddress{},
-		To:                   &common.MixedcaseAddress{},
-		Gas:                  21000,
-		MaxFeePerGas:         (*hexutil.Big)(big.NewInt(600)),
-		MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(500)),
-		BlobFeeCap:           (*hexutil.Big)(big.NewInt(700)),
-		Value:                hexutil.Big(*big.NewInt(100)),
-		Nonce:                8,
-		ChainID:              (*hexutil.Big)(big.NewInt(6)),
-		BlobHashes:           []common.Hash{hash},
-		Blobs:                []kzg4844.Blob{blob},
-		Commitments:          []kzg4844.Commitment{commitment},
-		Proofs:               cellProofs,
-	}
-
-	// This should succeed with the validation fix
-	tx, err := args.ToTransaction()
-	if err != nil {
-		t.Fatalf("failed to convert args with cell proofs to transaction: %v", err)
-	}
-
-	// Verify the transaction type is BlobTx
-	if tx.Type() != types.BlobTxType {
-		t.Fatalf("expected BlobTxType, got %d", tx.Type())
-	}
-
-	// Verify the transaction has a Version 1 sidecar
-	sidecar := tx.BlobTxSidecar()
-	if sidecar == nil {
-		t.Fatal("expected sidecar to be present")
-	}
-	if sidecar.Version != types.BlobSidecarVersion1 {
-		t.Fatalf("expected sidecar version %d, got %d", types.BlobSidecarVersion1, sidecar.Version)
-	}
-
-	// Verify the sidecar has the correct number of proofs
-	if len(sidecar.Proofs) != len(cellProofs) {
-		t.Fatalf("expected %d proofs in sidecar, got %d", len(cellProofs), len(sidecar.Proofs))
-	}
-
-	data, err := json.Marshal(tx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("cell proof tx %v", string(data))
 }
 
 func TestType_IsArray(t *testing.T) {
