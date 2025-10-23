@@ -69,20 +69,20 @@ func FindLastAvailableState(ctx context.Context, bc *core.BlockChain, stateFor S
 	return state, currentHeader, release, ctx.Err()
 }
 
-func AdvanceStateByBlock(ctx context.Context, bc *core.BlockChain, state *state.StateDB, blockToRecreate uint64, prevBlockHash common.Hash, logFunc StateBuildingLogFunction) (*state.StateDB, *types.Block, error) {
+func AdvanceStateByBlock(ctx context.Context, bc *core.BlockChain, state *state.StateDB, blockToRecreate uint64, prevBlockHash common.Hash, logFunc StateBuildingLogFunction, vmConfig vm.Config) (*state.StateDB, *types.Block, types.Receipts, error) {
 	block := bc.GetBlockByNumber(blockToRecreate)
 	if block == nil {
-		return nil, nil, fmt.Errorf("block not found while recreating: %d", blockToRecreate)
+		return nil, nil, nil, fmt.Errorf("block not found while recreating: %d", blockToRecreate)
 	}
 	if block.ParentHash() != prevBlockHash {
-		return nil, nil, fmt.Errorf("reorg detected: number %d expectedPrev: %v foundPrev: %v", blockToRecreate, prevBlockHash, block.ParentHash())
+		return nil, nil, nil, fmt.Errorf("reorg detected: number %d expectedPrev: %v foundPrev: %v", blockToRecreate, prevBlockHash, block.ParentHash())
 	}
 	if logFunc != nil {
 		logFunc(block.Header(), true)
 	}
-	_, err := bc.Processor().Process(block, state, vm.Config{})
+	result, err := bc.Processor().Process(block, state, vmConfig)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed recreating state for block %d : %w", blockToRecreate, err)
+		return nil, nil, nil, fmt.Errorf("failed recreating state for block %d : %w", blockToRecreate, err)
 	}
-	return state, block, nil
+	return state, block, result.Receipts, nil
 }
