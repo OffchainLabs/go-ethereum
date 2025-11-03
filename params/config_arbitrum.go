@@ -57,6 +57,7 @@ type ArbitrumChainParams struct {
 	GenesisBlockNum           uint64
 	MaxCodeSize               uint64 `json:"MaxCodeSize,omitempty"`     // Maximum bytecode to permit for a contract. 0 value implies params.DefaultMaxCodeSize
 	MaxInitCodeSize           uint64 `json:"MaxInitCodeSize,omitempty"` // Maximum initcode to permit in a creation transaction and create instructions. 0 value implies params.DefaultMaxInitCodeSize
+	MaxUncompressedBatchSize  uint64 `json:"MaxUncompressedBatchSize,omitempty"`
 }
 
 func (c *ChainConfig) IsArbitrum() bool {
