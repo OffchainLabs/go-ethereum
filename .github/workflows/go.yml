@@ -11,7 +11,7 @@ jobs:
   lint:
     if: false # not supported on OffchainLabs fork, ci.yml is used instead
     name: Lint
-    runs-on: self-hosted-ghr
+    runs-on: [self-hosted-ghr, size-s-x64]
     steps:
     - uses: actions/checkout@v4
       with:
@@ -39,7 +39,7 @@ jobs:
     if: false # not supported on OffchainLabs fork, ci.yml is used instead
     name: Test
     needs: lint
-    runs-on: self-hosted-ghr
+    runs-on: [self-hosted-ghr, size-l-x64]
     strategy:
       matrix:
         go:
@@ -57,4 +57,4 @@ jobs:
           cache: false
 
       - name: Run tests
-        run: go run build/ci.go test
+        run: go run build/ci.go test -p 8
