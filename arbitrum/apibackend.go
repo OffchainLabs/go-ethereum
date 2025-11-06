@@ -52,6 +52,14 @@ type APIBackend struct {
 	sync                  SyncProgressBackend
 }
 
+func (a *APIBackend) RPCTxSyncDefaultTimeout() time.Duration {
+	return a.b.config.TxSyncDefaultTimeout
+}
+
+func (a *APIBackend) RPCTxSyncMaxTimeout() time.Duration {
+	return a.b.config.TxSyncMaxTimeout
+}
+
 type errorFilteredFallbackClient struct {
 	impl types.FallbackClient
 	url  string
