@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	flag "github.com/spf13/pflag"
 )
@@ -26,11 +25,6 @@ type Config struct {
 	LogHistory           uint64 `koanf:"log-history"`            // The maximum number of blocks from head where a log search index is maintained.
 	LogNoHistory         bool   `koanf:"log-no-history"`         // No log search index is maintained.
 	LogExportCheckpoints string `koanf:"log-export-checkpoints"` // export log index checkpoints to file
-
-	// State scheme represents the scheme used to store states and trie
-	// nodes on top. It can be 'hash', 'path', or none which means use the scheme
-	// consistent with persistent state.
-	StateScheme string `koanf:"state-scheme"`
 
 	// Parameters for the filter system
 	FilterLogCacheSize int           `koanf:"filter-log-cache-size"`
@@ -82,7 +76,6 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.Uint64(prefix+".log-history", DefaultConfig.LogHistory, "maximum number of blocks from head where a log search index is maintained")
 	f.Bool(prefix+".log-no-history", DefaultConfig.LogNoHistory, "no log search index is maintained")
 	f.String(prefix+".log-export-checkpoints", DefaultConfig.LogExportCheckpoints, "export log index checkpoints to file")
-	f.String(prefix+".state-scheme", DefaultConfig.StateScheme, "state scheme used to store states and trie nodes on top")
 	f.Uint64(prefix+".feehistory-max-block-count", DefaultConfig.FeeHistoryMaxBlockCount, "max number of blocks a fee history request may cover")
 	f.String(prefix+".classic-redirect", DefaultConfig.ClassicRedirect, "url to redirect classic requests, use \"error:[CODE:]MESSAGE\" to return specified error instead of redirecting")
 	f.Duration(prefix+".classic-redirect-timeout", DefaultConfig.ClassicRedirectTimeout, "timeout for forwarded classic requests, where 0 = no timeout")
@@ -120,5 +113,4 @@ var DefaultConfig = Config{
 		TimeoutQueueBound: 512,
 	},
 	BlockRedirectsList: "default",
-	StateScheme:        rawdb.HashScheme,
 }
