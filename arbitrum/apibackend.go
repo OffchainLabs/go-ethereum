@@ -545,6 +545,21 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 	if archiveClientsManager != nil && header.Number.Uint64() <= archiveClientsManager.lastAvailableBlock() {
 		return nil, header, &types.ErrUseArchiveFallback{BlockNum: header.Number.Uint64()}
 	}
+
+	// use upstream path for PathScheme, as:
+	// - intermediate state recreation and trie node referencing doesn't apply to pathdb
+	// - HistoricState is supported only by pathdb
+	if bc.TrieDB().Scheme() == rawdb.PathScheme {
+		statedb, err := bc.StateAt(header.Root)
+		if err != nil {
+			statedb, err = bc.HistoricState(header.Root)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		return statedb, header, nil
+	}
+
 	stateFor := func(db state.Database, snapshots *snapshot.Tree) func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
 		return func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
 			if header.Root != (common.Hash{}) {
