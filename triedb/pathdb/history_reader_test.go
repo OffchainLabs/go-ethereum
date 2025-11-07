@@ -139,16 +139,12 @@ func TestHistoryReader(t *testing.T) {
 }
 
 func testHistoryReader(t *testing.T, historyLimit uint64) {
-	maxDiffLayers = 4
-	defer func() {
-		maxDiffLayers = 128
-	}()
-
 	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
 	config := &testerConfig{
-		stateHistory: historyLimit,
-		layers:       64,
-		enableIndex:  true,
+		stateHistory:  historyLimit,
+		layers:        64,
+		maxDiffLayers: 4,
+		enableIndex:   true,
 	}
 	env := newTester(t, config)
 	defer env.release()
@@ -183,16 +179,12 @@ func testHistoryReader(t *testing.T, historyLimit uint64) {
 }
 
 func TestHistoricalStateReader(t *testing.T) {
-	maxDiffLayers = 4
-	defer func() {
-		maxDiffLayers = 128
-	}()
-
 	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
 	config := &testerConfig{
-		stateHistory: 0,
-		layers:       64,
-		enableIndex:  true,
+		stateHistory:  0,
+		layers:        64,
+		maxDiffLayers: 4,
+		enableIndex:   true,
 	}
 	env := newTester(t, config)
 	defer env.release()
