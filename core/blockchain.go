@@ -172,9 +172,10 @@ type BlockChainConfig struct {
 	TrieNoAsyncFlush     bool          // Whether the asynchronous buffer flushing is disallowed
 	TrieJournalDirectory string        // Directory path to the journal used for persisting trie data across node restarts
 
-	Preimages   bool   // Whether to store preimage of trie key to the disk
-	StateScheme string // Scheme used to store ethereum states and merkle tree nodes on top
-	ArchiveMode bool   // Whether to enable the archive mode
+	Preimages     bool   // Whether to store preimage of trie key to the disk
+	StateScheme   string // Scheme used to store ethereum states and merkle tree nodes on top
+	ArchiveMode   bool   // Whether to enable the archive mode
+	MaxDiffLayers int    // MaxDiffLayers is the maximum diff layers allowed in the layer tree. (only for path scheme)
 
 	// Number of blocks from the chain head for which state histories are retained.
 	// If set to 0, all state histories across the entire chain will be retained;
@@ -228,6 +229,7 @@ func DefaultConfig() *BlockChainConfig {
 		TrieTimeLimitRandomOffset:          0,
 		MaxNumberOfBlocksToSkipStateSaving: 0,
 		MaxAmountOfGasToSkipStateSaving:    0,
+		MaxDiffLayers:                      pathdb.DefaultMaxDiffLayers,
 
 		TrieCleanLimit:   256,
 		TrieDirtyLimit:   256,
@@ -283,6 +285,7 @@ func (cfg *BlockChainConfig) triedbConfig(isVerkle bool) *triedb.Config {
 			TrieCleanSize:       cfg.TrieCleanLimit * 1024 * 1024,
 			StateCleanSize:      cfg.SnapshotLimit * 1024 * 1024,
 			JournalDirectory:    cfg.TrieJournalDirectory,
+			MaxDiffLayers:       cfg.MaxDiffLayers,
 
 			// TODO(rjl493456442): The write buffer represents the memory limit used
 			// for flushing both trie data and state data to disk. The config name
