@@ -43,11 +43,9 @@ const (
 	// Do not increase the buffer size arbitrarily, otherwise the system
 	// pause time will increase when the database writes happen.
 	defaultBufferSize = 64 * 1024 * 1024
-)
 
-var (
-	// maxDiffLayers is the maximum diff layers allowed in the layer tree.
-	maxDiffLayers = 128
+	// Maximum diff layers allowed in the layer tree.
+	DefaultMaxDiffLayers = 128
 )
 
 // Defaults contains default settings for Ethereum mainnet.
@@ -57,6 +55,7 @@ var Defaults = &Config{
 	TrieCleanSize:       defaultTrieCleanSize,
 	StateCleanSize:      defaultStateCleanSize,
 	WriteBufferSize:     defaultBufferSize,
+	MaxDiffLayers:       DefaultMaxDiffLayers,
 }
 
 // ReadOnly is the config in order to open database in read only mode.
@@ -64,11 +63,13 @@ var ReadOnly = &Config{
 	ReadOnly:       true,
 	TrieCleanSize:  defaultTrieCleanSize,
 	StateCleanSize: defaultStateCleanSize,
+	MaxDiffLayers:  DefaultMaxDiffLayers,
 }
 
 // Config contains the settings for database.
 type Config struct {
 	StateHistory        uint64 // Number of recent blocks to maintain state history for, 0: full chain
+	MaxDiffLayers       int    // Maximum diff layers allowed in the layer tree.
 	EnableStateIndexing bool   // Whether to enable state history indexing for external state access
 	TrieCleanSize       int    // Maximum memory allowance (in bytes) for caching clean trie data
 	StateCleanSize      int    // Maximum memory allowance (in bytes) for caching clean state data
@@ -89,6 +90,11 @@ func (c *Config) sanitize() *Config {
 	if conf.WriteBufferSize > maxBufferSize {
 		log.Warn("Sanitizing invalid node buffer size", "provided", common.StorageSize(conf.WriteBufferSize), "updated", common.StorageSize(maxBufferSize))
 		conf.WriteBufferSize = maxBufferSize
+	}
+
+	if conf.MaxDiffLayers <= 0 {
+		log.Warn("Sanitizing invalid max diff layers", "provided", conf.MaxDiffLayers, "updated", DefaultMaxDiffLayers)
+		conf.MaxDiffLayers = DefaultMaxDiffLayers
 	}
 	return &conf
 }
