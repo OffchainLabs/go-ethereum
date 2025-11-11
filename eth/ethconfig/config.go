@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
 
 // FullNodeGPO contains default gasprice oracle settings for full node.
@@ -56,6 +57,7 @@ var Defaults = Config{
 	TransactionHistory:   2350000,
 	LogHistory:           2350000,
 	StateHistory:         params.FullImmutabilityThreshold,
+	MaxDiffLayers:        pathdb.DefaultMaxDiffLayers,
 	DatabaseCache:        512,
 	TrieCleanCache:       154,
 	TrieDirtyCache:       256,
@@ -107,6 +109,7 @@ type Config struct {
 	LogNoHistory         bool   `toml:",omitempty"` // No log search index is maintained.
 	LogExportCheckpoints string // export log index checkpoints to file
 	StateHistory         uint64 `toml:",omitempty"` // The maximum number of blocks from head whose state histories are reserved.
+	MaxDiffLayers        int    `toml:",omitempty"` // Maximum diff layers allowed in the layer tree.
 
 	// State scheme represents the scheme used to store ethereum states and trie
 	// nodes on top. It can be 'hash', 'path', or none which means use the scheme
