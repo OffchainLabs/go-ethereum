@@ -43,6 +43,10 @@ type Config struct {
 
 	BlockRedirects     []BlockRedirectConfig `koanf:"block-redirects"`
 	BlockRedirectsList string                `koanf:"block-redirects-list"`
+
+	// EIP-7966: eth_sendRawTransactionSync timeouts
+	TxSyncDefaultTimeout time.Duration `koanf:"tx-sync-default-timeout"`
+	TxSyncMaxTimeout     time.Duration `koanf:"tx-sync-max-timeout"`
 }
 
 type BlockRedirectConfig struct {
@@ -87,6 +91,8 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.Uint64(prefix+".arbdebug.block-range-bound", arbDebug.BlockRangeBound, "bounds the number of blocks arbdebug calls may return")
 	f.Uint64(prefix+".arbdebug.timeout-queue-bound", arbDebug.TimeoutQueueBound, "bounds the length of timeout queues arbdebug calls may return")
 	f.String(prefix+".block-redirects-list", DefaultConfig.BlockRedirectsList, "array of node configs to redirect block requests given as a json string. time duration should be supplied in number indicating nanoseconds")
+	f.Duration(prefix+".tx-sync-default-timeout", DefaultConfig.TxSyncDefaultTimeout, "default timeout for eth_sendRawTransactionSync")
+	f.Duration(prefix+".tx-sync-max-timeout", DefaultConfig.TxSyncMaxTimeout, "maximum allowed timeout for eth_sendRawTransactionSync ")
 }
 
 const (
@@ -113,4 +119,7 @@ var DefaultConfig = Config{
 		TimeoutQueueBound: 512,
 	},
 	BlockRedirectsList: "default",
+	// EIP-7966: eth_sendRawTransactionSync timeouts
+	TxSyncDefaultTimeout: ethconfig.Defaults.TxSyncDefaultTimeout,
+	TxSyncMaxTimeout:     ethconfig.Defaults.TxSyncMaxTimeout,
 }
