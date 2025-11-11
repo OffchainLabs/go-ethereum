@@ -1749,12 +1749,11 @@ func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash commo
 	if err != nil {
 		return nil, err
 	}
+	if header == nil {
+		return nil, fmt.Errorf("header not found for block hash %s", blockHash.String())
+	}
 	arbosVersion := types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion
 	signer := types.MakeSigner(api.b.ChainConfig(), header.Number, header.Time, arbosVersion)
-	header, err = api.b.HeaderByHash(ctx, blockHash)
-	if err != nil {
-		return nil, err
-	}
 	blockMetadata, err := api.b.BlockMetadataByNumber(ctx, blockNumber)
 	if err != nil {
 		return nil, err
