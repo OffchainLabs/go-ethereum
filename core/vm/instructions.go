@@ -727,7 +727,7 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 	// Apply EIP150
 	gas -= gas / 64
-	scope.Contract.UseMultiGas(multigas.ComputationGas(gas), evm.Config.Tracer, tracing.GasChangeCallContractCreation)
+	scope.Contract.UseMultiGas(multigas.ComputationGas(gas), evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
 	// reuse size int for stackvalue
 	stackvalue := size
 	res, addr, returnGas, usedMultiGas, suberr := evm.Create2(scope.Contract.Address(), input, gas,
