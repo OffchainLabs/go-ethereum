@@ -53,13 +53,6 @@ func (c *SimulatedBeacon) GetBlobs(ctx context.Context, batchBlockHash common.Ha
 		}
 
 		copy(output[outputIdx][:], bundle.Blobs[i])
-
-		var proof kzg4844.Proof
-		copy(proof[:], bundle.Proofs[i])
-
-		if err := kzg4844.VerifyBlobProof(&output[outputIdx], commitment, proof); err != nil {
-			return nil, fmt.Errorf("failed to verify blob proof for blob index(%d), blob(%s)", i, firstFewChars(bundle.Blobs[i].String()))
-		}
 	}
 
 	for i, found := range outputsFound {
