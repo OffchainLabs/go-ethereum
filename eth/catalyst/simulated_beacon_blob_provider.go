@@ -75,11 +75,3 @@ func commitmentToVersionedHash(commitment kzg4844.Commitment) common.Hash {
 	hash[0] = 1
 	return hash
 }
-
-func firstFewChars(s string) string {
-	if len(s) < 9 {
-		return fmt.Sprintf("\"%s\"", s)
-	} else {
-		return fmt.Sprintf("\"%s...\"", s[:8])
-	}
-}
