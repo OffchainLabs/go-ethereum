@@ -313,22 +313,3 @@ func BenchmarkKeccak256Hash(b *testing.B) {
 		Keccak256Hash(input[:])
 	}
 }
-
-// goos: darwin
-// goarch: arm64
-// pkg: github.com/ethereum/go-ethereum/crypto
-// cpu: Apple M1 Pro
-// BenchmarkHashData
-// BenchmarkHashData-8   	  793386	      1278 ns/op	      32 B/op	       1 allocs/op
-func BenchmarkHashData(b *testing.B) {
-	var (
-		input  [512]byte
-		buffer = NewKeccakState()
-	)
-	rand.Read(input[:])
-
-	b.ReportAllocs()
-	for b.Loop() {
-		HashData(buffer, input[:])
-	}
-}
