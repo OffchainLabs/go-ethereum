@@ -645,7 +645,7 @@ func (c *Clique) Close() error {
 func SealHash(header *types.Header) (hash common.Hash) {
 	hasher := sha3.NewLegacyKeccak256()
 	encodeSigHeader(hasher, header)
-	hasher.(crypto.KeccakState).Read(hash[:])
+	hasher.(crypto.KeccakSponge).Read(hash[:])
 	return hash
 }
 

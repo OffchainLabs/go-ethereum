@@ -25,39 +25,38 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// NewKeccakState creates a new KeccakState
-func NewKeccakState() KeccakState {
-	return sha3.NewLegacyKeccak256().(KeccakState)
+// NewKeccakSponge creates a new KeccakSponge
+func NewKeccakSponge() KeccakSponge {
+	return sha3.NewLegacyKeccak256().(KeccakSponge)
 }
 
 var hasherPool = sync.Pool{
 	New: func() any {
-		return sha3.NewLegacyKeccak256().(KeccakState)
+		return sha3.NewLegacyKeccak256().(KeccakSponge)
 	},
+}
+
+// keccak256 is a helper that hashes the input data using the provided KeccakSponge and writes the result to out.
+func keccak256(out []byte, data ...[]byte) {
+	d := hasherPool.Get().(KeccakSponge)
+	d.Reset()
+	for _, b := range data {
+		d.Write(b)
+	}
+	d.Read(out)
+	hasherPool.Put(d)
 }
 
 // Keccak256 calculates and returns the Keccak256 hash of the input data.
 func Keccak256(data ...[]byte) []byte {
 	b := make([]byte, 32)
-	d := hasherPool.Get().(KeccakState)
-	d.Reset()
-	for _, b := range data {
-		d.Write(b)
-	}
-	d.Read(b)
-	hasherPool.Put(d)
+	keccak256(b, data...)
 	return b
 }
 
 // Keccak256Hash calculates and returns the Keccak256 hash of the input data,
 // converting it to an internal Hash data structure.
 func Keccak256Hash(data ...[]byte) (h common.Hash) {
-	d := hasherPool.Get().(KeccakState)
-	d.Reset()
-	for _, b := range data {
-		d.Write(b)
-	}
-	d.Read(h[:])
-	hasherPool.Put(d)
+	keccak256(h[:], data...)
 	return h
 }
