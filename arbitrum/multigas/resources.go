@@ -322,6 +322,26 @@ func (z MultiGas) SaturatingIncrement(kind ResourceKind, gas uint64) MultiGas {
 	return res
 }
 
+// SaturatingDecrement returns a copy of z with the given resource kind
+// and the total decremented by gas. On underflow, the field(s) are clamped to 0.
+func (z MultiGas) SaturatingDecrement(kind ResourceKind, gas uint64) MultiGas {
+	res := z
+
+	if v, c := bits.Sub64(res.gas[kind], gas, 0); c != 0 {
+		res.gas[kind] = 0 // clamp
+	} else {
+		res.gas[kind] = v
+	}
+
+	if t, c := bits.Sub64(res.total, gas, 0); c != 0 {
+		res.total = 0 // clamp
+	} else {
+		res.total = t
+	}
+
+	return res
+}
+
 // SaturatingIncrementInto increments the given resource kind and the total
 // in place by gas. On overflow, the affected field(s) are clamped to MaxUint64.
 // Unlike SaturatingIncrement, this method mutates the receiver directly and
