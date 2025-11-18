@@ -40,15 +40,14 @@ func keccak256Digest(out []byte, data ...[]byte) {
 	for _, b := range data {
 		flattenedInput = append(flattenedInput, b...)
 	}
+	inputLen := len(flattenedInput)
 
-	var inputPtr unsafe.Pointer
-	if len(flattenedInput) > 0 {
+	inputPtr := unsafe.Pointer(nil)
+	if inputLen > 0 {
 		inputPtr = unsafe.Pointer(&flattenedInput[0])
-	} else {
-		inputPtr = unsafe.Pointer(nil)
 	}
 
-	outsourcedKeccak(inputPtr, uint32(len(flattenedInput)), unsafe.Pointer(&out[0]))
+	outsourcedKeccak(inputPtr, uint32(inputLen), unsafe.Pointer(&out[0]))
 }
 
 //go:wasmimport arbkeccak keccak256
