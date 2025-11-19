@@ -321,7 +321,7 @@ func (s *hookedStateDB) RecordEvictWasm(wasm EvictWasm) {
 	s.inner.RecordEvictWasm(wasm)
 }
 
-func (s *hookedStateDB) GetRecentWasms() RecentWasms {
+func (s *hookedStateDB) GetRecentWasms() *RecentWasms {
 	return s.inner.GetRecentWasms()
 }
 
