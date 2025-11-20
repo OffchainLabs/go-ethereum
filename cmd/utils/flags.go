@@ -997,6 +997,20 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	// Hashing settings
+	HashKeySandboxFlag = &cli.StringFlag{
+		Name:     "hashkey.sandbox",
+		Usage:    "Sandbox contract address for hashkey computation",
+		Value:    common.Address{}.String(),
+		Category: flags.HashKeyCategory,
+	}
+	HashKeyPolicyFlag = &cli.StringFlag{
+		Name:     "hashkey.policy",
+		Usage:    "Policy contract address for hashkey computation (used with sandbox)",
+		Value:    common.Address{}.String(),
+		Category: flags.HashKeyCategory,
+	}
 )
 
 var (

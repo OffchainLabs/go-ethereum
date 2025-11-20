@@ -207,6 +207,11 @@ var (
 		utils.MetricsInfluxDBOrganizationFlag,
 		utils.StateSizeTrackingFlag,
 	}
+
+	hashkeyFlags = []cli.Flag{
+		utils.HashKeySandboxFlag,
+		utils.HashKeyPolicyFlag,
+	}
 )
 
 var app = flags.NewApp("the go-ethereum command line interface")
@@ -260,6 +265,7 @@ func init() {
 		consoleFlags,
 		debug.Flags,
 		metricsFlags,
+		hashkeyFlags,
 	)
 	flags.AutoEnvVars(app.Flags, "GETH")
 
