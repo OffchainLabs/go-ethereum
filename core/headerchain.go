@@ -607,7 +607,9 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 			// flush after each deleted header and its side forks
 			// on the first iteration (when origin==true) len(nums) can be considerable
 			if batch.ValueSize() >= ethdb.IdealBatchSize {
-				batch.Write()
+				if err := batch.Write(); err != nil {
+					log.Crit("Failed to flush batch in setHead", "err", err)
+				}
 				batch.Reset()
 			}
 		}
