@@ -608,6 +608,9 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 			// on the first iteration (when origin==true) len(nums) can be considerable
 			if batch.ValueSize() >= ethdb.IdealBatchSize {
 				if err := batch.Write(); err != nil {
+					// We do not exit gracefully here, as a failed batch write can leave the header chain in
+					// an inconsistent state during rewinds. This behavior is aligned with the other `batch.Write`
+					// calls handling around.
 					log.Crit("Failed to flush batch in setHead", "err", err)
 				}
 				batch.Reset()
