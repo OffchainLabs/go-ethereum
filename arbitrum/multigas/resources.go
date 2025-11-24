@@ -327,16 +327,20 @@ func (z MultiGas) SaturatingIncrement(kind ResourceKind, gas uint64) MultiGas {
 func (z MultiGas) SaturatingDecrement(kind ResourceKind, gas uint64) MultiGas {
 	res := z
 
-	if v, c := bits.Sub64(res.gas[kind], gas, 0); c != 0 {
-		res.gas[kind] = 0 // clamp
+	current := res.gas[kind]
+	var reduced uint64
+	if current < gas {
+		reduced = current
+		res.gas[kind] = 0
 	} else {
-		res.gas[kind] = v
+		reduced = gas
+		res.gas[kind] = current - gas
 	}
 
-	if t, c := bits.Sub64(res.total, gas, 0); c != 0 {
-		res.total = 0 // clamp
+	if res.total < reduced {
+		res.total = 0
 	} else {
-		res.total = t
+		res.total -= reduced
 	}
 
 	return res
