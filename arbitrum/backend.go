@@ -17,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/shutdowncheck"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 type Backend struct {
@@ -30,7 +29,8 @@ type Backend struct {
 	txFeed event.Feed
 	scope  event.SubscriptionScope
 
-	filterMaps *filtermaps.FilterMaps
+	filterMaps     *filtermaps.FilterMaps
+	receiptFetcher ReceiptFetcher
 
 	shutdownTracker *shutdowncheck.ShutdownTracker
 
@@ -84,13 +84,15 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 		backend.stack.ApplyAPIFilter(rpcFilter)
 	}
 
-	filterSystem, err := createRegisterAPIBackend(backend, filterConfig, config.ClassicRedirect, config.ClassicRedirectTimeout, config.BlockRedirects)
+	filterSystem, receiptFetcher, err := createRegisterAPIBackend(backend, filterConfig, config.ClassicRedirect, config.ClassicRedirectTimeout, config.BlockRedirects)
 	if err != nil {
 		return nil, nil, err
 	}
 	backend.filterSystem = filterSystem
+	backend.receiptFetcher = receiptFetcher
 	return backend, filterSystem, nil
 }
+
 func (b *Backend) newChainView(head *types.Header) *filtermaps.ChainView {
 	if head == nil {
 		return nil
@@ -100,11 +102,12 @@ func (b *Backend) newChainView(head *types.Header) *filtermaps.ChainView {
 
 func (b *Backend) AccountManager() *accounts.Manager { return b.stack.AccountManager() }
 func (b *Backend) APIBackend() *APIBackend           { return b.apiBackend }
-func (b *Backend) APIs() []rpc.API                   { return b.apiBackend.GetAPIs(b.filterSystem) }
 func (b *Backend) ArbInterface() ArbInterface        { return b.arb }
 func (b *Backend) BlockChain() *core.BlockChain      { return b.arb.BlockChain() }
 func (b *Backend) ChainDb() ethdb.Database           { return b.chainDb }
+func (b *Backend) Config() *Config                   { return b.config }
 func (b *Backend) Engine() consensus.Engine          { return b.arb.BlockChain().Engine() }
+func (b *Backend) ReceiptFetcher() ReceiptFetcher    { return b.receiptFetcher }
 func (b *Backend) Stack() *node.Node                 { return b.stack }
 
 func (b *Backend) ResetWithGenesisBlock(gb *types.Block) {

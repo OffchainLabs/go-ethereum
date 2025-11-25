@@ -495,14 +495,11 @@ type BlockMetadata []byte
 // starting from the second byte, (N)th bit would represent if (N)th tx is timeboosted or not, 1 means yes and 0 means no
 // blockMetadata[index / 8 + 1] & (1 << (index % 8)) != 0; where index = (N - 1), implies whether (N)th tx in a block is timeboosted
 // note that number of txs in a block will always lag behind (len(blockMetadata) - 1) * 8 but it wont lag more than a value of 7
-func (b BlockMetadata) IsTxTimeboosted(txIndex int) (bool, error) {
+func (b BlockMetadata) IsTxTimeboosted(txIndex uint64) (bool, error) {
 	if len(b) == 0 {
 		return false, errors.New("blockMetadata is not set")
 	}
-	if txIndex < 0 {
-		return false, fmt.Errorf("invalid transaction index- %d, should be positive", txIndex)
-	}
-	maxTxCount := (len(b) - 1) * 8
+	maxTxCount := (uint64(len(b)) - 1) * 8
 	if txIndex >= maxTxCount {
 		return false, nil
 	}

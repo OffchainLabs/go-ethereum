@@ -132,16 +132,16 @@ type SyncProgressBackend interface {
 	BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error)
 }
 
-func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration, archiveRedirects []BlockRedirectConfig) (*filters.FilterSystem, error) {
+func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration, archiveRedirects []BlockRedirectConfig) (*filters.FilterSystem, ReceiptFetcher, error) {
 	fallbackClient, err := CreateFallbackClient(fallbackClientUrl, fallbackClientTimeout, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var archiveClientsManager *archiveFallbackClientsManager
 	if len(archiveRedirects) != 0 {
 		archiveClientsManager, err = newArchiveFallbackClientsManager(archiveRedirects)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	backend.apiBackend = &APIBackend{
@@ -150,8 +150,9 @@ func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fal
 		archiveClientsManager: archiveClientsManager,
 	}
 	filterSystem := filters.NewFilterSystem(backend.apiBackend, filterConfig)
-	backend.stack.RegisterAPIs(backend.apiBackend.GetAPIs(filterSystem))
-	return filterSystem, nil
+	apis, receiptFetcher := backend.apiBackend.GetAPIs(filterSystem)
+	backend.stack.RegisterAPIs(apis)
+	return filterSystem, receiptFetcher, nil
 }
 
 func (a *APIBackend) SetSyncBackend(sync SyncProgressBackend) error {
@@ -162,8 +163,8 @@ func (a *APIBackend) SetSyncBackend(sync SyncProgressBackend) error {
 	return nil
 }
 
-func (a *APIBackend) GetAPIs(filterSystem *filters.FilterSystem) []rpc.API {
-	apis := ethapi.GetAPIs(a)
+func (a *APIBackend) GetAPIs(filterSystem *filters.FilterSystem) ([]rpc.API, ReceiptFetcher) {
+	apis, transactionAPI := ethapi.GetAPIs(a)
 
 	apis = append(apis, rpc.API{
 		Namespace: "eth",
@@ -195,7 +196,7 @@ func (a *APIBackend) GetAPIs(filterSystem *filters.FilterSystem) []rpc.API {
 
 	apis = append(apis, tracers.APIs(a)...)
 
-	return apis
+	return apis, transactionAPI
 }
 
 func (a *APIBackend) BlockChain() *core.BlockChain {
