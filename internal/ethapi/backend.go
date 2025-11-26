@@ -108,9 +108,12 @@ type Backend interface {
 	NewMatcherBackend() filtermaps.MatcherBackend
 }
 
-func GetAPIs(apiBackend Backend) ([]rpc.API, *TransactionAPI) {
+func GetTransactionAPI(apiBackend Backend) *TransactionAPI {
 	nonceLock := new(AddrLocker)
-	transactionAPI := NewTransactionAPI(apiBackend, nonceLock)
+	return NewTransactionAPI(apiBackend, nonceLock)
+}
+
+func GetAPIs(apiBackend Backend) []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "eth",
@@ -118,9 +121,6 @@ func GetAPIs(apiBackend Backend) ([]rpc.API, *TransactionAPI) {
 		}, {
 			Namespace: "eth",
 			Service:   NewBlockChainAPI(apiBackend),
-		}, {
-			Namespace: "eth",
-			Service:   transactionAPI,
 		}, {
 			Namespace: "txpool",
 			Service:   NewTxPoolAPI(apiBackend),
@@ -131,5 +131,5 @@ func GetAPIs(apiBackend Backend) ([]rpc.API, *TransactionAPI) {
 			Namespace: "eth",
 			Service:   NewEthereumAccountAPI(apiBackend.AccountManager()),
 		},
-	}, transactionAPI
+	}
 }
