@@ -150,14 +150,8 @@ func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fal
 		archiveClientsManager: archiveClientsManager,
 	}
 	filterSystem := filters.NewFilterSystem(backend.apiBackend, filterConfig)
-	apis := backend.apiBackend.GetAPIs(filterSystem)
-	backend.stack.RegisterAPIs(apis.Slice())
-
-	service := apis.EthAPIs.TransactionAPI.Service
-	receiptFetcher, ok := service.(ReceiptFetcher)
-	if !ok {
-		return nil, nil, fmt.Errorf("TransactionAPI.Service does not implement ReceiptFetcher")
-	}
+	apis, receiptFetcher := backend.apiBackend.GetAPIs(filterSystem)
+	backend.stack.RegisterAPIs(apis)
 	return filterSystem, receiptFetcher, nil
 }
 
@@ -169,35 +163,40 @@ func (a *APIBackend) SetSyncBackend(sync SyncProgressBackend) error {
 	return nil
 }
 
-func (a *APIBackend) GetAPIs(filterSystem *filters.FilterSystem) APIs {
-	return APIs{
-		EthAPIs: ethapi.GetAPIs(a),
-		FilterAPI: rpc.API{
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   filters.NewFilterAPI(filterSystem),
-			Public:    true,
-		},
-		ArbTransactionAPI: rpc.API{
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   NewArbTransactionAPI(a),
-			Public:    true,
-		},
-		PublicNetAPI: rpc.API{
-			Namespace: "net",
-			Version:   "1.0",
-			Service:   NewPublicNetAPI(a.ChainConfig().ChainID.Uint64()),
-			Public:    true,
-		},
-		PublicTxPoolAPI: rpc.API{
-			Namespace: "txpool",
-			Version:   "1.0",
-			Service:   NewPublicTxPoolAPI(),
-			Public:    true,
-		},
-		TracersAPIs: tracers.APIs(a),
-	}
+func (a *APIBackend) GetAPIs(filterSystem *filters.FilterSystem) ([]rpc.API, ReceiptFetcher) {
+	apis, transactionAPI := ethapi.GetAPIs(a)
+
+	apis = append(apis, rpc.API{
+		Namespace: "eth",
+		Version:   "1.0",
+		Service:   filters.NewFilterAPI(filterSystem),
+		Public:    true,
+	})
+
+	apis = append(apis, rpc.API{
+		Namespace: "eth",
+		Version:   "1.0",
+		Service:   NewArbTransactionAPI(a),
+		Public:    true,
+	})
+
+	apis = append(apis, rpc.API{
+		Namespace: "net",
+		Version:   "1.0",
+		Service:   NewPublicNetAPI(a.ChainConfig().ChainID.Uint64()),
+		Public:    true,
+	})
+
+	apis = append(apis, rpc.API{
+		Namespace: "txpool",
+		Version:   "1.0",
+		Service:   NewPublicTxPoolAPI(),
+		Public:    true,
+	})
+
+	apis = append(apis, tracers.APIs(a)...)
+
+	return apis, transactionAPI
 }
 
 func (a *APIBackend) BlockChain() *core.BlockChain {
