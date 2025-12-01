@@ -150,7 +150,18 @@ func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fal
 		archiveClientsManager: archiveClientsManager,
 	}
 	filterSystem := filters.NewFilterSystem(backend.apiBackend, filterConfig)
-	apis, receiptFetcher := backend.apiBackend.GetAPIs(filterSystem)
+	apis := backend.apiBackend.GetAPIs(filterSystem)
+	var receiptFetcher ReceiptFetcher
+	for _, api := range apis {
+		var ok bool
+		receiptFetcher, ok = api.Service.(ReceiptFetcher)
+		if ok {
+			break
+		}
+	}
+	if receiptFetcher == nil {
+		return nil, nil, errors.New("no receipt fetcher found in APIs")
+	}
 	backend.stack.RegisterAPIs(apis)
 	return filterSystem, receiptFetcher, nil
 }
@@ -163,8 +174,8 @@ func (a *APIBackend) SetSyncBackend(sync SyncProgressBackend) error {
 	return nil
 }
 
-func (a *APIBackend) GetAPIs(filterSystem *filters.FilterSystem) ([]rpc.API, ReceiptFetcher) {
-	apis, transactionAPI := ethapi.GetAPIs(a)
+func (a *APIBackend) GetAPIs(filterSystem *filters.FilterSystem) []rpc.API {
+	apis := ethapi.GetAPIs(a)
 
 	apis = append(apis, rpc.API{
 		Namespace: "eth",
@@ -196,7 +207,7 @@ func (a *APIBackend) GetAPIs(filterSystem *filters.FilterSystem) ([]rpc.API, Rec
 
 	apis = append(apis, tracers.APIs(a)...)
 
-	return apis, transactionAPI
+	return apis
 }
 
 func (a *APIBackend) BlockChain() *core.BlockChain {

@@ -370,7 +370,7 @@ func (api *FilterAPI) TransactionReceipts(ctx context.Context, filter *Transacti
 							receiptWithTx.Receipt.BlockNumber.Uint64(),
 							signer,
 							receiptWithTx.Transaction,
-							uint64(receiptWithTx.Receipt.TransactionIndex),
+							int(receiptWithTx.Receipt.TransactionIndex),
 							api.events.backend.ChainConfig(),
 							header,
 							blockMetadata,

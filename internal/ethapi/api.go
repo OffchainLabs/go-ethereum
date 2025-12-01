@@ -657,7 +657,7 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 		if err != nil {
 			return nil, err
 		}
-		result[i] = MarshalReceipt(receipt, block.Hash(), block.NumberU64(), signer, txs[i], uint64(i), api.b.ChainConfig(), header, blockMetadata)
+		result[i] = MarshalReceipt(receipt, block.Hash(), block.NumberU64(), signer, txs[i], i, api.b.ChainConfig(), header, blockMetadata)
 	}
 	return result, nil
 }
@@ -1758,11 +1758,11 @@ func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash commo
 	if err != nil {
 		return nil, err
 	}
-	return MarshalReceipt(receipt, blockHash, blockNumber, signer, tx, index, api.b.ChainConfig(), header, blockMetadata), nil
+	return MarshalReceipt(receipt, blockHash, blockNumber, signer, tx, int(index), api.b.ChainConfig(), header, blockMetadata), nil
 }
 
 // MarshalReceipt marshals a transaction receipt into a JSON object.
-func MarshalReceipt(receipt *types.Receipt, blockHash common.Hash, blockNumber uint64, signer types.Signer, tx *types.Transaction, txIndex uint64, chainConfig *params.ChainConfig, header *types.Header, blockMetadata common.BlockMetadata) map[string]interface{} {
+func MarshalReceipt(receipt *types.Receipt, blockHash common.Hash, blockNumber uint64, signer types.Signer, tx *types.Transaction, txIndex int, chainConfig *params.ChainConfig, header *types.Header, blockMetadata common.BlockMetadata) map[string]interface{} {
 	from, _ := types.Sender(signer, tx)
 
 	fields := map[string]interface{}{
@@ -2062,7 +2062,7 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 							rs[i].BlockNumber.Uint64(),
 							signer,
 							txs[i],
-							uint64(rs[i].TransactionIndex),
+							int(rs[i].TransactionIndex),
 							api.b.ChainConfig(),
 							header,
 							blockMetadata,
