@@ -191,20 +191,25 @@ func (z *MultiGas) SaturatingAddInto(x MultiGas) {
 // subtracted by the values from x. It returns the updated value and true if
 // a underflow occurred.
 func (z MultiGas) SafeSub(x MultiGas) (MultiGas, bool) {
-	res := z
+	res, underflow := z, false
 
 	for i := 0; i < int(NumResourceKind); i++ {
-		if saturatingScalarSubInto(res.gas[i], x.gas[i], &res.gas[i]) {
+		res.gas[i], underflow = saturatingScalarSub(res.gas[i], x.gas[i])
+		if underflow {
 			return z, true
 		}
 	}
 
-	if saturatingScalarSubInto(res.total, x.total, &res.total) {
+	res.total, underflow = saturatingScalarSub(res.total, x.total)
+	if underflow {
 		return z, true
 	}
-	if saturatingScalarSubInto(res.refund, x.refund, &res.refund) {
+
+	res.refund, underflow = saturatingScalarSub(res.refund, x.refund)
+	if underflow {
 		return z, true
 	}
+
 	return res, false
 }
 
@@ -214,10 +219,10 @@ func (z MultiGas) SafeSub(x MultiGas) (MultiGas, bool) {
 func (z MultiGas) SaturatingSub(x MultiGas) MultiGas {
 	res := z
 	for i := 0; i < int(NumResourceKind); i++ {
-		saturatingScalarSubInto(res.gas[i], x.gas[i], &res.gas[i])
+		res.gas[i], _ = saturatingScalarSub(res.gas[i], x.gas[i])
 	}
-	saturatingScalarSubInto(res.total, x.total, &res.total)
-	saturatingScalarSubInto(res.refund, x.refund, &res.refund)
+	res.total, _ = saturatingScalarSub(res.total, x.total)
+	res.refund, _ = saturatingScalarSub(res.refund, x.refund)
 	return res
 }
 
@@ -377,12 +382,10 @@ func saturatingScalarAddInto(a, b uint64, dst *uint64) bool {
 	return false
 }
 
-func saturatingScalarSubInto(a, b uint64, dst *uint64) bool {
+func saturatingScalarSub(a, b uint64) (uint64, bool) {
 	diff, borrow := bits.Sub64(a, b, 0)
 	if borrow != 0 {
-		*dst = 0
-		return true
+		return 0, true
 	}
-	*dst = diff
-	return false
+	return diff, false
 }
