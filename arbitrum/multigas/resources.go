@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"math/bits"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -67,12 +68,10 @@ func NewMultiGas(kind ResourceKind, amount uint64) MultiGas {
 func MultiGasFromPairs(pairs ...Pair) MultiGas {
 	var mg MultiGas
 	for _, p := range pairs {
-		newTotal, c := bits.Add64(mg.total, p.Amount, 0)
-		if c != 0 {
+		if saturatingScalarAddInto(mg.total, p.Amount, &mg.total) {
 			panic("multigas overflow")
 		}
 		mg.gas[p.Kind] = p.Amount
-		mg.total = newTotal
 	}
 	return mg
 }
@@ -121,12 +120,10 @@ func (z MultiGas) Get(kind ResourceKind) uint64 {
 // The total is adjusted accordingly. It returns the updated value and true if an overflow occurred.
 func (z MultiGas) With(kind ResourceKind, amount uint64) (MultiGas, bool) {
 	res := z
-	newTotal, c := bits.Add64(z.total-z.gas[kind], amount, 0)
-	if c != 0 {
+	if saturatingScalarAddInto(z.total-z.gas[kind], amount, &res.total) {
 		return z, true
 	}
 	res.gas[kind] = amount
-	res.total = newTotal
 	return res, false
 }
 
@@ -149,24 +146,17 @@ func (z MultiGas) SafeAdd(x MultiGas) (MultiGas, bool) {
 	res := z
 
 	for i := 0; i < int(NumResourceKind); i++ {
-		v, c := bits.Add64(res.gas[i], x.gas[i], 0)
-		if c != 0 {
+		if saturatingScalarAddInto(res.gas[i], x.gas[i], &res.gas[i]) {
 			return z, true
 		}
-		res.gas[i] = v
 	}
 
-	t, c := bits.Add64(res.total, x.total, 0)
-	if c != 0 {
+	if saturatingScalarAddInto(res.total, x.total, &res.total) {
 		return z, true
 	}
-	res.total = t
-
-	r, c := bits.Add64(res.refund, x.refund, 0)
-	if c != 0 {
+	if saturatingScalarAddInto(res.refund, x.refund, &res.refund) {
 		return z, true
 	}
-	res.refund = r
 
 	return res, false
 }
@@ -178,25 +168,11 @@ func (z MultiGas) SaturatingAdd(x MultiGas) MultiGas {
 	res := z
 
 	for i := 0; i < int(NumResourceKind); i++ {
-		if v, c := bits.Add64(res.gas[i], x.gas[i], 0); c != 0 {
-			res.gas[i] = ^uint64(0) // clamp
-		} else {
-			res.gas[i] = v
-		}
+		saturatingScalarAddInto(res.gas[i], x.gas[i], &res.gas[i])
 	}
 
-	if t, c := bits.Add64(res.total, x.total, 0); c != 0 {
-		res.total = ^uint64(0) // clamp
-	} else {
-		res.total = t
-	}
-
-	if r, c := bits.Add64(res.refund, x.refund, 0); c != 0 {
-		res.refund = ^uint64(0) // clamp
-	} else {
-		res.refund = r
-	}
-
+	saturatingScalarAddInto(res.total, x.total, &res.total)
+	saturatingScalarAddInto(res.refund, x.refund, &res.refund)
 	return res
 }
 
@@ -205,22 +181,10 @@ func (z MultiGas) SaturatingAdd(x MultiGas) MultiGas {
 // This is a hot-path helper; the public immutable API remains preferred elsewhere.
 func (z *MultiGas) SaturatingAddInto(x MultiGas) {
 	for i := 0; i < int(NumResourceKind); i++ {
-		if v, c := bits.Add64(z.gas[i], x.gas[i], 0); c != 0 {
-			z.gas[i] = ^uint64(0) // clamp
-		} else {
-			z.gas[i] = v
-		}
+		saturatingScalarAddInto(z.gas[i], x.gas[i], &z.gas[i])
 	}
-	if t, c := bits.Add64(z.total, x.total, 0); c != 0 {
-		z.total = ^uint64(0) // clamp
-	} else {
-		z.total = t
-	}
-	if r, c := bits.Add64(z.refund, x.refund, 0); c != 0 {
-		z.refund = ^uint64(0) // clamp
-	} else {
-		z.refund = r
-	}
+	saturatingScalarAddInto(z.total, x.total, &z.total)
+	saturatingScalarAddInto(z.refund, x.refund, &z.refund)
 }
 
 // SafeSub returns a copy of z with the per-kind, total, and refund gas
@@ -230,25 +194,17 @@ func (z MultiGas) SafeSub(x MultiGas) (MultiGas, bool) {
 	res := z
 
 	for i := 0; i < int(NumResourceKind); i++ {
-		v, b := bits.Sub64(res.gas[i], x.gas[i], 0)
-		if b != 0 {
+		if saturatingScalarSubInto(res.gas[i], x.gas[i], &res.gas[i]) {
 			return z, true
 		}
-		res.gas[i] = v
 	}
 
-	t, b := bits.Sub64(res.total, x.total, 0)
-	if b != 0 {
+	if saturatingScalarSubInto(res.total, x.total, &res.total) {
 		return z, true
 	}
-	res.total = t
-
-	r, b := bits.Sub64(res.refund, x.refund, 0)
-	if b != 0 {
+	if saturatingScalarSubInto(res.refund, x.refund, &res.refund) {
 		return z, true
 	}
-	res.refund = r
-
 	return res, false
 }
 
@@ -257,27 +213,11 @@ func (z MultiGas) SafeSub(x MultiGas) (MultiGas, bool) {
 // clamped to zero.
 func (z MultiGas) SaturatingSub(x MultiGas) MultiGas {
 	res := z
-
 	for i := 0; i < int(NumResourceKind); i++ {
-		if v, c := bits.Sub64(res.gas[i], x.gas[i], 0); c != 0 {
-			res.gas[i] = uint64(0) // clamp
-		} else {
-			res.gas[i] = v
-		}
+		saturatingScalarSubInto(res.gas[i], x.gas[i], &res.gas[i])
 	}
-
-	if t, c := bits.Sub64(res.total, x.total, 0); c != 0 {
-		res.total = uint64(0) // clamp
-	} else {
-		res.total = t
-	}
-
-	if r, c := bits.Sub64(res.refund, x.refund, 0); c != 0 {
-		res.refund = uint64(0) // clamp
-	} else {
-		res.refund = r
-	}
-
+	saturatingScalarSubInto(res.total, x.total, &res.total)
+	saturatingScalarSubInto(res.refund, x.refund, &res.refund)
 	return res
 }
 
@@ -286,19 +226,12 @@ func (z MultiGas) SaturatingSub(x MultiGas) MultiGas {
 // an overflow occurred.
 func (z MultiGas) SafeIncrement(kind ResourceKind, gas uint64) (MultiGas, bool) {
 	res := z
-
-	newValue, c := bits.Add64(z.gas[kind], gas, 0)
-	if c != 0 {
-		return res, true
+	if saturatingScalarAddInto(z.gas[kind], gas, &res.gas[kind]) {
+		return z, true
 	}
-
-	newTotal, c := bits.Add64(z.total, gas, 0)
-	if c != 0 {
-		return res, true
+	if saturatingScalarAddInto(z.total, gas, &res.total) {
+		return z, true
 	}
-
-	res.gas[kind] = newValue
-	res.total = newTotal
 	return res, false
 }
 
@@ -306,19 +239,8 @@ func (z MultiGas) SafeIncrement(kind ResourceKind, gas uint64) (MultiGas, bool) 
 // and the total incremented by gas. On overflow, the field(s) are clamped to MaxUint64.
 func (z MultiGas) SaturatingIncrement(kind ResourceKind, gas uint64) MultiGas {
 	res := z
-
-	if v, c := bits.Add64(res.gas[kind], gas, 0); c != 0 {
-		res.gas[kind] = ^uint64(0) // clamp
-	} else {
-		res.gas[kind] = v
-	}
-
-	if t, c := bits.Add64(res.total, gas, 0); c != 0 {
-		res.total = ^uint64(0) // clamp
-	} else {
-		res.total = t
-	}
-
+	saturatingScalarAddInto(z.gas[kind], gas, &res.gas[kind])
+	saturatingScalarAddInto(z.total, gas, &res.total)
 	return res
 }
 
@@ -327,17 +249,8 @@ func (z MultiGas) SaturatingIncrement(kind ResourceKind, gas uint64) MultiGas {
 // Unlike SaturatingIncrement, this method mutates the receiver directly and
 // is intended for VM hot paths where avoiding value copies is critical.
 func (z *MultiGas) SaturatingIncrementInto(kind ResourceKind, gas uint64) {
-	if v, c := bits.Add64(z.gas[kind], gas, 0); c != 0 {
-		z.gas[kind] = ^uint64(0)
-	} else {
-		z.gas[kind] = v
-	}
-
-	if t, c := bits.Add64(z.total, gas, 0); c != 0 {
-		z.total = ^uint64(0)
-	} else {
-		z.total = t
-	}
+	saturatingScalarAddInto(z.gas[kind], gas, &z.gas[kind])
+	saturatingScalarAddInto(z.total, gas, &z.total)
 }
 
 // SingleGas returns the single-dimensional total gas.
@@ -452,4 +365,24 @@ func (z *MultiGas) DecodeRLP(s *rlp.Stream) error {
 	z.total = total
 	z.refund = refund
 	return nil
+}
+
+func saturatingScalarAddInto(a, b uint64, dst *uint64) bool {
+	sum, carry := bits.Add64(a, b, 0)
+	if carry != 0 {
+		*dst = math.MaxUint64
+		return true
+	}
+	*dst = sum
+	return false
+}
+
+func saturatingScalarSubInto(a, b uint64, dst *uint64) bool {
+	diff, borrow := bits.Sub64(a, b, 0)
+	if borrow != 0 {
+		*dst = 0
+		return true
+	}
+	*dst = diff
+	return false
 }
