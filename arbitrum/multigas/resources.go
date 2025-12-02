@@ -70,7 +70,9 @@ func MultiGasFromPairs(pairs ...Pair) MultiGas {
 	for _, p := range pairs {
 		mg.gas[p.Kind] = p.Amount
 	}
-	mg.recomputeTotal()
+	if mg.recomputeTotal() {
+		panic("multigas overflow")
+	}
 	return mg
 }
 
@@ -378,17 +380,17 @@ func (z *MultiGas) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// recomputeTotal recomputes the total gas from the per-kind amounts.
-// Panics on overflow.
-func (z *MultiGas) recomputeTotal() {
-	total, overflow := uint64(0), false
+// recomputeTotal recomputes the total gas from the per-kind amounts. Returns
+// true if an overflow occurred (and the total was set to MaxUint64).
+func (z *MultiGas) recomputeTotal() (overflow bool) {
+	z.total = 0
 	for i := 0; i < int(NumResourceKind); i++ {
-		total, overflow = saturatingScalarAdd(total, z.gas[i])
+		z.total, overflow = saturatingScalarAdd(z.total, z.gas[i])
 		if overflow {
-			panic("multigas overflow")
+			return
 		}
 	}
-	z.total = total
+	return
 }
 
 // saturatingScalarAdd adds two uint64 values, returning the sum and a boolean
