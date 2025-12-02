@@ -68,13 +68,9 @@ func NewMultiGas(kind ResourceKind, amount uint64) MultiGas {
 func MultiGasFromPairs(pairs ...Pair) MultiGas {
 	var mg MultiGas
 	for _, p := range pairs {
-		newTotal, overflow := saturatingScalarAdd(mg.total, p.Amount)
-		if overflow {
-			panic("multigas overflow")
-		}
 		mg.gas[p.Kind] = p.Amount
-		mg.total = newTotal
 	}
+	mg.recomputeTotal()
 	return mg
 }
 
@@ -208,15 +204,12 @@ func (z MultiGas) SafeSub(x MultiGas) (MultiGas, bool) {
 		}
 	}
 
-	res.total, underflow = saturatingScalarSub(res.total, x.total)
-	if underflow {
-		return z, true
-	}
-
 	res.refund, underflow = saturatingScalarSub(res.refund, x.refund)
 	if underflow {
 		return z, true
 	}
+
+	res.recomputeTotal()
 
 	return res, false
 }
@@ -229,8 +222,8 @@ func (z MultiGas) SaturatingSub(x MultiGas) MultiGas {
 	for i := 0; i < int(NumResourceKind); i++ {
 		res.gas[i], _ = saturatingScalarSub(res.gas[i], x.gas[i])
 	}
-	res.total, _ = saturatingScalarSub(res.total, x.total)
 	res.refund, _ = saturatingScalarSub(res.refund, x.refund)
+	res.recomputeTotal()
 	return res
 }
 
@@ -383,6 +376,19 @@ func (z *MultiGas) DecodeRLP(s *rlp.Stream) error {
 	z.total = total
 	z.refund = refund
 	return nil
+}
+
+// recomputeTotal recomputes the total gas from the per-kind amounts.
+// Panics on overflow.
+func (z *MultiGas) recomputeTotal() {
+	total, overflow := uint64(0), false
+	for i := 0; i < int(NumResourceKind); i++ {
+		total, overflow = saturatingScalarAdd(total, z.gas[i])
+		if overflow {
+			panic("multigas overflow")
+		}
+	}
+	z.total = total
 }
 
 func saturatingScalarAdd(a, b uint64) (uint64, bool) {
