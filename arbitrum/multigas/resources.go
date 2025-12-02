@@ -391,6 +391,9 @@ func (z *MultiGas) recomputeTotal() {
 	z.total = total
 }
 
+// saturatingScalarAdd adds two uint64 values, returning the sum and a boolean
+// indicating whether an overflow occurred. If an overflow occurs, the sum is
+// set to math.MaxUint64.
 func saturatingScalarAdd(a, b uint64) (uint64, bool) {
 	sum, carry := bits.Add64(a, b, 0)
 	if carry != 0 {
@@ -399,6 +402,9 @@ func saturatingScalarAdd(a, b uint64) (uint64, bool) {
 	return sum, false
 }
 
+// saturatingScalarSub subtracts two uint64 values, returning the difference and a boolean
+// indicating whether an underflow occurred. If an underflow occurs, the difference is
+// set to 0.
 func saturatingScalarSub(a, b uint64) (uint64, bool) {
 	diff, borrow := bits.Sub64(a, b, 0)
 	if borrow != 0 {
