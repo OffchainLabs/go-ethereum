@@ -68,10 +68,12 @@ func NewMultiGas(kind ResourceKind, amount uint64) MultiGas {
 func MultiGasFromPairs(pairs ...Pair) MultiGas {
 	var mg MultiGas
 	for _, p := range pairs {
-		if saturatingScalarAddInto(mg.total, p.Amount, &mg.total) {
+		newTotal, overflow := saturatingScalarAdd(mg.total, p.Amount)
+		if overflow {
 			panic("multigas overflow")
 		}
 		mg.gas[p.Kind] = p.Amount
+		mg.total = newTotal
 	}
 	return mg
 }
@@ -119,10 +121,13 @@ func (z MultiGas) Get(kind ResourceKind) uint64 {
 // With returns a copy of z with the given resource kind set to amount.
 // The total is adjusted accordingly. It returns the updated value and true if an overflow occurred.
 func (z MultiGas) With(kind ResourceKind, amount uint64) (MultiGas, bool) {
-	res := z
-	if saturatingScalarAddInto(z.total-z.gas[kind], amount, &res.total) {
+	res, overflow := z, false
+
+	res.total, overflow = saturatingScalarAdd(z.total-z.gas[kind], amount)
+	if overflow {
 		return z, true
 	}
+
 	res.gas[kind] = amount
 	return res, false
 }
@@ -143,18 +148,21 @@ func (z MultiGas) WithRefund(amount uint64) MultiGas {
 // added to the values from x. It returns the updated value and true if
 // an overflow occurred.
 func (z MultiGas) SafeAdd(x MultiGas) (MultiGas, bool) {
-	res := z
+	res, overflow := z, false
 
 	for i := 0; i < int(NumResourceKind); i++ {
-		if saturatingScalarAddInto(res.gas[i], x.gas[i], &res.gas[i]) {
+		res.gas[i], overflow = saturatingScalarAdd(res.gas[i], x.gas[i])
+		if overflow {
 			return z, true
 		}
 	}
 
-	if saturatingScalarAddInto(res.total, x.total, &res.total) {
+	res.total, overflow = saturatingScalarAdd(res.total, x.total)
+	if overflow {
 		return z, true
 	}
-	if saturatingScalarAddInto(res.refund, x.refund, &res.refund) {
+	res.refund, overflow = saturatingScalarAdd(res.refund, x.refund)
+	if overflow {
 		return z, true
 	}
 
@@ -168,11 +176,11 @@ func (z MultiGas) SaturatingAdd(x MultiGas) MultiGas {
 	res := z
 
 	for i := 0; i < int(NumResourceKind); i++ {
-		saturatingScalarAddInto(res.gas[i], x.gas[i], &res.gas[i])
+		res.gas[i], _ = saturatingScalarAdd(res.gas[i], x.gas[i])
 	}
 
-	saturatingScalarAddInto(res.total, x.total, &res.total)
-	saturatingScalarAddInto(res.refund, x.refund, &res.refund)
+	res.total, _ = saturatingScalarAdd(res.total, x.total)
+	res.refund, _ = saturatingScalarAdd(res.refund, x.refund)
 	return res
 }
 
@@ -181,10 +189,10 @@ func (z MultiGas) SaturatingAdd(x MultiGas) MultiGas {
 // This is a hot-path helper; the public immutable API remains preferred elsewhere.
 func (z *MultiGas) SaturatingAddInto(x MultiGas) {
 	for i := 0; i < int(NumResourceKind); i++ {
-		saturatingScalarAddInto(z.gas[i], x.gas[i], &z.gas[i])
+		z.gas[i], _ = saturatingScalarAdd(z.gas[i], x.gas[i])
 	}
-	saturatingScalarAddInto(z.total, x.total, &z.total)
-	saturatingScalarAddInto(z.refund, x.refund, &z.refund)
+	z.total, _ = saturatingScalarAdd(z.total, x.total)
+	z.refund, _ = saturatingScalarAdd(z.refund, x.refund)
 }
 
 // SafeSub returns a copy of z with the per-kind, total, and refund gas
@@ -230,13 +238,18 @@ func (z MultiGas) SaturatingSub(x MultiGas) MultiGas {
 // and the total incremented by gas. It returns the updated value and true if
 // an overflow occurred.
 func (z MultiGas) SafeIncrement(kind ResourceKind, gas uint64) (MultiGas, bool) {
-	res := z
-	if saturatingScalarAddInto(z.gas[kind], gas, &res.gas[kind]) {
+	res, overflow := z, false
+
+	res.gas[kind], overflow = saturatingScalarAdd(z.gas[kind], gas)
+	if overflow {
 		return z, true
 	}
-	if saturatingScalarAddInto(z.total, gas, &res.total) {
+
+	res.total, overflow = saturatingScalarAdd(z.total, gas)
+	if overflow {
 		return z, true
 	}
+
 	return res, false
 }
 
@@ -244,8 +257,8 @@ func (z MultiGas) SafeIncrement(kind ResourceKind, gas uint64) (MultiGas, bool) 
 // and the total incremented by gas. On overflow, the field(s) are clamped to MaxUint64.
 func (z MultiGas) SaturatingIncrement(kind ResourceKind, gas uint64) MultiGas {
 	res := z
-	saturatingScalarAddInto(z.gas[kind], gas, &res.gas[kind])
-	saturatingScalarAddInto(z.total, gas, &res.total)
+	res.gas[kind], _ = saturatingScalarAdd(z.gas[kind], gas)
+	res.total, _ = saturatingScalarAdd(z.total, gas)
 	return res
 }
 
@@ -254,8 +267,8 @@ func (z MultiGas) SaturatingIncrement(kind ResourceKind, gas uint64) MultiGas {
 // Unlike SaturatingIncrement, this method mutates the receiver directly and
 // is intended for VM hot paths where avoiding value copies is critical.
 func (z *MultiGas) SaturatingIncrementInto(kind ResourceKind, gas uint64) {
-	saturatingScalarAddInto(z.gas[kind], gas, &z.gas[kind])
-	saturatingScalarAddInto(z.total, gas, &z.total)
+	z.gas[kind], _ = saturatingScalarAdd(z.gas[kind], gas)
+	z.total, _ = saturatingScalarAdd(z.total, gas)
 }
 
 // SingleGas returns the single-dimensional total gas.
@@ -372,14 +385,12 @@ func (z *MultiGas) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-func saturatingScalarAddInto(a, b uint64, dst *uint64) bool {
+func saturatingScalarAdd(a, b uint64) (uint64, bool) {
 	sum, carry := bits.Add64(a, b, 0)
 	if carry != 0 {
-		*dst = math.MaxUint64
-		return true
+		return math.MaxUint64, true
 	}
-	*dst = sum
-	return false
+	return sum, false
 }
 
 func saturatingScalarSub(a, b uint64) (uint64, bool) {
