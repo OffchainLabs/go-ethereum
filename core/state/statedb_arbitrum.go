@@ -94,11 +94,11 @@ func StripStylusPrefix(b []byte) ([]byte, byte, error) {
 	return b[4:], b[3], nil
 }
 
-func StripStylusFragmentPrefix(b []byte) ([]byte, byte, error) {
+func StripStylusFragmentPrefix(b []byte) ([]byte, error) {
 	if !IsStylusProgramFragment(b) {
-		return nil, 0, errors.New("specified bytecode is not a Stylus program fragment")
+		return nil, errors.New("specified bytecode is not a Stylus program fragment")
 	}
-	return b[4:], b[3], nil
+	return b[3:], nil
 }
 
 func StripStylusRootPrefix(b []byte) ([]byte, error) {
