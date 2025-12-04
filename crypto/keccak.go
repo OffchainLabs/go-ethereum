@@ -25,20 +25,20 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// NewKeccakSponge creates a new KeccakSponge
-func NewKeccakSponge() KeccakSponge {
-	return sha3.NewLegacyKeccak256().(KeccakSponge)
+// NewKeccakState creates a new KeccakState
+func NewKeccakState() KeccakState {
+	return sha3.NewLegacyKeccak256().(KeccakState)
 }
 
 var hasherPool = sync.Pool{
 	New: func() any {
-		return sha3.NewLegacyKeccak256().(KeccakSponge)
+		return sha3.NewLegacyKeccak256().(KeccakState)
 	},
 }
 
-// keccak256 is a helper that hashes the input data using the provided KeccakSponge and writes the result to out.
+// keccak256 is a helper that hashes the input data using the provided KeccakState and writes the result to out.
 func keccak256(out []byte, data ...[]byte) {
-	d := hasherPool.Get().(KeccakSponge)
+	d := hasherPool.Get().(KeccakState)
 	d.Reset()
 	for _, b := range data {
 		d.Write(b)

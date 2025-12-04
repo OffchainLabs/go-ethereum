@@ -23,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// zirenKeccakState implements the KeccakSponge interface using the Ziren zkvm_runtime.
+// zirenKeccakState implements the KeccakState interface using the Ziren zkvm_runtime.
 // It accumulates data written to it and uses the zkvm's Keccak256 system call for hashing.
 type zirenKeccakState struct {
 	buf    []byte // accumulated data
@@ -31,7 +31,7 @@ type zirenKeccakState struct {
 	dirty  bool   // whether new data has been written since last hash
 }
 
-func newZirenKeccakState() KeccakSponge {
+func newZirenKeccakState() KeccakState {
 	return &zirenKeccakState{
 		buf: make([]byte, 0, 512), // pre-allocate reasonable capacity
 	}
@@ -83,9 +83,9 @@ func (s *zirenKeccakState) computeHashIfNeeded() {
 	}
 }
 
-// NewKeccakSponge creates a new KeccakSponge
+// NewKeccakState creates a new KeccakState
 // This uses a Ziren-optimized implementation that leverages the zkvm_runtime.Keccak256 system call.
-func NewKeccakState() KeccakSponge {
+func NewKeccakState() KeccakState {
 	return newZirenKeccakState()
 }
 
