@@ -50,7 +50,7 @@ type TxProcessingHook interface {
 	HeldGas() uint64
 	NonrefundableGas() uint64
 	DropTip() bool
-	EndTxHook(totalGasUsed uint64, evmSuccess bool)
+	EndTxHook(totalGasUsed uint64, usedMultiGas multigas.MultiGas, evmSuccess bool)
 	ScheduledTxes() types.Transactions
 	L1BlockNumber(blockCtx BlockContext) (uint64, error)
 	L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error)
@@ -83,7 +83,7 @@ func (p DefaultTxProcessor) NonrefundableGas() uint64 { return 0 }
 
 func (p DefaultTxProcessor) DropTip() bool { return false }
 
-func (p DefaultTxProcessor) EndTxHook(_ uint64, _ bool) {}
+func (p DefaultTxProcessor) EndTxHook(_ uint64, _ multigas.MultiGas, _ bool) {}
 
 func (p DefaultTxProcessor) ScheduledTxes() types.Transactions {
 	return types.Transactions{}
