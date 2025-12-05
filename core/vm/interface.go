@@ -38,7 +38,7 @@ type StateDB interface {
 	ActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash common.Hash) (asmMap map[rawdb.WasmTarget][]byte, missingTargets []rawdb.WasmTarget, err error)
 	RecordCacheWasm(wasm state.CacheWasm)
 	RecordEvictWasm(wasm state.EvictWasm)
-	GetRecentWasms() state.RecentWasms
+	GetRecentWasms() *state.RecentWasms
 
 	// Arbitrum: track stylus's memory footprint
 	GetStylusPages() (uint16, uint16)

@@ -330,8 +330,8 @@ func (s *StateDB) RecordEvictWasm(wasm EvictWasm) {
 	s.journal.entries = append(s.journal.entries, wasm)
 }
 
-func (s *StateDB) GetRecentWasms() RecentWasms {
-	return s.arbExtraData.recentWasms
+func (s *StateDB) GetRecentWasms() *RecentWasms {
+	return &s.arbExtraData.recentWasms
 }
 
 // Type for managing recent program access.
@@ -346,7 +346,7 @@ func NewRecentWasms() RecentWasms {
 }
 
 // Inserts a new item, returning true if already present.
-func (p RecentWasms) Insert(item common.Hash, retain uint16) bool {
+func (p *RecentWasms) Insert(item common.Hash, retain uint16) bool {
 	if p.cache == nil {
 		cache := lru.NewBasicLRU[common.Hash, struct{}](int(retain))
 		p.cache = &cache

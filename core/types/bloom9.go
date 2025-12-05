@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -125,9 +126,7 @@ func MergeBloom(receipts Receipts) Bloom {
 	for _, receipt := range receipts {
 		if len(receipt.Logs) != 0 {
 			bl := receipt.Bloom.Bytes()
-			for i := range bin {
-				bin[i] |= bl[i]
-			}
+			bitutil.ORBytes(bin[:], bin[:], bl)
 		}
 	}
 	return bin
@@ -142,11 +141,8 @@ func Bloom9(data []byte) []byte {
 
 // bloomValues returns the bytes (index-value pairs) to set for the given data
 func bloomValues(data []byte, hashbuf *[6]byte) (uint, byte, uint, byte, uint, byte) {
-	sha := hasherPool.Get().(crypto.KeccakState)
-	sha.Reset()
-	sha.Write(data)
-	sha.Read(hashbuf[:])
-	hasherPool.Put(sha)
+	hash := crypto.Keccak256(data)
+	copy(hashbuf[:], hash[:6])
 	// The actual bits to flip
 	v1 := byte(1 << (hashbuf[1] & 0x7))
 	v2 := byte(1 << (hashbuf[3] & 0x7))

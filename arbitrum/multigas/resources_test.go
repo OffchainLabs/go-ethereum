@@ -388,6 +388,55 @@ func TestSaturatingIncrementIntoClampsOnOverflow(t *testing.T) {
 	}
 }
 
+func TestSaturatingDecrement(t *testing.T) {
+	// normal decrement
+	gas := ComputationGas(10)
+	newGas := gas.SaturatingDecrement(ResourceKindComputation, 5)
+	if got, want := newGas.Get(ResourceKindComputation), uint64(5); got != want {
+		t.Errorf("unexpected computation gas: got %v, want %v", got, want)
+	}
+	if got, want := newGas.SingleGas(), uint64(5); got != want {
+		t.Errorf("unexpected single gas: got %v, want %v", got, want)
+	}
+
+	// saturating decrement on kind
+	gas = MultiGasFromPairs(
+		Pair{ResourceKindComputation, 10},
+		Pair{ResourceKindStorageAccess, 10},
+	)
+
+	newGas = gas.SaturatingDecrement(ResourceKindComputation, 20)
+	if got, want := newGas.Get(ResourceKindComputation), uint64(0); got != want {
+		t.Errorf("unexpected comp gas: got %v, want %v", got, want)
+	}
+	if got, want := newGas.Get(ResourceKindStorageAccess), uint64(10); got != want {
+		t.Errorf("unexpected storage access gas: got %v, want %v", got, want)
+	}
+	if got, want := newGas.SingleGas(), uint64(10); got != want {
+		t.Errorf("unexpected total (should drop by 10 only): got %v, want %v", got, want)
+	}
+
+	if got, want := newGas.SingleGas(),
+		newGas.Get(ResourceKindComputation)+newGas.Get(ResourceKindStorageAccess); got != want {
+		t.Errorf("total/sum mismatch: total=%v sum=%v", got, want)
+	}
+
+	// total-only decrement case
+	gas = MultiGasFromPairs(
+		Pair{ResourceKindComputation, math.MaxUint64 - 1},
+		Pair{ResourceKindHistoryGrowth, 1},
+	)
+
+	newGas = gas.SaturatingDecrement(ResourceKindHistoryGrowth, 1)
+	if got, want := newGas.Get(ResourceKindHistoryGrowth), uint64(0); got != want {
+		t.Errorf("unexpected history growth gas: got %v, want %v", got, want)
+	}
+
+	if got, want := newGas.SingleGas(), uint64(math.MaxUint64-1); got != want {
+		t.Errorf("unexpected total gas: got %v, want %v", got, want)
+	}
+}
+
 func TestMultiGasSingleGasTracking(t *testing.T) {
 	g := ZeroGas()
 	if got := g.SingleGas(); got != 0 {

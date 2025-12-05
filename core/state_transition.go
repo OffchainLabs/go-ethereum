@@ -774,7 +774,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		tracer.CaptureArbitrumTransfer(nil, &tipReceipient, tipAmount, false, tracing.BalanceIncreaseRewardTransactionFee)
 	}
 
-	st.evm.ProcessingHook.EndTxHook(st.gasRemaining, vmerr == nil)
+	st.evm.ProcessingHook.EndTxHook(st.gasRemaining, usedMultiGas, vmerr == nil)
 
 	// Arbitrum: record self destructs
 	if tracer := st.evm.Config.Tracer; tracer != nil && tracer.CaptureArbitrumTransfer != nil {
