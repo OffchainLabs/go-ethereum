@@ -132,16 +132,16 @@ type SyncProgressBackend interface {
 	BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error)
 }
 
-func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration, archiveRedirects []BlockRedirectConfig) (*filters.FilterSystem, error) {
+func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration, archiveRedirects []BlockRedirectConfig) (*filters.FilterSystem, ReceiptFetcher, error) {
 	fallbackClient, err := CreateFallbackClient(fallbackClientUrl, fallbackClientTimeout, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var archiveClientsManager *archiveFallbackClientsManager
 	if len(archiveRedirects) != 0 {
 		archiveClientsManager, err = newArchiveFallbackClientsManager(archiveRedirects)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	backend.apiBackend = &APIBackend{
@@ -150,8 +150,20 @@ func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fal
 		archiveClientsManager: archiveClientsManager,
 	}
 	filterSystem := filters.NewFilterSystem(backend.apiBackend, filterConfig)
-	backend.stack.RegisterAPIs(backend.apiBackend.GetAPIs(filterSystem))
-	return filterSystem, nil
+	apis := backend.apiBackend.GetAPIs(filterSystem)
+	var receiptFetcher ReceiptFetcher
+	for _, api := range apis {
+		var ok bool
+		receiptFetcher, ok = api.Service.(ReceiptFetcher)
+		if ok {
+			break
+		}
+	}
+	if receiptFetcher == nil {
+		return nil, nil, errors.New("no receipt fetcher found in APIs")
+	}
+	backend.stack.RegisterAPIs(apis)
+	return filterSystem, receiptFetcher, nil
 }
 
 func (a *APIBackend) SetSyncBackend(sync SyncProgressBackend) error {
