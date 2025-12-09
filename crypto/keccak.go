@@ -36,27 +36,28 @@ var hasherPool = sync.Pool{
 	},
 }
 
-// keccak256 is a helper that hashes the input data using the provided KeccakState and writes the result to out.
-func keccak256(out []byte, data ...[]byte) {
+// Keccak256 calculates and returns the Keccak256 hash of the input data.
+func Keccak256(data ...[]byte) []byte {
+	b := make([]byte, 32)
 	d := hasherPool.Get().(KeccakState)
 	d.Reset()
 	for _, b := range data {
 		d.Write(b)
 	}
-	d.Read(out)
+	d.Read(b)
 	hasherPool.Put(d)
-}
-
-// Keccak256 calculates and returns the Keccak256 hash of the input data.
-func Keccak256(data ...[]byte) []byte {
-	b := make([]byte, 32)
-	keccak256(b, data...)
 	return b
 }
 
 // Keccak256Hash calculates and returns the Keccak256 hash of the input data,
 // converting it to an internal Hash data structure.
 func Keccak256Hash(data ...[]byte) (h common.Hash) {
-	keccak256(h[:], data...)
+	d := hasherPool.Get().(KeccakState)
+	d.Reset()
+	for _, b := range data {
+		d.Write(b)
+	}
+	d.Read(h[:])
+	hasherPool.Put(d)
 	return h
 }
