@@ -132,8 +132,9 @@ func generateHistoryTests(clictx *cli.Context) error {
 }
 
 func calcReceiptsHash(rcpt []*types.Receipt) common.Hash {
-	encoded, _ := rlp.EncodeToBytes(rcpt)
-	return crypto.Keccak256Hash(encoded)
+	h := crypto.NewKeccakState()
+	rlp.Encode(h, rcpt)
+	return common.Hash(h.Sum(nil))
 }
 
 func writeJSON(fileName string, value any) {
