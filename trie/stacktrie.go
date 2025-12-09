@@ -415,6 +415,7 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 	// Write the hash to the 'val'. We allocate a new val here to not mutate
 	// input values.
 	st.val = bPool.getWithSize(32)
+	panic("Used by replay.wasm")
 	t.h.hashDataTo(st.val, blob)
 
 	// Invoke the callback it's provided. Notably, the path and blob slices are

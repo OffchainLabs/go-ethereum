@@ -24,12 +24,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/urfave/cli/v2"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -133,6 +134,7 @@ func generateHistoryTests(clictx *cli.Context) error {
 
 func calcReceiptsHash(rcpt []*types.Receipt) common.Hash {
 	h := crypto.NewKeccakState()
+	panic("Used by replay.wasm")
 	rlp.Encode(h, rcpt)
 	return common.Hash(h.Sum(nil))
 }

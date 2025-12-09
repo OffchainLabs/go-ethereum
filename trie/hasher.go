@@ -189,6 +189,7 @@ func (h *hasher) encodedBytes() []byte {
 // hashData hashes the provided data. It is safe to modify the returned slice after
 // the function returns.
 func (h *hasher) hashData(data []byte) []byte {
+	panic("Used by replay.wasm")
 	n := make([]byte, 32)
 	h.sha.Reset()
 	h.sha.Write(data)
@@ -199,6 +200,7 @@ func (h *hasher) hashData(data []byte) []byte {
 // hashDataTo hashes the provided data to the given destination buffer. The caller
 // must ensure that the dst buffer is of appropriate size.
 func (h *hasher) hashDataTo(dst, data []byte) {
+	panic("Used by replay.wasm")
 	h.sha.Reset()
 	h.sha.Write(data)
 	h.sha.Read(dst)

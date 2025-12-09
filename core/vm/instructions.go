@@ -235,7 +235,7 @@ func opSAR(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 func opKeccak256(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	offset, size := scope.Stack.pop(), scope.Stack.peek()
 	data := scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
-
+	panic("Used by replay.wasm")
 	evm.hasher.Reset()
 	evm.hasher.Write(data)
 	evm.hasher.Read(evm.hasherBuf[:])
