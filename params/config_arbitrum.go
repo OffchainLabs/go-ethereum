@@ -40,6 +40,7 @@ const ArbosVersion_40 = uint64(40)
 const ArbosVersion_41 = uint64(41)
 const ArbosVersion_50 = uint64(50)
 const ArbosVersion_51 = uint64(51)
+const ArbosVersion_52 = uint64(52)
 const ArbosVersion_60 = uint64(60)
 
 const ArbosVersion_FixRedeemGas = ArbosVersion_11
@@ -50,6 +51,7 @@ const MaxArbosVersionSupported = ArbosVersion_51
 const MaxDebugArbosVersionSupported = ArbosVersion_51
 const ArbosVersion_Dia = ArbosVersion_50
 const ArbosVersion_MultiConstraintFix = ArbosVersion_51
+const ArbosVersion_BatchSize = ArbosVersion_52
 
 const DefaultMaxUncompressedBatchSize = 16 * 1024 * 1024 // 16 MB
 
@@ -91,8 +93,8 @@ func (c *ChainConfig) DebugMode() bool {
 	return c.ArbitrumChainParams.AllowDebugPrecompiles
 }
 
-func (c *ChainConfig) MaxUncompressedBatchSize() uint64 {
-	if c.ArbitrumChainParams.MaxUncompressedBatchSize == 0 {
+func (c *ChainConfig) MaxUncompressedBatchSize(arbosVersion uint64) uint64 {
+	if arbosVersion < ArbosVersion_BatchSize || c.ArbitrumChainParams.MaxUncompressedBatchSize == 0 {
 		return DefaultMaxUncompressedBatchSize
 	}
 	return c.ArbitrumChainParams.MaxUncompressedBatchSize
