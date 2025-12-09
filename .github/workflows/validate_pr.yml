@@ -23,3 +23,27 @@ jobs:
             }
             
             console.log('✅ PR title format is valid');
+
+      - name: Ensure PR Has a Nitro Companion
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prBody = context.payload.pull_request.body;
+            
+            if (!prBody) {
+              core.setFailed("The PR description is empty. Please ensure it contains the required link.");
+              return;
+            }
+            
+            // The required regex pattern:
+            // 1. Matches the literal string "pulled in by https://github.com/OffchainLabs/nitro/pull/"
+            // 2. Requires one or more digits (\d+) for the pull request number (xxxx)
+            // 3. The 'i' flag makes the entire match case-insensitive (e.g., "Pulled In By" is valid)
+            const requiredRegex = /pulled in by https:\/\/github\.com\/OffchainLabs\/nitro\/pull\/\d+/i;
+            
+            if (!requiredRegex.test(prBody)) {
+              const errorMessage = "PR description validation failed. The description must contain a line matching the case-insensitive pattern: 'pulled in by https://github.com/OffchainLabs/nitro/pull/xxxx', where 'xxxx' is a number.";
+              core.setFailed(errorMessage);
+            } else {
+              core.info("✅ PR description contains the required link.");
+            }
