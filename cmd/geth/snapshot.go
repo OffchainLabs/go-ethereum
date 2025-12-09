@@ -434,6 +434,8 @@ func traverseRawState(ctx *cli.Context) error {
 		codes      int
 		lastReport time.Time
 		start      = time.Now()
+		hasher     = crypto.NewKeccakState()
+		got        = make([]byte, 32)
 	)
 	accIter, err := t.NodeIterator(nil)
 	if err != nil {
@@ -457,7 +459,9 @@ func traverseRawState(ctx *cli.Context) error {
 				log.Error("Missing trie node(account)", "hash", node)
 				return errors.New("missing account")
 			}
-			got := crypto.Keccak256(blob)
+			hasher.Reset()
+			hasher.Write(blob)
+			hasher.Read(got)
 			if !bytes.Equal(got, node.Bytes()) {
 				log.Error("Invalid trie node(account)", "hash", node.Hex(), "value", blob)
 				return errors.New("invalid account node")
@@ -496,7 +500,9 @@ func traverseRawState(ctx *cli.Context) error {
 							log.Error("Missing trie node(storage)", "hash", node)
 							return errors.New("missing storage")
 						}
-						got := crypto.Keccak256(blob)
+						hasher.Reset()
+						hasher.Write(blob)
+						hasher.Read(got)
 						if !bytes.Equal(got, node.Bytes()) {
 							log.Error("Invalid trie node(storage)", "hash", node.Hex(), "value", blob)
 							return errors.New("invalid storage node")

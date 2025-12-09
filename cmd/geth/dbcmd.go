@@ -354,6 +354,8 @@ func checkStateContent(ctx *cli.Context) error {
 	defer db.Close()
 	var (
 		it        = rawdb.NewKeyLengthIterator(db.NewIterator(prefix, start), 32)
+		hasher    = crypto.NewKeccakState()
+		got       = make([]byte, 32)
 		errs      int
 		count     int
 		startTime = time.Now()
@@ -363,7 +365,9 @@ func checkStateContent(ctx *cli.Context) error {
 		count++
 		k := it.Key()
 		v := it.Value()
-		got := crypto.Keccak256(v)
+		hasher.Reset()
+		hasher.Write(v)
+		hasher.Read(got)
 		if !bytes.Equal(k, got) {
 			errs++
 			fmt.Printf("Error at %#x\n", k)
