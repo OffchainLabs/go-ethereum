@@ -113,6 +113,9 @@ func (c *ChainConfig) checkArbitrumCompatible(newcfg *ChainConfig, head *big.Int
 	if cArb.GenesisBlockNum != newArb.GenesisBlockNum {
 		return newBlockCompatError("genesisblocknum", new(big.Int).SetUint64(cArb.GenesisBlockNum), new(big.Int).SetUint64(newArb.GenesisBlockNum))
 	}
+	if cArb.MaxUncompressedBatchSize != newArb.MaxUncompressedBatchSize {
+		return newBlockCompatError("maxuncompressedbatchsize", new(big.Int).SetUint64(cArb.MaxUncompressedBatchSize), new(big.Int).SetUint64(newArb.MaxUncompressedBatchSize))
+	}
 	return nil
 }
 
