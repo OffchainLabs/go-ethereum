@@ -134,7 +134,6 @@ func generateHistoryTests(clictx *cli.Context) error {
 
 func calcReceiptsHash(rcpt []*types.Receipt) common.Hash {
 	h := crypto.NewKeccakState()
-	panic("Used by replay.wasm")
 	rlp.Encode(h, rcpt)
 	return common.Hash(h.Sum(nil))
 }

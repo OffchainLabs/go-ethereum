@@ -366,7 +366,6 @@ func checkStateContent(ctx *cli.Context) error {
 		count++
 		k := it.Key()
 		v := it.Value()
-		panic("Used by replay.wasm")
 		hasher.Reset()
 		hasher.Write(v)
 		hasher.Read(got)

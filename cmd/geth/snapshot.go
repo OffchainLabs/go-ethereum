@@ -460,7 +460,6 @@ func traverseRawState(ctx *cli.Context) error {
 				log.Error("Missing trie node(account)", "hash", node)
 				return errors.New("missing account")
 			}
-			panic("Used by replay.wasm")
 			hasher.Reset()
 			hasher.Write(blob)
 			hasher.Read(got)
@@ -502,7 +501,6 @@ func traverseRawState(ctx *cli.Context) error {
 							log.Error("Missing trie node(storage)", "hash", node)
 							return errors.New("missing storage")
 						}
-						panic("Used by replay.wasm")
 						hasher.Reset()
 						hasher.Write(blob)
 						hasher.Read(got)

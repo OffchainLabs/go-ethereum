@@ -907,7 +907,6 @@ func (s *Suite) snapGetByteCodes(t *utesting.T, tc *byteCodesTest) error {
 
 	for i, j := 0, 0; i < len(bytecodes); i++ {
 		// Find the next hash that we've been served, leaving misses with nils
-		panic("Used by replay.wasm")
 		hasher.Reset()
 		hasher.Write(bytecodes[i])
 		hasher.Read(hash)
@@ -967,7 +966,6 @@ func (s *Suite) snapGetTrieNodes(t *utesting.T, tc *trieNodesTest) error {
 		return fmt.Errorf("wrong trienode count, got %d, want %d", got, want)
 	}
 	for i, trienode := range trienodes {
-		panic("Used by replay.wasm")
 		hasher.Reset()
 		hasher.Write(trienode)
 		hasher.Read(hash)

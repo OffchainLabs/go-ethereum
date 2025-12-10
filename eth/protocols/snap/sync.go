@@ -2678,7 +2678,6 @@ func (s *Syncer) onByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error
 	codes := make([][]byte, len(req.hashes))
 	for i, j := 0, 0; i < len(bytecodes); i++ {
 		// Find the next hash that we've been served, leaving misses with nils
-		panic("Used by replay.wasm")
 		hasher.Reset()
 		hasher.Write(bytecodes[i])
 		hasher.Read(hash)
@@ -2928,7 +2927,6 @@ func (s *Syncer) OnTrieNodes(peer SyncPeer, id uint64, trienodes [][]byte) error
 	)
 	for i, j := 0, 0; i < len(trienodes); i++ {
 		// Find the next hash that we've been served, leaving misses with nils
-		panic("Used by replay.wasm")
 		hasher.Reset()
 		hasher.Write(trienodes[i])
 		hasher.Read(hash)
@@ -3034,7 +3032,6 @@ func (s *Syncer) onHealByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) e
 	codes := make([][]byte, len(req.hashes))
 	for i, j := 0, 0; i < len(bytecodes); i++ {
 		// Find the next hash that we've been served, leaving misses with nils
-		panic("Used by replay.wasm")
 		hasher.Reset()
 		hasher.Write(bytecodes[i])
 		hasher.Read(hash)

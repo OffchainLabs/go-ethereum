@@ -69,7 +69,6 @@ type KeccakState interface {
 
 // HashData hashes the provided data using the KeccakState and returns a 32 byte hash
 func HashData(kh KeccakState, data []byte) (h common.Hash) {
-	panic("Used by replay.wasm")
 	kh.Reset()
 	kh.Write(data)
 	kh.Read(h[:])
