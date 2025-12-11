@@ -64,8 +64,12 @@ func TestHashing(t *testing.T) {
 		}
 	}
 	var new = func() {
+		hasher := crypto.NewKeccakState()
+		var hash = make([]byte, 32)
 		for i := 0; i < len(bytecodes); i++ {
-			hash := crypto.Keccak256(bytecodes[i])
+			hasher.Reset()
+			hasher.Write(bytecodes[i])
+			hasher.Read(hash)
 			want = fmt.Sprintf("%v\n%v", want, hash)
 		}
 	}
@@ -92,8 +96,12 @@ func BenchmarkHashing(b *testing.B) {
 		}
 	}
 	var new = func() {
+		hasher := crypto.NewKeccakState()
+		var hash = make([]byte, 32)
 		for i := 0; i < len(bytecodes); i++ {
-			crypto.Keccak256(bytecodes[i])
+			hasher.Reset()
+			hasher.Write(bytecodes[i])
+			hasher.Read(hash)
 		}
 	}
 	b.Run("old", func(b *testing.B) {
