@@ -162,11 +162,17 @@ func findTxInBlockBody(blockbody rlp.RawValue, target common.Hash) (*types.Trans
 		if kind == rlp.List { // Legacy transaction
 			txHashPayload = txRLP
 		}
-		if crypto.Keccak256Hash(txHashPayload) == target {
-			var tx types.Transaction
-			if err := rlp.DecodeBytes(txRLP, &tx); err != nil {
-				return nil, 0, err
+		// arbitrum: decode txRLP to check tx type and support HashOverride in case of ArbitrumLegacyTx (happens in (*Transaction)Hash)
+		var tx types.Transaction
+		if err := rlp.DecodeBytes(txRLP, &tx); err != nil {
+			return nil, 0, err
+		}
+		// arbitrum: only use Hash() method for ArbitrumLegacyTxType, otherwise use the optimised path that does not involve encoding the RLP again
+		if tx.Type() == types.ArbitrumLegacyTxType {
+			if tx.Hash() == target {
+				return &tx, txIndex, nil
 			}
+		} else if crypto.Keccak256Hash(txHashPayload) == target {
 			return &tx, txIndex, nil
 		}
 		txIndex++
