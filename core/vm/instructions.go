@@ -20,15 +20,13 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/holiman/uint256"
-
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 func opAdd(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
@@ -237,11 +235,15 @@ func opSAR(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 func opKeccak256(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	offset, size := scope.Stack.pop(), scope.Stack.peek()
 	data := scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
-	hasherBuf := crypto.Keccak256Hash(data)
+
+	evm.hasher.Reset()
+	evm.hasher.Write(data)
+	evm.hasher.Read(evm.hasherBuf[:])
+
 	if evm.Config.EnablePreimageRecording {
-		evm.StateDB.AddPreimage(hasherBuf, data)
+		evm.StateDB.AddPreimage(evm.hasherBuf, data)
 	}
-	size.SetBytes(hasherBuf[:])
+	size.SetBytes(evm.hasherBuf[:])
 	return nil, nil
 }
 
