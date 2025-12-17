@@ -40,7 +40,6 @@ const ArbosVersion_40 = uint64(40)
 const ArbosVersion_41 = uint64(41)
 const ArbosVersion_50 = uint64(50)
 const ArbosVersion_51 = uint64(51)
-const ArbosVersion_52 = uint64(52)
 const ArbosVersion_60 = uint64(60)
 
 const ArbosVersion_FixRedeemGas = ArbosVersion_11
