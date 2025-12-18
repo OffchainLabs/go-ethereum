@@ -28,7 +28,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/arbcrypto"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // testHasher is the helper tool for transaction/receipt list hashing.
