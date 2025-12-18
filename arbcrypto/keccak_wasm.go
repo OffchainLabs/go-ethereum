@@ -1,14 +1,15 @@
-//go:build !ziren && wasm
+//go:build wasm
 
-package crypto
+package arbcrypto
 
 import (
+	"hash"
 	"sync"
 
 	"golang.org/x/crypto/sha3"
 )
 
-func NewLegacyKeccak256() KeccakState {
+func NewLegacyKeccak256() hash.Hash {
 	return &simpleHashBuffer{}
 }
 
@@ -41,12 +42,12 @@ func (s *simpleHashBuffer) BlockSize() int {
 
 var realHasherPool = sync.Pool{
 	New: func() any {
-		return sha3.NewLegacyKeccak256().(KeccakState)
+		return sha3.NewLegacyKeccak256()
 	},
 }
 
 func (s *simpleHashBuffer) Read(bytes []byte) (int, error) {
-	d := realHasherPool.Get().(KeccakState)
+	d := realHasherPool.Get().(simpleHashBuffer)
 	defer realHasherPool.Put(d)
 
 	d.Reset()
