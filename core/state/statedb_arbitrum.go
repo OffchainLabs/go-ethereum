@@ -224,6 +224,7 @@ type ArbitrumExtraData struct {
 	activatedWasms         map[common.Hash]ActivatedWasm // newly activated WASMs
 	recentWasms            RecentWasms
 	arbTxFilter            bool
+	touchedAddresses       map[common.Address]struct{}
 }
 
 func (s *StateDB) SetArbFinalizer(f func(*ArbitrumExtraData)) {
