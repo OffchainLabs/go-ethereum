@@ -33,11 +33,13 @@ import (
 	"net"
 	"time"
 
+	"github.com/golang/snappy"
+
+	"github.com/ethereum/go-ethereum/arbcrypto"
 	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/golang/snappy"
 )
 
 // Conn is an RLPx network connection. It wraps a low-level network connection. The
@@ -485,10 +487,10 @@ func (h *handshakeState) secrets(auth, authResp []byte) (Secrets, error) {
 	}
 
 	// setup sha3 instances for the MACs
-	mac1 := crypto.NewLegacyKeccak256()
+	mac1 := arbcrypto.NewLegacyKeccak256()
 	mac1.Write(xor(s.MAC, h.respNonce))
 	mac1.Write(auth)
-	mac2 := crypto.NewLegacyKeccak256()
+	mac2 := arbcrypto.NewLegacyKeccak256()
 	mac2.Write(xor(s.MAC, h.initNonce))
 	mac2.Write(authResp)
 	if h.initiator {
