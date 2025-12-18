@@ -26,6 +26,7 @@ import (
 	"bytes"
 	"hash"
 
+	"github.com/ethereum/go-ethereum/arbcrypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -39,7 +40,7 @@ type testHasher struct {
 
 // NewHasher returns a new testHasher instance.
 func NewHasher() *testHasher {
-	return &testHasher{hasher: crypto.NewLegacyKeccak256()}
+	return &testHasher{hasher: arbcrypto.NewLegacyKeccak256()}
 }
 
 // Reset resets the hash state.

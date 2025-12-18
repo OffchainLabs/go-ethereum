@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/arbcrypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -52,7 +53,7 @@ func TestHeaderStorage(t *testing.T) {
 	if entry := ReadHeaderRLP(db, header.Hash(), header.Number.Uint64()); entry == nil {
 		t.Fatalf("Stored header RLP not found")
 	} else {
-		hasher := crypto.NewLegacyKeccak256()
+		hasher := arbcrypto.NewLegacyKeccak256()
 		hasher.Write(entry)
 
 		if hash := common.BytesToHash(hasher.Sum(nil)); hash != header.Hash() {
@@ -73,7 +74,7 @@ func TestBodyStorage(t *testing.T) {
 	// Create a test body to move around the database and make sure it's really new
 	body := &types.Body{Uncles: []*types.Header{{Extra: []byte("test header")}}}
 
-	hasher := crypto.NewLegacyKeccak256()
+	hasher := arbcrypto.NewLegacyKeccak256()
 	rlp.Encode(hasher, body)
 	hash := common.BytesToHash(hasher.Sum(nil))
 
@@ -90,7 +91,7 @@ func TestBodyStorage(t *testing.T) {
 	if entry := ReadBodyRLP(db, hash, 0); entry == nil {
 		t.Fatalf("Stored body RLP not found")
 	} else {
-		hasher := crypto.NewLegacyKeccak256()
+		hasher := arbcrypto.NewLegacyKeccak256()
 		hasher.Write(entry)
 
 		if calc := common.BytesToHash(hasher.Sum(nil)); calc != hash {

@@ -20,6 +20,9 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/holiman/uint256"
+
+	"github.com/ethereum/go-ethereum/arbcrypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -39,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/holiman/uint256"
 )
 
 type Prestate struct {
@@ -403,7 +405,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc) *state.StateDB
 }
 
 func rlpHash(x interface{}) (h common.Hash) {
-	hw := crypto.NewLegacyKeccak256()
+	hw := arbcrypto.NewLegacyKeccak256()
 	rlp.Encode(hw, x)
 	hw.Sum(h[:0])
 	return h

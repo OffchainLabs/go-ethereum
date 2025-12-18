@@ -22,6 +22,9 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/holiman/uint256"
+
+	"github.com/ethereum/go-ethereum/arbcrypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
@@ -33,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/holiman/uint256"
 )
 
 func u64(val uint64) *uint64 { return &val }
@@ -398,7 +400,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	var receipts []*types.Receipt
 	// The post-state result doesn't need to be correct (this is a bad block), but we do need something there
 	// Preferably something unique. So let's use a combo of blocknum + txhash
-	hasher := crypto.NewLegacyKeccak256()
+	hasher := arbcrypto.NewLegacyKeccak256()
 	hasher.Write(header.Number.Bytes())
 	var cumulativeGas uint64
 	var nBlobs int

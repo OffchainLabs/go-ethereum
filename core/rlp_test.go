@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/arbcrypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -146,7 +147,7 @@ func BenchmarkHashing(b *testing.B) {
 		blockRlp, _ = rlp.EncodeToBytes(block)
 	}
 	var got common.Hash
-	var hasher = crypto.NewLegacyKeccak256()
+	var hasher = arbcrypto.NewLegacyKeccak256()
 	b.Run("iteratorhashing", func(b *testing.B) {
 		for b.Loop() {
 			var hash common.Hash
