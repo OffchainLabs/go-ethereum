@@ -4,6 +4,7 @@ package arbcrypto
 
 import (
 	"hash"
+	"io"
 	"sync"
 
 	"golang.org/x/crypto/sha3"
@@ -47,10 +48,10 @@ var realHasherPool = sync.Pool{
 }
 
 func (s *simpleHashBuffer) Read(bytes []byte) (int, error) {
-	d := realHasherPool.Get().(simpleHashBuffer)
+	d := realHasherPool.Get().(hash.Hash)
 	defer realHasherPool.Put(d)
 
 	d.Reset()
 	d.Write(s.buffer)
-	return d.Read(bytes)
+	return d.(io.Reader).Read(bytes)
 }
