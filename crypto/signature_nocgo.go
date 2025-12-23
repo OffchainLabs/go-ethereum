@@ -29,16 +29,6 @@ import (
 	decred_ecdsa "github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
 )
 
-// Ecrecover returns the uncompressed public key that created the given signature.
-func Ecrecover(hash, sig []byte) ([]byte, error) {
-	pub, err := sigToPub(hash, sig)
-	if err != nil {
-		return nil, err
-	}
-	bytes := pub.SerializeUncompressed()
-	return bytes, err
-}
-
 func sigToPub(hash, sig []byte) (*secp256k1.PublicKey, error) {
 	if len(sig) != SignatureLength {
 		return nil, errors.New("invalid signature")
