@@ -431,8 +431,22 @@ var NetworkNames = map[string]string{
 
 // Arbitrum
 // ArbOSInit defines some initialization values for ArbOS state.
+// lint:require-exhaustive-initialization
 type ArbOSInit struct {
-	NativeTokenSupplyManagementEnabled bool `json:"nativeTokenSupplyManagementEnabled"`
+	NativeTokenSupplyManagementEnabled bool     `json:"nativeTokenSupplyManagementEnabled"`
+	InitialL1BaseFee                   *big.Int `json:"initialL1BaseFee,omitempty"`
+}
+
+// The initial L1 pricing basefee starts at 50 GWei unless set in the init message
+var DefaultInitialL1BaseFee = big.NewInt(50 * GWei)
+
+// GetInitialL1BaseFee returns the initial L1 base fee for the ArbOS instance.
+// If not set, it returns the default value (backwards compatibility).
+func (a *ArbOSInit) GetInitialL1BaseFee() *big.Int {
+	if a.InitialL1BaseFee != nil {
+		return a.InitialL1BaseFee
+	}
+	return DefaultInitialL1BaseFee
 }
 
 // ChainConfig is the core config which determines the blockchain settings.
