@@ -431,8 +431,10 @@ var NetworkNames = map[string]string{
 
 // Arbitrum
 // ArbOSInit defines some initialization values for ArbOS state.
+// lint:require-exhaustive-initialization
 type ArbOSInit struct {
-	NativeTokenSupplyManagementEnabled bool `json:"nativeTokenSupplyManagementEnabled"`
+	NativeTokenSupplyManagementEnabled bool     `json:"nativeTokenSupplyManagementEnabled"`
+	InitialL1BaseFee                   *big.Int `json:"initialL1BaseFee"`
 }
 
 // ChainConfig is the core config which determines the blockchain settings.
