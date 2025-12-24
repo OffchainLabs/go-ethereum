@@ -50,7 +50,7 @@ const MaxArbosVersionSupported = ArbosVersion_51
 const MaxDebugArbosVersionSupported = ArbosVersion_51
 const ArbosVersion_Dia = ArbosVersion_50
 const ArbosVersion_MultiConstraintFix = ArbosVersion_51
-const ArbosVersion_StylusContractLimit = ArbosVersion_60
+const ArbosVersion_StylusContractLimit = ArbosVersion_50
 
 type ArbitrumChainParams struct {
 	EnableArbOS               bool
