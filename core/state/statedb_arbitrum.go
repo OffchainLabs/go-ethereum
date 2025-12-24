@@ -110,33 +110,46 @@ func StripStylusFragmentPrefix(b []byte) ([]byte, error) {
 	return b[3:], nil
 }
 
-func StripStylusRootPrefix(b []byte) ([]byte, uint32, error) {
+func StripStylusRootPrefix(b []byte) ([]byte, byte, uint32, error) {
 	if !IsStylusProgramRoot(b) {
-		return nil, 0, errors.New("specified bytecode is not a Stylus program root")
+		return nil, byte(0), 0, errors.New("specified bytecode is not a Stylus program root")
 	}
 
 	if len(b) < 7 {
-		return nil, 0, fmt.Errorf(
+		return nil, byte(0), 0, fmt.Errorf(
 			"stylus program root too short: need at least 7 bytes, got %d",
 			len(b),
 		)
 	}
 
-	if len(b[7:])%common.AddressLength != 0 {
-		return nil, 0, fmt.Errorf(
+	fmt.Println("bluebird supreme", len(b))
+	if len(b[8:])%common.AddressLength != 0 {
+		return nil, byte(0), 0, fmt.Errorf(
 			"stylus program root has invalid address section length: expected multiple of %d, got %d (remainder %d)",
 			common.AddressLength,
-			len(b[7:]),
-			len(b[7:])%common.AddressLength,
+
+			len(b[8:]),
+			len(b[8:])%common.AddressLength,
 		)
 	}
-
-	return b[7:], binary.BigEndian.Uint32(b[3:7]), nil
+	// 3 + 1 + 4 + 40 = 48
+	return b[8:], b[3], binary.BigEndian.Uint32(b[4:8]), nil
 }
 
 // creates a new Stylus prefix from the given dictionary byte
 func NewStylusPrefix(dictionary byte) []byte {
 	prefix := bytes.Clone(StylusDiscriminant)
+	return append(prefix, dictionary)
+}
+
+// creates a new Fragment Stylus prefix
+func NewStylusFragmentPrefix() []byte {
+	return bytes.Clone(StylusFragmentsDiscriminant)
+}
+
+// creates a new Fragment Stylus prefix from the given dictionary byte
+func NewStylusRootPrefix(dictionary byte) []byte {
+	prefix := bytes.Clone(StylusRootDiscriminant)
 	return append(prefix, dictionary)
 }
 
