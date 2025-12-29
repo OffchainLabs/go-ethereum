@@ -216,6 +216,12 @@ func (s *StateDB) Recording() bool {
 
 var ErrArbTxFilter error = errors.New("internal error")
 
+// AddressFilter checks if addresses should be filtered from transactions.
+// Used by Arbitrum for transaction filtering based on touched addresses.
+type AddressFilter interface {
+	IsFiltered(addr common.Address) bool
+}
+
 type ArbitrumExtraData struct {
 	unexpectedBalanceDelta *big.Int                      // total balance change across all accounts
 	userWasms              UserWasms                     // user wasms encountered during execution
@@ -224,7 +230,7 @@ type ArbitrumExtraData struct {
 	activatedWasms         map[common.Hash]ActivatedWasm // newly activated WASMs
 	recentWasms            RecentWasms
 	arbTxFilter            bool
-	touchedAddresses       map[common.Address]struct{}
+	addressFilter          AddressFilter
 }
 
 func (s *StateDB) SetArbFinalizer(f func(*ArbitrumExtraData)) {

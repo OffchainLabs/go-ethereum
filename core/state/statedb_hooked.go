@@ -361,16 +361,12 @@ func (s *hookedStateDB) IsTxFiltered() bool {
 	return s.inner.IsTxFiltered()
 }
 
-func (s *hookedStateDB) AddTouchedAddress(addr common.Address) {
-	s.inner.AddTouchedAddress(addr)
+func (s *hookedStateDB) SetAddressFilter(filter AddressFilter) {
+	s.inner.SetAddressFilter(filter)
 }
 
-func (s *hookedStateDB) GetTouchedAddresses() []common.Address {
-	return s.inner.GetTouchedAddresses()
-}
-
-func (s *hookedStateDB) ClearTouchedAddresses() {
-	s.inner.ClearTouchedAddresses()
+func (s *hookedStateDB) TouchAddress(addr common.Address) {
+	s.inner.TouchAddress(addr)
 }
 
 func (s *hookedStateDB) Recording() bool {

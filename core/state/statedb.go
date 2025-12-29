@@ -217,26 +217,14 @@ func (s *StateDB) IsTxFiltered() bool {
 	return s.arbExtraData.arbTxFilter
 }
 
-func (s *StateDB) AddTouchedAddress(addr common.Address) {
-	if s.arbExtraData.touchedAddresses == nil {
-		s.arbExtraData.touchedAddresses = make(map[common.Address]struct{})
-	}
-	s.arbExtraData.touchedAddresses[addr] = struct{}{}
+func (s *StateDB) SetAddressFilter(filter AddressFilter) {
+	s.arbExtraData.addressFilter = filter
 }
 
-func (s *StateDB) GetTouchedAddresses() []common.Address {
-	if s.arbExtraData.touchedAddresses == nil {
-		return nil
+func (s *StateDB) TouchAddress(addr common.Address) {
+	if s.arbExtraData.addressFilter != nil && s.arbExtraData.addressFilter.IsFiltered(addr) {
+		s.FilterTx()
 	}
-	addrs := make([]common.Address, 0, len(s.arbExtraData.touchedAddresses))
-	for addr := range s.arbExtraData.touchedAddresses {
-		addrs = append(addrs, addr)
-	}
-	return addrs
-}
-
-func (s *StateDB) ClearTouchedAddresses() {
-	s.arbExtraData.touchedAddresses = nil
 }
 
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
@@ -758,7 +746,7 @@ func (s *StateDB) Copy() *StateDB {
 			openWasmPages:          s.arbExtraData.openWasmPages,
 			everWasmPages:          s.arbExtraData.everWasmPages,
 			arbTxFilter:            s.arbExtraData.arbTxFilter,
-			touchedAddresses:       maps.Clone(s.arbExtraData.touchedAddresses),
+			addressFilter:          s.arbExtraData.addressFilter,
 		},
 
 		db:                   s.db,
@@ -1130,7 +1118,6 @@ func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 	// Arbitrum: clear memory charging state for new tx
 	s.arbExtraData.openWasmPages = 0
 	s.arbExtraData.everWasmPages = 0
-	s.arbExtraData.touchedAddresses = nil
 }
 
 func (s *StateDB) clearJournalAndRefund() {

@@ -54,11 +54,8 @@ type StateDB interface {
 	FilterTx()
 	ClearTxFilter()
 	IsTxFiltered() bool
-
-	// Arbitrum
-	AddTouchedAddress(addr common.Address)
-	GetTouchedAddresses() []common.Address
-	ClearTouchedAddresses()
+	SetAddressFilter(filter state.AddressFilter)
+	TouchAddress(addr common.Address)
 
 	Recording() bool
 	Deterministic() bool
