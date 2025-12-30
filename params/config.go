@@ -441,7 +441,7 @@ type ArbOSInit struct {
 var DefaultInitialL1BaseFee = big.NewInt(50 * GWei)
 
 // GetInitialL1BaseFee returns the initial L1 base fee for the ArbOS instance.
-// If not set, it returns the default value (backwards compatibility).
+// If not set, it returns the default value.
 func (a *ArbOSInit) GetInitialL1BaseFee() *big.Int {
 	if a.InitialL1BaseFee != nil {
 		return a.InitialL1BaseFee
