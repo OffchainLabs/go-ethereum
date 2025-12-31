@@ -217,14 +217,21 @@ func (s *StateDB) IsTxFiltered() bool {
 	return s.arbExtraData.arbTxFilter
 }
 
-func (s *StateDB) SetAddressFilter(filter AddressFilter) {
-	s.arbExtraData.addressFilter = filter
+func (s *StateDB) SetAddressChecker(checker AddressChecker) {
+	s.arbExtraData.addressChecker = checker
 }
 
 func (s *StateDB) TouchAddress(addr common.Address) {
-	if s.arbExtraData.addressFilter != nil && s.arbExtraData.addressFilter.IsFiltered(addr) {
-		s.FilterTx()
+	if s.arbExtraData.addressCheckerState != nil {
+		s.arbExtraData.addressCheckerState.TouchAddress(addr)
 	}
+}
+
+func (s *StateDB) IsAddressFiltered() bool {
+	if s.arbExtraData.addressCheckerState != nil {
+		return s.arbExtraData.addressCheckerState.IsFiltered()
+	}
+	return false
 }
 
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
@@ -746,7 +753,8 @@ func (s *StateDB) Copy() *StateDB {
 			openWasmPages:          s.arbExtraData.openWasmPages,
 			everWasmPages:          s.arbExtraData.everWasmPages,
 			arbTxFilter:            s.arbExtraData.arbTxFilter,
-			addressFilter:          s.arbExtraData.addressFilter,
+			addressChecker:         s.arbExtraData.addressChecker, // shared reference, checker is stateless
+			addressCheckerState:    nil,                           // will be set in SetTxContext
 		},
 
 		db:                   s.db,
@@ -1118,6 +1126,13 @@ func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 	// Arbitrum: clear memory charging state for new tx
 	s.arbExtraData.openWasmPages = 0
 	s.arbExtraData.everWasmPages = 0
+
+	// Arbitrum: create fresh address checker state for new tx
+	if s.arbExtraData.addressChecker != nil {
+		s.arbExtraData.addressCheckerState = s.arbExtraData.addressChecker.NewTxState()
+	} else {
+		s.arbExtraData.addressCheckerState = nil
+	}
 }
 
 func (s *StateDB) clearJournalAndRefund() {

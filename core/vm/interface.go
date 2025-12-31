@@ -54,8 +54,9 @@ type StateDB interface {
 	FilterTx()
 	ClearTxFilter()
 	IsTxFiltered() bool
-	SetAddressFilter(filter state.AddressFilter)
+	SetAddressChecker(checker state.AddressChecker)
 	TouchAddress(addr common.Address)
+	IsAddressFiltered() bool
 
 	Recording() bool
 	Deterministic() bool
