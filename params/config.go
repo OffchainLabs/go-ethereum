@@ -435,6 +435,7 @@ var NetworkNames = map[string]string{
 type ArbOSInit struct {
 	NativeTokenSupplyManagementEnabled bool     `json:"nativeTokenSupplyManagementEnabled"`
 	InitialL1BaseFee                   *big.Int `json:"initialL1BaseFee,omitempty"`
+	SerializedChainConfig              []byte   `json:"serializedChainConfig,omitempty"`
 }
 
 // ChainConfig is the core config which determines the blockchain settings.
