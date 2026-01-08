@@ -433,6 +433,7 @@ var NetworkNames = map[string]string{
 // ArbOSInit defines some initialization values for ArbOS state.
 type ArbOSInit struct {
 	NativeTokenSupplyManagementEnabled bool `json:"nativeTokenSupplyManagementEnabled"`
+	TransactionFilteringEnabled        bool `json:"transactionFilteringEnabled"`
 }
 
 // ChainConfig is the core config which determines the blockchain settings.
