@@ -62,36 +62,29 @@ var (
 
 type ActivatedWasm map[rawdb.WasmTarget][]byte
 
+// checks if the bytecode is a Stylus source (program or fragment)
+func IsStylusSource(b []byte) bool {
+	return IsStylusProgram(b) || IsStylusProgramFragment(b)
+}
+
 // checks if a valid Stylus prefix is present
 func IsStylusProgram(b []byte) bool {
-	if len(b) < len(StylusDiscriminant)+1 {
-		return false
-	}
-	return bytes.Equal(b[:3], StylusDiscriminant) || bytes.Equal(b[:3], StylusRootDiscriminant)
+	return IsStylusProgramClassic(b) || IsStylusProgramRoot(b)
 }
 
 // checks if a valid Stylus classic prefix is present
 func IsStylusProgramClassic(b []byte) bool {
-	if len(b) < len(StylusDiscriminant)+1 {
-		return false
-	}
-	return bytes.Equal(b[:3], StylusDiscriminant)
+	return len(b) > len(StylusDiscriminant) && bytes.HasPrefix(b, StylusDiscriminant)
 }
 
 // checks if a valid Stylus fragment prefix is present
 func IsStylusProgramFragment(b []byte) bool {
-	if len(b) < len(StylusFragmentsDiscriminant)+1 {
-		return false
-	}
-	return bytes.Equal(b[:3], StylusFragmentsDiscriminant)
+	return len(b) > len(StylusFragmentsDiscriminant) && bytes.HasPrefix(b, StylusFragmentsDiscriminant)
 }
 
 // checks if a valid Stylus root prefix is present
 func IsStylusProgramRoot(b []byte) bool {
-	if len(b) < len(StylusRootDiscriminant)+1 {
-		return false
-	}
-	return bytes.Equal(b[:3], StylusRootDiscriminant)
+	return len(b) > len(StylusRootDiscriminant) && bytes.HasPrefix(b, StylusRootDiscriminant)
 }
 
 // strips the Stylus header from a contract, returning the dictionary used
@@ -109,29 +102,38 @@ func StripStylusFragmentPrefix(b []byte) ([]byte, error) {
 	return b[3:], nil
 }
 
-func StripStylusRootPrefix(b []byte) ([]byte, byte, uint32, error) {
+type StylusRoot struct {
+	DictionaryType     byte
+	DecompressedLength uint32
+	Addresses          []common.Address
+}
+
+func NewStylusRoot(b []byte) (*StylusRoot, error) {
 	if !IsStylusProgramRoot(b) {
-		return nil, byte(0), 0, errors.New("specified bytecode is not a Stylus program root")
+		return nil, errors.New("specified bytecode is not a Stylus program root")
 	}
 
-	if len(b) < 7 {
-		return nil, byte(0), 0, fmt.Errorf(
-			"stylus program root too short: need at least 7 bytes, got %d",
-			len(b),
-		)
+	if len(b) < 8 {
+		return nil, fmt.Errorf("stylus program root too short: need at least 8 bytes, got %d", len(b))
 	}
 
-	if len(b[8:])%common.AddressLength != 0 {
-		return nil, byte(0), 0, fmt.Errorf(
-			"stylus program root has invalid address section length: expected multiple of %d, got %d (remainder %d)",
-			common.AddressLength,
-
-			len(b[8:]),
-			len(b[8:])%common.AddressLength,
-		)
+	addressData := b[8:]
+	if len(addressData)%common.AddressLength != 0 {
+		return nil, fmt.Errorf("stylus program root address data has invalid length: %d (must be multiple of %d)", len(addressData), common.AddressLength)
 	}
-	// 3 + 1 + 4 + 40 = 48
-	return b[8:], b[3], binary.BigEndian.Uint32(b[4:8]), nil
+
+	count := len(addressData) / common.AddressLength
+	addresses := make([]common.Address, 0, count)
+
+	for i := 0; i < len(addressData); i += common.AddressLength {
+		addresses = append(addresses, common.BytesToAddress(addressData[i:i+common.AddressLength]))
+	}
+
+	return &StylusRoot{
+		Version:            b[3],
+		DecompressedLength: binary.BigEndian.Uint32(b[4:8]),
+		Addresses:          addresses,
+	}, nil
 }
 
 // creates a new Stylus prefix from the given dictionary byte
@@ -145,7 +147,7 @@ func NewStylusFragmentPrefix() []byte {
 	return bytes.Clone(StylusFragmentsDiscriminant)
 }
 
-// creates a new Fragment Stylus prefix from the given dictionary byte
+// Returns a new Stylus Root prefix with the given dictionary byte
 func NewStylusRootPrefix(dictionary byte) []byte {
 	prefix := bytes.Clone(StylusRootDiscriminant)
 	return append(prefix, dictionary)
