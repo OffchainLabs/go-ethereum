@@ -130,7 +130,7 @@ func NewStylusRoot(b []byte) (*StylusRoot, error) {
 	}
 
 	return &StylusRoot{
-		Version:            b[3],
+		DictionaryType:     b[3],
 		DecompressedLength: binary.BigEndian.Uint32(b[4:8]),
 		Addresses:          addresses,
 	}, nil
