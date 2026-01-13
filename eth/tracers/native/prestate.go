@@ -370,7 +370,6 @@ func (t *prestateTracer) lookupStorage(addr common.Address, key common.Hash) {
 		return
 	}
 	if _, ok := t.pre[addr].Storage[key]; ok {
-		log.Info("Storage key already exists!!!!!", "addr", addr.Hex(), "key", key.Hex())
 		return
 	}
 	t.pre[addr].Storage[key] = t.env.StateDB.GetState(addr, key)
