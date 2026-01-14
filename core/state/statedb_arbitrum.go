@@ -241,6 +241,7 @@ type ArbitrumExtraData struct {
 	activatedWasms         map[common.Hash]ActivatedWasm // newly activated WASMs
 	recentWasms            RecentWasms
 	arbTxFilter            bool
+	arbTxFilterBypassed    bool
 
 	addressChecker      AddressChecker      // shared, stateless checker factory
 	addressCheckerState AddressCheckerState // per-tx state, created in SetTxContext
