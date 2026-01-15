@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	flag "github.com/spf13/pflag"
 )
@@ -27,11 +26,6 @@ type Config struct {
 	LogNoHistory         bool   `koanf:"log-no-history"`         // No log search index is maintained.
 	LogExportCheckpoints string `koanf:"log-export-checkpoints"` // export log index checkpoints to file
 
-	// State scheme represents the scheme used to store states and trie
-	// nodes on top. It can be 'hash', 'path', or none which means use the scheme
-	// consistent with persistent state.
-	StateScheme string `koanf:"state-scheme"`
-
 	// Parameters for the filter system
 	FilterLogCacheSize int           `koanf:"filter-log-cache-size"`
 	FilterTimeout      time.Duration `koanf:"filter-timeout"`
@@ -49,6 +43,10 @@ type Config struct {
 
 	BlockRedirects     []BlockRedirectConfig `koanf:"block-redirects"`
 	BlockRedirectsList string                `koanf:"block-redirects-list"`
+
+	// EIP-7966: eth_sendRawTransactionSync timeouts
+	TxSyncDefaultTimeout time.Duration `koanf:"tx-sync-default-timeout"`
+	TxSyncMaxTimeout     time.Duration `koanf:"tx-sync-max-timeout"`
 }
 
 type BlockRedirectConfig struct {
@@ -82,7 +80,6 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.Uint64(prefix+".log-history", DefaultConfig.LogHistory, "maximum number of blocks from head where a log search index is maintained")
 	f.Bool(prefix+".log-no-history", DefaultConfig.LogNoHistory, "no log search index is maintained")
 	f.String(prefix+".log-export-checkpoints", DefaultConfig.LogExportCheckpoints, "export log index checkpoints to file")
-	f.String(prefix+".state-scheme", DefaultConfig.StateScheme, "state scheme used to store states and trie nodes on top")
 	f.Uint64(prefix+".feehistory-max-block-count", DefaultConfig.FeeHistoryMaxBlockCount, "max number of blocks a fee history request may cover")
 	f.String(prefix+".classic-redirect", DefaultConfig.ClassicRedirect, "url to redirect classic requests, use \"error:[CODE:]MESSAGE\" to return specified error instead of redirecting")
 	f.Duration(prefix+".classic-redirect-timeout", DefaultConfig.ClassicRedirectTimeout, "timeout for forwarded classic requests, where 0 = no timeout")
@@ -94,6 +91,8 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.Uint64(prefix+".arbdebug.block-range-bound", arbDebug.BlockRangeBound, "bounds the number of blocks arbdebug calls may return")
 	f.Uint64(prefix+".arbdebug.timeout-queue-bound", arbDebug.TimeoutQueueBound, "bounds the length of timeout queues arbdebug calls may return")
 	f.String(prefix+".block-redirects-list", DefaultConfig.BlockRedirectsList, "array of node configs to redirect block requests given as a json string. time duration should be supplied in number indicating nanoseconds")
+	f.Duration(prefix+".tx-sync-default-timeout", DefaultConfig.TxSyncDefaultTimeout, "default timeout for eth_sendRawTransactionSync")
+	f.Duration(prefix+".tx-sync-max-timeout", DefaultConfig.TxSyncMaxTimeout, "maximum allowed timeout for eth_sendRawTransactionSync ")
 }
 
 const (
@@ -120,5 +119,7 @@ var DefaultConfig = Config{
 		TimeoutQueueBound: 512,
 	},
 	BlockRedirectsList: "default",
-	StateScheme:        rawdb.HashScheme,
+	// EIP-7966: eth_sendRawTransactionSync timeouts
+	TxSyncDefaultTimeout: ethconfig.Defaults.TxSyncDefaultTimeout,
+	TxSyncMaxTimeout:     ethconfig.Defaults.TxSyncMaxTimeout,
 }

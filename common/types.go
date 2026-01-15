@@ -29,8 +29,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/arbcrypto"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"golang.org/x/crypto/sha3"
 )
 
 // Lengths of hashes and addresses in bytes.
@@ -42,8 +42,8 @@ const (
 )
 
 var (
-	hashT    = reflect.TypeOf(Hash{})
-	addressT = reflect.TypeOf(Address{})
+	hashT    = reflect.TypeFor[Hash]()
+	addressT = reflect.TypeFor[Address]()
 
 	// MaxAddress represents the maximum possible address value.
 	MaxAddress = HexToAddress("0xffffffffffffffffffffffffffffffffffffffff")
@@ -262,7 +262,7 @@ func (a *Address) checksumHex() []byte {
 	buf := a.hex()
 
 	// compute checksum
-	sha := sha3.NewLegacyKeccak256()
+	sha := arbcrypto.NewLegacyKeccak256()
 	sha.Write(buf[2:])
 	hash := sha.Sum(nil)
 	for i := 2; i < len(buf); i++ {
@@ -466,7 +466,7 @@ func isString(input []byte) bool {
 // UnmarshalJSON parses a hash in hex syntax.
 func (d *Decimal) UnmarshalJSON(input []byte) error {
 	if !isString(input) {
-		return &json.UnmarshalTypeError{Value: "non-string", Type: reflect.TypeOf(uint64(0))}
+		return &json.UnmarshalTypeError{Value: "non-string", Type: reflect.TypeFor[uint64]()}
 	}
 	if i, err := strconv.ParseUint(string(input[1:len(input)-1]), 10, 64); err == nil {
 		*d = Decimal(i)

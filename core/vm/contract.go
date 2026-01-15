@@ -17,8 +17,10 @@
 package vm
 
 import (
+	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
 )
 
@@ -34,8 +36,8 @@ type Contract struct {
 	// Arbitrum
 	delegateOrCallcode bool
 
-	jumpdests map[common.Hash]bitvec // Aggregated result of JUMPDEST analysis.
-	analysis  bitvec                 // Locally cached result of JUMPDEST analysis
+	jumpDests JumpDestCache // Aggregated result of JUMPDEST analysis.
+	analysis  BitVec        // Locally cached result of JUMPDEST analysis
 
 	Code     []byte
 	CodeHash common.Hash
@@ -47,20 +49,26 @@ type Contract struct {
 
 	Gas   uint64
 	value *uint256.Int
+
+	// Arbitrum: total used multi-dimensional gas
+	UsedMultiGas     multigas.MultiGas
+	RetainedMultiGas multigas.MultiGas
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
-func NewContract(caller common.Address, address common.Address, value *uint256.Int, gas uint64, jumpDests map[common.Hash]bitvec) *Contract {
-	// Initialize the jump analysis map if it's nil, mostly for tests
+func NewContract(caller common.Address, address common.Address, value *uint256.Int, gas uint64, jumpDests JumpDestCache) *Contract {
+	// Initialize the jump analysis cache if it's nil, mostly for tests
 	if jumpDests == nil {
-		jumpDests = make(map[common.Hash]bitvec)
+		jumpDests = newMapJumpDests()
 	}
 	return &Contract{
-		caller:    caller,
-		address:   address,
-		jumpdests: jumpDests,
-		Gas:       gas,
-		value:     value,
+		caller:           caller,
+		address:          address,
+		jumpDests:        jumpDests,
+		Gas:              gas,
+		value:            value,
+		UsedMultiGas:     multigas.ZeroGas(),
+		RetainedMultiGas: multigas.ZeroGas(),
 	}
 }
 
@@ -90,12 +98,12 @@ func (c *Contract) isCode(udest uint64) bool {
 	// contracts ( not temporary initcode), we store the analysis in a map
 	if c.CodeHash != (common.Hash{}) {
 		// Does parent context have the analysis?
-		analysis, exist := c.jumpdests[c.CodeHash]
+		analysis, exist := c.jumpDests.Load(c.CodeHash)
 		if !exist {
 			// Do the analysis and save in parent context
 			// We do not need to store it in c.analysis
 			analysis = codeBitmap(c.Code)
-			c.jumpdests[c.CodeHash] = analysis
+			c.jumpDests.Store(c.CodeHash, analysis)
 		}
 		// Also stash it in current contract for faster access
 		c.analysis = analysis
@@ -129,12 +137,12 @@ func (c *Contract) Caller() common.Address {
 }
 
 // Jumpdest returns the jumpdests of the contract
-func (c *Contract) Jumpdest() map[common.Hash]bitvec {
-	return c.jumpdests
+func (c *Contract) Jumpdest() JumpDestCache {
+	return c.jumpDests
 }
 
-// UseGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) UseGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
+// useGas attempts the use gas and subtracts it and returns true on success
+func (c *Contract) useGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
 	if c.Gas < gas {
 		return false
 	}
@@ -170,4 +178,25 @@ func (c *Contract) Value() *uint256.Int {
 func (c *Contract) SetCallCode(hash common.Hash, code []byte) {
 	c.Code = code
 	c.CodeHash = hash
+}
+
+// UseMultiGas attempts the use gas, subtracts it, increments usedMultiGas, and returns true on success
+func (c *Contract) UseMultiGas(multiGas multigas.MultiGas, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
+	if !c.useGas(multiGas.SingleGas(), logger, reason) {
+		return false
+	}
+	c.UsedMultiGas.SaturatingAddInto(multiGas)
+	return true
+}
+
+func (c *Contract) GetTotalUsedMultiGas() multigas.MultiGas {
+	var total multigas.MultiGas
+	var underflow bool
+	if total, underflow = c.UsedMultiGas.SafeSub(c.RetainedMultiGas); underflow {
+		// NOTE: This should never happen, but if it does, log it and continue
+		log.Trace("used contract gas underflow", "used", c.UsedMultiGas, "retained", c.RetainedMultiGas)
+		// But since not all places are instrumented yet, clamp to zero for safety
+		return c.UsedMultiGas.SaturatingSub(c.RetainedMultiGas)
+	}
+	return total
 }

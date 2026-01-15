@@ -41,7 +41,7 @@ type Backend struct {
 	filterSystem *filters.FilterSystem
 }
 
-func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publisher ArbInterface, filterConfig filters.Config) (*Backend, *filters.FilterSystem, error) {
+func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publisher ArbInterface, filterConfig filters.Config, stateScheme string) (*Backend, *filters.FilterSystem, error) {
 	backend := &Backend{
 		arb:     publisher,
 		stack:   stack,
@@ -55,7 +55,7 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 		chanNewBlock: make(chan struct{}, 1),
 	}
 
-	scheme, err := rawdb.ParseStateScheme(config.StateScheme, chainDb)
+	scheme, err := rawdb.ParseStateScheme(stateScheme, chainDb)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -72,7 +72,10 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 	if fb := backend.arb.BlockChain().CurrentFinalBlock(); fb != nil {
 		finalBlock = fb.Number.Uint64()
 	}
-	backend.filterMaps = filtermaps.NewFilterMaps(chainDb, chainView, historyCutoff, finalBlock, filtermaps.DefaultParams, fmConfig)
+	backend.filterMaps, err = filtermaps.NewFilterMaps(chainDb, chainView, historyCutoff, finalBlock, filtermaps.DefaultParams, fmConfig)
+	if err != nil {
+		return nil, nil, err
+	}
 	if len(config.AllowMethod) > 0 {
 		rpcFilter := make(map[string]bool)
 		for _, method := range config.AllowMethod {

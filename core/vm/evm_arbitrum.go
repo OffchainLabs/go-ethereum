@@ -19,6 +19,7 @@ package vm
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -37,22 +38,26 @@ func (evm *EVM) DecrementDepth() {
 	evm.depth -= 1
 }
 
+func (evm *EVM) JumpDests() JumpDestCache {
+	return evm.jumpDests
+}
+
 type TxProcessingHook interface {
-	StartTxHook() (bool, uint64, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
-	GasChargingHook(gasRemaining *uint64) (common.Address, error)
+	StartTxHook() (bool, multigas.MultiGas, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
+	GasChargingHook(gasRemaining *uint64, intrinsicGas uint64) (common.Address, multigas.MultiGas, error)
 	PushContract(contract *Contract)
 	PopContract()
-	ForceRefundGas() uint64
+	HeldGas() uint64
 	NonrefundableGas() uint64
 	DropTip() bool
-	EndTxHook(totalGasUsed uint64, evmSuccess bool)
+	EndTxHook(totalGasUsed uint64, usedMultiGas multigas.MultiGas, evmSuccess bool)
 	ScheduledTxes() types.Transactions
 	L1BlockNumber(blockCtx BlockContext) (uint64, error)
 	L1BlockHash(blockCtx BlockContext, l1BlocKNumber uint64) (common.Hash, error)
 	GasPriceOp(evm *EVM) *big.Int
 	FillReceiptInfo(receipt *types.Receipt)
 	MsgIsNonMutating() bool
-	ExecuteWASM(scope *ScopeContext, input []byte, interpreter *EVMInterpreter) ([]byte, error)
+	ExecuteWASM(scope *ScopeContext, input []byte, evm *EVM) ([]byte, error)
 	IsCalldataPricingIncreaseEnabled() bool
 }
 
@@ -60,25 +65,25 @@ type DefaultTxProcessor struct {
 	evm *EVM
 }
 
-func (p DefaultTxProcessor) StartTxHook() (bool, uint64, error, []byte) {
-	return false, 0, nil, nil
+func (p DefaultTxProcessor) StartTxHook() (bool, multigas.MultiGas, error, []byte) {
+	return false, multigas.ZeroGas(), nil, nil
 }
 
-func (p DefaultTxProcessor) GasChargingHook(gasRemaining *uint64) (common.Address, error) {
-	return p.evm.Context.Coinbase, nil
+func (p DefaultTxProcessor) GasChargingHook(_ *uint64, _ uint64) (common.Address, multigas.MultiGas, error) {
+	return p.evm.Context.Coinbase, multigas.ZeroGas(), nil
 }
 
-func (p DefaultTxProcessor) PushContract(contract *Contract) {}
+func (p DefaultTxProcessor) PushContract(_ *Contract) {}
 
 func (p DefaultTxProcessor) PopContract() {}
 
-func (p DefaultTxProcessor) ForceRefundGas() uint64 { return 0 }
+func (p DefaultTxProcessor) HeldGas() uint64 { return 0 }
 
 func (p DefaultTxProcessor) NonrefundableGas() uint64 { return 0 }
 
 func (p DefaultTxProcessor) DropTip() bool { return false }
 
-func (p DefaultTxProcessor) EndTxHook(totalGasUsed uint64, evmSuccess bool) {}
+func (p DefaultTxProcessor) EndTxHook(_ uint64, _ multigas.MultiGas, _ bool) {}
 
 func (p DefaultTxProcessor) ScheduledTxes() types.Transactions {
 	return types.Transactions{}
@@ -102,7 +107,7 @@ func (p DefaultTxProcessor) MsgIsNonMutating() bool {
 	return false
 }
 
-func (p DefaultTxProcessor) ExecuteWASM(scope *ScopeContext, input []byte, interpreter *EVMInterpreter) ([]byte, error) {
+func (p DefaultTxProcessor) ExecuteWASM(_ *ScopeContext, _ []byte, evm *EVM) ([]byte, error) {
 	log.Crit("tried to execute WASM with default processing hook")
 	return nil, nil
 }

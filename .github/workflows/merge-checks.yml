@@ -2,7 +2,7 @@ name: Merge Checks
 
 on:
   pull_request_target:
-    branches: [ master ]
+    branches: [master]
     types: [synchronize, opened, reopened, labeled, unlabeled]
 
 permissions:
@@ -11,7 +11,7 @@ permissions:
 jobs:
   check-design-approved:
     name: Check if Design Approved
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-4
     steps:
       - name: Check if design approved and update status
         run: |

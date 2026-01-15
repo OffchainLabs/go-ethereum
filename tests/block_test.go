@@ -81,6 +81,10 @@ func TestExecutionSpecBlocktests(t *testing.T) {
 	}
 	bt := new(testMatcher)
 
+	// These tests require us to handle scenarios where a system contract is not deployed at a fork
+	bt.skipLoad(".*prague/eip7251_consolidations/test_system_contract_deployment.json")
+	bt.skipLoad(".*prague/eip7002_el_triggerable_withdrawals/test_system_contract_deployment.json")
+
 	// These tests fail as of https://github.com/ethereum/go-ethereum/pull/28666, since we
 	// no longer delete "leftover storage" when deploying a contract.
 	bt.skipLoad(`^cancun/eip6780_selfdestruct/selfdestruct/self_destructing_initcode_create_tx.json`)

@@ -22,6 +22,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -44,6 +45,8 @@ type ExecutionResult struct {
 	ScheduledTxes types.Transactions
 	// Arbitrum: the contract deployed from the top-level transaction, or nil if not a contract creation tx
 	TopLevelDeployed *common.Address
+	// Arbitrum: total used multi-dimensional gas
+	UsedMultiGas multigas.MultiGas
 }
 
 // Unwrap returns the internal evm error which allows us for further
@@ -75,12 +78,21 @@ func (result *ExecutionResult) Revert() []byte {
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
 func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool) (uint64, error) {
+	multiGas, err := IntrinsicMultiGas(data, accessList, authList, isContractCreation, isHomestead, isEIP2028, isEIP3860)
+	if err != nil {
+		return 0, err
+	}
+	return multiGas.SingleGas(), nil
+}
+
+// IntrinsicMultiGas returns the intrinsic gas as a multi-gas.
+func IntrinsicMultiGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool) (multigas.MultiGas, error) {
 	// Set the starting gas for the raw transaction
-	var gas uint64
+	var gas multigas.MultiGas
 	if isContractCreation && isHomestead {
-		gas = params.TxGasContractCreation
+		gas.SaturatingIncrementInto(multigas.ResourceKindComputation, params.TxGasContractCreation)
 	} else {
-		gas = params.TxGas
+		gas.SaturatingIncrementInto(multigas.ResourceKindComputation, params.TxGas)
 	}
 	dataLen := uint64(len(data))
 	// Bump the required gas by the amount of transactional data
@@ -94,30 +106,30 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 		if isEIP2028 {
 			nonZeroGas = params.TxDataNonZeroGasEIP2028
 		}
-		if (math.MaxUint64-gas)/nonZeroGas < nz {
-			return 0, ErrGasUintOverflow
+		if (math.MaxUint64-gas.SingleGas())/nonZeroGas < nz {
+			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
-		gas += nz * nonZeroGas
+		gas.SaturatingIncrementInto(multigas.ResourceKindL2Calldata, nz*nonZeroGas)
 
-		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
-			return 0, ErrGasUintOverflow
+		if (math.MaxUint64-gas.SingleGas())/params.TxDataZeroGas < z {
+			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
-		gas += z * params.TxDataZeroGas
+		gas.SaturatingIncrementInto(multigas.ResourceKindL2Calldata, z*params.TxDataZeroGas)
 
 		if isContractCreation && isEIP3860 {
 			lenWords := toWordSize(dataLen)
-			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
-				return 0, ErrGasUintOverflow
+			if (math.MaxUint64-gas.SingleGas())/params.InitCodeWordGas < lenWords {
+				return multigas.ZeroGas(), ErrGasUintOverflow
 			}
-			gas += lenWords * params.InitCodeWordGas
+			gas.SaturatingIncrementInto(multigas.ResourceKindComputation, lenWords*params.InitCodeWordGas)
 		}
 	}
 	if accessList != nil {
-		gas += uint64(len(accessList)) * params.TxAccessListAddressGas
-		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
+		gas.SaturatingIncrementInto(multigas.ResourceKindStorageAccess, uint64(len(accessList))*params.TxAccessListAddressGas)
+		gas.SaturatingIncrementInto(multigas.ResourceKindStorageAccess, uint64(accessList.StorageKeys())*params.TxAccessListStorageKeyGas)
 	}
 	if authList != nil {
-		gas += uint64(len(authList)) * params.CallNewAccountGas
+		gas.SaturatingIncrementInto(multigas.ResourceKindStorageGrowth, uint64(len(authList))*params.CallNewAccountGas)
 	}
 	return gas, nil
 }
@@ -169,11 +181,17 @@ type Message struct {
 
 	// When SkipNonceChecks is true, the message nonce is not checked against the
 	// account nonce in state.
-	// This field will be set to true for operations like RPC eth_call.
+	//
+	// This field will be set to true for operations like RPC eth_call
+	// or the state prefetching.
 	SkipNonceChecks bool
 
-	// When SkipFromEOACheck is true, the message sender is not checked to be an EOA.
-	SkipFromEOACheck bool
+	// When set, the message is not treated as a transaction, and certain
+	// transaction-specific checks are skipped:
+	//
+	// - From is not verified to be an EOA
+	// - GasLimit is not checked against the protocol defined tx gaslimit
+	SkipTransactionChecks bool
 	// L1 charging is disabled when SkipL1Charging is true.
 	// This field might be set to true for operations like RPC eth_call.
 	SkipL1Charging bool
@@ -309,8 +327,8 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		Data:                  tx.Data(),
 		AccessList:            tx.AccessList(),
 		SetCodeAuthorizations: tx.SetCodeAuthorizations(),
-		SkipNonceChecks:       tx.SkipNonceChecks(),  // TODO Arbitrum upstream this was init'd to false
-		SkipFromEOACheck:      tx.SkipFromEOACheck(), // TODO Arbitrum upstream this was init'd to false
+		SkipNonceChecks:       tx.SkipNonceChecks(),       // TODO Arbitrum upstream this was init'd to false
+		SkipTransactionChecks: tx.SkipTransactionChecks(), // TODO Arbitrum upstream this was init'd to false
 		BlobHashes:            tx.BlobHashes(),
 		BlobGasFeeCap:         tx.BlobGasFeeCap(),
 	}
@@ -457,7 +475,12 @@ func (st *stateTransition) preCheck() error {
 				msg.From.Hex(), stNonce)
 		}
 	}
-	if !msg.SkipFromEOACheck {
+	isOsaka := st.evm.ChainConfig().IsOsaka(st.evm.Context.BlockNumber, st.evm.Context.Time, st.evm.Context.ArbOSVersion)
+	if !msg.SkipTransactionChecks {
+		// Verify tx gas limit does not exceed EIP-7825 cap.
+		if !st.evm.ChainConfig().IsArbitrum() && isOsaka && msg.GasLimit > params.MaxTxGasRenamedForNitroMerges {
+			return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxGasRenamedForNitroMerges, msg.GasLimit)
+		}
 		// Make sure the sender is an EOA
 		code := st.state.GetCode(msg.From)
 		_, delegated := types.ParseDelegation(code)
@@ -501,6 +524,9 @@ func (st *stateTransition) preCheck() error {
 		}
 		if len(msg.BlobHashes) == 0 {
 			return ErrMissingBlobHashes
+		}
+		if isOsaka && len(msg.BlobHashes) > params.BlobTxMaxBlobs {
+			return ErrTooManyBlobs
 		}
 		for i, hash := range msg.BlobHashes {
 			if !kzg4844.IsValidVersionedHash(hash[:]) {
@@ -546,14 +572,17 @@ func (st *stateTransition) preCheck() error {
 // However if any consensus issue encountered, return the error directly with
 // nil evm execution result.
 func (st *stateTransition) execute() (*ExecutionResult, error) {
-	endTxNow, startHookUsedGas, err, returnData := st.evm.ProcessingHook.StartTxHook()
+	endTxNow, startHookUsedMultiGas, err, returnData := st.evm.ProcessingHook.StartTxHook()
+	startHookUsedSingleGas := startHookUsedMultiGas.SingleGas()
+
 	if endTxNow {
 		return &ExecutionResult{
-			UsedGas:       startHookUsedGas,
-			MaxUsedGas:    startHookUsedGas,
+			UsedGas:       startHookUsedSingleGas,
+			MaxUsedGas:    startHookUsedSingleGas,
 			Err:           err,
 			ReturnData:    returnData,
 			ScheduledTxes: st.evm.ProcessingHook.ScheduledTxes(),
+			UsedMultiGas:  startHookUsedMultiGas,
 		}, nil
 	}
 
@@ -583,15 +612,17 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Random != nil, st.evm.Context.Time, st.evm.Context.ArbOSVersion)
 		contractCreation = msg.To == nil
 		floorDataGas     uint64
+		usedMultiGas     = multigas.ZeroGas()
 	)
 
-	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
+	// Check clauses 4-5, subtract intrinsic iGas if everything is correct
+	iMultiGas, err := IntrinsicMultiGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
 	if err != nil {
 		return nil, err
 	}
-	if st.gasRemaining < gas {
-		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, gas)
+	iGas := iMultiGas.SingleGas()
+	if st.gasRemaining < iGas {
+		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, iGas)
 	}
 	// Gas limit suffices for the floor data cost (EIP-7623)
 	if rules.IsPrague && st.evm.ProcessingHook.IsCalldataPricingIncreaseEnabled() {
@@ -604,20 +635,24 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 	}
 	if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
-		t.OnGasChange(st.gasRemaining, st.gasRemaining-gas, tracing.GasChangeTxIntrinsicGas)
+		t.OnGasChange(st.gasRemaining, st.gasRemaining-iGas, tracing.GasChangeTxIntrinsicGas)
 	}
-	st.gasRemaining -= gas
+	st.gasRemaining -= iGas
+	usedMultiGas = usedMultiGas.SaturatingAdd(iMultiGas)
 
 	tipAmount := big.NewInt(0)
-	tipReceipient, err := st.evm.ProcessingHook.GasChargingHook(&st.gasRemaining)
+	tipReceipient, multiGas, err := st.evm.ProcessingHook.GasChargingHook(&st.gasRemaining, iGas)
 	if err != nil {
 		return nil, err
 	}
+
+	usedMultiGas = usedMultiGas.SaturatingAdd(multiGas)
+
 	if rules.IsEIP4762 {
 		st.evm.AccessEvents.AddTxOrigin(msg.From)
 
 		if targetAddr := msg.To; targetAddr != nil {
-			st.evm.AccessEvents.AddTxDestination(*targetAddr, msg.Value.Sign() != 0)
+			st.evm.AccessEvents.AddTxDestination(*targetAddr, msg.Value.Sign() != 0, !st.state.Exist(*targetAddr))
 		}
 	}
 
@@ -646,43 +681,61 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		ret   []byte
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
-	if contractCreation {
-		deployedContract = &common.Address{}
-		ret, *deployedContract, st.gasRemaining, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value)
-	} else {
-		// Increment the nonce for the next transaction.
-		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
 
-		// Apply EIP-7702 authorizations.
-		if msg.SetCodeAuthorizations != nil {
-			for _, auth := range msg.SetCodeAuthorizations {
-				// Note errors are ignored, we simply skip invalid authorizations here.
-				st.applyAuthorization(&auth)
+	// Check against hardcoded transaction hashes that have previously reverted, so instead
+	// of executing the transaction we just update state nonce and remaining gas to avoid
+	// state divergence.
+	usedMultiGas, vmerr = st.handleRevertedTx(msg, usedMultiGas)
+
+	// vmerr is only not nil when we find a previous reverted transaction
+	if vmerr == nil {
+		if contractCreation {
+			deployedContract = &common.Address{}
+			ret, *deployedContract, st.gasRemaining, multiGas, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value)
+			usedMultiGas = usedMultiGas.SaturatingAdd(multiGas)
+		} else {
+			// Increment the nonce for the next transaction.
+			st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
+
+			// Apply EIP-7702 authorizations.
+			if msg.SetCodeAuthorizations != nil {
+				for _, auth := range msg.SetCodeAuthorizations {
+					// Note errors are ignored, we simply skip invalid authorizations here.
+					st.applyAuthorization(&auth)
+				}
 			}
-		}
 
-		// Perform convenience warming of sender's delegation target. Although the
-		// sender is already warmed in Prepare(..), it's possible a delegation to
-		// the account was deployed during this transaction. To handle correctly,
-		// simply wait until the final state of delegations is determined before
-		// performing the resolution and warming.
-		if addr, ok := types.ParseDelegation(st.state.GetCode(*msg.To)); ok {
-			st.state.AddAddressToAccessList(addr)
-		}
+			// Perform convenience warming of sender's delegation target. Although the
+			// sender is already warmed in Prepare(..), it's possible a delegation to
+			// the account was deployed during this transaction. To handle correctly,
+			// simply wait until the final state of delegations is determined before
+			// performing the resolution and warming.
+			if addr, ok := types.ParseDelegation(st.state.GetCode(*msg.To)); ok {
+				st.state.AddAddressToAccessList(addr)
+			}
 
-		// Execute the transaction's call.
-		ret, st.gasRemaining, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining, value)
+			// Execute the transaction's call.
+			ret, st.gasRemaining, multiGas, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining, value)
+			usedMultiGas = usedMultiGas.SaturatingAdd(multiGas)
+		}
 	}
+
+	// Refund the gas that was held to limit the amount of computation done.
+	st.gasRemaining += st.calcHeldGasRefund()
 
 	// Record the gas used excluding gas refunds. This value represents the actual
 	// gas allowance required to complete execution.
 	peakGasUsed := st.gasUsed()
 
 	// Compute refund counter, capped to a refund quotient.
-	st.gasRemaining += st.calcRefund()
+	refund := st.calcRefund()
+	st.gasRemaining += refund
+	// Arbitrum: set the multigas refunds
+	usedMultiGas = usedMultiGas.WithRefund(refund)
 	if rules.IsPrague && st.evm.ProcessingHook.IsCalldataPricingIncreaseEnabled() {
 		// After EIP-7623: Data-heavy transactions pay the floor gas.
 		if st.gasUsed() < floorDataGas {
+			usedMultiGas = usedMultiGas.SaturatingIncrement(multigas.ResourceKindL2Calldata, floorDataGas-usedMultiGas.SingleGas())
 			prev := st.gasRemaining
 			st.gasRemaining = st.initialGas - floorDataGas
 			if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
@@ -697,10 +750,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 	effectiveTip := msg.GasPrice
 	if rules.IsLondon {
-		effectiveTip = new(big.Int).Sub(msg.GasFeeCap, st.evm.Context.BaseFee)
-		if effectiveTip.Cmp(msg.GasTipCap) > 0 {
-			effectiveTip = msg.GasTipCap
-		}
+		effectiveTip = new(big.Int).Sub(msg.GasPrice, st.evm.Context.BaseFee)
 	}
 	effectiveTipU256, _ := uint256.FromBig(effectiveTip)
 
@@ -715,7 +765,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		tipAmount = fee.ToBig()
 		// add the coinbase to the witness iff the fee is greater than 0
 		if rules.IsEIP4762 && fee.Sign() != 0 {
-			st.evm.AccessEvents.AddAccount(st.evm.Context.Coinbase, true)
+			st.evm.AccessEvents.AddAccount(st.evm.Context.Coinbase, true, math.MaxUint64)
 		}
 	}
 
@@ -724,7 +774,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		tracer.CaptureArbitrumTransfer(nil, &tipReceipient, tipAmount, false, tracing.BalanceIncreaseRewardTransactionFee)
 	}
 
-	st.evm.ProcessingHook.EndTxHook(st.gasRemaining, vmerr == nil)
+	st.evm.ProcessingHook.EndTxHook(st.gasRemaining, usedMultiGas, vmerr == nil)
 
 	// Arbitrum: record self destructs
 	if tracer := st.evm.Config.Tracer; tracer != nil && tracer.CaptureArbitrumTransfer != nil {
@@ -742,7 +792,32 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		ReturnData:       ret,
 		ScheduledTxes:    st.evm.ProcessingHook.ScheduledTxes(),
 		TopLevelDeployed: deployedContract,
+		UsedMultiGas:     usedMultiGas,
 	}, nil
+}
+
+// handleRevertedTx attempts to process a reverted transaction. It returns
+// ErrExecutionReverted with the updated multiGas if a matching reverted
+// tx is found; otherwise, it returns nil error with unchangedmultiGas
+func (st *stateTransition) handleRevertedTx(msg *Message, usedMultiGas multigas.MultiGas) (multigas.MultiGas, error) {
+	if msg.Tx == nil {
+		return usedMultiGas, nil
+	}
+
+	txHash := msg.Tx.Hash()
+	if l2GasUsed, ok := RevertedTxGasUsed[txHash]; ok {
+		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
+
+		// Calculate adjusted gas since l2GasUsed contains params.TxGas
+		adjustedGas := l2GasUsed - params.TxGas
+		st.gasRemaining -= adjustedGas
+
+		// Update multigas and return ErrExecutionReverted error
+		usedMultiGas = usedMultiGas.SaturatingAdd(multigas.ComputationGas(adjustedGas))
+		return usedMultiGas, vm.ErrExecutionReverted
+	}
+
+	return usedMultiGas, nil
 }
 
 // validateAuthorization validates an EIP-7702 authorization against the state.
@@ -793,19 +868,22 @@ func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization) 
 	st.state.SetNonce(authority, auth.Nonce+1, tracing.NonceChangeAuthorization)
 	if auth.Address == (common.Address{}) {
 		// Delegation to zero address means clear.
-		st.state.SetCode(authority, nil)
+		st.state.SetCode(authority, nil, tracing.CodeChangeAuthorizationClear)
 		return nil
 	}
 
 	// Otherwise install delegation to auth.Address.
-	st.state.SetCode(authority, types.AddressToDelegation(auth.Address))
+	st.state.SetCode(authority, types.AddressToDelegation(auth.Address), tracing.CodeChangeAuthorization)
 
 	return nil
 }
 
+func (st *stateTransition) calcHeldGasRefund() uint64 {
+	return st.evm.ProcessingHook.HeldGas()
+}
+
 // calcRefund computes refund counter, capped to a refund quotient.
 func (st *stateTransition) calcRefund() uint64 {
-	st.gasRemaining += st.evm.ProcessingHook.ForceRefundGas()
 	nonrefundable := st.evm.ProcessingHook.NonrefundableGas()
 	var refund uint64
 	if nonrefundable < st.gasUsed() {

@@ -25,6 +25,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/arbcrypto"
+	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -45,7 +47,6 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
-	"golang.org/x/crypto/sha3"
 )
 
 // StateTest checks transaction processing without block context.
@@ -219,7 +220,7 @@ func (t *StateTest) checkError(subtest StateSubtest, err error) error {
 
 // Run executes a specific subtest and verifies the post-state and logs
 func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string, postCheck func(err error, st *StateTestState)) (result error) {
-	st, root, _, err := t.RunNoVerify(subtest, vmconfig, snapshotter, scheme)
+	st, root, usedGas, usedMultiGas, err := t.RunNoVerify(subtest, vmconfig, snapshotter, scheme)
 	// Invoke the callback at the end of function for further analysis.
 	defer func() {
 		postCheck(result, &st)
@@ -229,6 +230,10 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bo
 	checkedErr := t.checkError(subtest, err)
 	if checkedErr != nil {
 		return checkedErr
+	}
+	if usedGas != usedMultiGas.SingleGas() {
+		return fmt.Errorf("mismatch between usedGas and usedMultiGas: usedGas=%v, usedMultiGas=%v",
+			usedGas, usedMultiGas.SingleGas())
 	}
 	// The error has been checked; if it was unexpected, it's already returned.
 	if err != nil {
@@ -251,10 +256,10 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bo
 
 // RunNoVerify runs a specific subtest and returns the statedb and post-state root.
 // Remember to call state.Close after verifying the test result!
-func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string) (st StateTestState, root common.Hash, gasUsed uint64, err error) {
+func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string) (st StateTestState, root common.Hash, gasUsed uint64, multiGasUsed multigas.MultiGas, err error) {
 	config, eips, err := GetChainConfig(subtest.Fork)
 	if err != nil {
-		return st, common.Hash{}, 0, UnsupportedForkError{subtest.Fork}
+		return st, common.Hash{}, 0, multigas.ZeroGas(), UnsupportedForkError{subtest.Fork}
 	}
 	vmconfig.ExtraEips = eips
 
@@ -273,7 +278,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	post := t.json.Post[subtest.Fork][subtest.Index]
 	msg, err := t.json.Tx.toMessage(post, baseFee)
 	if err != nil {
-		return st, common.Hash{}, 0, err
+		return st, common.Hash{}, 0, multigas.ZeroGas(), err
 	}
 
 	// Blob transactions may be present after the Cancun fork.
@@ -284,7 +289,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	// utilize those codepaths.
 	if config.IsCancun(new(big.Int), block.Time(), types.DeserializeHeaderExtraInformation(block.Header()).ArbOSFormatVersion) {
 		if len(msg.BlobHashes) > eip4844.MaxBlobsPerBlock(config, block.Time()) {
-			return st, common.Hash{}, 0, errors.New("blob gas exceeds maximum")
+			return st, common.Hash{}, 0, multigas.ZeroGas(), errors.New("blob gas exceeds maximum")
 		}
 	}
 
@@ -293,10 +298,10 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		var ttx types.Transaction
 		err := ttx.UnmarshalBinary(post.TxBytes)
 		if err != nil {
-			return st, common.Hash{}, 0, err
+			return st, common.Hash{}, 0, multigas.ZeroGas(), err
 		}
 		if _, err := types.Sender(types.LatestSigner(config), &ttx); err != nil {
-			return st, common.Hash{}, 0, err
+			return st, common.Hash{}, 0, multigas.ZeroGas(), err
 		}
 	}
 
@@ -337,7 +342,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
 			evm.Config.Tracer.OnTxEnd(nil, err)
 		}
-		return st, common.Hash{}, 0, err
+		return st, common.Hash{}, 0, multigas.ZeroGas(), err
 	}
 	// Add 0-value mining reward. This only makes a difference in the cases
 	// where
@@ -352,7 +357,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		receipt := &types.Receipt{GasUsed: vmRet.UsedGas}
 		tracer.OnTxEnd(receipt, nil)
 	}
-	return st, root, vmRet.UsedGas, nil
+	return st, root, vmRet.UsedGas, vmRet.UsedMultiGas, nil
 }
 
 func (t *StateTest) gasLimit(subtest StateSubtest) uint64 {
@@ -483,7 +488,7 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 }
 
 func rlpHash(x interface{}) (h common.Hash) {
-	hw := sha3.NewLegacyKeccak256()
+	hw := arbcrypto.NewLegacyKeccak256()
 	rlp.Encode(hw, x)
 	hw.Sum(h[:0])
 	return h
@@ -512,7 +517,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 	sdb := state.NewDatabase(triedb, nil)
 	statedb, _ := state.New(types.EmptyRootHash, sdb)
 	for addr, a := range accounts {
-		statedb.SetCode(addr, a.Code)
+		statedb.SetCode(addr, a.Code, tracing.CodeChangeUnspecified)
 		statedb.SetNonce(addr, a.Nonce, tracing.NonceChangeUnspecified)
 		statedb.SetBalance(addr, uint256.MustFromBig(a.Balance), tracing.BalanceChangeUnspecified)
 		for k, v := range a.Storage {
@@ -524,7 +529,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 
 	// If snapshot is requested, initialize the snapshotter and use it in state.
 	var snaps *snapshot.Tree
-	if snapshotter {
+	if snapshotter && scheme == rawdb.HashScheme {
 		snapconfig := snapshot.Config{
 			CacheSize:  1,
 			Recovery:   false,
@@ -560,3 +565,6 @@ type dummyChain struct {
 func (d *dummyChain) Engine() consensus.Engine                        { return nil }
 func (d *dummyChain) GetHeader(h common.Hash, n uint64) *types.Header { return nil }
 func (d *dummyChain) Config() *params.ChainConfig                     { return d.config }
+func (d *dummyChain) CurrentHeader() *types.Header                    { return nil }
+func (d *dummyChain) GetHeaderByNumber(n uint64) *types.Header        { return nil }
+func (d *dummyChain) GetHeaderByHash(h common.Hash) *types.Header     { return nil }

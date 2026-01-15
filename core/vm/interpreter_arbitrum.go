@@ -16,26 +16,14 @@
 
 package vm
 
-func (in *EVMInterpreter) Config() *Config {
-	return &in.evm.Config
+func (evm *EVM) ReadOnly() bool {
+	return evm.readOnly
 }
 
-func (in *EVMInterpreter) Depth() int {
-	return in.evm.depth
+func (evm *EVM) GetReturnData() []byte {
+	return evm.returnData
 }
 
-func (in *EVMInterpreter) Evm() *EVM {
-	return in.evm
-}
-
-func (in *EVMInterpreter) ReadOnly() bool {
-	return in.readOnly
-}
-
-func (in *EVMInterpreter) GetReturnData() []byte {
-	return in.returnData
-}
-
-func (in *EVMInterpreter) SetReturnData(data []byte) {
-	in.returnData = data
+func (evm *EVM) SetReturnData(data []byte) {
+	evm.returnData = data
 }
