@@ -373,6 +373,10 @@ func (s *hookedStateDB) IsAddressFiltered() bool {
 	return s.inner.IsAddressFiltered()
 }
 
+func (s *hookedStateDB) IsTxFilterBypassed() bool {
+	return s.inner.IsTxFilterBypassed()
+}
+
 func (s *hookedStateDB) Recording() bool {
 	return s.inner.Recording()
 }

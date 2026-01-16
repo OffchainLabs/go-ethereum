@@ -57,6 +57,7 @@ type StateDB interface {
 	SetAddressChecker(checker state.AddressChecker)
 	TouchAddress(addr common.Address)
 	IsAddressFiltered() bool
+	IsTxFilterBypassed() bool
 
 	Recording() bool
 	Deterministic() bool
