@@ -19,6 +19,7 @@
 package pebble
 
 import (
+	"encoding/binary"
 	"errors"
 	"testing"
 
@@ -42,6 +43,35 @@ func TestPebbleDB(t *testing.T) {
 			}
 		})
 	})
+}
+
+func TestPebbleBatchBatchTooLargeError(t *testing.T) {
+	pebbleDb, err := pebble.Open("", &pebble.Options{
+		FS: vfs.NewMem(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var db ethdb.KeyValueStore = &Database{
+		db: pebbleDb,
+	}
+	batch := db.NewBatch()
+	data := make([]byte, maxBatchSize-1-binary.MaxVarintLen32)
+	err = batch.Delete(data)
+	if err == nil {
+		t.Fatal("batch.Delete shouldn't succeed")
+	}
+	if !errors.Is(err, ethdb.ErrBatchTooLarge) {
+		t.Fatalf("batch.Delete returned unexpected error: %v", err)
+	}
+	data = data[:len(data)-binary.MaxVarintLen32]
+	err = batch.Put(data[0:len(data)/2], data[len(data)/2:])
+	if err == nil {
+		t.Fatal("batch.Put shouldn't succeed")
+	}
+	if !errors.Is(err, ethdb.ErrBatchTooLarge) {
+		t.Fatalf("batch.Put returned unexpected error: %v", err)
+	}
 }
 
 func BenchmarkPebbleDB(b *testing.B) {
