@@ -174,19 +174,6 @@ func (t *prestateTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scop
 	}
 }
 
-func (t *prestateTracer) handleLookupAccounts() {
-	coinbase := common.HexToAddress("0x0000000000000000000000000000000000000000")
-	t.lookupAccount(coinbase)
-	t.lookupAccount(types.L1PricerFundsPoolAddress)
-
-	t.lookupAccount(t.to)
-	t.lookupAccount(params.HistoryStorageAddress)
-	t.lookupAccount(types.ArbosStateAddress)
-
-	t.lookupAccount(types.ArbWasmAddress)
-	t.lookupAccount(types.ArbWasmCacheAddress)
-}
-
 func (t *prestateTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
 	if tx.To() == nil {
@@ -204,9 +191,17 @@ func (t *prestateTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction
 	}
 
 	t.lookupAccount(from)
+	t.lookupAccount(t.to)
 	t.lookupAccount(env.Coinbase)
+	t.lookupAccount(params.HistoryStorageAddress)
+	t.lookupAccount(types.ArbosStateAddress)
 
-	t.handleLookupAccounts()
+	// Arbos required accounts
+	nullAddress := common.HexToAddress("0x0000000000000000000000000000000000000000")
+	t.lookupAccount(nullAddress)
+	t.lookupAccount(types.L1PricerFundsPoolAddress)
+	t.lookupAccount(types.ArbWasmAddress)
+	t.lookupAccount(types.ArbWasmCacheAddress)
 
 	// Add accounts with authorizations to the prestate before they get applied.
 	for _, auth := range tx.SetCodeAuthorizations() {
