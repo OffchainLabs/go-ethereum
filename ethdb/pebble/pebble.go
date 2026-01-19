@@ -20,8 +20,10 @@
 package pebble
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"runtime"
 	"strings"
 	"sync"
@@ -52,6 +54,14 @@ const (
 	// degradationWarnInterval specifies how often warning should be printed if the
 	// leveldb database cannot keep up with requested writes.
 	degradationWarnInterval = time.Minute
+
+	// The max size of internal pebble batch is limited by the uint32 offsets.
+	// Pebble limits the size to MaxUint32 (just short of 4GB) so that the exclusive
+	// end of an allocation fits in uint32.
+	// On 32-bit systems, slices are naturally limited to MaxInt (just short of
+	// 2GB).
+	// see: cockroachdb/pebble.maxBatchSize
+	maxBatchSize = min(math.MaxUint32, math.MaxInt) // MaxUint32 on 64-bit platform, MaxInt on 32-bit platform
 )
 
 // Database is a persistent key-value store based on the pebble storage engine.
@@ -715,7 +725,21 @@ type batch struct {
 }
 
 // Put inserts the given value into the batch for later committing.
+// In case ethdb.ErrBatchTooLarge is returned, it is safe to flush the batch and retry putting the key,value pair.
 func (b *batch) Put(key, value []byte) error {
+	// The size increase is an argument to the cockroachdb/pebble.Batch.grow call in cockroachdb/pebble.Batch.prepareDeferredKeyValueRecord called internally in cockroachdb/pebble.Batch.Set.
+	// pebble.Batch.grow panics when the batch data size plus the increase reaches cockroachdb/pebble.maxBatchSize
+	// 1 byte for batch entry kind
+	// + MaxVariantLen32 for encoding of key length
+	// + MaxVariantLen32 for encoding of value length
+	// + key length
+	// + value length
+	sizeIncrease := 1 + uint64(2*binary.MaxVarintLen32) + uint64(len(key)) + uint64(len(value))
+	// check if we fit within maxBatchSize
+	if uint64(b.b.Len())+sizeIncrease >= maxBatchSize {
+		// return an error instead of letting b.b.Set to panic
+		return ethdb.ErrBatchTooLarge
+	}
 	if err := b.b.Set(key, value, nil); err != nil {
 		return err
 	}
@@ -724,7 +748,19 @@ func (b *batch) Put(key, value []byte) error {
 }
 
 // Delete inserts the key removal into the batch for later committing.
+// In case ethdb.ErrBatchTooLarge is returned, it is safe to flush the batch and retry deleting the key
 func (b *batch) Delete(key []byte) error {
+	// the size increase is argument in call to cockroachdb/pebble.Batch.grow in cockroachdb/pebble.Batch.prepareDeferredKeyRecord called internally in cockroachdb/pebble.Batch.Delete.
+	// pebble.Batch.grow panics when the batch data size plus the increase reaches cockroachdb/pebble.maxBatchSize
+	// 1 byte for batch entry kind
+	// + MaxVariantLen32 for encoding of key length
+	// + key length
+	sizeIncrease := 1 + uint64(binary.MaxVarintLen32) + uint64(len(key))
+	// check if we fit within maxBatchSize
+	if uint64(b.b.Len())+sizeIncrease >= maxBatchSize {
+		// return an error instead of letting b.b.Delete to panic
+		return ethdb.ErrBatchTooLarge
+	}
 	if err := b.b.Delete(key, nil); err != nil {
 		return err
 	}

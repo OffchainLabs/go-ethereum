@@ -62,12 +62,20 @@ var (
 
 // Config contains the settings for database.
 type Config struct {
+	// Arbitrum:
+	IdealCapBatchSize    uint32 // write batch size threshold used during capping triedb size (if 0, ethdb.IdealBatchSize will be used)
+	IdealCommitBatchSize uint32 // write batch size threshold used during committing trie nodes to disk (if 0, ethdb.IdealBatchSize will be used)
+
 	CleanCacheSize int // Maximum memory allowance (in bytes) for caching clean nodes
 }
 
 // Defaults is the default setting for database if it's not specified.
 // Notably, clean cache is disabled explicitly,
 var Defaults = &Config{
+	// Arbitrum:
+	IdealCapBatchSize:    0, // 0 = ethdb.IdealBatchSize will be used
+	IdealCommitBatchSize: 0, // 0 = ethdb.IdealBatchSize will be used
+
 	// Explicitly set clean cache size to 0 to avoid creating fastcache,
 	// otherwise database must be closed when it's no longer needed to
 	// prevent memory leak.
@@ -78,6 +86,10 @@ var Defaults = &Config{
 // the disk database. The aim is to accumulate trie writes in-memory and only
 // periodically flush a couple tries to disk, garbage collecting the remainder.
 type Database struct {
+	// Arbitrum:
+	idealCapBatchSize    uint
+	idealCommitBatchSize uint
+
 	diskdb  ethdb.Database              // Persistent storage for matured trie nodes
 	cleans  *fastcache.Cache            // GC friendly memory cache of clean node RLPs
 	dirties map[common.Hash]*cachedNode // Data and references relationships of dirty trie nodes
@@ -132,7 +144,16 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	if config.CleanCacheSize > 0 {
 		cleans = fastcache.New(config.CleanCacheSize)
 	}
+	sanitizeBatchSize := func(size uint32) uint {
+		if size > 0 {
+			return uint(size)
+		}
+		return ethdb.IdealBatchSize
+	}
 	return &Database{
+		idealCapBatchSize:    sanitizeBatchSize(config.IdealCapBatchSize),
+		idealCommitBatchSize: sanitizeBatchSize(config.IdealCommitBatchSize),
+
 		diskdb:  diskdb,
 		cleans:  cleans,
 		dirties: make(map[common.Hash]*cachedNode),
@@ -347,10 +368,23 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	for size > limit && oldest != (common.Hash{}) {
 		// Fetch the oldest referenced node and push into the batch
 		node := db.dirties[oldest]
-		rawdb.WriteLegacyTrieNode(batch, oldest, node.node)
+
+		err := rawdb.WriteLegacyTrieNodeWithError(batch, oldest, node.node)
+		if errors.Is(err, ethdb.ErrBatchTooLarge) {
+			log.Warn("Pebble batch limit reached in hashdb Cap operation, flushing batch. Consider setting ideal cap batch size to a lower value.", "pebbleError", err)
+			// flush batch & retry the write
+			if err = batch.Write(); err != nil {
+				log.Error("Failed to write flush list to disk", "err", err)
+				return err
+			}
+			batch.Reset()
+			rawdb.WriteLegacyTrieNode(batch, oldest, node.node)
+		} else if err != nil {
+			log.Crit("Failure in hashdb Cap operation", "err", err)
+		}
 
 		// If we exceeded the ideal batch size, commit and reset
-		if batch.ValueSize() >= ethdb.IdealBatchSize {
+		if uint(batch.ValueSize()) >= db.idealCapBatchSize {
 			if err := batch.Write(); err != nil {
 				log.Error("Failed to write flush list to disk", "err", err)
 				return err
@@ -474,8 +508,23 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 		return err
 	}
 	// If we've reached an optimal batch size, commit and start over
-	rawdb.WriteLegacyTrieNode(batch, hash, node.node)
-	if batch.ValueSize() >= ethdb.IdealBatchSize {
+	err = rawdb.WriteLegacyTrieNodeWithError(batch, hash, node.node)
+	if errors.Is(err, ethdb.ErrBatchTooLarge) {
+		log.Warn("Pebble batch limit reached in hashdb Commit operation, flushing batch. Consider setting ideal commit batch size to a lower value.", "pebbleError", err)
+		// flush batch & retry the write
+		if err = batch.Write(); err != nil {
+			return err
+		}
+		err = batch.Replay(uncacher)
+		if err != nil {
+			return err
+		}
+		batch.Reset()
+		rawdb.WriteLegacyTrieNode(batch, hash, node.node)
+	} else if err != nil {
+		log.Crit("Failure in hashdb Commit operation", "err", err)
+	}
+	if uint(batch.ValueSize()) >= db.idealCommitBatchSize {
 		if err := batch.Write(); err != nil {
 			return err
 		}
