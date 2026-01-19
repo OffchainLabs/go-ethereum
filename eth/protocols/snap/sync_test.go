@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/arbcrypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -41,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
-	"golang.org/x/crypto/sha3"
 )
 
 func TestHashing(t *testing.T) {
@@ -55,7 +55,7 @@ func TestHashing(t *testing.T) {
 	}
 	var want, got string
 	var old = func() {
-		hasher := sha3.NewLegacyKeccak256()
+		hasher := arbcrypto.NewLegacyKeccak256()
 		for i := 0; i < len(bytecodes); i++ {
 			hasher.Reset()
 			hasher.Write(bytecodes[i])
@@ -88,7 +88,7 @@ func BenchmarkHashing(b *testing.B) {
 		bytecodes[i] = buf
 	}
 	var old = func() {
-		hasher := sha3.NewLegacyKeccak256()
+		hasher := arbcrypto.NewLegacyKeccak256()
 		for i := 0; i < len(bytecodes); i++ {
 			hasher.Reset()
 			hasher.Write(bytecodes[i])

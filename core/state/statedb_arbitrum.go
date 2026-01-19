@@ -19,13 +19,12 @@ package state
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"maps"
 	"math/big"
-	"slices"
-
-	"errors"
 	"runtime"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -216,6 +215,24 @@ func (s *StateDB) Recording() bool {
 
 var ErrArbTxFilter error = errors.New("internal error")
 
+// AddressCheckerState tracks address filtering for a single transaction.
+// Implementations manage their own synchronization (sync, WaitGroup, channels, etc).
+type AddressCheckerState interface {
+	// TouchAddress records an address access and checks if it should be filtered.
+	TouchAddress(addr common.Address)
+
+	// IsFiltered returns whether any touched address was filtered.
+	// Blocks until all pending checks complete (implementation-specific).
+	IsFiltered() bool
+}
+
+// AddressChecker creates per-tx state instances for address filtering.
+// The checker itself is stateless and can be shared across StateDBs.
+type AddressChecker interface {
+	// NewTxState creates fresh state for a new transaction.
+	NewTxState() AddressCheckerState
+}
+
 type ArbitrumExtraData struct {
 	unexpectedBalanceDelta *big.Int                      // total balance change across all accounts
 	userWasms              UserWasms                     // user wasms encountered during execution
@@ -224,6 +241,9 @@ type ArbitrumExtraData struct {
 	activatedWasms         map[common.Hash]ActivatedWasm // newly activated WASMs
 	recentWasms            RecentWasms
 	arbTxFilter            bool
+
+	addressChecker      AddressChecker      // shared, stateless checker factory
+	addressCheckerState AddressCheckerState // per-tx state, created in SetTxContext
 }
 
 func (s *StateDB) SetArbFinalizer(f func(*ArbitrumExtraData)) {
