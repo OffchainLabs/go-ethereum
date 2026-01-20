@@ -39,15 +39,20 @@ const ArbosVersion_32 = uint64(32)
 const ArbosVersion_40 = uint64(40)
 const ArbosVersion_41 = uint64(41)
 const ArbosVersion_50 = uint64(50)
+const ArbosVersion_51 = uint64(51)
 const ArbosVersion_60 = uint64(60)
 
 const ArbosVersion_FixRedeemGas = ArbosVersion_11
 const ArbosVersion_Stylus = ArbosVersion_30
 const ArbosVersion_StylusFixes = ArbosVersion_31
 const ArbosVersion_StylusChargingFixes = ArbosVersion_32
-const MaxArbosVersionSupported = ArbosVersion_50
-const MaxDebugArbosVersionSupported = ArbosVersion_60
+const MaxArbosVersionSupported = ArbosVersion_51
+const MaxDebugArbosVersionSupported = ArbosVersion_51
 const ArbosVersion_Dia = ArbosVersion_50
+const ArbosVersion_MultiConstraintFix = ArbosVersion_51
+const ArbosVersion_TransactionFiltering = ArbosVersion_60
+
+const DefaultMaxUncompressedBatchSize = 16 * 1024 * 1024 // 16 MB
 
 type ArbitrumChainParams struct {
 	EnableArbOS               bool
@@ -58,6 +63,7 @@ type ArbitrumChainParams struct {
 	GenesisBlockNum           uint64
 	MaxCodeSize               uint64 `json:"MaxCodeSize,omitempty"`     // Maximum bytecode to permit for a contract. 0 value implies params.DefaultMaxCodeSize
 	MaxInitCodeSize           uint64 `json:"MaxInitCodeSize,omitempty"` // Maximum initcode to permit in a creation transaction and create instructions. 0 value implies params.DefaultMaxInitCodeSize
+	MaxUncompressedBatchSize  uint64 `json:"MaxUncompressedBatchSize,omitempty"`
 }
 
 func (c *ChainConfig) IsArbitrum() bool {
@@ -86,6 +92,13 @@ func (c *ChainConfig) DebugMode() bool {
 	return c.ArbitrumChainParams.AllowDebugPrecompiles
 }
 
+func (c *ChainConfig) MaxUncompressedBatchSize() uint64 {
+	if c.ArbitrumChainParams.MaxUncompressedBatchSize == 0 {
+		return DefaultMaxUncompressedBatchSize
+	}
+	return c.ArbitrumChainParams.MaxUncompressedBatchSize
+}
+
 func (c *ChainConfig) checkArbitrumCompatible(newcfg *ChainConfig, head *big.Int) *ConfigCompatError {
 	if c.IsArbitrum() != newcfg.IsArbitrum() {
 		// This difference applies to the entire chain, so report that the genesis block is where the difference appears.
@@ -98,6 +111,9 @@ func (c *ChainConfig) checkArbitrumCompatible(newcfg *ChainConfig, head *big.Int
 	newArb := &newcfg.ArbitrumChainParams
 	if cArb.GenesisBlockNum != newArb.GenesisBlockNum {
 		return newBlockCompatError("genesisblocknum", new(big.Int).SetUint64(cArb.GenesisBlockNum), new(big.Int).SetUint64(newArb.GenesisBlockNum))
+	}
+	if cArb.MaxUncompressedBatchSize != newArb.MaxUncompressedBatchSize {
+		return newBlockCompatError("maxuncompressedbatchsize", new(big.Int).SetUint64(cArb.MaxUncompressedBatchSize), new(big.Int).SetUint64(newArb.MaxUncompressedBatchSize))
 	}
 	return nil
 }

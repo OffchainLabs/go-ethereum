@@ -130,6 +130,10 @@ func TestFindTxInBlockBody(t *testing.T) {
 		Value:    big.NewInt(5),
 		Data:     []byte{0x11, 0x11, 0x11},
 	})
+	arbitrumLegacyTx, err := types.NewArbitrumLegacyTx(tx1, common.HexToHash("0xdeadbeef"), 0, 0, new(common.Address))
+	if err != nil {
+		t.Fatalf("Failed to create ArbitrumLegacyTx, err: %v", err)
+	}
 	tx2 := types.NewTx(&types.AccessListTx{
 		Nonce:    1,
 		GasPrice: big.NewInt(1),
@@ -198,7 +202,7 @@ func TestFindTxInBlockBody(t *testing.T) {
 		},
 	})
 
-	txs := []*types.Transaction{tx1, tx2, tx3, tx4, tx5}
+	txs := []*types.Transaction{tx1, arbitrumLegacyTx, tx2, tx3, tx4, tx5}
 
 	block := types.NewBlock(&types.Header{Number: big.NewInt(314)}, &types.Body{Transactions: txs}, nil, newTestHasher())
 	db := NewMemoryDatabase()

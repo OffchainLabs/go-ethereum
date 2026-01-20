@@ -21,18 +21,18 @@ package crypto
 import (
 	"sync"
 
+	"github.com/ethereum/go-ethereum/arbcrypto"
 	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/crypto/sha3"
 )
 
 // NewKeccakState creates a new KeccakState
 func NewKeccakState() KeccakState {
-	return sha3.NewLegacyKeccak256().(KeccakState)
+	return arbcrypto.NewLegacyKeccak256().(KeccakState)
 }
 
 var hasherPool = sync.Pool{
 	New: func() any {
-		return sha3.NewLegacyKeccak256().(KeccakState)
+		return arbcrypto.NewLegacyKeccak256().(KeccakState)
 	},
 }
 

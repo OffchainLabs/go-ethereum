@@ -19,13 +19,12 @@ package state
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"maps"
 	"math/big"
-	"slices"
-
-	"errors"
 	"runtime"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -216,6 +215,24 @@ func (s *StateDB) Recording() bool {
 
 var ErrArbTxFilter error = errors.New("internal error")
 
+// AddressCheckerState tracks address filtering for a single transaction.
+// Implementations manage their own synchronization (sync, WaitGroup, channels, etc).
+type AddressCheckerState interface {
+	// TouchAddress records an address access and checks if it should be filtered.
+	TouchAddress(addr common.Address)
+
+	// IsFiltered returns whether any touched address was filtered.
+	// Blocks until all pending checks complete (implementation-specific).
+	IsFiltered() bool
+}
+
+// AddressChecker creates per-tx state instances for address filtering.
+// The checker itself is stateless and can be shared across StateDBs.
+type AddressChecker interface {
+	// NewTxState creates fresh state for a new transaction.
+	NewTxState() AddressCheckerState
+}
+
 type ArbitrumExtraData struct {
 	unexpectedBalanceDelta *big.Int                      // total balance change across all accounts
 	userWasms              UserWasms                     // user wasms encountered during execution
@@ -224,6 +241,9 @@ type ArbitrumExtraData struct {
 	activatedWasms         map[common.Hash]ActivatedWasm // newly activated WASMs
 	recentWasms            RecentWasms
 	arbTxFilter            bool
+
+	addressChecker      AddressChecker      // shared, stateless checker factory
+	addressCheckerState AddressCheckerState // per-tx state, created in SetTxContext
 }
 
 func (s *StateDB) SetArbFinalizer(f func(*ArbitrumExtraData)) {
@@ -330,8 +350,8 @@ func (s *StateDB) RecordEvictWasm(wasm EvictWasm) {
 	s.journal.entries = append(s.journal.entries, wasm)
 }
 
-func (s *StateDB) GetRecentWasms() RecentWasms {
-	return s.arbExtraData.recentWasms
+func (s *StateDB) GetRecentWasms() *RecentWasms {
+	return &s.arbExtraData.recentWasms
 }
 
 // Type for managing recent program access.
@@ -346,7 +366,7 @@ func NewRecentWasms() RecentWasms {
 }
 
 // Inserts a new item, returning true if already present.
-func (p RecentWasms) Insert(item common.Hash, retain uint16) bool {
+func (p *RecentWasms) Insert(item common.Hash, retain uint16) bool {
 	if p.cache == nil {
 		cache := lru.NewBasicLRU[common.Hash, struct{}](int(retain))
 		p.cache = &cache

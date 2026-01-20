@@ -321,7 +321,7 @@ func (s *hookedStateDB) RecordEvictWasm(wasm EvictWasm) {
 	s.inner.RecordEvictWasm(wasm)
 }
 
-func (s *hookedStateDB) GetRecentWasms() RecentWasms {
+func (s *hookedStateDB) GetRecentWasms() *RecentWasms {
 	return s.inner.GetRecentWasms()
 }
 
@@ -359,6 +359,18 @@ func (s *hookedStateDB) ClearTxFilter() {
 
 func (s *hookedStateDB) IsTxFiltered() bool {
 	return s.inner.IsTxFiltered()
+}
+
+func (s *hookedStateDB) SetAddressChecker(checker AddressChecker) {
+	s.inner.SetAddressChecker(checker)
+}
+
+func (s *hookedStateDB) TouchAddress(addr common.Address) {
+	s.inner.TouchAddress(addr)
+}
+
+func (s *hookedStateDB) IsAddressFiltered() bool {
+	return s.inner.IsAddressFiltered()
 }
 
 func (s *hookedStateDB) Recording() bool {
