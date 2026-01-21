@@ -5,9 +5,7 @@ package arbcrypto
 import (
 	"hash"
 	"io"
-	"sync"
-
-	"golang.org/x/crypto/sha3"
+	"unsafe"
 )
 
 func NewLegacyKeccak256() hash.Hash {
@@ -41,17 +39,20 @@ func (s *simpleHashBuffer) BlockSize() int {
 	return (1600 - 512) / 8 // Keccak256 rate in bytes: sponge size 1600 bits - capacity 512 bits. Copied from sha3.
 }
 
-var realHasherPool = sync.Pool{
-	New: func() any {
-		return sha3.NewLegacyKeccak256()
-	},
-}
-
 func (s *simpleHashBuffer) Read(bytes []byte) (int, error) {
-	d := realHasherPool.Get().(hash.Hash)
-	defer realHasherPool.Put(d)
+	if len(bytes) < 32 {
+		return 0, io.ErrShortBuffer
+	}
 
-	d.Reset()
-	d.Write(s.buffer)
-	return d.(io.Reader).Read(bytes)
+	inputLen := len(s.buffer)
+	inputPtr := unsafe.Pointer(nil)
+	if inputLen > 0 {
+		inputPtr = unsafe.Pointer(&s.buffer[0])
+	}
+
+	outsourcedKeccak(inputPtr, uint32(inputLen), unsafe.Pointer(&bytes[0]))
+	return 32, nil
 }
+
+//go:wasmimport arbkeccak keccak256
+func outsourcedKeccak(inBuf unsafe.Pointer, inLen uint32, outBuf unsafe.Pointer)
