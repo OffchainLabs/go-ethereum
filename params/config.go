@@ -431,10 +431,9 @@ var NetworkNames = map[string]string{
 
 // Arbitrum
 // ArbOSInit defines some initialization values for ArbOS state.
-// lint:require-exhaustive-initialization
 type ArbOSInit struct {
-	NativeTokenSupplyManagementEnabled bool `json:"nativeTokenSupplyManagementEnabled"`
-	TransactionFilteringEnabled        bool `json:"transactionFilteringEnabled"`
+	NativeTokenSupplyManagementEnabled bool     `json:"nativeTokenSupplyManagementEnabled"`
+	TransactionFilteringEnabled        bool     `json:"transactionFilteringEnabled"`
 	InitialL1BaseFee                   *big.Int `json:"initialL1BaseFee,omitempty"`
 	SerializedChainConfig              string   `json:"serializedChainConfig,omitempty"`
 }
