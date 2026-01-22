@@ -4,7 +4,6 @@ package arbcrypto
 
 import (
 	"hash"
-	"io"
 	"unsafe"
 )
 
@@ -39,9 +38,15 @@ func (s *simpleHashBuffer) BlockSize() int {
 	return (1600 - 512) / 8 // Keccak256 rate in bytes: sponge size 1600 bits - capacity 512 bits. Copied from sha3.
 }
 
-func (s *simpleHashBuffer) Read(bytes []byte) (int, error) {
-	if len(bytes) < 32 {
-		return 0, io.ErrShortBuffer
+func (s *simpleHashBuffer) Read(out []byte) (int, error) {
+	if len(out) < 32 {
+		hashBuf := make([]byte, 32)
+		n, err := s.Read(hashBuf)
+		if err != nil {
+			return n, err
+		}
+		copy(out, hashBuf)
+		return len(out), nil
 	}
 
 	inputLen := len(s.buffer)
@@ -50,7 +55,7 @@ func (s *simpleHashBuffer) Read(bytes []byte) (int, error) {
 		inputPtr = unsafe.Pointer(&s.buffer[0])
 	}
 
-	outsourcedKeccak(inputPtr, uint32(inputLen), unsafe.Pointer(&bytes[0]))
+	outsourcedKeccak(inputPtr, uint32(inputLen), unsafe.Pointer(&out[0]))
 	return 32, nil
 }
 
