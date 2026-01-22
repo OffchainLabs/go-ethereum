@@ -4,7 +4,6 @@ package arbcrypto
 
 import (
 	"hash"
-	"io"
 	"unsafe"
 )
 
@@ -41,7 +40,13 @@ func (s *simpleHashBuffer) BlockSize() int {
 
 func (s *simpleHashBuffer) Read(out []byte) (int, error) {
 	if len(out) < 32 {
-		return 0, io.ErrShortBuffer
+		hashBuf := make([]byte, 32)
+		n, err := s.Read(hashBuf)
+		if err != nil {
+			return n, err
+		}
+		copy(out, hashBuf)
+		return len(out), nil
 	}
 
 	inputLen := len(s.buffer)
