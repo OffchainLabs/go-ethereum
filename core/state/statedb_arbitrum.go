@@ -62,41 +62,46 @@ var (
 
 type ActivatedWasm map[rawdb.WasmTarget][]byte
 
-// checks if the bytecode is a Stylus source (program or fragment)
-func IsStylusSource(b []byte) bool {
-	return IsStylusProgram(b) || IsStylusProgramFragment(b)
+// IsStylusComponentPrefix reports whether the bytecode starts with any
+// Stylus prefix (program: classic or root, or fragment).
+func IsStylusComponentPrefix(b []byte) bool {
+	return IsStylusDeployableProgramPrefix(b) || IsStylusFragmentPrefix(b)
 }
 
-// checks if a valid Stylus prefix is present
-func IsStylusProgram(b []byte) bool {
-	return IsStylusProgramClassic(b) || IsStylusProgramRoot(b)
+// IsStylusDeployableProgramPrefix reports whether the bytecode starts with a
+// deployable Stylus program prefix (classic program or root program).
+func IsStylusDeployableProgramPrefix(b []byte) bool {
+	return IsStylusClassicProgramPrefix(b) || IsStylusRootProgramPrefix(b)
 }
 
-// checks if a valid Stylus classic prefix is present
-func IsStylusProgramClassic(b []byte) bool {
+// IsStylusClassicProgramPrefix reports whether the bytecode starts with a
+// classic Stylus program prefix.
+func IsStylusClassicProgramPrefix(b []byte) bool {
 	return len(b) > len(StylusDiscriminant) && bytes.HasPrefix(b, StylusDiscriminant)
 }
 
-// checks if a valid Stylus fragment prefix is present
-func IsStylusProgramFragment(b []byte) bool {
+// IsStylusFragmentPrefix reports whether the bytecode starts with a
+// Stylus fragment prefix.
+func IsStylusFragmentPrefix(b []byte) bool {
 	return len(b) > len(StylusFragmentsDiscriminant) && bytes.HasPrefix(b, StylusFragmentsDiscriminant)
 }
 
-// checks if a valid Stylus root prefix is present
-func IsStylusProgramRoot(b []byte) bool {
+// IsStylusRootProgramPrefix reports whether the bytecode starts with a
+// Stylus root program prefix.
+func IsStylusRootProgramPrefix(b []byte) bool {
 	return len(b) > len(StylusRootDiscriminant) && bytes.HasPrefix(b, StylusRootDiscriminant)
 }
 
 // strips the Stylus header from a contract, returning the dictionary used
 func StripStylusPrefix(b []byte) ([]byte, byte, error) {
-	if !IsStylusProgramClassic(b) {
+	if !IsStylusClassicProgramPrefix(b) {
 		return nil, 0, errors.New("specified bytecode is not a Stylus program")
 	}
 	return b[4:], b[3], nil
 }
 
 func StripStylusFragmentPrefix(b []byte) ([]byte, error) {
-	if !IsStylusProgramFragment(b) {
+	if !IsStylusFragmentPrefix(b) {
 		return nil, errors.New("specified bytecode is not a Stylus program fragment")
 	}
 	return b[3:], nil
@@ -109,7 +114,7 @@ type StylusRoot struct {
 }
 
 func NewStylusRoot(b []byte) (*StylusRoot, error) {
-	if !IsStylusProgramRoot(b) {
+	if !IsStylusRootProgramPrefix(b) {
 		return nil, errors.New("specified bytecode is not a Stylus program root")
 	}
 
