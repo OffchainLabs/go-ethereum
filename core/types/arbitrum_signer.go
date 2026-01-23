@@ -28,6 +28,7 @@ var ArbFilteredTransactionsManagerAddress = common.HexToAddress("0x74")
 var NodeInterfaceAddress = common.HexToAddress("0xc8")
 var NodeInterfaceDebugAddress = common.HexToAddress("0xc9")
 var ArbDebugAddress = common.HexToAddress("0xff")
+var L1PricerFundsPoolAddress = common.HexToAddress("0xA4B00000000000000000000000000000000000f6")
 
 type arbitrumSigner struct{ Signer }
 
