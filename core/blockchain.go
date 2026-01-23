@@ -190,10 +190,14 @@ type BlockChainConfig struct {
 	SnapshotRestoreMaxGas uint64 // Rollback up to this much gas to restore snapshot (otherwise snapshot recalculated from nothing)
 	HeadRewindBlocksLimit uint64 // Rollback up to this many blocks to restore chain head (0 = preserve default upstream behaviour), only for HashScheme
 
-	// Arbitrum: configure GC window
+	// Arbitrum:
+	// configure GC window
 	TriesInMemory             uint64        // Height difference before which a trie may not be garbage-collected
 	TrieRetention             time.Duration // Time limit before which a trie may not be garbage-collected
 	TrieTimeLimitRandomOffset time.Duration // Range of random offset of each commit due to TrieTimeLimit period
+	// configure write batch size thresholds
+	TrieCapBatchSize    uint32 // threshold used during capping triedb size
+	TrieCommitBatchSize uint32 // threshold used during committing triedb to disk
 
 	MaxNumberOfBlocksToSkipStateSaving uint32
 	MaxAmountOfGasToSkipStateSaving    uint64
@@ -275,6 +279,10 @@ func (cfg *BlockChainConfig) triedbConfig(isVerkle bool) *triedb.Config {
 	}
 	if cfg.StateScheme == rawdb.HashScheme {
 		config.HashDB = &hashdb.Config{
+			// Arbitrum:
+			IdealCapBatchSize:    cfg.TrieCapBatchSize,
+			IdealCommitBatchSize: cfg.TrieCommitBatchSize,
+
 			CleanCacheSize: cfg.TrieCleanLimit * 1024 * 1024,
 		}
 	}
