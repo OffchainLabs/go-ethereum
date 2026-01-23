@@ -132,7 +132,7 @@ func testPrestateTracer(tracerName string, dirPath string, t *testing.T) {
 				t.Fatalf("failed to marshal test: %v", err)
 			}
 			if string(want) != string(res) {
-				t.Fatalf("trace mismatch\n have: %v\n want: %v\n", string(res), string(want))
+				t.Fatalf("trace mismatch\nfile name: %s\n have: %v\n want: %v\n", file.Name(), string(res), string(want))
 			}
 		})
 	}
