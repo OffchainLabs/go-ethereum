@@ -8,7 +8,7 @@ import (
 
 var ArbosAddress = common.HexToAddress("0xa4b05")
 var ArbosStateAddress = common.HexToAddress("0xA4B05FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
-var FilteredTransactionsStateAddress = common.HexToAddress("0xA4B0600000000000000000000000000000000000")
+var FilteredTransactionsStateAddress = common.HexToAddress("0xA4B0500000000000000000000000000000000001")
 var ArbSysAddress = common.HexToAddress("0x64")
 var ArbInfoAddress = common.HexToAddress("0x65")
 var ArbAddressTableAddress = common.HexToAddress("0x66")
