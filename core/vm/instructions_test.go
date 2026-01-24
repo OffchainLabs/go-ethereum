@@ -1013,7 +1013,7 @@ func TestOpCLZ(t *testing.T) {
 func runSelfdestruct6780(t *testing.T, code []byte) error {
 	t.Helper()
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-	evm := NewEVM(BlockContext{}, statedb, params.TestChainConfig, Config{})
+	evm := NewEVM(BlockContext{ArbOSVersion: params.ArbosVersion_StylusContractLimit}, statedb, params.TestChainConfig, Config{})
 	actingAddress := common.Address{0x1}
 	beneficiary := common.Address{0x2}
 

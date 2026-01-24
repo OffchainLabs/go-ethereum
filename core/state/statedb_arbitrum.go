@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -62,9 +63,15 @@ var (
 
 type ActivatedWasm map[rawdb.WasmTarget][]byte
 
-// IsStylusComponentPrefix reports whether the bytecode starts with any
-// Stylus prefix (program: classic or root, or fragment).
-func IsStylusComponentPrefix(b []byte) bool {
+// IsStylusComponentPrefix reports whether the bytecode starts with a Stylus
+// component prefix (classic program, or root/fragment when supported).
+func IsStylusComponentPrefix(b []byte, arbosVersion uint64) bool {
+	if arbosVersion < params.ArbosVersion_Stylus {
+		return false
+	}
+	if arbosVersion < params.ArbosVersion_StylusContractLimit {
+		return IsStylusClassicProgramPrefix(b)
+	}
 	return IsStylusDeployableProgramPrefix(b) || IsStylusFragmentPrefix(b)
 }
 
