@@ -234,14 +234,6 @@ func (s *StateDB) IsAddressFiltered() bool {
 	return false
 }
 
-func (s *StateDB) SetTxOnchainFiltered(filtered bool) {
-	s.arbExtraData.arbTxOnchainFiltered = filtered
-}
-
-func (s *StateDB) IsTxOnchainFiltered() bool {
-	return s.arbExtraData.arbTxOnchainFiltered
-}
-
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
@@ -1134,9 +1126,6 @@ func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 	// Arbitrum: clear memory charging state for new tx
 	s.arbExtraData.openWasmPages = 0
 	s.arbExtraData.everWasmPages = 0
-
-	// Arbitrum: reset onchain filtered flag for new tx
-	s.arbExtraData.arbTxOnchainFiltered = false
 
 	// Arbitrum: create fresh address checker state for new tx
 	if s.arbExtraData.addressChecker != nil {
