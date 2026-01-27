@@ -59,6 +59,7 @@ type TxProcessingHook interface {
 	MsgIsNonMutating() bool
 	ExecuteWASM(scope *ScopeContext, input []byte, evm *EVM) ([]byte, error)
 	IsCalldataPricingIncreaseEnabled() bool
+	IsTxOnchainFiltered() bool
 }
 
 type DefaultTxProcessor struct {
@@ -116,3 +117,5 @@ func (p DefaultTxProcessor) ExecuteWASM(_ *ScopeContext, _ []byte, evm *EVM) ([]
 func (p DefaultTxProcessor) IsCalldataPricingIncreaseEnabled() bool {
 	return true
 }
+
+func (p DefaultTxProcessor) IsTxOnchainFiltered() bool { return false }
