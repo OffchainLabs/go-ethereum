@@ -373,10 +373,6 @@ func (s *hookedStateDB) IsAddressFiltered() bool {
 	return s.inner.IsAddressFiltered()
 }
 
-func (s *hookedStateDB) IsTxOnchainFiltered() bool {
-	return s.inner.IsTxOnchainFiltered()
-}
-
 func (s *hookedStateDB) Recording() bool {
 	return s.inner.Recording()
 }
