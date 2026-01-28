@@ -26,4 +26,4 @@ func SigToPub(hash, sig []byte) (*secp256k1.PublicKey, error) {
 }
 
 //go:wasmimport arbcrypto ecrecovery
-func outsourcedECRecovery(hash, sig, pub unsafe.Pointer) uint32
+func outsourcedECRecovery(hash, sig, pub unsafe.Pointer) uint8
