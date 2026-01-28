@@ -59,5 +59,5 @@ func (s *simpleHashBuffer) Read(out []byte) (int, error) {
 	return 32, nil
 }
 
-//go:wasmimport arbkeccak keccak256
+//go:wasmimport arbcrypto keccak256
 func outsourcedKeccak(inBuf unsafe.Pointer, inLen uint32, outBuf unsafe.Pointer)
