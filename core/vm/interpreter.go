@@ -168,7 +168,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 	}
 
 	// Arbitrum: handle Stylus programs
-	if evm.chainRules.IsStylus && state.IsStylusProgram(contract.Code) {
+	if evm.chainRules.IsStylus && state.IsStylusDeployableProgramPrefix(contract.Code) {
 		ret, err = evm.ProcessingHook.ExecuteWASM(callContext, input, evm)
 		return
 	}

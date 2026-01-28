@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -1006,5 +1007,77 @@ func TestOpCLZ(t *testing.T) {
 		if got := result.Uint64(); got != tc.want {
 			t.Fatalf("clz(%q) = %d; want %d", tc.inputHex, got, tc.want)
 		}
+	}
+}
+
+func runSelfdestruct6780(t *testing.T, code []byte) error {
+	t.Helper()
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	evm := NewEVM(BlockContext{ArbOSVersion: params.ArbosVersion_StylusContractLimit}, statedb, params.TestChainConfig, Config{})
+	actingAddress := common.Address{0x1}
+	beneficiary := common.Address{0x2}
+
+	statedb.CreateAccount(actingAddress)
+	statedb.CreateAccount(beneficiary)
+	statedb.SetBalance(actingAddress, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
+	statedb.SetCode(actingAddress, code, tracing.CodeChangeUnspecified)
+
+	stack := newstack()
+	stack.push(new(uint256.Int).SetBytes(beneficiary.Bytes()))
+	contract := NewContract(common.Address{}, actingAddress, uint256.NewInt(0), 0, nil)
+	pc := uint64(0)
+	_, err := opSelfdestruct6780(&pc, evm, &ScopeContext{Memory: NewMemory(), Stack: stack, Contract: contract})
+	return err
+}
+
+func TestOpSelfdestruct6780StylusComponentReverts(t *testing.T) {
+	tests := []struct {
+		name string
+		code []byte
+	}{
+		{
+			name: "classic",
+			code: state.NewStylusPrefix(0x01),
+		},
+		{
+			name: "fragment",
+			code: append(state.NewStylusFragmentPrefix(), 0x01),
+		},
+		{
+			name: "root",
+			code: state.NewStylusRootPrefix(0x02),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := runSelfdestruct6780(t, tt.code); err != ErrExecutionReverted {
+				t.Fatalf("expected ErrExecutionReverted, got %v", err)
+			}
+		})
+	}
+}
+
+func TestOpSelfdestruct6780NonStylusCodeProceeds(t *testing.T) {
+	tests := []struct {
+		name string
+		code []byte
+	}{
+		{
+			name: "evm-code",
+			code: []byte{0x60, 0x00},
+		},
+		{
+			name: "short-fragment-prefix",
+			code: state.NewStylusFragmentPrefix(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := runSelfdestruct6780(t, tt.code); err != errStopToken {
+				t.Fatalf("expected errStopToken, got %v", err)
+			}
+		})
 	}
 }
