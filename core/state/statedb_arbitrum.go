@@ -66,18 +66,21 @@ type ActivatedWasm map[rawdb.WasmTarget][]byte
 // IsStylusComponentPrefix reports whether the bytecode starts with a Stylus
 // component prefix (classic program, or root/fragment when supported).
 func IsStylusComponentPrefix(b []byte, arbosVersion uint64) bool {
+	if arbosVersion < params.ArbosVersion_StylusContractLimit {
+		return IsStylusDeployableProgramPrefix(b, arbosVersion)
+	}
+	return IsStylusDeployableProgramPrefix(b, arbosVersion) || IsStylusFragmentPrefix(b)
+}
+
+// IsStylusDeployableProgramPrefix reports whether the bytecode starts with a
+// deployable Stylus program prefix (classic program, or root program when supported).
+func IsStylusDeployableProgramPrefix(b []byte, arbosVersion uint64) bool {
 	if arbosVersion < params.ArbosVersion_Stylus {
 		return false
 	}
 	if arbosVersion < params.ArbosVersion_StylusContractLimit {
 		return IsStylusClassicProgramPrefix(b)
 	}
-	return IsStylusDeployableProgramPrefix(b) || IsStylusFragmentPrefix(b)
-}
-
-// IsStylusDeployableProgramPrefix reports whether the bytecode starts with a
-// deployable Stylus program prefix (classic program or root program).
-func IsStylusDeployableProgramPrefix(b []byte) bool {
 	return IsStylusClassicProgramPrefix(b) || IsStylusRootProgramPrefix(b)
 }
 
