@@ -24,6 +24,8 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/holiman/uint256"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -39,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
-	"github.com/holiman/uint256"
 )
 
 //go:generate go run github.com/fjl/gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -75,7 +76,8 @@ type Genesis struct {
 	BlobGasUsed   *uint64     `json:"blobGasUsed"`   // EIP-4844
 
 	// Arbitrum
-	ArbOSInit *params.ArbOSInit `json:"arbOSInit,omitempty"`
+	SerializedChainConfig string            `json:"serializedConfig,omitempty"`
+	ArbOSInit             *params.ArbOSInit `json:"arbOSInit,omitempty"`
 }
 
 // copy copies the genesis.
