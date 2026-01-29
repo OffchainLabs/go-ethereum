@@ -76,6 +76,21 @@ func (result *ExecutionResult) Revert() []byte {
 	return common.CopyBytes(result.ReturnData)
 }
 
+// ErrFilteredTx is returned when a transaction was found in the onchain filter
+// and executed as a no-op (nonce incremented, all gas consumed). It wraps
+// ErrExecutionReverted so receipt status checks work correctly.
+type ErrFilteredTx struct {
+	TxHash common.Hash
+}
+
+func (e *ErrFilteredTx) Error() string {
+	return fmt.Sprintf("transaction %s in onchain filter", e.TxHash.Hex())
+}
+
+func (e *ErrFilteredTx) Unwrap() error {
+	return vm.ErrExecutionReverted
+}
+
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
 func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool) (uint64, error) {
 	multiGas, err := IntrinsicMultiGas(data, accessList, authList, isContractCreation, isHomestead, isEIP2028, isEIP3860)
@@ -828,7 +843,12 @@ func (st *stateTransition) handleRevertedTx(msg *Message, usedMultiGas multigas.
 		st.gasRemaining = 0
 		usedMultiGas = usedMultiGas.SaturatingAdd(multigas.ComputationGas(usedGas))
 
-		return usedMultiGas, vm.ErrExecutionReverted
+		// Remove the tx hash from the filter now that we've handled it.
+		// We return ErrFilteredTx so PostTxFilter knows this tx was already
+		// processed and won't try to halt the delayed sequencer.
+		st.evm.ProcessingHook.RemoveFilteredTx(txHash)
+
+		return usedMultiGas, &ErrFilteredTx{TxHash: txHash}
 	}
 
 	return usedMultiGas, nil
