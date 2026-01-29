@@ -9,11 +9,31 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
+type ecRecoveryStatus uint32
+
+const (
+	success ecRecoveryStatus = iota
+	invalidHashLength
+	invalidSigLength
+	invalidRecoveryId
+	recoveryFailed
+)
+
 func SigToPub(hash, sig []byte) (*secp256k1.PublicKey, error) {
 	pubkeyBytes := make([]byte, 65)
-	switch outsourcedECRecovery(sliceToPointer(hash), uint32(len(hash)), sliceToPointer(sig), uint32(len(sig)), sliceToPointer(pubkeyBytes)) {
-	case 0:
+	result := outsourcedECRecovery(sliceToPointer(hash), uint32(len(hash)), sliceToPointer(sig), uint32(len(sig)), sliceToPointer(pubkeyBytes))
+
+	switch ecRecoveryStatus(result) {
+	case success:
 		return secp256k1.ParsePubKey(pubkeyBytes)
+	case invalidHashLength:
+		return nil, errors.New("invalid hash length")
+	case invalidSigLength:
+		return nil, errors.New("invalid signature length")
+	case invalidRecoveryId:
+		return nil, errors.New("invalid recovery id")
+	case recoveryFailed:
+		return nil, errors.New("public key recovery failed")
 	default:
 		return nil, errors.New("ecrecovery failed")
 	}
