@@ -817,10 +817,10 @@ func (st *stateTransition) handleRevertedTx(msg *Message, usedMultiGas multigas.
 		return usedMultiGas, vm.ErrExecutionReverted
 	}
 
-	// Check if tx is in the onchain filter.
+	// Check if tx is in the onchain filter (gas-free read).
 	// This handles delayed messages that were flagged by address filter,
 	// then added to onchain filter list. We skip execution but consume gas.
-	if st.evm.ProcessingHook.IsTxOnchainFiltered() {
+	if st.evm.ProcessingHook.IsFilteredTx(txHash) {
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
 
 		// Consume all remaining gas as punishment
