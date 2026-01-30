@@ -620,19 +620,19 @@ func EnableVerkleAtGenesis(db ethdb.Database, genesis *Genesis) (bool, error) {
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.
 func DefaultGenesisBlock() *Genesis {
-	return initSerializedConfigFromConfig(&Genesis{
+	return &Genesis{
 		Config:     params.MainnetChainConfig,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   5000,
 		Difficulty: big.NewInt(17179869184),
 		Alloc:      decodePrealloc(mainnetAllocData),
-	})
+	}
 }
 
 // DefaultSepoliaGenesisBlock returns the Sepolia network genesis block.
 func DefaultSepoliaGenesisBlock() *Genesis {
-	return initSerializedConfigFromConfig(&Genesis{
+	return &Genesis{
 		Config:     params.SepoliaChainConfig,
 		Nonce:      0,
 		ExtraData:  []byte("Sepolia, Athens, Attica, Greece!"),
@@ -640,31 +640,31 @@ func DefaultSepoliaGenesisBlock() *Genesis {
 		Difficulty: big.NewInt(0x20000),
 		Timestamp:  1633267481,
 		Alloc:      decodePrealloc(sepoliaAllocData),
-	})
+	}
 }
 
 // DefaultHoleskyGenesisBlock returns the Holesky network genesis block.
 func DefaultHoleskyGenesisBlock() *Genesis {
-	return initSerializedConfigFromConfig(&Genesis{
+	return &Genesis{
 		Config:     params.HoleskyChainConfig,
 		Nonce:      0x1234,
 		GasLimit:   0x17d7840,
 		Difficulty: big.NewInt(0x01),
 		Timestamp:  1695902100,
 		Alloc:      decodePrealloc(holeskyAllocData),
-	})
+	}
 }
 
 // DefaultHoodiGenesisBlock returns the Hoodi network genesis block.
 func DefaultHoodiGenesisBlock() *Genesis {
-	return initSerializedConfigFromConfig(&Genesis{
+	return &Genesis{
 		Config:     params.HoodiChainConfig,
 		Nonce:      0x1234,
 		GasLimit:   0x2255100,
 		Difficulty: big.NewInt(0x01),
 		Timestamp:  1742212800,
 		Alloc:      decodePrealloc(hoodiAllocData),
-	})
+	}
 }
 
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block.
@@ -673,7 +673,7 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 	config := *params.AllDevChainProtocolChanges
 
 	// Assemble and return the genesis with the precompiles and faucet pre-funded
-	genesis := initSerializedConfigFromConfig(&Genesis{
+	genesis := &Genesis{
 		Config:     &config,
 		GasLimit:   gasLimit,
 		BaseFee:    big.NewInt(params.InitialBaseFee),
@@ -703,7 +703,7 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 			params.WithdrawalQueueAddress:    {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
 			params.ConsolidationQueueAddress: {Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0},
 		},
-	})
+	}
 	if faucet != nil {
 		genesis.Alloc[*faucet] = types.Account{Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))}
 	}
@@ -741,16 +741,4 @@ func decodePrealloc(data string) types.GenesisAlloc {
 		ga[common.BigToAddress(account.Addr)] = acc
 	}
 	return ga
-}
-
-func initSerializedConfigFromConfig(g *Genesis) *Genesis {
-	if g.Config == nil {
-		panic("genesis config is nil")
-	}
-	serialized, err := json.Marshal(g.Config)
-	if err != nil {
-		panic(err)
-	}
-	g.SerializedConfig = string(serialized)
-	return g
 }
