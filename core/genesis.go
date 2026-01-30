@@ -76,8 +76,8 @@ type Genesis struct {
 	BlobGasUsed   *uint64     `json:"blobGasUsed"`   // EIP-4844
 
 	// Arbitrum
-	SerializedConfig string            `json:"serializedConfig,omitempty"`
-	ArbOSInit        *params.ArbOSInit `json:"arbOSInit,omitempty"`
+	SerializedChainConfig string            `json:"serializedChainConfig,omitempty"`
+	ArbOSInit             *params.ArbOSInit `json:"arbOSInit,omitempty"`
 }
 
 // copy copies the genesis.
