@@ -843,11 +843,6 @@ func (st *stateTransition) handleRevertedTx(msg *Message, usedMultiGas multigas.
 		st.gasRemaining = 0
 		usedMultiGas = usedMultiGas.SaturatingAdd(multigas.ComputationGas(usedGas))
 
-		// Remove the tx hash from the filter now that we've handled it.
-		// We return ErrFilteredTx so PostTxFilter knows this tx was already
-		// processed and won't try to halt the delayed sequencer.
-		st.evm.ProcessingHook.RemoveFilteredTx(txHash)
-
 		return usedMultiGas, &ErrFilteredTx{TxHash: txHash}
 	}
 

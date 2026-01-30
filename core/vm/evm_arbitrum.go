@@ -60,7 +60,6 @@ type TxProcessingHook interface {
 	ExecuteWASM(scope *ScopeContext, input []byte, evm *EVM) ([]byte, error)
 	IsCalldataPricingIncreaseEnabled() bool
 	IsFilteredTx(txHash common.Hash) bool
-	RemoveFilteredTx(txHash common.Hash)
 }
 
 type DefaultTxProcessor struct {
@@ -120,5 +119,3 @@ func (p DefaultTxProcessor) IsCalldataPricingIncreaseEnabled() bool {
 }
 
 func (p DefaultTxProcessor) IsFilteredTx(common.Hash) bool { return false }
-
-func (p DefaultTxProcessor) RemoveFilteredTx(common.Hash) {}
