@@ -45,6 +45,10 @@ func (evm *EVM) JumpDests() JumpDestCache {
 type TxProcessingHook interface {
 	StartTxHook() (bool, multigas.MultiGas, error, []byte) // return 4-tuple rather than *struct to avoid an import cycle
 	GasChargingHook(gasRemaining *uint64, intrinsicGas uint64) (common.Address, multigas.MultiGas, error)
+	// RevertedTxHook handles pre-recorded reverted transactions and filtered transactions.
+	// Returns updated multigas and an error if the tx should not execute normally.
+	// If error is non-nil, the transaction should be treated as reverted.
+	RevertedTxHook(gasRemaining *uint64, usedMultiGas multigas.MultiGas) (multigas.MultiGas, error)
 	PushContract(contract *Contract)
 	PopContract()
 	HeldGas() uint64
@@ -59,7 +63,6 @@ type TxProcessingHook interface {
 	MsgIsNonMutating() bool
 	ExecuteWASM(scope *ScopeContext, input []byte, evm *EVM) ([]byte, error)
 	IsCalldataPricingIncreaseEnabled() bool
-	IsFilteredTx(txHash common.Hash) bool
 }
 
 type DefaultTxProcessor struct {
@@ -118,4 +121,6 @@ func (p DefaultTxProcessor) IsCalldataPricingIncreaseEnabled() bool {
 	return true
 }
 
-func (p DefaultTxProcessor) IsFilteredTx(common.Hash) bool { return false }
+func (p DefaultTxProcessor) RevertedTxHook(_ *uint64, usedMultiGas multigas.MultiGas) (multigas.MultiGas, error) {
+	return usedMultiGas, nil
+}

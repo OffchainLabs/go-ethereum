@@ -700,7 +700,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// Check against hardcoded transaction hashes that have previously reverted, so instead
 	// of executing the transaction we just update state nonce and remaining gas to avoid
 	// state divergence.
-	usedMultiGas, vmerr = st.handleRevertedTx(msg, usedMultiGas)
+	usedMultiGas, vmerr = st.evm.ProcessingHook.RevertedTxHook(&st.gasRemaining, usedMultiGas)
 
 	// vmerr is only not nil when we find a previous reverted transaction
 	if vmerr == nil {
@@ -809,44 +809,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		TopLevelDeployed: deployedContract,
 		UsedMultiGas:     usedMultiGas,
 	}, nil
-}
-
-// handleRevertedTx attempts to process a reverted transaction. It returns
-// ErrExecutionReverted with the updated multiGas if a matching reverted
-// tx is found; otherwise, it returns nil error with unchangedmultiGas
-func (st *stateTransition) handleRevertedTx(msg *Message, usedMultiGas multigas.MultiGas) (multigas.MultiGas, error) {
-	if msg.Tx == nil {
-		return usedMultiGas, nil
-	}
-
-	txHash := msg.Tx.Hash()
-	if l2GasUsed, ok := RevertedTxGasUsed[txHash]; ok {
-		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
-
-		// Calculate adjusted gas since l2GasUsed contains params.TxGas
-		adjustedGas := l2GasUsed - params.TxGas
-		st.gasRemaining -= adjustedGas
-
-		// Update multigas and return ErrExecutionReverted error
-		usedMultiGas = usedMultiGas.SaturatingAdd(multigas.ComputationGas(adjustedGas))
-		return usedMultiGas, vm.ErrExecutionReverted
-	}
-
-	// Check if tx is in the onchain filter (gas-free read).
-	// This handles delayed messages that were flagged by address filter,
-	// then added to onchain filter list. We skip execution but consume gas.
-	if st.evm.ProcessingHook.IsFilteredTx(txHash) {
-		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
-
-		// Consume all remaining gas as punishment
-		usedGas := st.gasRemaining
-		st.gasRemaining = 0
-		usedMultiGas = usedMultiGas.SaturatingAdd(multigas.ComputationGas(usedGas))
-
-		return usedMultiGas, &ErrFilteredTx{TxHash: txHash}
-	}
-
-	return usedMultiGas, nil
 }
 
 // validateAuthorization validates an EIP-7702 authorization against the state.
