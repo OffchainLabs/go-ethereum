@@ -35,9 +35,9 @@ func memoryGasCost(mem *Memory, newMemSize uint64) (multigas.MultiGas, error) {
 	// The maximum that will fit in a uint64 is max_word_count - 1. Anything above
 	// that will result in an overflow. Additionally, a newMemSize which results in
 	// a newMemSizeWords larger than 0xFFFFFFFF will cause the square operation to
-	// overflow. The constant 0x1FFFFFFFE0 is the highest number that can be used
+	// overflow. The constant MaxMemorySize is the highest number that can be used
 	// without overflowing the gas calculation.
-	if newMemSize > 0x1FFFFFFFE0 {
+	if newMemSize > MaxMemorySize {
 		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
 	newMemSizeWords := toWordSize(newMemSize)

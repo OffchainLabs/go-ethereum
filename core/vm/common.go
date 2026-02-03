@@ -23,6 +23,9 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// MaxMemorySize is the largest size that won't overflow memory gas calculation.
+const MaxMemorySize = 0x1FFFFFFFE0
+
 // calcMemSize64 calculates the required memory size, and returns
 // the size and whether the result overflowed uint64
 func calcMemSize64(off, l *uint256.Int) (uint64, bool) {
@@ -74,6 +77,11 @@ func getDataAndAdjustedBounds(data []byte, start uint64, size uint64) (codeCopyP
 		end = length
 	}
 	return common.RightPadBytes(data[start:end], int(size)), start, end - start
+}
+
+// ToWordSize returns the ceiled word size required for memory expansion.
+func ToWordSize(size uint64) uint64 {
+	return toWordSize(size)
 }
 
 // toWordSize returns the ceiled word size required for memory expansion.
