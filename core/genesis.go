@@ -77,8 +77,21 @@ type Genesis struct {
 	BlobGasUsed   *uint64     `json:"blobGasUsed"`   // EIP-4844
 
 	// Arbitrum
-	SerializedChainConfig string            `json:"serializedChainConfig,omitempty"`
-	ArbOSInit             *params.ArbOSInit `json:"arbOSInit,omitempty"`
+	SerializedChainConfig string              `json:"serializedChainConfig,omitempty"`
+	deserializedConfig    *params.ChainConfig // cached deserialized chain config
+	ArbOSInit             *params.ArbOSInit   `json:"arbOSInit,omitempty"`
+}
+
+// GetConfig returns the chain configuration object, corresponding to the g.SerializedChainConfig field.
+func (g *Genesis) GetConfig() (*params.ChainConfig, error) {
+	if g.deserializedConfig == nil {
+		var c params.ChainConfig
+		if err := json.Unmarshal([]byte(g.SerializedChainConfig), &c); err != nil {
+			return nil, fmt.Errorf("failed to deserialize chain config: %w", err)
+		}
+		g.deserializedConfig = &c
+	}
+	return g.deserializedConfig, nil
 }
 
 // copy copies the genesis.
@@ -89,6 +102,7 @@ func (g *Genesis) copy() *Genesis {
 			conf := *g.Config
 			cpy.Config = &conf
 		}
+		cpy.deserializedConfig = nil
 		return &cpy
 	}
 	return nil
