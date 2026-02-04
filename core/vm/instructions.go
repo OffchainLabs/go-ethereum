@@ -949,7 +949,7 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 
 	// Arbitrum: revert if acting account is a Stylus program
 	actingAddress := scope.Contract.Address()
-	if code := evm.StateDB.GetCode(actingAddress); state.IsStylusProgram(code) {
+	if code := evm.StateDB.GetCode(actingAddress); state.IsStylusComponentPrefix(code, evm.chainRules.ArbOSVersion) {
 		return nil, ErrExecutionReverted
 	}
 

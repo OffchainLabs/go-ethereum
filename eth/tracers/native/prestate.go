@@ -196,6 +196,13 @@ func (t *prestateTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction
 	t.lookupAccount(params.HistoryStorageAddress)
 	t.lookupAccount(types.ArbosStateAddress)
 
+	// Arbos required accounts
+	nullAddress := common.HexToAddress("0x0000000000000000000000000000000000000000")
+	t.lookupAccount(nullAddress)
+	t.lookupAccount(types.L1PricerFundsPoolAddress)
+	t.lookupAccount(types.ArbWasmAddress)
+	t.lookupAccount(types.ArbWasmCacheAddress)
+
 	// Add accounts with authorizations to the prestate before they get applied.
 	for _, auth := range tx.SetCodeAuthorizations() {
 		addr, err := auth.Authority()

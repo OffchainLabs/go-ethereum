@@ -55,7 +55,7 @@ type GenesisAlloc = types.GenesisAlloc
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
 type Genesis struct {
-	Config     *params.ChainConfig `json:"config"`
+	Config     *params.ChainConfig `json:"config,omitempty"`
 	Nonce      uint64              `json:"nonce"`
 	Timestamp  uint64              `json:"timestamp"`
 	ExtraData  []byte              `json:"extraData"`
@@ -75,7 +75,8 @@ type Genesis struct {
 	BlobGasUsed   *uint64     `json:"blobGasUsed"`   // EIP-4844
 
 	// Arbitrum
-	ArbOSInit *params.ArbOSInit `json:"arbOSInit,omitempty"`
+	SerializedChainConfig string            `json:"serializedChainConfig,omitempty"`
+	ArbOSInit             *params.ArbOSInit `json:"arbOSInit,omitempty"`
 }
 
 // copy copies the genesis.

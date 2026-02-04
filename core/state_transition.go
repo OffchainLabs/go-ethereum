@@ -76,6 +76,21 @@ func (result *ExecutionResult) Revert() []byte {
 	return common.CopyBytes(result.ReturnData)
 }
 
+// ErrFilteredTx is returned when a transaction was found in the onchain filter
+// and executed as a no-op (nonce incremented, all gas consumed). It wraps
+// ErrExecutionReverted so receipt status checks work correctly.
+type ErrFilteredTx struct {
+	TxHash common.Hash
+}
+
+func (e *ErrFilteredTx) Error() string {
+	return fmt.Sprintf("transaction %s in onchain filter", e.TxHash.Hex())
+}
+
+func (e *ErrFilteredTx) Unwrap() error {
+	return vm.ErrExecutionReverted
+}
+
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
 func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool) (uint64, error) {
 	multiGas, err := IntrinsicMultiGas(data, accessList, authList, isContractCreation, isHomestead, isEIP2028, isEIP3860)
@@ -685,7 +700,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// Check against hardcoded transaction hashes that have previously reverted, so instead
 	// of executing the transaction we just update state nonce and remaining gas to avoid
 	// state divergence.
-	usedMultiGas, vmerr = st.handleRevertedTx(msg, usedMultiGas)
+	usedMultiGas, vmerr = st.evm.ProcessingHook.RevertedTxHook(&st.gasRemaining, usedMultiGas)
 
 	// vmerr is only not nil when we find a previous reverted transaction
 	if vmerr == nil {
@@ -794,30 +809,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		TopLevelDeployed: deployedContract,
 		UsedMultiGas:     usedMultiGas,
 	}, nil
-}
-
-// handleRevertedTx attempts to process a reverted transaction. It returns
-// ErrExecutionReverted with the updated multiGas if a matching reverted
-// tx is found; otherwise, it returns nil error with unchangedmultiGas
-func (st *stateTransition) handleRevertedTx(msg *Message, usedMultiGas multigas.MultiGas) (multigas.MultiGas, error) {
-	if msg.Tx == nil {
-		return usedMultiGas, nil
-	}
-
-	txHash := msg.Tx.Hash()
-	if l2GasUsed, ok := RevertedTxGasUsed[txHash]; ok {
-		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
-
-		// Calculate adjusted gas since l2GasUsed contains params.TxGas
-		adjustedGas := l2GasUsed - params.TxGas
-		st.gasRemaining -= adjustedGas
-
-		// Update multigas and return ErrExecutionReverted error
-		usedMultiGas = usedMultiGas.SaturatingAdd(multigas.ComputationGas(adjustedGas))
-		return usedMultiGas, vm.ErrExecutionReverted
-	}
-
-	return usedMultiGas, nil
 }
 
 // validateAuthorization validates an EIP-7702 authorization against the state.
