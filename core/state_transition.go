@@ -220,6 +220,7 @@ const (
 	messageEthcallMode
 	messageReplayMode
 	messageRecordingMode
+	messageSequencingMode
 )
 
 type MessageRunContext struct {
@@ -227,6 +228,12 @@ type MessageRunContext struct {
 
 	wasmCacheTag uint32
 	wasmTargets  []rawdb.WasmTarget
+}
+
+func NewMessageSequencingContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
+	messageRunCtx := NewMessageCommitContext(wasmTargets)
+	messageRunCtx.runMode = messageSequencingMode
+	return messageRunCtx
 }
 
 func NewMessageCommitContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
@@ -275,13 +282,17 @@ func NewMessageGasEstimationContext() *MessageRunContext {
 	}
 }
 
+func (c *MessageRunContext) IsSequencing() bool {
+	return c.runMode == messageSequencingMode
+}
+
 func (c *MessageRunContext) IsCommitMode() bool {
-	return c.runMode == messageCommitMode
+	return c.runMode == messageCommitMode || c.runMode == messageSequencingMode
 }
 
 // these message modes are executed onchain so cannot make any gas shortcuts
 func (c *MessageRunContext) IsExecutedOnChain() bool {
-	return c.runMode == messageCommitMode || c.runMode == messageReplayMode || c.runMode == messageRecordingMode
+	return c.IsCommitMode() || c.runMode == messageReplayMode || c.runMode == messageRecordingMode
 }
 
 func (c *MessageRunContext) IsGasEstimation() bool {
@@ -310,6 +321,8 @@ func (c *MessageRunContext) WasmTargets() []rawdb.WasmTarget {
 
 func (c *MessageRunContext) RunModeMetricName() string {
 	switch c.runMode {
+	case messageSequencingMode:
+		return "sequencing_runmode"
 	case messageCommitMode:
 		return "commit_runmode"
 	case messageGasEstimationMode:
