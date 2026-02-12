@@ -231,9 +231,9 @@ type MessageRunContext struct {
 }
 
 func NewMessageSequencingContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
-	messageRunCtx := NewMessageCommitContext(wasmTargets)
-	messageRunCtx.runMode = messageSequencingMode
-	return messageRunCtx
+	messageSequencingCtx := NewMessageCommitContext(wasmTargets)
+	messageSequencingCtx.runMode = messageSequencingMode
+	return messageSequencingCtx
 }
 
 func NewMessageCommitContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
