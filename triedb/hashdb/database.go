@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -89,6 +90,7 @@ type Database struct {
 	// Arbitrum:
 	idealCapBatchSize    uint
 	idealCommitBatchSize uint
+	committing           atomic.Bool
 
 	diskdb  ethdb.Database              // Persistent storage for matured trie nodes
 	cleans  *fastcache.Cache            // GC friendly memory cache of clean node RLPs
@@ -444,6 +446,9 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
+	db.committing.Store(true)
+	defer db.committing.Store(false)
+
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
 	// memory cache during commit but not yet in persistent storage). This is ensured
@@ -692,4 +697,10 @@ func (reader *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]
 // with the specified state.
 func (db *Database) StateReader(root common.Hash) (database.StateReader, error) {
 	return nil, errors.New("not implemented")
+}
+
+// returns true if hashdb is performing commit in this moment
+// thread safe - can be called concurrently, but does not guarantee that the returned result remains true after the call
+func (db *Database) IsBusyCommitting() bool {
+	return db.committing.Load()
 }

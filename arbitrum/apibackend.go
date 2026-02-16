@@ -540,7 +540,7 @@ func (a *APIBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 	return a.b.filterMaps.NewMatcherBackend()
 }
 
-func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *core.BlockChain, maxRecreateStateDepth int64, header *types.Header, err error, archiveClientsManager *archiveFallbackClientsManager) (*state.StateDB, *types.Header, error) {
+func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *core.BlockChain, maxRecreateStateDepth int64, errorWhenTriedbBusy bool, header *types.Header, err error, archiveClientsManager *archiveFallbackClientsManager) (*state.StateDB, *types.Header, error) {
 	if err != nil {
 		return nil, header, err
 	}
@@ -566,6 +566,10 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 			}
 		}
 		return statedb, header, nil
+	}
+
+	if errorWhenTriedbBusy && bc.StateCache().TrieDB().IsBusyCommitting() {
+		return nil, header, errors.New("please retry, triedb is busy committing state")
 	}
 
 	stateFor := func(db state.Database, snapshots *snapshot.Tree) func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
@@ -641,7 +645,7 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 
 func (a *APIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	header, err := a.HeaderByNumber(ctx, number)
-	return StateAndHeaderFromHeader(ctx, a.ChainDb(), a.b.arb.BlockChain(), a.b.config.MaxRecreateStateDepth, header, err, a.archiveClientsManager)
+	return StateAndHeaderFromHeader(ctx, a.ChainDb(), a.b.arb.BlockChain(), a.b.config.MaxRecreateStateDepth, a.b.config.ErrorWhenTriedbBusy, header, err, a.archiveClientsManager)
 }
 
 func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
@@ -652,7 +656,7 @@ func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOr
 	if ishash && header != nil && header.Number.Cmp(bc.CurrentBlock().Number) > 0 && bc.GetCanonicalHash(header.Number.Uint64()) != hash {
 		return nil, nil, errors.New("requested block ahead of current block and the hash is not currently canonical")
 	}
-	return StateAndHeaderFromHeader(ctx, a.ChainDb(), a.b.arb.BlockChain(), a.b.config.MaxRecreateStateDepth, header, err, a.archiveClientsManager)
+	return StateAndHeaderFromHeader(ctx, a.ChainDb(), a.b.arb.BlockChain(), a.b.config.MaxRecreateStateDepth, a.b.config.ErrorWhenTriedbBusy, header, err, a.archiveClientsManager)
 }
 
 func (a *APIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
