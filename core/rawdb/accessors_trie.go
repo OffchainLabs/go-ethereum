@@ -18,7 +18,6 @@ package rawdb
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -44,25 +43,6 @@ const HashScheme = "hash"
 // area of the disk with good data locality property. But this scheme needs to rely
 // on extra state diffs to survive deep reorg.
 const PathScheme = "path"
-
-// hasher is used to compute the sha256 hash of the provided data.
-type hasher struct{ sha crypto.KeccakState }
-
-var hasherPool = sync.Pool{
-	New: func() interface{} { return &hasher{sha: crypto.NewKeccakState()} },
-}
-
-func newHasher() *hasher {
-	return hasherPool.Get().(*hasher)
-}
-
-func (h *hasher) hash(data []byte) common.Hash {
-	return crypto.HashData(h.sha, data)
-}
-
-func (h *hasher) release() {
-	hasherPool.Put(h)
-}
 
 // ReadAccountTrieNode retrieves the account trie node with the specified node path.
 func ReadAccountTrieNode(db ethdb.KeyValueReader, path []byte) []byte {
@@ -147,6 +127,14 @@ func WriteLegacyTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte)
 	}
 }
 
+// Arbitrum: version of WriteLegacyTrieNode that returns error instead of os.Exit in log.Crit
+func WriteLegacyTrieNodeWithError(db ethdb.KeyValueWriter, hash common.Hash, node []byte) error {
+	if err := db.Put(hash.Bytes(), node); err != nil {
+		return fmt.Errorf("Failed to store legacy trie node, err: %w", err)
+	}
+	return nil
+}
+
 // DeleteLegacyTrieNode deletes the specified legacy trie node from database.
 func DeleteLegacyTrieNode(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(hash.Bytes()); err != nil {
@@ -170,9 +158,7 @@ func HasTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash c
 		if len(blob) == 0 {
 			return false
 		}
-		h := newHasher()
-		defer h.release()
-		return h.hash(blob) == hash // exists but not match
+		return crypto.Keccak256Hash(blob) == hash // exist and match
 	default:
 		panic(fmt.Sprintf("Unknown scheme %v", scheme))
 	}
@@ -194,10 +180,8 @@ func ReadTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash 
 		if len(blob) == 0 {
 			return nil
 		}
-		h := newHasher()
-		defer h.release()
-		if h.hash(blob) != hash {
-			return nil // exists but not match
+		if crypto.Keccak256Hash(blob) != hash {
+			return nil // exist but not match
 		}
 		return blob
 	default:

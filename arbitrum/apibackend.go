@@ -52,6 +52,14 @@ type APIBackend struct {
 	sync                  SyncProgressBackend
 }
 
+func (a *APIBackend) RPCTxSyncDefaultTimeout() time.Duration {
+	return a.b.config.TxSyncDefaultTimeout
+}
+
+func (a *APIBackend) RPCTxSyncMaxTimeout() time.Duration {
+	return a.b.config.TxSyncMaxTimeout
+}
+
 type errorFilteredFallbackClient struct {
 	impl types.FallbackClient
 	url  string
@@ -545,9 +553,25 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 	if archiveClientsManager != nil && header.Number.Uint64() <= archiveClientsManager.lastAvailableBlock() {
 		return nil, header, &types.ErrUseArchiveFallback{BlockNum: header.Number.Uint64()}
 	}
+
+	// use upstream path for PathScheme, as:
+	// - intermediate state recreation and trie node referencing doesn't apply to pathdb
+	// - HistoricState is supported only by pathdb
+	if bc.TrieDB().Scheme() == rawdb.PathScheme {
+		statedb, err := bc.StateAt(header.Root)
+		if err != nil {
+			statedb, err = bc.HistoricState(header.Root)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		return statedb, header, nil
+	}
+
 	if errorWhenTriedbBusy && bc.StateCache().TrieDB().IsBusyCommitting() {
 		return nil, header, errors.New("please retry, triedb is busy committing state")
 	}
+
 	stateFor := func(db state.Database, snapshots *snapshot.Tree) func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
 		return func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
 			if header.Root != (common.Hash{}) {
@@ -660,6 +684,10 @@ func (a *APIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.R
 	return a.BlockChain().GetReceiptsByHash(hash), nil
 }
 
+func (a *APIBackend) GetCanonicalReceipt(tx *types.Transaction, blockHash common.Hash, blockNumber, blockIndex uint64) (*types.Receipt, error) {
+	return a.BlockChain().GetCanonicalReceipt(tx, blockHash, blockNumber, blockIndex)
+}
+
 func (a *APIBackend) GetEVM(ctx context.Context, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
 	if vmConfig == nil {
 		vmConfig = a.BlockChain().GetVMConfig()
@@ -690,8 +718,8 @@ func (a *APIBackend) SendConditionalTx(ctx context.Context, signedTx *types.Tran
 	return a.b.EnqueueL2Message(ctx, signedTx, options)
 }
 
-func (a *APIBackend) GetTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64) {
-	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(a.b.chainDb, txHash)
+func (a *APIBackend) GetCanonicalTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64) {
+	tx, blockHash, blockNumber, index := rawdb.ReadCanonicalTransaction(a.b.chainDb, txHash)
 	return tx != nil, tx, blockHash, blockNumber, index
 }
 

@@ -1,0 +1,102 @@
+name: PR Format Validation
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR Title Format
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prTitle = context.payload.pull_request.title;
+            const titleRegex = /^([\w\s,{}/.]+): .+/;
+            
+            if (!titleRegex.test(prTitle)) {
+              core.setFailed(`PR title "${prTitle}" does not match required format: directory, ...: description`);
+              return;
+            }
+            
+            console.log('✅ PR title format is valid');
+
+      - name: Ensure PR Has a Nitro Companion
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prBody = context.payload.pull_request.body;
+            const currentPrNumber = context.payload.pull_request.number;
+            
+            // --------------------------------------
+            // --- 1. Check the Current PR's Body ---
+            // --------------------------------------
+
+            core.info(`Validating current PR description.`);
+            
+            if (!prBody) {
+              core.setFailed("The PR description is empty. Please ensure it contains the required link.");
+              return;
+            }
+            
+            // The required regex pattern:
+            // 1. Matches the literal string "pulled in by https://github.com/OffchainLabs/nitro/pull/"
+            // 2. Requires one or more digits (\d+) for the pull request number (xxxx)
+            // 3. The 'i' flag makes the entire match case-insensitive (e.g., "Pulled In By" is valid)
+            const requiredRegex = /pulled in by https:\/\/github\.com\/OffchainLabs\/nitro\/pull\/(\d+)/i;
+            const match = prBody.match(requiredRegex);
+            
+            if (!match) {
+              core.setFailed("PR description validation failed. The description must contain a line matching the case-insensitive pattern: 'pulled in by https://github.com/OffchainLabs/nitro/pull/xxxx', where 'xxxx' is a number.");
+              return;
+            } else {
+              core.info("✅ PR description contains the required link.");
+            }
+
+            const nitroPrNumber = match[1];
+            core.info(`✅ Current PR contains 'pulled in by' link.`);
+            core.info(`Found referenced Nitro PR number: #${nitroPrNumber}`);
+
+            // ---------------------------------------------------
+            // --- 2. Fetch the Referenced PR's Body ---
+            // ---------------------------------------------------
+
+            try {
+              // Fetch the referenced PR details from the OffchainLabs/nitro repository.
+              const referencedPr = await github.rest.pulls.get({
+                owner: 'OffchainLabs',
+                repo: 'nitro',
+                pull_number: nitroPrNumber,
+              });
+
+              const referencedPrBody = referencedPr.data.body;
+            
+              if (!referencedPrBody || referencedPrBody.trim().length === 0) {
+                core.setFailed(`Referenced Nitro PR #${nitroPrNumber} description is empty. The referenced PR must have a description.`);
+                return;
+              }
+
+              // -----------------------------------------
+              // --- 3. Check the Referenced PR's Body ---
+              // -----------------------------------------
+
+              // The inverse link must reference the current PR's number (yyy is currentPrNumber)
+              // Pattern: "pulls in https://github.com/OffchainLabs/go-ethereum/pull/yyy"
+              const inversePatternString = `pulls in https:\/\/github\.com\/OffchainLabs\/go-ethereum\/pull\/${currentPrNumber}`;
+              const inverseRequiredRegex = new RegExp(inversePatternString, 'i');
+
+              if (!inverseRequiredRegex.test(referencedPrBody)) {
+                core.setFailed(`Inverse link validation failed on Nitro PR #${nitroPrNumber}. It must contain the case-insensitive link: 'pulls in https://github.com/OffchainLabs/go-ethereum/pull/${currentPrNumber}'`);
+                return;
+              }
+
+              core.info(`✅ Referenced Nitro PR #${nitroPrNumber} contains the inverse link to go-ethereum PR #${currentPrNumber}.`);
+              core.info("✅ All PR description cross-validations passed successfully.");
+
+            } catch (error) {
+              // Handle cases like "PR not found" or API errors
+              core.setFailed(`Could not fetch or validate referenced PR #${nitroPrNumber} in OffchainLabs/nitro. API Error: ${error.message}`);
+            }

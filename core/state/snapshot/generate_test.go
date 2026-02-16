@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/arbcrypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -34,11 +35,10 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
-	"golang.org/x/crypto/sha3"
 )
 
 func hashData(input []byte) common.Hash {
-	var hasher = sha3.NewLegacyKeccak256()
+	var hasher = arbcrypto.NewLegacyKeccak256()
 	var hash common.Hash
 	hasher.Reset()
 	hasher.Write(input)
@@ -166,7 +166,10 @@ func newHelper(scheme string) *testHelper {
 	diskdb := rawdb.NewMemoryDatabase()
 	config := &triedb.Config{}
 	if scheme == rawdb.PathScheme {
-		config.PathDB = &pathdb.Config{} // disable caching
+		config.PathDB = &pathdb.Config{
+			SnapshotNoBuild: true,
+			NoAsyncFlush:    true,
+		} // disable caching
 	} else {
 		config.HashDB = &hashdb.Config{} // disable caching
 	}

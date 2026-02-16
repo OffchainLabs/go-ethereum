@@ -38,7 +38,7 @@ type StateDB interface {
 	ActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash common.Hash) (asmMap map[rawdb.WasmTarget][]byte, missingTargets []rawdb.WasmTarget, err error)
 	RecordCacheWasm(wasm state.CacheWasm)
 	RecordEvictWasm(wasm state.EvictWasm)
-	GetRecentWasms() state.RecentWasms
+	GetRecentWasms() *state.RecentWasms
 
 	// Arbitrum: track stylus's memory footprint
 	GetStylusPages() (uint16, uint16)
@@ -54,6 +54,9 @@ type StateDB interface {
 	FilterTx()
 	ClearTxFilter()
 	IsTxFiltered() bool
+	SetAddressChecker(checker state.AddressChecker)
+	TouchAddress(addr common.Address)
+	IsAddressFiltered() bool
 
 	Recording() bool
 	Deterministic() bool
@@ -75,14 +78,14 @@ type StateDB interface {
 	GetCode(common.Address) []byte
 
 	// SetCode sets the new code for the address, and returns the previous code, if any.
-	SetCode(common.Address, []byte) []byte
+	SetCode(common.Address, []byte, tracing.CodeChangeReason) []byte
 	GetCodeSize(common.Address) int
 
 	AddRefund(uint64)
 	SubRefund(uint64)
 	GetRefund() uint64
 
-	GetCommittedState(common.Address, common.Hash) common.Hash
+	GetStateAndCommittedState(common.Address, common.Hash) (common.Hash, common.Hash)
 	GetState(common.Address, common.Hash) common.Hash
 	SetState(common.Address, common.Hash, common.Hash) common.Hash
 	GetStorageRoot(addr common.Address) common.Hash
@@ -102,7 +105,7 @@ type StateDB interface {
 	SelfDestruct6780(common.Address) (uint256.Int, bool)
 
 	// Exist reports whether the given account exists in state.
-	// Notably this should also return true for self-destructed accounts.
+	// Notably this also returns true for self-destructed accounts within the current transaction.
 	Exist(common.Address) bool
 	// Empty returns whether the given account is empty. Empty
 	// is defined according to EIP161 (balance = nonce = code = 0).

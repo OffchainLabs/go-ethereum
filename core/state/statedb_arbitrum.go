@@ -19,19 +19,20 @@ package state
 
 import (
 	"bytes"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"maps"
 	"math/big"
-	"slices"
-
-	"errors"
 	"runtime"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -50,29 +51,120 @@ var (
 	// 4th byte specifies the Stylus dictionary used during compression
 
 	StylusDiscriminant = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersion}
+
+	// This version byte indicates this compress wasm is a subsection of a larger stylus program
+	stylusEOFVersionV1Fragments = byte(0x01)
+	StylusFragmentsDiscriminant = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersionV1Fragments}
+
+	// This version byte indicates that this is a list of pointers to wasm fragments
+	stylusEOFVersionV1Root = byte(0x02)
+	StylusRootDiscriminant = []byte{stylusEOFMagic, stylusEOFMagicSuffix, stylusEOFVersionV1Root}
 )
 
 type ActivatedWasm map[rawdb.WasmTarget][]byte
 
-// checks if a valid Stylus prefix is present
-func IsStylusProgram(b []byte) bool {
-	if len(b) < len(StylusDiscriminant)+1 {
+// IsStylusComponentPrefix reports whether the bytecode starts with a Stylus
+// component prefix (classic program, or root/fragment when supported).
+func IsStylusComponentPrefix(b []byte, arbosVersion uint64) bool {
+	if arbosVersion < params.ArbosVersion_StylusContractLimit {
+		return IsStylusDeployableProgramPrefix(b, arbosVersion)
+	}
+	return IsStylusDeployableProgramPrefix(b, arbosVersion) || IsStylusFragmentPrefix(b)
+}
+
+// IsStylusDeployableProgramPrefix reports whether the bytecode starts with a
+// deployable Stylus program prefix (classic program, or root program when supported).
+func IsStylusDeployableProgramPrefix(b []byte, arbosVersion uint64) bool {
+	if arbosVersion < params.ArbosVersion_Stylus {
 		return false
 	}
-	return bytes.Equal(b[:3], StylusDiscriminant)
+	if arbosVersion < params.ArbosVersion_StylusContractLimit {
+		return IsStylusClassicProgramPrefix(b)
+	}
+	return IsStylusClassicProgramPrefix(b) || IsStylusRootProgramPrefix(b)
+}
+
+// IsStylusClassicProgramPrefix reports whether the bytecode starts with a
+// classic Stylus program prefix.
+func IsStylusClassicProgramPrefix(b []byte) bool {
+	return len(b) > len(StylusDiscriminant) && bytes.HasPrefix(b, StylusDiscriminant)
+}
+
+// IsStylusFragmentPrefix reports whether the bytecode starts with a
+// Stylus fragment prefix.
+func IsStylusFragmentPrefix(b []byte) bool {
+	return len(b) > len(StylusFragmentsDiscriminant) && bytes.HasPrefix(b, StylusFragmentsDiscriminant)
+}
+
+// IsStylusRootProgramPrefix reports whether the bytecode starts with a
+// Stylus root program prefix.
+func IsStylusRootProgramPrefix(b []byte) bool {
+	return len(b) > len(StylusRootDiscriminant) && bytes.HasPrefix(b, StylusRootDiscriminant)
 }
 
 // strips the Stylus header from a contract, returning the dictionary used
 func StripStylusPrefix(b []byte) ([]byte, byte, error) {
-	if !IsStylusProgram(b) {
+	if !IsStylusClassicProgramPrefix(b) {
 		return nil, 0, errors.New("specified bytecode is not a Stylus program")
 	}
 	return b[4:], b[3], nil
 }
 
+func StripStylusFragmentPrefix(b []byte) ([]byte, error) {
+	if !IsStylusFragmentPrefix(b) {
+		return nil, errors.New("specified bytecode is not a Stylus program fragment")
+	}
+	return b[3:], nil
+}
+
+type StylusRoot struct {
+	DictionaryType     byte
+	DecompressedLength uint32
+	Addresses          []common.Address
+}
+
+func NewStylusRoot(b []byte) (*StylusRoot, error) {
+	if !IsStylusRootProgramPrefix(b) {
+		return nil, errors.New("specified bytecode is not a Stylus program root")
+	}
+
+	if len(b) < 8 {
+		return nil, fmt.Errorf("stylus program root too short: need at least 8 bytes, got %d", len(b))
+	}
+
+	addressData := b[8:]
+	if len(addressData)%common.AddressLength != 0 {
+		return nil, fmt.Errorf("stylus program root address data has invalid length: %d (must be multiple of %d)", len(addressData), common.AddressLength)
+	}
+
+	count := len(addressData) / common.AddressLength
+	addresses := make([]common.Address, 0, count)
+
+	for i := 0; i < len(addressData); i += common.AddressLength {
+		addresses = append(addresses, common.BytesToAddress(addressData[i:i+common.AddressLength]))
+	}
+
+	return &StylusRoot{
+		DictionaryType:     b[3],
+		DecompressedLength: binary.BigEndian.Uint32(b[4:8]),
+		Addresses:          addresses,
+	}, nil
+}
+
 // creates a new Stylus prefix from the given dictionary byte
 func NewStylusPrefix(dictionary byte) []byte {
 	prefix := bytes.Clone(StylusDiscriminant)
+	return append(prefix, dictionary)
+}
+
+// creates a new Fragment Stylus prefix
+func NewStylusFragmentPrefix() []byte {
+	return bytes.Clone(StylusFragmentsDiscriminant)
+}
+
+// Returns a new Stylus Root prefix with the given dictionary byte
+func NewStylusRootPrefix(dictionary byte) []byte {
+	prefix := bytes.Clone(StylusRootDiscriminant)
 	return append(prefix, dictionary)
 }
 
@@ -216,6 +308,24 @@ func (s *StateDB) Recording() bool {
 
 var ErrArbTxFilter error = errors.New("internal error")
 
+// AddressCheckerState tracks address filtering for a single transaction.
+// Implementations manage their own synchronization (sync, WaitGroup, channels, etc).
+type AddressCheckerState interface {
+	// TouchAddress records an address access and checks if it should be filtered.
+	TouchAddress(addr common.Address)
+
+	// IsFiltered returns whether any touched address was filtered.
+	// Blocks until all pending checks complete (implementation-specific).
+	IsFiltered() bool
+}
+
+// AddressChecker creates per-tx state instances for address filtering.
+// The checker itself is stateless and can be shared across StateDBs.
+type AddressChecker interface {
+	// NewTxState creates fresh state for a new transaction.
+	NewTxState() AddressCheckerState
+}
+
 type ArbitrumExtraData struct {
 	unexpectedBalanceDelta *big.Int                      // total balance change across all accounts
 	userWasms              UserWasms                     // user wasms encountered during execution
@@ -224,6 +334,9 @@ type ArbitrumExtraData struct {
 	activatedWasms         map[common.Hash]ActivatedWasm // newly activated WASMs
 	recentWasms            RecentWasms
 	arbTxFilter            bool
+
+	addressChecker      AddressChecker      // shared, stateless checker factory
+	addressCheckerState AddressCheckerState // per-tx state, created in SetTxContext
 }
 
 func (s *StateDB) SetArbFinalizer(f func(*ArbitrumExtraData)) {
@@ -275,7 +388,7 @@ func forEachStorage(s *StateDB, addr common.Address, cb func(key, value common.H
 	it := trie.NewIterator(trieIt)
 
 	for it.Next() {
-		key := common.BytesToHash(s.trie.GetKey(it.Key))
+		key := common.BytesToHash(tr.GetKey(it.Key))
 		if value, dirty := so.dirtyStorage[key]; dirty {
 			if !cb(key, value) {
 				return nil
@@ -330,8 +443,8 @@ func (s *StateDB) RecordEvictWasm(wasm EvictWasm) {
 	s.journal.entries = append(s.journal.entries, wasm)
 }
 
-func (s *StateDB) GetRecentWasms() RecentWasms {
-	return s.arbExtraData.recentWasms
+func (s *StateDB) GetRecentWasms() *RecentWasms {
+	return &s.arbExtraData.recentWasms
 }
 
 // Type for managing recent program access.
@@ -346,7 +459,7 @@ func NewRecentWasms() RecentWasms {
 }
 
 // Inserts a new item, returning true if already present.
-func (p RecentWasms) Insert(item common.Hash, retain uint16) bool {
+func (p *RecentWasms) Insert(item common.Hash, retain uint16) bool {
 	if p.cache == nil {
 		cache := lru.NewBasicLRU[common.Hash, struct{}](int(retain))
 		p.cache = &cache

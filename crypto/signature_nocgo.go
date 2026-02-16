@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build nacl || wasm || wasip1 || !cgo || gofuzz
-// +build nacl wasm wasip1 !cgo gofuzz
+//go:build nacl || wasm || wasip1 || !cgo || gofuzz || tinygo
+// +build nacl wasm wasip1 !cgo gofuzz tinygo
 
 package crypto
 
@@ -27,11 +27,13 @@ import (
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	decred_ecdsa "github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
+
+	"github.com/ethereum/go-ethereum/arbcrypto"
 )
 
 // Ecrecover returns the uncompressed public key that created the given signature.
 func Ecrecover(hash, sig []byte) ([]byte, error) {
-	pub, err := sigToPub(hash, sig)
+	pub, err := arbcrypto.SigToPub(hash, sig)
 	if err != nil {
 		return nil, err
 	}
@@ -39,22 +41,9 @@ func Ecrecover(hash, sig []byte) ([]byte, error) {
 	return bytes, err
 }
 
-func sigToPub(hash, sig []byte) (*secp256k1.PublicKey, error) {
-	if len(sig) != SignatureLength {
-		return nil, errors.New("invalid signature")
-	}
-	// Convert to secp256k1 input format with 'recovery id' v at the beginning.
-	btcsig := make([]byte, SignatureLength)
-	btcsig[0] = sig[RecoveryIDOffset] + 27
-	copy(btcsig[1:], sig)
-
-	pub, _, err := decred_ecdsa.RecoverCompact(btcsig, hash)
-	return pub, err
-}
-
 // SigToPub returns the public key that created the given signature.
 func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
-	pub, err := sigToPub(hash, sig)
+	pub, err := arbcrypto.SigToPub(hash, sig)
 	if err != nil {
 		return nil, err
 	}

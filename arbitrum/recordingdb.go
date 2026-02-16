@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -39,6 +40,10 @@ type RecordingKV struct {
 
 func newRecordingKV(inner *triedb.Database, diskDb ethdb.KeyValueStore) *RecordingKV {
 	return &RecordingKV{inner, diskDb, make(map[common.Hash][]byte), sync.Mutex{}, false}
+}
+
+func (db *RecordingKV) SyncKeyValue() error {
+	return nil // recording KV doesn't support SyncKeyValue
 }
 
 func (db *RecordingKV) Has(key []byte) (bool, error) {
@@ -163,6 +168,35 @@ func (r *RecordingChainContext) GetHeader(hash common.Hash, num uint64) *types.H
 
 func (r *RecordingChainContext) GetMinBlockNumberAccessed() uint64 {
 	return r.minBlockNumberAccessed
+}
+
+func (r *RecordingChainContext) CurrentHeader() *types.Header {
+	header := r.bc.CurrentHeader()
+	if header != nil {
+		num := header.Number.Uint64()
+		if num < r.minBlockNumberAccessed {
+			r.minBlockNumberAccessed = num
+		}
+	}
+	return header
+}
+
+func (r *RecordingChainContext) GetHeaderByNumber(number uint64) *types.Header {
+	if number < r.minBlockNumberAccessed {
+		r.minBlockNumberAccessed = number
+	}
+	return r.bc.GetHeaderByNumber(number)
+}
+
+func (r *RecordingChainContext) GetHeaderByHash(hash common.Hash) *types.Header {
+	header := r.bc.GetHeaderByHash(hash)
+	if header != nil {
+		num := header.Number.Uint64()
+		if num < r.minBlockNumberAccessed {
+			r.minBlockNumberAccessed = num
+		}
+	}
+	return header
 }
 
 type RecordingDatabaseConfig struct {
@@ -330,7 +364,7 @@ func (r *RecordingDatabase) GetOrRecreateState(ctx context.Context, header *type
 	returnedBlockNumber := header.Number.Uint64()
 	for ctx.Err() == nil {
 		var block *types.Block
-		state, block, err = AdvanceStateByBlock(ctx, r.bc, state, blockToRecreate, prevHash, logFunc)
+		state, block, _, err = AdvanceStateByBlock(ctx, r.bc, state, blockToRecreate, prevHash, logFunc, vm.Config{})
 		if err != nil {
 			return nil, err
 		}

@@ -53,13 +53,6 @@ func (c *SimulatedBeacon) GetBlobs(ctx context.Context, batchBlockHash common.Ha
 		}
 
 		copy(output[outputIdx][:], bundle.Blobs[i])
-
-		var proof kzg4844.Proof
-		copy(proof[:], bundle.Proofs[i])
-
-		if err := kzg4844.VerifyBlobProof(&output[outputIdx], commitment, proof); err != nil {
-			return nil, fmt.Errorf("failed to verify blob proof for blob index(%d), blob(%s)", i, firstFewChars(bundle.Blobs[i].String()))
-		}
 	}
 
 	for i, found := range outputsFound {
@@ -72,7 +65,7 @@ func (c *SimulatedBeacon) GetBlobs(ctx context.Context, batchBlockHash common.Ha
 }
 
 func (c *SimulatedBeacon) Initialize(ctx context.Context) error {
-	c.blobsBundleProvider = make(map[common.Hash]*engine.BlobsBundleV1)
+	c.blobsBundleProvider = make(map[common.Hash]*engine.BlobsBundle)
 	return nil
 }
 
@@ -81,12 +74,4 @@ func commitmentToVersionedHash(commitment kzg4844.Commitment) common.Hash {
 	hash := sha256.Sum256(commitment[:])
 	hash[0] = 1
 	return hash
-}
-
-func firstFewChars(s string) string {
-	if len(s) < 9 {
-		return fmt.Sprintf("\"%s\"", s)
-	} else {
-		return fmt.Sprintf("\"%s...\"", s[:8])
-	}
 }

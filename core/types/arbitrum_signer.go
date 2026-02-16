@@ -8,6 +8,7 @@ import (
 
 var ArbosAddress = common.HexToAddress("0xa4b05")
 var ArbosStateAddress = common.HexToAddress("0xA4B05FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+var FilteredTransactionsStateAddress = common.HexToAddress("0xA4B0500000000000000000000000000000000001")
 var ArbSysAddress = common.HexToAddress("0x64")
 var ArbInfoAddress = common.HexToAddress("0x65")
 var ArbAddressTableAddress = common.HexToAddress("0x66")
@@ -23,9 +24,11 @@ var ArbOwnerAddress = common.HexToAddress("0x70")
 var ArbWasmAddress = common.HexToAddress("0x71")
 var ArbWasmCacheAddress = common.HexToAddress("0x72")
 var ArbNativeTokenManagerAddress = common.HexToAddress("0x73")
+var ArbFilteredTransactionsManagerAddress = common.HexToAddress("0x74")
 var NodeInterfaceAddress = common.HexToAddress("0xc8")
 var NodeInterfaceDebugAddress = common.HexToAddress("0xc9")
 var ArbDebugAddress = common.HexToAddress("0xff")
+var L1PricerFundsPoolAddress = common.HexToAddress("0xA4B00000000000000000000000000000000000f6")
 
 type arbitrumSigner struct{ Signer }
 
