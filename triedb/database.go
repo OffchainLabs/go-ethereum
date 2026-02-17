@@ -279,6 +279,15 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	return hdb.Node(hash)
 }
 
+// NodeSource returns where a trie node is found: "clean", "dirty", "disk", or "missing".
+func (db *Database) NodeSource(hash common.Hash) string {
+	hdb, ok := db.backend.(*hashdb.Database)
+	if !ok {
+		return "unsupported"
+	}
+	return hdb.NodeSource(hash)
+}
+
 // Recover rollbacks the database to a specified historical point. The state is
 // supported as the rollback destination only if it's canonical state and the
 // corresponding trie histories are existent. It's only supported by path-based

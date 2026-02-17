@@ -239,6 +239,30 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	return db.node(hash)
 }
 
+// NodeSource returns where a trie node hash is found: "clean", "dirty", "disk", or "missing".
+// This is a diagnostic method for debugging unexpected state availability.
+func (db *Database) NodeSource(hash common.Hash) string {
+	if hash == (common.Hash{}) {
+		return "missing"
+	}
+	if db.cleans != nil {
+		if enc := db.cleans.Get(nil, hash[:]); enc != nil {
+			return "clean"
+		}
+	}
+	db.lock.RLock()
+	_, inDirty := db.dirties[hash]
+	db.lock.RUnlock()
+	if inDirty {
+		return "dirty"
+	}
+	enc := rawdb.ReadLegacyTrieNode(db.diskdb, hash)
+	if len(enc) != 0 {
+		return "disk"
+	}
+	return "missing"
+}
+
 // Reference adds a new reference from a parent node to a child node.
 // This function is used to add reference between internal trie node
 // and external node(e.g. storage trie root), all internal trie nodes
