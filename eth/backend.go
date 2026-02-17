@@ -500,6 +500,11 @@ func (s *Ethereum) updateFilterMapsHeads() {
 		if head == nil || newHead.Hash() != head.Hash() {
 			head = newHead
 			chainView := s.newChainView(head)
+			// passing nil chainView to FilterMaps.SetTarget triggers a panic
+			// newChainView can return nil not only when head == nil but also when ChainView.extendNonCanonical returns false
+			if chainView == nil {
+				return
+			}
 			historyCutoff, _ := s.blockchain.HistoryPruningCutoff()
 			var finalBlock uint64
 			if fb := s.blockchain.CurrentFinalBlock(); fb != nil {
