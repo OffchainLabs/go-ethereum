@@ -35,8 +35,8 @@ type Backend struct {
 	shutdownTracker *shutdowncheck.ShutdownTracker
 
 	chanTxs         chan *types.Transaction
-	closeFilterMaps chan struct{} //close coroutine
-	chanNewBlock    chan struct{} //create new L2 block unless empty
+	closeFilterMaps chan chan struct{} // close updateFilterMapsHeads goroutine
+	chanNewBlock    chan struct{}      //create new L2 block unless empty
 
 	filterSystem *filters.FilterSystem
 }
@@ -51,7 +51,7 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 		shutdownTracker: shutdowncheck.NewShutdownTracker(chainDb),
 
 		chanTxs:         make(chan *types.Transaction, 100),
-		closeFilterMaps: make(chan struct{}),
+		closeFilterMaps: make(chan chan struct{}),
 		chanNewBlock:    make(chan struct{}, 1),
 	}
 
