@@ -505,8 +505,30 @@ func (api *DebugAPI) StateSize(blockHashOrNumber *rpc.BlockNumberOrHash) (interf
 
 func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumber) (*stateless.ExtWitness, error) {
 	bc := api.eth.blockchain
-	block, err := api.eth.APIBackend.BlockByNumber(context.Background(), bn)
-	if err != nil {
+	var block *types.Block
+	switch bn {
+	case rpc.LatestBlockNumber:
+		latestBlock := bc.CurrentBlock()
+		if latestBlock == nil {
+			return &stateless.ExtWitness{}, errors.New("latest block not found")
+		}
+		block = bc.GetBlock(latestBlock.Hash(), latestBlock.Number.Uint64())
+	case rpc.FinalizedBlockNumber:
+		finalizedBlock := bc.CurrentFinalBlock()
+		if finalizedBlock == nil {
+			return &stateless.ExtWitness{}, errors.New("finalized block not found")
+		}
+		block = bc.GetBlock(finalizedBlock.Hash(), finalizedBlock.Number.Uint64())
+	case rpc.SafeBlockNumber:
+		safeBlock := bc.CurrentSafeBlock()
+		if safeBlock == nil {
+			return &stateless.ExtWitness{}, errors.New("safe block not found")
+		}
+		block = bc.GetBlock(safeBlock.Hash(), safeBlock.Number.Uint64())
+	default:
+		block = bc.GetBlockByNumber(uint64(bn.Int64()))
+	}
+	if block == nil {
 		return &stateless.ExtWitness{}, fmt.Errorf("block number %v not found", bn)
 	}
 
