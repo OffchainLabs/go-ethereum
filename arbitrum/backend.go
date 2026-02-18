@@ -2,6 +2,7 @@ package arbitrum
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -34,9 +35,11 @@ type Backend struct {
 
 	shutdownTracker *shutdowncheck.ShutdownTracker
 
-	chanTxs      chan *types.Transaction
-	chanClose    chan struct{} //close coroutine
-	chanNewBlock chan struct{} //create new L2 block unless empty
+	chanTxs       chan *types.Transaction
+	chanClose     chan struct{} //close coroutine
+	chanNewBlock  chan struct{} //create new L2 block unless empty
+	chanCloseWg   sync.WaitGroup
+	chanCloseOnce sync.Once
 
 	filterSystem *filters.FilterSystem
 }
@@ -124,7 +127,11 @@ func (b *Backend) Start() error {
 	b.filterMaps.Start()
 	b.shutdownTracker.MarkStartup()
 	b.shutdownTracker.Start()
-	go b.updateFilterMapsHeads()
+	b.chanCloseWg.Add(1)
+	go func() {
+		defer b.chanCloseWg.Done()
+		b.updateFilterMapsHeads()
+	}()
 	return nil
 }
 
@@ -163,6 +170,12 @@ func (b *Backend) updateFilterMapsHeads() {
 		if head == nil || newHead.Hash() != head.Hash() {
 			head = newHead
 			chainView := b.newChainView(head)
+			if chainView == nil {
+				// The chain can become temporarily inconsistent during shutdown or debug_setHead.
+				// Skip this update rather than panicking the process.
+				log.Warn("arbitrum Backend: skipping filtermaps target update due invalid chain view", "head", head.Number, "hash", head.Hash())
+				return
+			}
 			historyCutoff, _ := b.arb.BlockChain().HistoryPruningCutoff()
 			var finalBlock uint64
 			if fb := b.arb.BlockChain().CurrentFinalBlock(); fb != nil {
@@ -190,10 +203,13 @@ func (b *Backend) updateFilterMapsHeads() {
 }
 
 func (b *Backend) Stop() error {
+	b.chanCloseOnce.Do(func() {
+		close(b.chanClose)
+	})
+	b.chanCloseWg.Wait()
 	b.scope.Close()
 	b.filterMaps.Stop()
 	b.shutdownTracker.Stop()
 	b.chainDb.Close()
-	close(b.chanClose)
 	return nil
 }
