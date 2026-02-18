@@ -34,9 +34,9 @@ type Backend struct {
 
 	shutdownTracker *shutdowncheck.ShutdownTracker
 
-	chanTxs      chan *types.Transaction
-	chanClose    chan struct{} //close coroutine
-	chanNewBlock chan struct{} //create new L2 block unless empty
+	chanTxs         chan *types.Transaction
+	closeFilterMaps chan struct{} //close coroutine
+	chanNewBlock    chan struct{} //create new L2 block unless empty
 
 	filterSystem *filters.FilterSystem
 }
@@ -50,9 +50,9 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 
 		shutdownTracker: shutdowncheck.NewShutdownTracker(chainDb),
 
-		chanTxs:      make(chan *types.Transaction, 100),
-		chanClose:    make(chan struct{}),
-		chanNewBlock: make(chan struct{}, 1),
+		chanTxs:         make(chan *types.Transaction, 100),
+		closeFilterMaps: make(chan struct{}),
+		chanNewBlock:    make(chan struct{}, 1),
 	}
 
 	scheme, err := rawdb.ParseStateScheme(stateScheme, chainDb)
@@ -186,19 +186,23 @@ func (b *Backend) updateFilterMapsHeads() {
 			b.filterMaps.SetBlockProcessing(blockProc)
 		case <-time.After(time.Second * 10):
 			setHead(b.arb.BlockChain().CurrentBlock())
-		case _, more := <-b.chanClose:
-			if !more {
-				return
-			}
+		case ch := <-b.closeFilterMaps:
+			close(ch)
+			return
 		}
 	}
 }
 
 func (b *Backend) Stop() error {
 	b.scope.Close()
+
+	// stop updateFilterMapsHeads goroutine and wait for it to finish
+	ch := make(chan struct{})
+	b.closeFilterMaps <- ch
+	<-ch
+
 	b.filterMaps.Stop()
 	b.shutdownTracker.Stop()
 	b.chainDb.Close()
-	close(b.chanClose)
 	return nil
 }
