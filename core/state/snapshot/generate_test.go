@@ -22,10 +22,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/arbcrypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -38,12 +38,7 @@ import (
 )
 
 func hashData(input []byte) common.Hash {
-	var hasher = arbcrypto.NewLegacyKeccak256()
-	var hash common.Hash
-	hasher.Reset()
-	hasher.Write(input)
-	hasher.Sum(hash[:0])
-	return hash
+	return crypto.Keccak256Hash(input)
 }
 
 // Tests that snapshot generation from an empty database.
