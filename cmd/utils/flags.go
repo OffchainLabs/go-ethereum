@@ -672,6 +672,12 @@ var (
 		Usage:    "Disables db compaction after import",
 		Category: flags.LoggingCategory,
 	}
+	LogSlowBlockFlag = &cli.DurationFlag{
+		Name:     "debug.logslowblock",
+		Usage:    "Block execution time threshold beyond which detailed statistics will be logged (0 means disable)",
+		Value:    ethconfig.Defaults.SlowBlockThreshold,
+		Category: flags.LoggingCategory,
+	}
 
 	// MISC settings
 	SyncTargetFlag = &cli.StringFlag{
@@ -1683,8 +1689,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(CacheNoPrefetchFlag.Name) {
 		cfg.NoPrefetch = ctx.Bool(CacheNoPrefetchFlag.Name)
 	}
-	// Read the value from the flag no matter if it's set or not.
-	cfg.Preimages = ctx.Bool(CachePreimagesFlag.Name)
+	if ctx.IsSet(CachePreimagesFlag.Name) {
+		cfg.Preimages = ctx.Bool(CachePreimagesFlag.Name)
+	}
 	if cfg.NoPruning && !cfg.Preimages {
 		cfg.Preimages = true
 		log.Info("Enabling recording of key preimages since archive mode is used")
@@ -1718,6 +1725,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(LogNoHistoryFlag.Name) {
 		cfg.LogNoHistory = true
+	}
+	if ctx.IsSet(LogSlowBlockFlag.Name) {
+		cfg.SlowBlockThreshold = ctx.Duration(LogSlowBlockFlag.Name)
 	}
 	if ctx.IsSet(LogExportCheckpointsFlag.Name) {
 		cfg.LogExportCheckpoints = ctx.String(LogExportCheckpointsFlag.Name)
@@ -2298,6 +2308,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		Preimages:      ctx.Bool(CachePreimagesFlag.Name),
 		StateScheme:    scheme,
 		StateHistory:   ctx.Uint64(StateHistoryFlag.Name),
+
 		// Disable transaction indexing/unindexing.
 		TxIndexer: nil,
 
@@ -2309,6 +2320,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 
 		// Enable state size tracking if enabled
 		StateSizeTracking: ctx.Bool(StateSizeTrackingFlag.Name),
+
+		// Configure the slow block statistic logger
+		SlowBlockThreshold: ctx.Duration(LogSlowBlockFlag.Name),
 	}
 	if options.ArchiveMode && !options.Preimages {
 		options.Preimages = true
