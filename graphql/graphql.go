@@ -717,6 +717,9 @@ func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
 	if err != nil {
 		return nil, err
 	}
+	if b.header == nil {
+		return nil, nil
+	}
 	if b.hash == (common.Hash{}) {
 		b.hash = b.header.Hash()
 	}
