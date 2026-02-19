@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/event"
@@ -49,12 +50,12 @@ type downloadTester struct {
 }
 
 // newTester creates a new downloader test mocker.
-func newTester(t *testing.T) *downloadTester {
-	return newTesterWithNotification(t, nil)
+func newTester(t *testing.T, mode ethconfig.SyncMode) *downloadTester {
+	return newTesterWithNotification(t, mode, nil)
 }
 
 // newTesterWithNotification creates a new downloader test mocker.
-func newTesterWithNotification(t *testing.T, success func()) *downloadTester {
+func newTesterWithNotification(t *testing.T, mode ethconfig.SyncMode, success func()) *downloadTester {
 	db, err := rawdb.Open(rawdb.NewMemoryDatabase(), rawdb.OpenOptions{})
 	if err != nil {
 		panic(err)
@@ -75,7 +76,7 @@ func newTesterWithNotification(t *testing.T, success func()) *downloadTester {
 		chain: chain,
 		peers: make(map[string]*downloadTesterPeer),
 	}
-	tester.downloader = New(db, new(event.TypeMux), tester.chain, tester.dropPeer, success)
+	tester.downloader = New(db, mode, new(event.TypeMux), tester.chain, tester.dropPeer, success)
 	return tester
 }
 
@@ -394,7 +395,7 @@ func TestCanonicalSynchronisation68Full(t *testing.T) { testCanonSync(t, eth.ETH
 
 func testCanonSync(t *testing.T, protocol uint, mode SyncMode) {
 	success := make(chan struct{})
-	tester := newTesterWithNotification(t, func() {
+	tester := newTesterWithNotification(t, mode, func() {
 		close(success)
 	})
 	defer tester.terminate()
@@ -404,7 +405,7 @@ func testCanonSync(t *testing.T, protocol uint, mode SyncMode) {
 	tester.newPeer("peer", protocol, chain.blocks[1:])
 
 	// Synchronise with the peer and make sure all relevant data was retrieved
-	if err := tester.downloader.BeaconSync(mode, chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
+	if err := tester.downloader.BeaconSync(chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
 		t.Fatalf("failed to beacon-sync chain: %v", err)
 	}
 	select {
@@ -422,7 +423,7 @@ func TestThrottling68Full(t *testing.T) { testThrottling(t, eth.ETH68, FullSync)
 // func TestThrottling68Snap(t *testing.T) { testThrottling(t, eth.ETH68, SnapSync) }
 
 func testThrottling(t *testing.T, protocol uint, mode SyncMode) {
-	tester := newTester(t)
+	tester := newTester(t, mode)
 	defer tester.terminate()
 
 	// Create a long block chain to download and the tester
@@ -439,7 +440,7 @@ func testThrottling(t *testing.T, protocol uint, mode SyncMode) {
 	// Start a synchronisation concurrently
 	errc := make(chan error, 1)
 	go func() {
-		errc <- tester.downloader.BeaconSync(mode, testChainBase.blocks[len(testChainBase.blocks)-1].Header(), nil)
+		errc <- tester.downloader.BeaconSync(testChainBase.blocks[len(testChainBase.blocks)-1].Header(), nil)
 	}()
 	// Iteratively take some blocks, always checking the retrieval count
 	for {
@@ -505,7 +506,7 @@ func testCancel(t *testing.T, protocol uint, mode SyncMode) {
 	success := func() {
 		close(complete)
 	}
-	tester := newTesterWithNotification(t, success)
+	tester := newTesterWithNotification(t, mode, success)
 	defer tester.terminate()
 
 	chain := testChainBase.shorten(MaxHeaderFetch)
@@ -517,7 +518,7 @@ func testCancel(t *testing.T, protocol uint, mode SyncMode) {
 		t.Errorf("download queue not idle")
 	}
 	// Synchronise with the peer, but cancel afterwards
-	if err := tester.downloader.BeaconSync(mode, chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
+	if err := tester.downloader.BeaconSync(chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	<-complete
@@ -538,7 +539,7 @@ func testMultiProtoSync(t *testing.T, protocol uint, mode SyncMode) {
 	success := func() {
 		close(complete)
 	}
-	tester := newTesterWithNotification(t, success)
+	tester := newTesterWithNotification(t, mode, success)
 	defer tester.terminate()
 
 	// Create a small enough block chain to download
@@ -547,7 +548,7 @@ func testMultiProtoSync(t *testing.T, protocol uint, mode SyncMode) {
 	// Create peers of every type
 	tester.newPeer("peer 68", eth.ETH68, chain.blocks[1:])
 
-	if err := tester.downloader.BeaconSync(mode, chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
+	if err := tester.downloader.BeaconSync(chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
 		t.Fatalf("failed to start beacon sync: %v", err)
 	}
 	select {
@@ -575,7 +576,7 @@ func TestEmptyShortCircuit68Full(t *testing.T) { testEmptyShortCircuit(t, eth.ET
 
 func testEmptyShortCircuit(t *testing.T, protocol uint, mode SyncMode) {
 	success := make(chan struct{})
-	tester := newTesterWithNotification(t, func() {
+	tester := newTesterWithNotification(t, mode, func() {
 		close(success)
 	})
 	defer tester.terminate()
@@ -593,7 +594,7 @@ func testEmptyShortCircuit(t *testing.T, protocol uint, mode SyncMode) {
 		receiptsHave.Add(int32(len(headers)))
 	}
 
-	if err := tester.downloader.BeaconSync(mode, chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
+	if err := tester.downloader.BeaconSync(chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	select {
@@ -656,7 +657,7 @@ func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			success := make(chan struct{})
-			tester := newTesterWithNotification(t, func() {
+			tester := newTesterWithNotification(t, mode, func() {
 				close(success)
 			})
 			defer tester.terminate()
@@ -668,7 +669,7 @@ func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
 			if c.local > 0 {
 				tester.chain.InsertChain(chain.blocks[1 : c.local+1])
 			}
-			if err := tester.downloader.BeaconSync(mode, chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
+			if err := tester.downloader.BeaconSync(chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
 				t.Fatalf("Failed to beacon sync chain %v %v", c.name, err)
 			}
 			select {
@@ -692,7 +693,7 @@ func TestSyncProgress68Full(t *testing.T) { testSyncProgress(t, eth.ETH68, FullS
 
 func testSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	success := make(chan struct{})
-	tester := newTesterWithNotification(t, func() {
+	tester := newTesterWithNotification(t, mode, func() {
 		success <- struct{}{}
 	})
 	defer tester.terminate()
@@ -707,7 +708,7 @@ func testSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 		faultyPeer.withholdBodies[header.Hash()] = struct{}{}
 	}
 
-	if err := tester.downloader.BeaconSync(mode, chain.blocks[len(chain.blocks)/2-1].Header(), nil); err != nil {
+	if err := tester.downloader.BeaconSync(chain.blocks[len(chain.blocks)/2-1].Header(), nil); err != nil {
 		t.Fatalf("failed to beacon-sync chain: %v", err)
 	}
 	select {
@@ -723,7 +724,7 @@ func testSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 
 	// Synchronise all the blocks and check continuation progress
 	tester.newPeer("peer-full", protocol, chain.blocks[1:])
-	if err := tester.downloader.BeaconSync(mode, chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
+	if err := tester.downloader.BeaconSync(chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
 		t.Fatalf("failed to beacon-sync chain: %v", err)
 	}
 	startingBlock := uint64(len(chain.blocks)/2 - 1)
