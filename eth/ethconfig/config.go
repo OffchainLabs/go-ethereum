@@ -50,33 +50,34 @@ var FullNodeGPO = gasprice.Config{
 
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
-	HistoryMode:          history.KeepAll,
-	SyncMode:             SnapSync,
-	NetworkId:            0, // enable auto configuration of networkID == chainID
-	TxLookupLimit:        2350000,
-	TransactionHistory:   2350000,
-	LogHistory:           2350000,
-	StateHistory:         params.FullImmutabilityThreshold,
-	MaxDiffLayers:        pathdb.DefaultMaxDiffLayers,
-	TrienodeHistory:      -1,
-	DatabaseCache:        512,
-	TrieCleanCache:       154,
-	TrieDirtyCache:       256,
-	TrieTimeout:          60 * time.Minute,
-	SnapshotCache:        102,
-	FilterLogCacheSize:   32,
-	LogQueryLimit:        1000,
-	Miner:                miner.DefaultConfig,
-	TxPool:               legacypool.DefaultConfig,
-	BlobPool:             blobpool.DefaultConfig,
-	RPCGasCap:            50000000,
-	RPCEVMTimeout:        5 * time.Second,
-	GPO:                  FullNodeGPO,
-	RPCTxFeeCap:          1, // 1 ether
-	TxSyncDefaultTimeout: 20 * time.Second,
-	TxSyncMaxTimeout:     1 * time.Minute,
-	SlowBlockThreshold:   time.Second * 2,
-	RangeLimit:           0,
+	HistoryMode:             history.KeepAll,
+	SyncMode:                SnapSync,
+	NetworkId:               0, // enable auto configuration of networkID == chainID
+	TxLookupLimit:           2350000,
+	TransactionHistory:      2350000,
+	LogHistory:              2350000,
+	StateHistory:            pathdb.Defaults.StateHistory,
+	MaxDiffLayers:           pathdb.DefaultMaxDiffLayers,
+	TrienodeHistory:         pathdb.Defaults.TrienodeHistory,
+	NodeFullValueCheckpoint: pathdb.Defaults.FullValueCheckpoint,
+	DatabaseCache:           512,
+	TrieCleanCache:          154,
+	TrieDirtyCache:          256,
+	TrieTimeout:             60 * time.Minute,
+	SnapshotCache:           102,
+	FilterLogCacheSize:      32,
+	LogQueryLimit:           1000,
+	Miner:                   miner.DefaultConfig,
+	TxPool:                  legacypool.DefaultConfig,
+	BlobPool:                blobpool.DefaultConfig,
+	RPCGasCap:               50000000,
+	RPCEVMTimeout:           5 * time.Second,
+	GPO:                     FullNodeGPO,
+	RPCTxFeeCap:             1, // 1 ether
+	TxSyncDefaultTimeout:    20 * time.Second,
+	TxSyncMaxTimeout:        1 * time.Minute,
+	SlowBlockThreshold:      time.Second * 2,
+	RangeLimit:              0,
 }
 
 //go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
@@ -114,6 +115,12 @@ type Config struct {
 	StateHistory         uint64 `toml:",omitempty"` // The maximum number of blocks from head whose state histories are reserved.
 	MaxDiffLayers        int    `toml:",omitempty"` // Maximum diff layers allowed in the layer tree.
 	TrienodeHistory      int64  `toml:",omitempty"` // Number of blocks from the chain head for which trienode histories are retained
+
+	// The frequency of full-value encoding. For example, a value of 16 means
+	// that, on average, for a given trie node across its 16 consecutive historical
+	// versions, only one version is stored in full format, while the others
+	// are stored in diff mode for storage compression.
+	NodeFullValueCheckpoint uint32 `toml:",omitempty"`
 
 	// State scheme represents the scheme used to store ethereum states and trie
 	// nodes on top. It can be 'hash', 'path', or none which means use the scheme

@@ -48,7 +48,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 var errBlobTxNotSupported = errors.New("signing blob transactions not supported")
@@ -379,8 +378,7 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 	if len(keys) > 0 {
 		var storageTrie state.Trie
 		if storageRoot != types.EmptyRootHash && storageRoot != (common.Hash{}) {
-			id := trie.StorageTrieID(header.Root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
-			st, err := trie.NewStateTrie(id, statedb.Database().TrieDB())
+			st, err := statedb.Database().OpenStorageTrie(header.Root, address, storageRoot, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -411,7 +409,7 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 		}
 	}
 	// Create the accountProof.
-	tr, err := trie.NewStateTrie(trie.StateTrieID(header.Root), statedb.Database().TrieDB())
+	tr, err := statedb.Database().OpenTrie(header.Root)
 	if err != nil {
 		return nil, err
 	}
