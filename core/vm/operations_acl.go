@@ -270,8 +270,10 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, params.ColdAccountAccessCostEIP2929)
 
+			// Terminate the gas measurement if the leftover gas is not sufficient,
+			// it can effectively prevent accessing the states in the following steps
 			if contract.Gas < multiGas.SingleGas() {
-				return multiGas, nil
+				return multigas.ZeroGas(), ErrOutOfGas
 			}
 		}
 		// if empty and transfers value
