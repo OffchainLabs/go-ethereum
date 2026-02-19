@@ -219,7 +219,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		return nil
 	}
 
-	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true)
+	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true, nil, nil)
 	if err != nil {
 		return err
 	}
