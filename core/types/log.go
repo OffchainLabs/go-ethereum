@@ -68,7 +68,7 @@ type logMarshaling struct {
 
 // FilterLogs creates a slice of logs matching the given criteria.
 func FilterLogs(logs []*Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*Log {
-	var check = func(log *Log) bool {
+	check := func(log *Log) bool {
 		if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > log.BlockNumber {
 			return false
 		}
