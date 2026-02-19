@@ -269,6 +269,10 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 			// Cold account access considered as storage access.
 			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, params.ColdAccountAccessCostEIP2929)
+
+			if contract.Gas < multiGas.SingleGas() {
+				return multiGas, nil
+			}
 		}
 		// if empty and transfers value
 		if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
