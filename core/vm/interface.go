@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
 
@@ -121,9 +120,6 @@ type StateDB interface {
 	AddSlotToAccessList(addr common.Address, slot common.Hash)
 	// GetAccessList returns the access list
 	GetAccessList() (addresses map[common.Address]int, slots []map[common.Hash]struct{})
-
-	// PointCache returns the point cache used in computations
-	PointCache() *utils.PointCache
 
 	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
 

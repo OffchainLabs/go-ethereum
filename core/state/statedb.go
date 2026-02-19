@@ -40,7 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 	"golang.org/x/sync/errgroup"
 )
@@ -203,7 +202,7 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		transientStorage:     newTransientStorage(),
 	}
 	if db.TrieDB().IsVerkle() {
-		sdb.accessEvents = NewAccessEvents(db.PointCache())
+		sdb.accessEvents = NewAccessEvents()
 	}
 	return sdb, nil
 }
@@ -1675,11 +1674,6 @@ func (s *StateDB) markUpdate(addr common.Address) {
 	}
 	s.mutations[addr].applied = false
 	s.mutations[addr].typ = update
-}
-
-// PointCache returns the point cache used by verkle tree.
-func (s *StateDB) PointCache() *utils.PointCache {
-	return s.db.PointCache()
 }
 
 // Witness retrieves the current state witness being collected.
