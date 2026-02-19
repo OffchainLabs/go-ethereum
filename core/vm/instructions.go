@@ -913,18 +913,31 @@ func opStop(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	beneficiary := scope.Stack.pop()
-	evm.StateDB.TouchAddress(beneficiary.Bytes20())
-	balance := evm.StateDB.GetBalance(scope.Contract.Address())
-	evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
-	evm.StateDB.SelfDestruct(scope.Contract.Address())
-	if beneficiary.Bytes20() == scope.Contract.Address() {
+	var (
+		this        = scope.Contract.Address()
+		balance     = evm.StateDB.GetBalance(this)
+		top         = scope.Stack.pop()
+		beneficiary = common.Address(top.Bytes20())
+	)
+
+	evm.StateDB.TouchAddress(beneficiary)
+
+	// The funds are burned immediately if the beneficiary is the caller itself,
+	// in this case, the beneficiary's balance is not increased.
+	if this != beneficiary {
+		evm.StateDB.AddBalance(beneficiary, balance, tracing.BalanceIncreaseSelfdestruct)
+	}
+	// Clear any leftover funds for the account being destructed.
+	evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
+	evm.StateDB.SelfDestruct(this)
+	if this == beneficiary {
 		// Arbitrum: calling selfdestruct(this) burns the balance
 		evm.StateDB.ExpectBalanceBurn(balance.ToBig())
 	}
+
 	if tracer := evm.Config.Tracer; tracer != nil {
 		if tracer.OnEnter != nil {
-			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance.ToBig())
+			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, 0, balance.ToBig())
 		}
 		if tracer.OnExit != nil {
 			tracer.OnExit(evm.depth, []byte{}, 0, nil, false)
@@ -934,29 +947,48 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	var (
+		this        = scope.Contract.Address()
+		balance     = evm.StateDB.GetBalance(this)
+		top         = scope.Stack.pop()
+		beneficiary = common.Address(top.Bytes20())
+
+		newContract = evm.StateDB.IsNewContract(this)
+	)
+
 	// Arbitrum: revert if acting account is a Stylus program
-	actingAddress := scope.Contract.Address()
-	if code := evm.StateDB.GetCode(actingAddress); state.IsStylusComponentPrefix(code, evm.chainRules.ArbOSVersion) {
+	if code := evm.StateDB.GetCode(this); state.IsStylusComponentPrefix(code, evm.chainRules.ArbOSVersion) {
 		return nil, ErrExecutionReverted
 	}
 
-	beneficiary := scope.Stack.pop()
-	evm.StateDB.TouchAddress(beneficiary.Bytes20())
-	balance := evm.StateDB.GetBalance(scope.Contract.Address())
-	evm.StateDB.SubBalance(scope.Contract.Address(), balance, tracing.BalanceDecreaseSelfdestruct)
-	evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
-	evm.StateDB.SelfDestruct6780(scope.Contract.Address())
-	if beneficiary.Bytes20() == scope.Contract.Address() {
+	evm.StateDB.TouchAddress(beneficiary)
+
+	// Contract is new and will actually be deleted.
+	if newContract {
+		if this != beneficiary { // Skip no-op transfer when self-destructing to self.
+			evm.StateDB.AddBalance(beneficiary, balance, tracing.BalanceIncreaseSelfdestruct)
+		}
+		evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
+		evm.StateDB.SelfDestruct(this)
+	}
+
+	// Contract already exists, only do transfer if beneficiary is not self.
+	if !newContract && this != beneficiary {
+		evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
+		evm.StateDB.AddBalance(beneficiary, balance, tracing.BalanceIncreaseSelfdestruct)
+	}
+
+	if this == beneficiary {
 		// SelfDestruct6780 only destructs the contract if selfdestructing in the same transaction as contract creation
 		// So we only account for the balance burn if the contract is actually destructed by checking if the balance is zero.
-		if evm.StateDB.GetBalance(scope.Contract.Address()).Sign() == 0 {
+		if evm.StateDB.GetBalance(this).Sign() == 0 {
 			// Arbitrum: calling selfdestruct(this) burns the balance
 			evm.StateDB.ExpectBalanceBurn(balance.ToBig())
 		}
 	}
 	if tracer := evm.Config.Tracer; tracer != nil {
 		if tracer.OnEnter != nil {
-			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance.ToBig())
+			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, 0, balance.ToBig())
 		}
 		if tracer.OnExit != nil {
 			tracer.OnExit(evm.depth, []byte{}, 0, nil, false)
