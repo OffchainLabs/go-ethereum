@@ -58,6 +58,7 @@ var Defaults = Config{
 	LogHistory:           2350000,
 	StateHistory:         params.FullImmutabilityThreshold,
 	MaxDiffLayers:        pathdb.DefaultMaxDiffLayers,
+	TrienodeHistory:      -1,
 	DatabaseCache:        512,
 	TrieCleanCache:       154,
 	TrieDirtyCache:       256,
@@ -111,6 +112,7 @@ type Config struct {
 	LogExportCheckpoints string // export log index checkpoints to file
 	StateHistory         uint64 `toml:",omitempty"` // The maximum number of blocks from head whose state histories are reserved.
 	MaxDiffLayers        int    `toml:",omitempty"` // Maximum diff layers allowed in the layer tree.
+	TrienodeHistory      int64  `toml:",omitempty"` // Number of blocks from the chain head for which trienode histories are retained
 
 	// State scheme represents the scheme used to store ethereum states and trie
 	// nodes on top. It can be 'hash', 'path', or none which means use the scheme

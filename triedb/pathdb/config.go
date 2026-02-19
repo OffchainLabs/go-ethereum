@@ -51,6 +51,7 @@ const (
 // Defaults contains default settings for Ethereum mainnet.
 var Defaults = &Config{
 	StateHistory:        params.FullImmutabilityThreshold,
+	TrienodeHistory:     -1,
 	EnableStateIndexing: false,
 	TrieCleanSize:       defaultTrieCleanSize,
 	StateCleanSize:      defaultStateCleanSize,
@@ -60,16 +61,18 @@ var Defaults = &Config{
 
 // ReadOnly is the config in order to open database in read only mode.
 var ReadOnly = &Config{
-	ReadOnly:       true,
-	TrieCleanSize:  defaultTrieCleanSize,
-	StateCleanSize: defaultStateCleanSize,
-	MaxDiffLayers:  DefaultMaxDiffLayers,
+	ReadOnly:        true,
+	TrienodeHistory: -1,
+	TrieCleanSize:   defaultTrieCleanSize,
+	StateCleanSize:  defaultStateCleanSize,
+	MaxDiffLayers:   DefaultMaxDiffLayers,
 }
 
 // Config contains the settings for database.
 type Config struct {
 	StateHistory        uint64 // Number of recent blocks to maintain state history for, 0: full chain
 	MaxDiffLayers       int    // Maximum diff layers allowed in the layer tree.
+	TrienodeHistory     int64  // Number of recent blocks to maintain trienode history for, 0: full chain, negative: disable
 	EnableStateIndexing bool   // Whether to enable state history indexing for external state access
 	TrieCleanSize       int    // Maximum memory allowance (in bytes) for caching clean trie data
 	StateCleanSize      int    // Maximum memory allowance (in bytes) for caching clean state data
@@ -113,6 +116,13 @@ func (c *Config) fields() []interface{} {
 		list = append(list, "state-history", "entire chain")
 	} else {
 		list = append(list, "state-history", fmt.Sprintf("last %d blocks", c.StateHistory))
+	}
+	if c.TrienodeHistory >= 0 {
+		if c.TrienodeHistory == 0 {
+			list = append(list, "trie-history", "entire chain")
+		} else {
+			list = append(list, "trie-history", fmt.Sprintf("last %d blocks", c.TrienodeHistory))
+		}
 	}
 	if c.EnableStateIndexing {
 		list = append(list, "index-history", true)

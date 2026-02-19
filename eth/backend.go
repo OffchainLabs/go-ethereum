@@ -236,6 +236,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			Preimages:        config.Preimages,
 			StateHistory:     config.StateHistory,
 			MaxDiffLayers:    config.MaxDiffLayers,
+			TrienodeHistory:  config.TrienodeHistory,
 			StateScheme:      scheme,
 			ChainHistoryMode: config.HistoryMode,
 			TxIndexer: &core.TxIndexerConfig{
