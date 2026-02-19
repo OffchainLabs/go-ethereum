@@ -994,13 +994,13 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				witness := trie.Witness()
 				s.witness.AddState(witness)
 				if s.witnessStats != nil {
-					s.witnessStats.Add(witness, obj.addrHash)
+					s.witnessStats.Add(witness, obj.addrHash())
 				}
 			} else if obj.trie != nil {
 				witness := obj.trie.Witness()
 				s.witness.AddState(witness)
 				if s.witnessStats != nil {
-					s.witnessStats.Add(witness, obj.addrHash)
+					s.witnessStats.Add(witness, obj.addrHash())
 				}
 			}
 		}
@@ -1018,13 +1018,13 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				witness := trie.Witness()
 				s.witness.AddState(witness)
 				if s.witnessStats != nil {
-					s.witnessStats.Add(witness, obj.addrHash)
+					s.witnessStats.Add(witness, obj.addrHash())
 				}
 			} else if obj.trie != nil {
 				witness := obj.trie.Witness()
 				s.witness.AddState(witness)
 				if s.witnessStats != nil {
-					s.witnessStats.Add(witness, obj.addrHash)
+					s.witnessStats.Add(witness, obj.addrHash())
 				}
 			}
 		}
@@ -1443,7 +1443,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 				return err
 			}
 			lock.Lock()
-			updates[obj.addrHash] = update
+			updates[obj.addrHash()] = update
 			s.StorageCommits = time.Since(start) // overwrite with the longest storage commit runtime
 			lock.Unlock()
 			return nil
