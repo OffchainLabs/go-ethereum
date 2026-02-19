@@ -225,7 +225,7 @@ func TestUnindexTransactionsMissingBody(t *testing.T) {
 
 	// Index the entire chain.
 	lastBlock := blocks[len(blocks)-1].NumberU64()
-	IndexTransactions(chainDB, 0, lastBlock+1, nil, false)
+	IndexTransactions(chainDB, 0, lastBlock+1, nil, false, 0)
 
 	// Prove that block 2 body exists in the database.
 	if raw := ReadCanonicalBodyRLP(chainDB, 2, nil); len(raw) == 0 {
@@ -239,7 +239,7 @@ func TestUnindexTransactionsMissingBody(t *testing.T) {
 	}
 
 	// Unindex blocks [0, 3)
-	UnindexTransactions(chainDB, 0, 3, nil, false)
+	UnindexTransactions(chainDB, 0, 3, nil, false, 0)
 
 	// Verify that tx index tail is updated to 3.
 	tail := ReadTxIndexTail(chainDB)
