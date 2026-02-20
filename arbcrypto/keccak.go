@@ -5,9 +5,9 @@ package arbcrypto
 import (
 	"hash"
 
-	"golang.org/x/crypto/sha3"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 )
 
 func NewLegacyKeccak256() hash.Hash {
-	return sha3.NewLegacyKeccak256()
+	return keccak.NewLegacyKeccak256()
 }

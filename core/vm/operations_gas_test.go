@@ -420,7 +420,7 @@ func TestGasSStore4762(t *testing.T) {
 	mem := NewMemory()
 
 	// Setup access list and stack
-	accessList := state.NewAccessEvents(evm.StateDB.PointCache())
+	accessList := state.NewAccessEvents()
 	accessList.AddAccount(caller, false, 0)
 	evm.AccessEvents = accessList
 
@@ -488,7 +488,7 @@ func testGasSLoad(t *testing.T, gasFunc gasFunc, slotKeyProviders ...func(contra
 	mem := NewMemory()
 
 	// Setup access list and stack
-	accessList := state.NewAccessEvents(evm.StateDB.PointCache())
+	accessList := state.NewAccessEvents()
 	accessList.AddAccount(caller, false, 0)
 	evm.AccessEvents = accessList
 
@@ -589,7 +589,7 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 
 			// Mock AccessEvents for EIP4762
 			if tc.isEIP4762 {
-				accessEvents := state.NewAccessEvents(stateDb.PointCache())
+				accessEvents := state.NewAccessEvents()
 				evm.AccessEvents = accessEvents
 			}
 
@@ -1263,8 +1263,8 @@ func TestGasSelfdestructEIP4762(t *testing.T) {
 	mem := NewMemory()
 
 	// Setup access list
-	accessList := state.NewAccessEvents(evm.StateDB.PointCache())
-	accessListForExpected := state.NewAccessEvents(evm.StateDB.PointCache())
+	accessList := state.NewAccessEvents()
+	accessListForExpected := state.NewAccessEvents()
 	evm.AccessEvents = accessList
 
 	stateDb.CreateAccount(beneficiaryAddr)
@@ -1437,7 +1437,7 @@ func TestGasCodeCopyEIP4762(t *testing.T) {
 			// EVM + access events
 			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 			evm := NewEVM(BlockContext{BlockNumber: big.NewInt(0)}, statedb, params.TestChainConfig, Config{})
-			evm.AccessEvents = state.NewAccessEvents(evm.StateDB.PointCache())
+			evm.AccessEvents = state.NewAccessEvents()
 
 			contract := NewContract(common.Address{}, common.HexToAddress("0x1234"), new(uint256.Int), 100000, nil)
 			contract.Code = make([]byte, c.codeLen)
@@ -1464,7 +1464,7 @@ func TestGasCodeCopyEIP4762(t *testing.T) {
 			if c.expectChunks {
 				_, copyOff, nonPadded := getDataAndAdjustedBounds(contract.Code, c.codeOffset, c.length)
 				single := expectedMultiGas.SingleGas()
-				aeExp := state.NewAccessEvents(evm.StateDB.PointCache())
+				aeExp := state.NewAccessEvents()
 				_, wanted := aeExp.CodeChunksRangeGas(contract.Address(), copyOff, nonPadded, uint64(len(contract.Code)), false, contract.Gas-single)
 				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, wanted)
 			}
@@ -1519,7 +1519,7 @@ func TestGasExtCodeCopyEIP4762(t *testing.T) {
 			// EVM + access events
 			stateDb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 			evm := NewEVM(BlockContext{BlockNumber: big.NewInt(0)}, stateDb, params.TestChainConfig, Config{})
-			evm.AccessEvents = state.NewAccessEvents(evm.StateDB.PointCache())
+			evm.AccessEvents = state.NewAccessEvents()
 
 			contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), 100000, nil)
 
@@ -1545,7 +1545,7 @@ func TestGasExtCodeCopyEIP4762(t *testing.T) {
 				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929)
 			} else {
 				singleGas := expectedMultiGas.SingleGas()
-				accessEventsForExpected := state.NewAccessEvents(evm.StateDB.PointCache())
+				accessEventsForExpected := state.NewAccessEvents()
 				wgas := accessEventsForExpected.BasicDataGas(c.addr, false, contract.Gas-singleGas, true)
 				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, wgas)
 			}
@@ -1724,7 +1724,7 @@ func TestGasBalanceExtCodeSizeExtCodeHash4762(t *testing.T) {
 			// EVM + AccessEvents
 			stateDb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 			evm := NewEVM(BlockContext{BlockNumber: big.NewInt(0)}, stateDb, params.TestChainConfig, Config{})
-			evm.AccessEvents = state.NewAccessEvents(evm.StateDB.PointCache())
+			evm.AccessEvents = state.NewAccessEvents()
 
 			contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), 100000, nil)
 
@@ -1744,7 +1744,7 @@ func TestGasBalanceExtCodeSizeExtCodeHash4762(t *testing.T) {
 			}
 
 			// Reset AccessEvents so the call sees the same state
-			evm.AccessEvents = state.NewAccessEvents(evm.StateDB.PointCache())
+			evm.AccessEvents = state.NewAccessEvents()
 
 			multiGas, err := tt.gasFn(evm, contract, stack, mem, 0)
 			if err != nil {
