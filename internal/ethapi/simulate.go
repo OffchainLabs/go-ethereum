@@ -224,7 +224,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	}
 	arbOSVersion := types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion
 	parentArbOSVersion := types.DeserializeHeaderExtraInformation(parent).ArbOSFormatVersion
-	if sim.chainConfig.IsCancun(header.Number, header.Time, arbOSVersion) {
+	if !sim.chainConfig.IsArbitrum() && sim.chainConfig.IsCancun(header.Number, header.Time, arbOSVersion) {
 		var excess uint64
 		if sim.chainConfig.IsCancun(parent.Number, parent.Time, parentArbOSVersion) {
 			excess = eip4844.CalcExcessBlobGas(sim.chainConfig, parent, header.Time)
