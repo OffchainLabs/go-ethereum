@@ -18,6 +18,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"math/rand/v2"
 	"time"
@@ -106,11 +107,11 @@ func (bc *BlockChain) ClipToPostNitroGenesis(blockNum rpc.BlockNumber) (rpc.Bloc
 	return blockNum, currentBlock
 }
 
-func (bc *BlockChain) RecoverState(block *types.Block) error {
+func (bc *BlockChain) RecoverState(ctx context.Context, block *types.Block) error {
 	if bc.HasState(block.Root()) {
 		return nil
 	}
 	log.Warn("recovering block state", "num", block.Number(), "hash", block.Hash(), "root", block.Root())
-	_, err := bc.recoverAncestors(block, false)
+	_, err := bc.recoverAncestors(ctx, block, false)
 	return err
 }
