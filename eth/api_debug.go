@@ -507,6 +507,10 @@ func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumber) (*stateless.ExtWitness
 	bc := api.eth.blockchain
 	var block *types.Block
 	switch bn {
+	case rpc.PendingBlockNumber:
+		return &stateless.ExtWitness{}, errors.New("pending block is not supported for execution witness")
+	case rpc.EarliestBlockNumber:
+		return &stateless.ExtWitness{}, errors.New("earliest block is not supported for execution witness")
 	case rpc.LatestBlockNumber:
 		latestBlock := bc.CurrentBlock()
 		if latestBlock == nil {
@@ -526,6 +530,9 @@ func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumber) (*stateless.ExtWitness
 		}
 		block = bc.GetBlock(safeBlock.Hash(), safeBlock.Number.Uint64())
 	default:
+		if bn < 0 {
+			return &stateless.ExtWitness{}, fmt.Errorf("negative block numbers are not unsupported: %v", bn)
+		}
 		block = bc.GetBlockByNumber(uint64(bn.Int64()))
 	}
 	if block == nil {
@@ -539,7 +546,7 @@ func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumber) (*stateless.ExtWitness
 
 	result, err := bc.ProcessBlock(parent.Root, block, false, true)
 	if err != nil {
-		return nil, err
+		return &stateless.ExtWitness{}, err
 	}
 
 	return result.Witness().ToExtWitness(), nil
@@ -559,7 +566,7 @@ func (api *DebugAPI) ExecutionWitnessByHash(hash common.Hash) (*stateless.ExtWit
 
 	result, err := bc.ProcessBlock(parent.Root, block, false, true)
 	if err != nil {
-		return nil, err
+		return &stateless.ExtWitness{}, err
 	}
 
 	return result.Witness().ToExtWitness(), nil
