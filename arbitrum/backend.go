@@ -35,7 +35,7 @@ type Backend struct {
 	shutdownTracker *shutdowncheck.ShutdownTracker
 
 	chanTxs         chan *types.Transaction
-	closeFilterMaps chan chan struct{} // close updateFilterMapsHeads goroutine
+	closeFilterMaps chan chan struct{} // closeFilterMaps signals updateFilterMapsHeads to stop; the inner channel is closed by the goroutine to confirm it has exited
 	chanNewBlock    chan struct{}      //create new L2 block unless empty
 
 	filterSystem *filters.FilterSystem
