@@ -251,6 +251,14 @@ func (j *journal) accessListAddSlot(addr common.Address, slot common.Hash) {
 	})
 }
 
+func (j *journal) accessListReset(prev *accessList) {
+	j.append(accessListChange{prev: prev})
+}
+
+func (j *journal) transientStorageReset(prev transientStorage) {
+	j.append(transientStorageResetChange{prev: prev})
+}
+
 type (
 	// Changes to the account trie.
 	createObjectChange struct {
@@ -526,5 +534,47 @@ func (ch accessListAddSlotChange) copy() journalEntry {
 	return accessListAddSlotChange{
 		address: ch.address,
 		slot:    ch.slot,
+	}
+}
+
+// accessListChange journals the replacement of the per-tx accessList.
+// On revert, the old pointer is restored so that earlier accessListAdd*
+// journal entries operate on the correct object.
+type accessListChange struct {
+	prev *accessList
+}
+
+func (ch accessListChange) revert(s *StateDB) {
+	s.accessList = ch.prev
+}
+
+func (ch accessListChange) dirtied() *common.Address {
+	return nil
+}
+
+func (ch accessListChange) copy() journalEntry {
+	return accessListChange{
+		prev: ch.prev.Copy(),
+	}
+}
+
+// transientStorageResetChange journals the replacement of the per-tx
+// transientStorage. On revert, the old pointer is restored so that earlier
+// transientStorageChange journal entries operate on the correct object.
+type transientStorageResetChange struct {
+	prev transientStorage
+}
+
+func (ch transientStorageResetChange) revert(s *StateDB) {
+	s.transientStorage = ch.prev
+}
+
+func (ch transientStorageResetChange) dirtied() *common.Address {
+	return nil
+}
+
+func (ch transientStorageResetChange) copy() journalEntry {
+	return transientStorageResetChange{
+		prev: ch.prev.Copy(),
 	}
 }

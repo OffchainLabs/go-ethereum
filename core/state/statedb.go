@@ -1582,7 +1582,7 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 	if rules.IsEIP2929 {
 		// Clear out any leftover from previous executions
 		al := newAccessList()
-		s.accessList = al
+		s.setAccessList(al)
 
 		al.AddAddress(sender)
 		if dst != nil {
@@ -1603,7 +1603,21 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 		}
 	}
 	// Reset transient storage at the beginning of transaction execution
-	s.transientStorage = newTransientStorage()
+	s.setTransientStorage(newTransientStorage())
+}
+
+// setAccessList replaces the access list, journaling the old value so that
+// RevertToSnapshot across a Prepare boundary restores it.
+func (s *StateDB) setAccessList(al *accessList) {
+	s.journal.accessListReset(s.accessList)
+	s.accessList = al
+}
+
+// setTransientStorage replaces the transient storage, journaling the old value
+// so that RevertToSnapshot across a Prepare boundary restores it.
+func (s *StateDB) setTransientStorage(ts transientStorage) {
+	s.journal.transientStorageReset(s.transientStorage)
+	s.transientStorage = ts
 }
 
 // AddAddressToAccessList adds the given address to the access list
