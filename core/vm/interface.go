@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
 
@@ -93,20 +92,18 @@ type StateDB interface {
 	GetTransientState(addr common.Address, key common.Hash) common.Hash
 	SetTransientState(addr common.Address, key, value common.Hash)
 
-	SelfDestruct(common.Address) uint256.Int
+	SelfDestruct(common.Address)
 	HasSelfDestructed(common.Address) bool
 	GetSelfDestructs() []common.Address
-
-	// SelfDestruct6780 is post-EIP6780 selfdestruct, which means that it's a
-	// send-all-to-beneficiary, unless the contract was created in this same
-	// transaction, in which case it will be destructed.
-	// This method returns the prior balance, along with a boolean which is
-	// true iff the object was indeed destructed.
-	SelfDestruct6780(common.Address) (uint256.Int, bool)
 
 	// Exist reports whether the given account exists in state.
 	// Notably this also returns true for self-destructed accounts within the current transaction.
 	Exist(common.Address) bool
+
+	// IsNewContract reports whether the contract at the given address was deployed
+	// during the current transaction.
+	IsNewContract(addr common.Address) bool
+
 	// Empty returns whether the given account is empty. Empty
 	// is defined according to EIP161 (balance = nonce = code = 0).
 	Empty(common.Address) bool
@@ -121,9 +118,6 @@ type StateDB interface {
 	AddSlotToAccessList(addr common.Address, slot common.Hash)
 	// GetAccessList returns the access list
 	GetAccessList() (addresses map[common.Address]int, slots []map[common.Hash]struct{})
-
-	// PointCache returns the point cache used in computations
-	PointCache() *utils.PointCache
 
 	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
 

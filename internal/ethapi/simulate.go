@@ -224,7 +224,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	}
 	arbOSVersion := types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion
 	parentArbOSVersion := types.DeserializeHeaderExtraInformation(parent).ArbOSFormatVersion
-	if sim.chainConfig.IsCancun(header.Number, header.Time, arbOSVersion) {
+	if !sim.chainConfig.IsArbitrum() && sim.chainConfig.IsCancun(header.Number, header.Time, arbOSVersion) {
 		var excess uint64
 		if sim.chainConfig.IsCancun(parent.Number, parent.Time, parentArbOSVersion) {
 			excess = eip4844.CalcExcessBlobGas(sim.chainConfig, parent, header.Time)
@@ -235,7 +235,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if block.BlockOverrides.BlobBaseFee != nil {
 		blockContext.BlobBaseFee = block.BlockOverrides.BlobBaseFee.ToInt()
 	}
-	precompiles := sim.activePrecompiles(sim.base)
+	precompiles := sim.activePrecompiles(header)
 	// State overrides are applied prior to execution of a block
 	if err := block.StateOverrides.Apply(sim.state, precompiles); err != nil {
 		return nil, nil, nil, err
@@ -312,7 +312,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			if errors.Is(result.Err, vm.ErrExecutionReverted) {
 				// If the result contains a revert reason, try to unpack it.
 				revertErr := newRevertError(result.Revert())
-				callRes.Error = &callError{Message: revertErr.Error(), Code: errCodeReverted, Data: revertErr.ErrorData().(string)}
+				callRes.Error = &callError{Message: revertErr.Error(), Code: revertErr.ErrorCode(), Data: revertErr.ErrorData().(string)}
 			} else {
 				callRes.Error = &callError{Message: result.Err.Error(), Code: errCodeVMError}
 			}
@@ -379,7 +379,7 @@ func (sim *simulator) sanitizeCall(call *TransactionArgs, state vm.StateDB, head
 		call.Gas = (*hexutil.Uint64)(&remaining)
 	}
 	if *gasUsed+uint64(*call.Gas) > blockContext.GasLimit {
-		return &blockGasLimitReachedError{fmt.Sprintf("block gas limit reached: %d >= %d", gasUsed, blockContext.GasLimit)}
+		return &blockGasLimitReachedError{fmt.Sprintf("block gas limit reached: %d >= %d", *gasUsed, blockContext.GasLimit)}
 	}
 	if err := call.CallDefaults(sim.gp.Gas(), header.BaseFee, sim.chainConfig.ChainID); err != nil {
 		return err

@@ -44,6 +44,26 @@ const (
 	// pause time will increase when the database writes happen.
 	defaultBufferSize = 64 * 1024 * 1024
 
+	// maxFullValueCheckpoint defines the maximum allowed encoding frequency (1/16)
+	// for storing nodes in full format. With this setting, a node may be written
+	// to the trienode history as a full value at the specified frequency.
+	//
+	// Note that the frequency is not strict: the actual decision is probabilistic.
+	// Only the overall long-term full-value encoding rate is enforced.
+	//
+	// Values beyond this limit are considered ineffective, as the trienode history
+	// is already well compressed. Increasing it further will only degrade read
+	// performance linearly.
+	maxFullValueCheckpoint = 16
+
+	// defaultFullValueCheckpoint defines the default full-value encoding frequency
+	// (1/8) for storing nodes in full format. With this setting, nodes may be
+	// written to the trienode history as full values at the specified rate.
+	//
+	// This strikes a balance between effective compression of the trienode history
+	// and acceptable read performance.
+	defaultFullValueCheckpoint = 8
+
 	// Maximum diff layers allowed in the layer tree.
 	DefaultMaxDiffLayers = 128
 )
@@ -51,6 +71,8 @@ const (
 // Defaults contains default settings for Ethereum mainnet.
 var Defaults = &Config{
 	StateHistory:        params.FullImmutabilityThreshold,
+	TrienodeHistory:     -1,
+	FullValueCheckpoint: defaultFullValueCheckpoint,
 	EnableStateIndexing: false,
 	TrieCleanSize:       defaultTrieCleanSize,
 	StateCleanSize:      defaultStateCleanSize,
@@ -60,22 +82,28 @@ var Defaults = &Config{
 
 // ReadOnly is the config in order to open database in read only mode.
 var ReadOnly = &Config{
-	ReadOnly:       true,
-	TrieCleanSize:  defaultTrieCleanSize,
-	StateCleanSize: defaultStateCleanSize,
-	MaxDiffLayers:  DefaultMaxDiffLayers,
+	ReadOnly:            true,
+	TrienodeHistory:     -1,
+	TrieCleanSize:       defaultTrieCleanSize,
+	StateCleanSize:      defaultStateCleanSize,
+	MaxDiffLayers:       DefaultMaxDiffLayers,
+	FullValueCheckpoint: defaultFullValueCheckpoint,
 }
 
 // Config contains the settings for database.
 type Config struct {
+	TrieCleanSize    int    // Maximum memory allowance (in bytes) for caching clean trie data
+	StateCleanSize   int    // Maximum memory allowance (in bytes) for caching clean state data
+	WriteBufferSize  int    // Maximum memory allowance (in bytes) for write buffer
+	ReadOnly         bool   // Flag whether the database is opened in read only mode
+	JournalDirectory string // Absolute path of journal directory (null means the journal data is persisted in key-value store)
+
+	// Historical state configurations
 	StateHistory        uint64 // Number of recent blocks to maintain state history for, 0: full chain
 	MaxDiffLayers       int    // Maximum diff layers allowed in the layer tree.
+	TrienodeHistory     int64  // Number of recent blocks to maintain trienode history for, 0: full chain, negative: disable
 	EnableStateIndexing bool   // Whether to enable state history indexing for external state access
-	TrieCleanSize       int    // Maximum memory allowance (in bytes) for caching clean trie data
-	StateCleanSize      int    // Maximum memory allowance (in bytes) for caching clean state data
-	WriteBufferSize     int    // Maximum memory allowance (in bytes) for write buffer
-	ReadOnly            bool   // Flag whether the database is opened in read only mode
-	JournalDirectory    string // Absolute path of journal directory (null means the journal data is persisted in key-value store)
+	FullValueCheckpoint uint32 // The rate at which trie nodes are encoded in full-value format
 
 	// Testing configurations
 	SnapshotNoBuild   bool // Flag Whether the state generation is disabled
@@ -91,10 +119,17 @@ func (c *Config) sanitize() *Config {
 		log.Warn("Sanitizing invalid node buffer size", "provided", common.StorageSize(conf.WriteBufferSize), "updated", common.StorageSize(maxBufferSize))
 		conf.WriteBufferSize = maxBufferSize
 	}
-
 	if conf.MaxDiffLayers <= 0 {
 		log.Warn("Sanitizing invalid max diff layers", "provided", conf.MaxDiffLayers, "updated", DefaultMaxDiffLayers)
 		conf.MaxDiffLayers = DefaultMaxDiffLayers
+	}
+	if conf.FullValueCheckpoint > maxFullValueCheckpoint {
+		log.Warn("Sanitizing trienode history full value checkpoint", "provided", conf.FullValueCheckpoint, "updated", maxFullValueCheckpoint)
+		conf.FullValueCheckpoint = maxFullValueCheckpoint
+	}
+	if conf.FullValueCheckpoint == 0 {
+		conf.FullValueCheckpoint = 1
+		log.Info("Disabling diff mode trie node history encoding")
 	}
 	return &conf
 }
@@ -113,6 +148,13 @@ func (c *Config) fields() []interface{} {
 		list = append(list, "state-history", "entire chain")
 	} else {
 		list = append(list, "state-history", fmt.Sprintf("last %d blocks", c.StateHistory))
+	}
+	if c.TrienodeHistory >= 0 {
+		if c.TrienodeHistory == 0 {
+			list = append(list, "trie-history", "entire chain")
+		} else {
+			list = append(list, "trie-history", fmt.Sprintf("last %d blocks", c.TrienodeHistory))
+		}
 	}
 	if c.EnableStateIndexing {
 		list = append(list, "index-history", true)

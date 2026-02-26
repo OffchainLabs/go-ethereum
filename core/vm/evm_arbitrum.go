@@ -102,7 +102,7 @@ func (p DefaultTxProcessor) L1BlockHash(blockCtx BlockContext, l1BlocKNumber uin
 }
 
 func (p DefaultTxProcessor) GasPriceOp(evm *EVM) *big.Int {
-	return evm.GasPrice
+	return evm.GasPrice.ToBig()
 }
 
 func (p DefaultTxProcessor) FillReceiptInfo(*types.Receipt) {}
