@@ -234,6 +234,11 @@ func (s *StateDB) IsAddressFiltered() bool {
 	return false
 }
 
+// HasActiveAddressFilter returns true if an address checker is configured.
+func (s *StateDB) HasActiveAddressFilter() bool {
+	return s.arbExtraData.addressChecker != nil
+}
+
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
