@@ -832,45 +832,6 @@ func (s *StateDB) Copy() *StateDB {
 	return state
 }
 
-// RestoreFrom replaces the receiver's entire state with the state from other.
-// After RestoreFrom, the receiver is in the same state as other.
-//
-// The prefetcher is preserved from the receiver (owned by caller).
-// Metrics counters are NOT restored (cumulative for the block).
-func (s *StateDB) RestoreFrom(other *StateDB) {
-	prefetcher := s.prefetcher
-	witnessStats := s.witnessStats
-
-	s.trie = other.trie
-	s.originalRoot = other.originalRoot
-	s.stateObjects = other.stateObjects
-	s.stateObjectsDestruct = other.stateObjectsDestruct
-	s.mutations = other.mutations
-	s.dbErr = other.dbErr
-	s.refund = other.refund
-	s.thash = other.thash
-	s.txIndex = other.txIndex
-	s.logs = other.logs
-	s.logSize = other.logSize
-	s.preimages = other.preimages
-	s.accessList = other.accessList
-	s.accessEvents = other.accessEvents
-	s.transientStorage = other.transientStorage
-	s.journal = other.journal
-	s.witness = other.witness
-	s.arbExtraData = other.arbExtraData
-
-	s.prefetcher = prefetcher
-	s.witnessStats = witnessStats
-
-	for _, obj := range s.stateObjects {
-		obj.db = s
-	}
-	for _, obj := range s.stateObjectsDestruct {
-		obj.db = s
-	}
-}
-
 // Snapshot returns an identifier for the current revision of the state.
 func (s *StateDB) Snapshot() int {
 	return s.journal.snapshot(s)
