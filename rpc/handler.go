@@ -212,7 +212,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 		if timeout, ok := ContextRequestTimeout(cp.ctx); ok {
 			timer = time.AfterFunc(timeout, func() {
 				cancel()
-				err := &internalServerError{errcodeTimeout, errMsgTimeout}
+				err := &internalServerError{ErrcodeTimeout, ErrMsgTimeout}
 				callBuffer.respondWithError(cp.ctx, h.conn, err)
 			})
 		}
@@ -232,7 +232,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			if resp != nil && h.batchResponseMaxSize != 0 {
 				responseBytes += len(resp.Result)
 				if responseBytes > h.batchResponseMaxSize {
-					err := &internalServerError{errcodeResponseTooLarge, errMsgResponseTooLarge}
+					err := &internalServerError{ErrcodeResponseTooLarge, ErrMsgResponseTooLarge}
 					callBuffer.respondWithError(cp.ctx, h.conn, err)
 					break
 				}
@@ -251,7 +251,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 }
 
 func (h *handler) respondWithBatchTooLarge(cp *callProc, batch []*jsonrpcMessage) {
-	resp := errorMessage(&invalidRequestError{errMsgBatchTooLarge})
+	resp := errorMessage(&invalidRequestError{ErrMsgBatchTooLarge})
 	// Find the first call and add its "id" field to the error.
 	// This is the best we can do, given that the protocol doesn't have a way
 	// of reporting an error for the entire batch.
@@ -290,7 +290,7 @@ func (h *handler) handleNonBatchCall(cp *callProc, msg *jsonrpcMessage) {
 		timer = time.AfterFunc(timeout, func() {
 			cancel()
 			responded.Do(func() {
-				resp := msg.errorResponse(&internalServerError{errcodeTimeout, errMsgTimeout})
+				resp := msg.errorResponse(&internalServerError{ErrcodeTimeout, ErrMsgTimeout})
 				h.conn.writeJSON(cp.ctx, resp, true)
 			})
 		})

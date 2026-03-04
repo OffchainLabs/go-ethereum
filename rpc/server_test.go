@@ -201,7 +201,7 @@ func TestServerBatchResponseSizeLimit(t *testing.T) {
 		if !ok {
 			t.Fatalf("batch elem %d has wrong error: %v", i, batch[i].Error)
 		}
-		wantedCode := errcodeResponseTooLarge
+		wantedCode := ErrcodeResponseTooLarge
 		if re.ErrorCode() != wantedCode {
 			t.Errorf("batch elem %d wrong error code, have %d want %d", i, re.ErrorCode(), wantedCode)
 		}
