@@ -284,27 +284,32 @@ type RawReceiptContext struct {
 // that the additional positional fields are not directly included in the receipt.
 // Notably, only receipts from the canonical chain are visible.
 func ReadCanonicalRawReceipt(db ethdb.Reader, blockHash common.Hash, blockNumber, txIndex uint64) (*types.Receipt, RawReceiptContext, error) {
-	receiptIt, err := rlp.NewListIterator(ReadCanonicalReceiptsRLP(db, blockNumber, &blockHash))
+	data := ReadCanonicalReceiptsRLP(db, blockNumber, &blockHash)
+	if len(data) == 0 {
+		return nil, RawReceiptContext{}, fmt.Errorf("receipts not found, %d, %x", blockNumber, blockHash)
+	}
+	receiptIt, err := rlp.NewListIterator(data)
 	if err != nil {
-		return nil, RawReceiptContext{}, err
+		// The block-level data is not a valid RLP list. This could indicate
+		// corruption or an unknown encoding. Fall back to decoding all receipts.
+		log.Warn("Receipt data is not an RLP list, falling back to full decode", "block", blockNumber, "hash", blockHash, "err", err)
+		return readCanonicalRawReceiptFallback(db, blockHash, blockNumber, txIndex)
 	}
 	var (
 		cumulativeGasUsed uint64
 		logIndex          uint
 	)
 	for i := uint64(0); i <= txIndex; i++ {
-		// Unexpected iteration error
-		if receiptIt.Err() != nil {
-			return nil, RawReceiptContext{}, receiptIt.Err()
-		}
-		// Unexpected end of iteration
 		if !receiptIt.Next() {
 			return nil, RawReceiptContext{}, fmt.Errorf("receipt not found, %d, %x, %d", blockNumber, blockHash, txIndex)
+		}
+		if receiptIt.Err() != nil {
+			return nil, RawReceiptContext{}, fmt.Errorf("corrupted receipt data at block %d, hash %x, index %d: %w", blockNumber, blockHash, i, receiptIt.Err())
 		}
 		if i == txIndex {
 			var stored types.ReceiptForStorage
 			if err := rlp.DecodeBytes(receiptIt.Value(), &stored); err != nil {
-				return nil, RawReceiptContext{}, err
+				return nil, RawReceiptContext{}, fmt.Errorf("failed to decode receipt at block %d, hash %x, txIndex %d: %w", blockNumber, blockHash, txIndex, err)
 			}
 			return (*types.Receipt)(&stored), RawReceiptContext{
 				GasUsed:  stored.CumulativeGasUsed - cumulativeGasUsed,
@@ -313,13 +318,46 @@ func ReadCanonicalRawReceipt(db ethdb.Reader, blockHash common.Hash, blockNumber
 		} else {
 			gas, logs, err := extractReceiptFields(receiptIt.Value())
 			if err != nil {
-				return nil, RawReceiptContext{}, err
+				// extractReceiptFields may fail on Arbitrum legacy receipts,
+				// which have fields [postState, cumulativeGas, gasUsed, l1GasUsed,
+				// status, contractAddress, logs] instead of the expected
+				// [postState, cumulativeGas, l1GasUsed, logs, ...].
+				// See arbLegacyStoredReceiptRLP vs storedReceiptRLP in core/types/receipt.go.
+				log.Debug("extractReceiptFields failed, falling back to full decode", "block", blockNumber, "hash", blockHash, "receiptIndex", i, "err", err)
+				return readCanonicalRawReceiptFallback(db, blockHash, blockNumber, txIndex)
 			}
 			cumulativeGasUsed = gas
 			logIndex += logs
 		}
 	}
 	return nil, RawReceiptContext{}, fmt.Errorf("receipt not found, %d, %x, %d", blockNumber, blockHash, txIndex)
+}
+
+// readCanonicalRawReceiptFallback is the slow path for reading a single receipt.
+// It is used when the optimized field extraction cannot parse the receipt data
+// (e.g. Arbitrum legacy receipts have a different field layout). It decodes all
+// receipts in the block via ReadRawReceipts and derives the context fields from them.
+func readCanonicalRawReceiptFallback(db ethdb.Reader, blockHash common.Hash, blockNumber, txIndex uint64) (*types.Receipt, RawReceiptContext, error) {
+	receipts := ReadRawReceipts(db, blockHash, blockNumber)
+	if receipts == nil {
+		return nil, RawReceiptContext{}, fmt.Errorf("receipts not found, %d, %x", blockNumber, blockHash)
+	}
+	if txIndex >= uint64(len(receipts)) {
+		return nil, RawReceiptContext{}, fmt.Errorf("receipt not found, %d, %x, %d", blockNumber, blockHash, txIndex)
+	}
+	var (
+		cumulativeGasUsed uint64
+		logIndex          uint
+	)
+	for i := uint64(0); i < txIndex; i++ {
+		cumulativeGasUsed = receipts[i].CumulativeGasUsed
+		logIndex += uint(len(receipts[i].Logs))
+	}
+	receipt := receipts[txIndex]
+	return receipt, RawReceiptContext{
+		GasUsed:  receipt.CumulativeGasUsed - cumulativeGasUsed,
+		LogIndex: logIndex,
+	}, nil
 }
 
 // ReadFilterMapExtRow retrieves a filter map row at the given mapRowIndex
