@@ -289,7 +289,7 @@ func TestClientBatchRequestLimit(t *testing.T) {
 		t.Log("error zero:", batch[0].Error)
 		t.Fatalf("batch elem 0 has wrong error type: %T", batch[0].Error)
 	} else {
-		if err0.ErrorCode() != -32600 || err0.Error() != errMsgBatchTooLarge {
+		if err0.ErrorCode() != -32600 || err0.Error() != ErrMsgBatchTooLarge {
 			t.Fatalf("wrong error on batch elem zero: %v", err0)
 		}
 	}
