@@ -2,7 +2,7 @@ package core
 
 import (
 	"bytes"
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
@@ -339,12 +339,8 @@ func TestCallVariantsMultiGas(t *testing.T) {
 			callFn: func() ([]byte, uint64, multigas.MultiGas, error) {
 				return evm.StaticCall(caller, contractAddr, nil, gasLimit)
 			},
-			expectErr: vm.ErrWriteProtection,
-			expectedMultiGas: multigas.MultiGasFromPairs(
-				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: refinedComputationGas},
-				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929},
-				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.SstoreSetGasEIP2200},
-			),
+			expectErr:        fmt.Errorf("%w: %v", vm.ErrOutOfGas, vm.ErrWriteProtection),
+			expectedMultiGas: multigas.ComputationGas(refinedComputationGas + params.ColdSloadCostEIP2929 + params.SstoreSetGasEIP2200),
 		},
 	}
 
@@ -352,8 +348,15 @@ func TestCallVariantsMultiGas(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ret, leftover, usedMultiGas, err := tt.callFn()
 
-			if !errors.Is(err, tt.expectErr) {
-				t.Fatalf("unexpected error: got %v, want %v", err, tt.expectErr)
+			if tt.expectErr != nil {
+				if err == nil {
+					t.Fatalf("unexpected error, got: nil, want: %v", tt.expectErr)
+				}
+				if err.Error() != tt.expectErr.Error() {
+					t.Fatalf("unexpected error, got: %v, want: %v", err, tt.expectErr)
+				}
+			} else if err != nil {
+				t.Fatalf("unexpected error, got: %v, want: nil", err)
 			}
 
 			if gasLimit-leftover != usedMultiGas.SingleGas() {
