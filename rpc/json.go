@@ -116,14 +116,14 @@ func (msg *jsonrpcMessage) errorResponse(err error) *jsonrpcMessage {
 func (msg *jsonrpcMessage) response(result interface{}) *jsonrpcMessage {
 	enc, err := json.Marshal(result)
 	if err != nil {
-		return msg.errorResponse(&internalServerError{errcodeMarshalError, err.Error()})
+		return msg.errorResponse(&internalServerError{ErrcodeMarshalError, err.Error()})
 	}
 	return &jsonrpcMessage{Version: vsn, ID: msg.ID, Result: enc}
 }
 
 func errorMessage(err error) *jsonrpcMessage {
 	msg := &jsonrpcMessage{Version: vsn, ID: null, Error: &jsonError{
-		Code:    errcodeDefault,
+		Code:    ErrcodeDefault,
 		Message: err.Error(),
 	}}
 	ec, ok := err.(Error)

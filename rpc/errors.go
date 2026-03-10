@@ -58,19 +58,19 @@ var (
 )
 
 const (
-	errcodeDefault          = -32000
-	errcodeTimeout          = -32002
-	errcodeResponseTooLarge = -32003
-	errcodePanic            = -32603
-	errcodeMarshalError     = -32603
+	ErrcodeDefault          = -32000
+	ErrcodeTimeout          = -32002
+	ErrcodeResponseTooLarge = -32003
+	ErrcodePanic            = -32603
+	ErrcodeMarshalError     = -32603
 
-	legacyErrcodeNotificationsUnsupported = -32001
+	LegacyErrcodeNotificationsUnsupported = -32001
 )
 
 const (
-	errMsgTimeout          = "request timed out"
-	errMsgResponseTooLarge = "response too large"
-	errMsgBatchTooLarge    = "batch too large"
+	ErrMsgTimeout          = "request timed out"
+	ErrMsgResponseTooLarge = "response too large"
+	ErrMsgBatchTooLarge    = "batch too large"
 )
 
 type methodNotFoundError struct{ method string }
@@ -104,7 +104,7 @@ func (e notificationsUnsupportedError) Is(other error) bool {
 	rpcErr, ok := other.(Error)
 	if ok {
 		code := rpcErr.ErrorCode()
-		return code == -32601 || code == legacyErrcodeNotificationsUnsupported
+		return code == -32601 || code == LegacyErrcodeNotificationsUnsupported
 	}
 	return false
 }
