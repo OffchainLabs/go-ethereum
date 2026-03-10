@@ -301,3 +301,115 @@ func TestExtractReceiptFields(t *testing.T) {
 		}
 	}
 }
+
+func TestReadCanonicalRawReceiptLegacyFallback(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	blockHash := common.BytesToHash([]byte{0x03, 0x14})
+	blockNumber := uint64(42)
+
+	// Create three Arbitrum legacy receipts. The legacy storage format has
+	// fields [postState, cumulativeGas, gasUsed, l1GasUsed, status,
+	// contractAddress, logs] instead of [postState, cumulativeGas, l1GasUsed,
+	// logs, ...], which causes extractReceiptFields to fail and triggers the
+	// fallback path.
+	receipt1 := &types.Receipt{
+		Type:              types.ArbitrumLegacyTxType,
+		PostState:         []byte{0x00},
+		Status:            types.ReceiptStatusSuccessful,
+		CumulativeGasUsed: 100,
+		GasUsed:           100,
+		GasUsedForL1:      50,
+		ContractAddress:   common.BytesToAddress([]byte{0x01}),
+		Logs: []*types.Log{
+			{Address: common.BytesToAddress([]byte{0x11})},
+			{Address: common.BytesToAddress([]byte{0x22})},
+		},
+	}
+	receipt2 := &types.Receipt{
+		Type:              types.ArbitrumLegacyTxType,
+		PostState:         []byte{0x00},
+		Status:            types.ReceiptStatusSuccessful,
+		CumulativeGasUsed: 300,
+		GasUsed:           200,
+		GasUsedForL1:      80,
+		ContractAddress:   common.BytesToAddress([]byte{0x02}),
+		Logs: []*types.Log{
+			{Address: common.BytesToAddress([]byte{0x33})},
+		},
+	}
+	receipt3 := &types.Receipt{
+		Type:              types.ArbitrumLegacyTxType,
+		PostState:         []byte{0x00},
+		Status:            types.ReceiptStatusSuccessful,
+		CumulativeGasUsed: 600,
+		GasUsed:           300,
+		GasUsedForL1:      120,
+		ContractAddress:   common.BytesToAddress([]byte{0x03}),
+		Logs: []*types.Log{
+			{Address: common.BytesToAddress([]byte{0x44})},
+			{Address: common.BytesToAddress([]byte{0x55})},
+			{Address: common.BytesToAddress([]byte{0x66})},
+		},
+	}
+
+	// Write receipts and the canonical hash mapping so
+	// ReadCanonicalReceiptsRLP can find the data.
+	WriteReceipts(db, blockHash, blockNumber, types.Receipts{receipt1, receipt2, receipt3})
+	WriteCanonicalHash(db, blockHash, blockNumber)
+
+	// Reading receipt at index 0 should succeed. The direct path works here
+	// because ReceiptForStorage.DecodeRLP handles both formats, but
+	// extractReceiptFields is not called for preceding receipts.
+	r, ctx, err := ReadCanonicalRawReceipt(db, blockHash, blockNumber, 0)
+	if err != nil {
+		t.Fatalf("unexpected error reading receipt 0: %v", err)
+	}
+	if r.CumulativeGasUsed != 100 {
+		t.Fatalf("receipt 0: unexpected CumulativeGasUsed, want 100, got %d", r.CumulativeGasUsed)
+	}
+	if ctx.GasUsed != 100 {
+		t.Fatalf("receipt 0: unexpected GasUsed, want 100, got %d", ctx.GasUsed)
+	}
+	if ctx.LogIndex != 0 {
+		t.Fatalf("receipt 0: unexpected LogIndex, want 0, got %d", ctx.LogIndex)
+	}
+
+	// Reading receipt at index 1 exercises the fallback path because
+	// extractReceiptFields will fail on the legacy receipt at index 0.
+	r, ctx, err = ReadCanonicalRawReceipt(db, blockHash, blockNumber, 1)
+	if err != nil {
+		t.Fatalf("unexpected error reading receipt 1: %v", err)
+	}
+	if r.CumulativeGasUsed != 300 {
+		t.Fatalf("receipt 1: unexpected CumulativeGasUsed, want 300, got %d", r.CumulativeGasUsed)
+	}
+	if ctx.GasUsed != 200 {
+		t.Fatalf("receipt 1: unexpected GasUsed, want 200, got %d", ctx.GasUsed)
+	}
+	if ctx.LogIndex != 2 {
+		t.Fatalf("receipt 1: unexpected LogIndex, want 2, got %d", ctx.LogIndex)
+	}
+
+	// Reading receipt at index 2 exercises accumulation across multiple
+	// preceding receipts in the fallback path.
+	r, ctx, err = ReadCanonicalRawReceipt(db, blockHash, blockNumber, 2)
+	if err != nil {
+		t.Fatalf("unexpected error reading receipt 2: %v", err)
+	}
+	if r.CumulativeGasUsed != 600 {
+		t.Fatalf("receipt 2: unexpected CumulativeGasUsed, want 600, got %d", r.CumulativeGasUsed)
+	}
+	if ctx.GasUsed != 300 {
+		t.Fatalf("receipt 2: unexpected GasUsed, want 300, got %d", ctx.GasUsed)
+	}
+	if ctx.LogIndex != 3 {
+		t.Fatalf("receipt 2: unexpected LogIndex, want 3, got %d", ctx.LogIndex)
+	}
+
+	// Reading an out-of-bounds index should return an error via the fallback.
+	_, _, err = ReadCanonicalRawReceipt(db, blockHash, blockNumber, 5)
+	if err == nil {
+		t.Fatal("expected error for out-of-bounds txIndex, got nil")
+	}
+}
