@@ -21,7 +21,7 @@ const (
 	ResourceKindHistoryGrowth
 	ResourceKindStorageAccess
 	ResourceKindStorageGrowth
-	ResourceKindL1Calldata
+	ResourceKindSpecialFee
 	ResourceKindL2Calldata
 	ResourceKindWasmComputation
 	NumResourceKind
@@ -96,9 +96,9 @@ func StorageGrowthGas(amount uint64) MultiGas {
 	return NewMultiGas(ResourceKindStorageGrowth, amount)
 }
 
-// L1CalldataGas returns a MultiGas initialized with L1 calldata gas.
-func L1CalldataGas(amount uint64) MultiGas {
-	return NewMultiGas(ResourceKindL1Calldata, amount)
+// SpecialFeeGas returns a MultiGas initialized with a special fee such as L1 calldata cost and retryable redeem gas donation.
+func SpecialFeeGas(amount uint64) MultiGas {
+	return NewMultiGas(ResourceKindSpecialFee, amount)
 }
 
 // L2CalldataGas returns a MultiGas initialized with L2 calldata gas.
@@ -306,7 +306,7 @@ type multiGasJSON struct {
 	HistoryGrowth   hexutil.Uint64 `json:"historyGrowth"`
 	StorageAccess   hexutil.Uint64 `json:"storageAccess"`
 	StorageGrowth   hexutil.Uint64 `json:"storageGrowth"`
-	L1Calldata      hexutil.Uint64 `json:"l1Calldata"`
+	SpecialFee      hexutil.Uint64 `json:"specialFee"`
 	L2Calldata      hexutil.Uint64 `json:"l2Calldata"`
 	WasmComputation hexutil.Uint64 `json:"wasmComputation"`
 	Refund          hexutil.Uint64 `json:"refund"`
@@ -321,7 +321,7 @@ func (z MultiGas) MarshalJSON() ([]byte, error) {
 		HistoryGrowth:   hexutil.Uint64(z.gas[ResourceKindHistoryGrowth]),
 		StorageAccess:   hexutil.Uint64(z.gas[ResourceKindStorageAccess]),
 		StorageGrowth:   hexutil.Uint64(z.gas[ResourceKindStorageGrowth]),
-		L1Calldata:      hexutil.Uint64(z.gas[ResourceKindL1Calldata]),
+		SpecialFee:      hexutil.Uint64(z.gas[ResourceKindSpecialFee]),
 		L2Calldata:      hexutil.Uint64(z.gas[ResourceKindL2Calldata]),
 		WasmComputation: hexutil.Uint64(z.gas[ResourceKindWasmComputation]),
 		Refund:          hexutil.Uint64(z.refund),
@@ -341,7 +341,7 @@ func (z *MultiGas) UnmarshalJSON(data []byte) error {
 	z.gas[ResourceKindHistoryGrowth] = uint64(j.HistoryGrowth)
 	z.gas[ResourceKindStorageAccess] = uint64(j.StorageAccess)
 	z.gas[ResourceKindStorageGrowth] = uint64(j.StorageGrowth)
-	z.gas[ResourceKindL1Calldata] = uint64(j.L1Calldata)
+	z.gas[ResourceKindSpecialFee] = uint64(j.SpecialFee)
 	z.gas[ResourceKindL2Calldata] = uint64(j.L2Calldata)
 	z.gas[ResourceKindWasmComputation] = uint64(j.WasmComputation)
 	z.refund = uint64(j.Refund)

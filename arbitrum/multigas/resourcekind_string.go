@@ -13,13 +13,13 @@ func _() {
 	_ = x[ResourceKindHistoryGrowth-2]
 	_ = x[ResourceKindStorageAccess-3]
 	_ = x[ResourceKindStorageGrowth-4]
-	_ = x[ResourceKindL1Calldata-5]
+	_ = x[ResourceKindSpecialFee-5]
 	_ = x[ResourceKindL2Calldata-6]
 	_ = x[ResourceKindWasmComputation-7]
 	_ = x[NumResourceKind-8]
 }
 
-const _ResourceKind_name = "UnknownComputationHistoryGrowthStorageAccessStorageGrowthL1CalldataL2CalldataWasmComputationNumResourceKind"
+const _ResourceKind_name = "UnknownComputationHistoryGrowthStorageAccessStorageGrowthSpecialFeeL2CalldataWasmComputationNumResourceKind"
 
 var _ResourceKind_index = [...]uint8{0, 7, 18, 31, 44, 57, 67, 77, 92, 107}
 
