@@ -27,7 +27,7 @@
           "historyGrowth": "0x0",
           "storageAccess": "0x0",
           "storageGrowth": "0x0",
-          "l1Calldata": "0x0",
+          "specialFee": "0x0",
           "l2Calldata": "0x0",
           "wasmComputation": "0x0",
           "refund": "0x0",
