@@ -116,7 +116,7 @@ func TestSafeAdd(t *testing.T) {
 		t.Errorf("unexpected storage growth gas: got %v, want %v", got, want)
 	}
 	if got, want := gas.Get(ResourceKindSingleDim), uint64(0); got != want {
-		t.Errorf("unexpected L1 calldata gas: got %v, want %v", got, want)
+		t.Errorf("unexpected single-dimensional gas: got %v, want %v", got, want)
 	}
 	if got, want := gas.Get(ResourceKindL2Calldata), uint64(0); got != want {
 		t.Errorf("unexpected L2 calldata gas: got %v, want %v", got, want)
@@ -168,7 +168,7 @@ func TestSafeSub(t *testing.T) {
 		t.Errorf("unexpected storage growth gas: got %v, want %v", got, want)
 	}
 	if got, want := gas.Get(ResourceKindSingleDim), uint64(0); got != want {
-		t.Errorf("unexpected L1 calldata gas: got %v, want %v", got, want)
+		t.Errorf("unexpected single-dimensional gas: got %v, want %v", got, want)
 	}
 	if got, want := gas.Get(ResourceKindL2Calldata), uint64(0); got != want {
 		t.Errorf("unexpected L2 calldata gas: got %v, want %v", got, want)
