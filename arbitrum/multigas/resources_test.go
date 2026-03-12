@@ -51,13 +51,23 @@ func TestComputationGas(t *testing.T) {
 	}
 }
 
-func TestStorageAccessGas(t *testing.T) {
-	storage := StorageAccessGas(200)
-	if storage.Get(ResourceKindStorageAccess) != 200 {
-		t.Errorf("StorageAccessGas: expected Get(ResourceKindStorageAccess) == 200, got %d", storage.Get(ResourceKindStorageAccess))
+func TestStorageAccessReadGas(t *testing.T) {
+	storage := StorageAccessReadGas(200)
+	if storage.Get(ResourceKindStorageAccessRead) != 200 {
+		t.Errorf("StorageAccessReadGas: expected Get(ResourceKindStorageAccessRead) == 200, got %d", storage.Get(ResourceKindStorageAccessRead))
 	}
 	if storage.SingleGas() != 200 {
-		t.Errorf("StorageAccessGas: expected SingleGas() == 200, got %d", storage.SingleGas())
+		t.Errorf("StorageAccessReadGas: expected SingleGas() == 200, got %d", storage.SingleGas())
+	}
+}
+
+func TestStorageAccessWriteGas(t *testing.T) {
+	storage := StorageAccessWriteGas(300)
+	if storage.Get(ResourceKindStorageAccessWrite) != 300 {
+		t.Errorf("StorageAccessWriteGas: expected Get(ResourceKindStorageAccessWrite) == 300, got %d", storage.Get(ResourceKindStorageAccessWrite))
+	}
+	if storage.SingleGas() != 300 {
+		t.Errorf("StorageAccessWriteGas: expected SingleGas() == 300, got %d", storage.SingleGas())
 	}
 }
 
@@ -65,15 +75,16 @@ func TestMultiGasFromPairs(t *testing.T) {
 	fromPairs := MultiGasFromPairs(
 		Pair{ResourceKindComputation, 10},
 		Pair{ResourceKindHistoryGrowth, 11},
-		Pair{ResourceKindStorageAccess, 12},
+		Pair{ResourceKindStorageAccessRead, 12},
+		Pair{ResourceKindStorageAccessWrite, 17},
 		Pair{ResourceKindStorageGrowth, 13},
 		Pair{ResourceKindL1Calldata, 14},
 		Pair{ResourceKindL2Calldata, 15},
 		Pair{ResourceKindWasmComputation, 16},
 	)
 
-	if got := fromPairs.SingleGas(); got != 91 {
-		t.Errorf("MultiGasFromPairs: expected SingleGas() == 91, got %d", got)
+	if got := fromPairs.SingleGas(); got != 108 {
+		t.Errorf("MultiGasFromPairs: expected SingleGas() == 108, got %d", got)
 	}
 	if got := fromPairs.Get(ResourceKindComputation); got != 10 {
 		t.Errorf("MultiGasFromPairs: expected Get(ResourceKindComputation) == 10, got %d", got)
@@ -81,8 +92,11 @@ func TestMultiGasFromPairs(t *testing.T) {
 	if got := fromPairs.Get(ResourceKindHistoryGrowth); got != 11 {
 		t.Errorf("MultiGasFromPairs: expected Get(ResourceKindHistoryGrowth) == 11, got %d", got)
 	}
-	if got := fromPairs.Get(ResourceKindStorageAccess); got != 12 {
-		t.Errorf("MultiGasFromPairs: expected Get(ResourceKindStorageAccess) == 12, got %d", got)
+	if got := fromPairs.Get(ResourceKindStorageAccessRead); got != 12 {
+		t.Errorf("MultiGasFromPairs: expected Get(ResourceKindStorageAccessRead) == 12, got %d", got)
+	}
+	if got := fromPairs.Get(ResourceKindStorageAccessWrite); got != 17 {
+		t.Errorf("MultiGasFromPairs: expected Get(ResourceKindStorageAccessWrite) == 17, got %d", got)
 	}
 	if got := fromPairs.Get(ResourceKindStorageGrowth); got != 13 {
 		t.Errorf("MultiGasFromPairs: expected Get(ResourceKindStorageGrowth) == 13, got %d", got)
@@ -109,8 +123,11 @@ func TestSafeAdd(t *testing.T) {
 	if got, want := gas.Get(ResourceKindHistoryGrowth), uint64(20); got != want {
 		t.Errorf("unexpected history growth gas: got %v, want %v", got, want)
 	}
-	if got, want := gas.Get(ResourceKindStorageAccess), uint64(0); got != want {
-		t.Errorf("unexpected storage access gas: got %v, want %v", got, want)
+	if got, want := gas.Get(ResourceKindStorageAccessRead), uint64(0); got != want {
+		t.Errorf("unexpected storage access read gas: got %v, want %v", got, want)
+	}
+	if got, want := gas.Get(ResourceKindStorageAccessWrite), uint64(0); got != want {
+		t.Errorf("unexpected storage access write gas: got %v, want %v", got, want)
 	}
 	if got, want := gas.Get(ResourceKindStorageGrowth), uint64(0); got != want {
 		t.Errorf("unexpected storage growth gas: got %v, want %v", got, want)
@@ -147,7 +164,7 @@ func TestSafeSub(t *testing.T) {
 	gas, underflow := MultiGasFromPairs(
 		Pair{ResourceKindComputation, 30},
 		Pair{ResourceKindHistoryGrowth, 40},
-		Pair{ResourceKindStorageAccess, 50},
+		Pair{ResourceKindStorageAccessRead, 50},
 	).SafeSub(MultiGasFromPairs(
 		Pair{ResourceKindComputation, 10},
 		Pair{ResourceKindHistoryGrowth, 20},
@@ -161,7 +178,7 @@ func TestSafeSub(t *testing.T) {
 	if got, want := gas.Get(ResourceKindHistoryGrowth), uint64(20); got != want {
 		t.Errorf("unexpected history growth gas: got %v, want %v", got, want)
 	}
-	if got, want := gas.Get(ResourceKindStorageAccess), uint64(50); got != want {
+	if got, want := gas.Get(ResourceKindStorageAccessRead), uint64(50); got != want {
 		t.Errorf("unexpected storage access gas: got %v, want %v", got, want)
 	}
 	if got, want := gas.Get(ResourceKindStorageGrowth), uint64(0); got != want {
@@ -220,7 +237,7 @@ func TestSaturatingSub(t *testing.T) {
 	a := MultiGasFromPairs(
 		Pair{ResourceKindComputation, 30},
 		Pair{ResourceKindHistoryGrowth, 40},
-		Pair{ResourceKindStorageAccess, 50},
+		Pair{ResourceKindStorageAccessRead, 50},
 	)
 	b := MultiGasFromPairs(
 		Pair{ResourceKindComputation, 10},
@@ -233,7 +250,7 @@ func TestSaturatingSub(t *testing.T) {
 	if got, want := res.Get(ResourceKindHistoryGrowth), uint64(20); got != want {
 		t.Errorf("unexpected history growth gas: got %v, want %v", got, want)
 	}
-	if got, want := res.Get(ResourceKindStorageAccess), uint64(50); got != want {
+	if got, want := res.Get(ResourceKindStorageAccessRead), uint64(50); got != want {
 		t.Errorf("unexpected storage access gas: got %v, want %v", got, want)
 	}
 }
@@ -267,7 +284,7 @@ func TestSaturatingAddInto_AddsKindsTotalRefund(t *testing.T) {
 	// z: comp=5, sa=2, total=7
 	z := MultiGasFromPairs(
 		Pair{ResourceKindComputation, 5},
-		Pair{ResourceKindStorageAccess, 2},
+		Pair{ResourceKindStorageAccessRead, 2},
 	)
 	// x: l2=3, refund=4, total=3
 	x := MultiGasFromPairs(
@@ -280,7 +297,7 @@ func TestSaturatingAddInto_AddsKindsTotalRefund(t *testing.T) {
 	if got, want := z.Get(ResourceKindComputation), uint64(5); got != want {
 		t.Errorf("unexpected computation: got %v, want %v", got, want)
 	}
-	if got, want := z.Get(ResourceKindStorageAccess), uint64(2); got != want {
+	if got, want := z.Get(ResourceKindStorageAccessRead), uint64(2); got != want {
 		t.Errorf("unexpected storage access: got %v, want %v", got, want)
 	}
 	if got, want := z.Get(ResourceKindL2Calldata), uint64(3); got != want {
@@ -317,14 +334,15 @@ func TestSingleGas(t *testing.T) {
 	gas := MultiGasFromPairs(
 		Pair{ResourceKindComputation, 21},
 		Pair{ResourceKindHistoryGrowth, 15},
-		Pair{ResourceKindStorageAccess, 5},
+		Pair{ResourceKindStorageAccessRead, 5},
+		Pair{ResourceKindStorageAccessWrite, 4},
 		Pair{ResourceKindStorageGrowth, 6},
 		Pair{ResourceKindL1Calldata, 7},
 		Pair{ResourceKindL2Calldata, 8},
 		Pair{ResourceKindWasmComputation, 9},
 	)
 	singleGas := gas.SingleGas()
-	if want := uint64(71); singleGas != want {
+	if want := uint64(75); singleGas != want {
 		t.Errorf("unexpected storage growth gas: got %v, want %v", singleGas, want)
 	}
 }
@@ -370,8 +388,8 @@ func TestSaturatingIncrementIntoClampsOnOverflow(t *testing.T) {
 	g := ComputationGas(math.MaxUint64)
 
 	// Increment a different kind by 1: kind won't overflow, total will clamp.
-	g.SaturatingIncrementInto(ResourceKindStorageAccess, 1)
-	if got, want := g.Get(ResourceKindStorageAccess), uint64(1); got != want {
+	g.SaturatingIncrementInto(ResourceKindStorageAccessRead, 1)
+	if got, want := g.Get(ResourceKindStorageAccessRead), uint64(1); got != want {
 		t.Errorf("unexpected storage-access gas: got %v, want %v", got, want)
 	}
 	if got, want := g.SingleGas(), uint64(math.MaxUint64); got != want {
@@ -402,14 +420,14 @@ func TestSaturatingDecrement(t *testing.T) {
 	// saturating decrement on kind
 	gas = MultiGasFromPairs(
 		Pair{ResourceKindComputation, 10},
-		Pair{ResourceKindStorageAccess, 10},
+		Pair{ResourceKindStorageAccessRead, 10},
 	)
 
 	newGas = gas.SaturatingDecrement(ResourceKindComputation, 20)
 	if got, want := newGas.Get(ResourceKindComputation), uint64(0); got != want {
 		t.Errorf("unexpected comp gas: got %v, want %v", got, want)
 	}
-	if got, want := newGas.Get(ResourceKindStorageAccess), uint64(10); got != want {
+	if got, want := newGas.Get(ResourceKindStorageAccessRead), uint64(10); got != want {
 		t.Errorf("unexpected storage access gas: got %v, want %v", got, want)
 	}
 	if got, want := newGas.SingleGas(), uint64(10); got != want {
@@ -417,7 +435,7 @@ func TestSaturatingDecrement(t *testing.T) {
 	}
 
 	if got, want := newGas.SingleGas(),
-		newGas.Get(ResourceKindComputation)+newGas.Get(ResourceKindStorageAccess); got != want {
+		newGas.Get(ResourceKindComputation)+newGas.Get(ResourceKindStorageAccessRead); got != want {
 		t.Errorf("total/sum mismatch: total=%v sum=%v", got, want)
 	}
 
@@ -460,7 +478,7 @@ func TestMultiGasSingleGasTracking(t *testing.T) {
 		t.Fatalf("after SafeIncrement: got total %v, want %v", got, want)
 	}
 
-	other := StorageAccessGas(8)
+	other := StorageAccessReadGas(8)
 	g, overflow = g.SafeAdd(other)
 	if overflow {
 		t.Fatalf("unexpected overflow in SafeAdd")
@@ -491,7 +509,8 @@ func TestMultiGasJsonRoundTrip(t *testing.T) {
 		MultiGasFromPairs(
 			Pair{ResourceKindComputation, 10},
 			Pair{ResourceKindHistoryGrowth, 11},
-			Pair{ResourceKindStorageAccess, 12},
+			Pair{ResourceKindStorageAccessRead, 12},
+			Pair{ResourceKindStorageAccessWrite, 17},
 			Pair{ResourceKindStorageGrowth, 13},
 			Pair{ResourceKindL1Calldata, 14},
 			Pair{ResourceKindL2Calldata, 15},
@@ -529,7 +548,8 @@ func TestMultiGasRlpRoundTrip(t *testing.T) {
 		MultiGasFromPairs(
 			Pair{ResourceKindComputation, 10},
 			Pair{ResourceKindHistoryGrowth, 11},
-			Pair{ResourceKindStorageAccess, 12},
+			Pair{ResourceKindStorageAccessRead, 12},
+			Pair{ResourceKindStorageAccessWrite, 17},
 			Pair{ResourceKindStorageGrowth, 13},
 			Pair{ResourceKindL1Calldata, 14},
 			Pair{ResourceKindL2Calldata, 15},
