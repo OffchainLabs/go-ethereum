@@ -21,7 +21,7 @@ const (
 	ResourceKindHistoryGrowth
 	ResourceKindStorageAccess
 	ResourceKindStorageGrowth
-	ResourceKindSpecialFee
+	ResourceKindSingleDim
 	ResourceKindL2Calldata
 	ResourceKindWasmComputation
 	NumResourceKind
@@ -96,13 +96,13 @@ func StorageGrowthGas(amount uint64) MultiGas {
 	return NewMultiGas(ResourceKindStorageGrowth, amount)
 }
 
-// SpecialFeeGas returns a MultiGas initialized with a special fee such as L1 calldata cost and
+// SingleDimGas returns a MultiGas initialized with single-dimensional gas such as L1 calldata cost and
 // retryable redeem gas donation.
-// For more information on special fees check the design decision docs:
+// For more information on single-dimensional gas check the design decision docs:
 //   - nitro/docs/decisions/0002-multi-dimensional-gas-metering.md
 //   - nitro/docs/decisions/0003-multi-dimensional-gas-refunds.md
-func SpecialFeeGas(amount uint64) MultiGas {
-	return NewMultiGas(ResourceKindSpecialFee, amount)
+func SingleDimGas(amount uint64) MultiGas {
+	return NewMultiGas(ResourceKindSingleDim, amount)
 }
 
 // L2CalldataGas returns a MultiGas initialized with L2 calldata gas.
@@ -310,7 +310,7 @@ type multiGasJSON struct {
 	HistoryGrowth   hexutil.Uint64 `json:"historyGrowth"`
 	StorageAccess   hexutil.Uint64 `json:"storageAccess"`
 	StorageGrowth   hexutil.Uint64 `json:"storageGrowth"`
-	SpecialFee      hexutil.Uint64 `json:"specialFee"`
+	SingleDim       hexutil.Uint64 `json:"singleDim"`
 	L2Calldata      hexutil.Uint64 `json:"l2Calldata"`
 	WasmComputation hexutil.Uint64 `json:"wasmComputation"`
 	Refund          hexutil.Uint64 `json:"refund"`
@@ -325,7 +325,7 @@ func (z MultiGas) MarshalJSON() ([]byte, error) {
 		HistoryGrowth:   hexutil.Uint64(z.gas[ResourceKindHistoryGrowth]),
 		StorageAccess:   hexutil.Uint64(z.gas[ResourceKindStorageAccess]),
 		StorageGrowth:   hexutil.Uint64(z.gas[ResourceKindStorageGrowth]),
-		SpecialFee:      hexutil.Uint64(z.gas[ResourceKindSpecialFee]),
+		SingleDim:       hexutil.Uint64(z.gas[ResourceKindSingleDim]),
 		L2Calldata:      hexutil.Uint64(z.gas[ResourceKindL2Calldata]),
 		WasmComputation: hexutil.Uint64(z.gas[ResourceKindWasmComputation]),
 		Refund:          hexutil.Uint64(z.refund),
@@ -345,7 +345,7 @@ func (z *MultiGas) UnmarshalJSON(data []byte) error {
 	z.gas[ResourceKindHistoryGrowth] = uint64(j.HistoryGrowth)
 	z.gas[ResourceKindStorageAccess] = uint64(j.StorageAccess)
 	z.gas[ResourceKindStorageGrowth] = uint64(j.StorageGrowth)
-	z.gas[ResourceKindSpecialFee] = uint64(j.SpecialFee)
+	z.gas[ResourceKindSingleDim] = uint64(j.SingleDim)
 	z.gas[ResourceKindL2Calldata] = uint64(j.L2Calldata)
 	z.gas[ResourceKindWasmComputation] = uint64(j.WasmComputation)
 	z.refund = uint64(j.Refund)

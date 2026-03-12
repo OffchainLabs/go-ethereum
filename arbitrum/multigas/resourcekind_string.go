@@ -13,15 +13,15 @@ func _() {
 	_ = x[ResourceKindHistoryGrowth-2]
 	_ = x[ResourceKindStorageAccess-3]
 	_ = x[ResourceKindStorageGrowth-4]
-	_ = x[ResourceKindSpecialFee-5]
+	_ = x[ResourceKindSingleDim-5]
 	_ = x[ResourceKindL2Calldata-6]
 	_ = x[ResourceKindWasmComputation-7]
 	_ = x[NumResourceKind-8]
 }
 
-const _ResourceKind_name = "UnknownComputationHistoryGrowthStorageAccessStorageGrowthSpecialFeeL2CalldataWasmComputationNumResourceKind"
+const _ResourceKind_name = "UnknownComputationHistoryGrowthStorageAccessStorageGrowthSingleDimL2CalldataWasmComputationNumResourceKind"
 
-var _ResourceKind_index = [...]uint8{0, 7, 18, 31, 44, 57, 67, 77, 92, 107}
+var _ResourceKind_index = [...]uint8{0, 7, 18, 31, 44, 57, 66, 76, 91, 106}
 
 func (i ResourceKind) String() string {
 	if i >= ResourceKind(len(_ResourceKind_index)-1) {
