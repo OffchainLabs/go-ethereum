@@ -96,7 +96,10 @@ func StorageGrowthGas(amount uint64) MultiGas {
 	return NewMultiGas(ResourceKindStorageGrowth, amount)
 }
 
-// SpecialFeeGas returns a MultiGas initialized with a special fee such as L1 calldata cost and retryable redeem gas donation.
+// SpecialFeeGas returns a MultiGas initialized with a special fee such as L1 calldata cost and
+// retryable redeem gas donation.
+// For more information on special fees check the design decision doc in
+// nitro/docs/decisions/0002-multi-dimensional-gas-metering.md.
 func SpecialFeeGas(amount uint64) MultiGas {
 	return NewMultiGas(ResourceKindSpecialFee, amount)
 }
