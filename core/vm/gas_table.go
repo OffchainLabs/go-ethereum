@@ -539,7 +539,9 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	multiGas := multigas.ZeroGas()
 	// EIP150 homestead gas reprice fork:
 	if evm.chainRules.IsEIP150 {
-		// Selfdestruct operation considered as storage access.
+		// SELFDESTRUCT base cost covers deleting the contract from state — a destructive write.
+		// This predates EIP-2929, so it doesn't decompose into cold/warm phases; the full cost
+		// is attributed to StorageAccessWrite.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessWrite, params.SelfdestructGasEIP150)
 		var address = common.Address(stack.Back(0).Bytes20())

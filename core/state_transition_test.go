@@ -218,7 +218,7 @@ func TestIntrinsicGas(t *testing.T) {
 			accessList: types.AccessList{{Address: common.Address{1}, StorageKeys: []common.Hash{{2}, {3}}}},
 			want: multigas.MultiGasFromPairs(
 				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.TxGas},
-				multigas.Pair{Kind: multigas.ResourceKindStorageAccessWrite, Amount: params.TxAccessListAddressGas + 2*params.TxAccessListStorageKeyGas},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccessRead, Amount: params.TxAccessListAddressGas + 2*params.TxAccessListStorageKeyGas},
 			),
 		},
 		{
