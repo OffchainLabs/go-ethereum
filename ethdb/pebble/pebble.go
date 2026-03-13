@@ -229,6 +229,8 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 			{TargetFileSize: 16 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
 			{TargetFileSize: 32 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
 			{TargetFileSize: 64 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+
+			// Pebble doesn't use the Bloom filter at level6 for read efficiency.
 			{TargetFileSize: 128 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
 		}
 	} else {
@@ -269,8 +271,8 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	// limit unchanged allows writes to be flushed more smoothly. This helps
 	// avoid compaction spikes and mitigates write stalls caused by heavy
 	// compaction workloads.
-	memTableLimit := extraOptions.MemTableStopWritesThreshold
-	memTableSize := cache * 1024 * 1024 / 2 / memTableLimit
+	memTableNumber := extraOptions.MemTableStopWritesThreshold
+	memTableSize := cache * 1024 * 1024 / 2 / memTableNumber
 
 	// The memory table size is currently capped at maxMemTableSize-1 due to a
 	// known bug in the pebble where maxMemTableSize is not recognized as a
@@ -299,12 +301,16 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		// Note, there may have more than two memory tables in the system.
 		MemTableSize: uint64(memTableSize),
 
-		// MemTableStopWritesThreshold places a hard limit on the size
+		// MemTableStopWritesThreshold places a hard limit on the number
 		// of the existent MemTables(including the frozen one).
+		//
 		// Note, this must be the number of tables not the size of all memtables
 		// according to https://github.com/cockroachdb/pebble/blob/master/options.go#L738-L742
 		// and to https://github.com/cockroachdb/pebble/blob/master/db.go#L1892-L1903.
-		MemTableStopWritesThreshold: memTableLimit,
+		//
+		// MemTableStopWritesThreshold is set to twice the maximum number of
+		// allowed memtables to accommodate temporary spikes.
+		MemTableStopWritesThreshold: memTableNumber * 2,
 
 		// The default compaction concurrency(1 thread),
 		// Here use all available CPUs for faster compaction.

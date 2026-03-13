@@ -50,30 +50,34 @@ var FullNodeGPO = gasprice.Config{
 
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
-	HistoryMode:          history.KeepAll,
-	SyncMode:             SnapSync,
-	NetworkId:            0, // enable auto configuration of networkID == chainID
-	TxLookupLimit:        2350000,
-	TransactionHistory:   2350000,
-	LogHistory:           2350000,
-	StateHistory:         params.FullImmutabilityThreshold,
-	MaxDiffLayers:        pathdb.DefaultMaxDiffLayers,
-	DatabaseCache:        512,
-	TrieCleanCache:       154,
-	TrieDirtyCache:       256,
-	TrieTimeout:          60 * time.Minute,
-	SnapshotCache:        102,
-	FilterLogCacheSize:   32,
-	LogQueryLimit:        1000,
-	Miner:                miner.DefaultConfig,
-	TxPool:               legacypool.DefaultConfig,
-	BlobPool:             blobpool.DefaultConfig,
-	RPCGasCap:            50000000,
-	RPCEVMTimeout:        5 * time.Second,
-	GPO:                  FullNodeGPO,
-	RPCTxFeeCap:          1, // 1 ether
-	TxSyncDefaultTimeout: 20 * time.Second,
-	TxSyncMaxTimeout:     1 * time.Minute,
+	HistoryMode:             history.KeepAll,
+	SyncMode:                SnapSync,
+	NetworkId:               0, // enable auto configuration of networkID == chainID
+	TxLookupLimit:           2350000,
+	TransactionHistory:      2350000,
+	LogHistory:              2350000,
+	StateHistory:            pathdb.Defaults.StateHistory,
+	MaxDiffLayers:           pathdb.DefaultMaxDiffLayers,
+	TrienodeHistory:         pathdb.Defaults.TrienodeHistory,
+	NodeFullValueCheckpoint: pathdb.Defaults.FullValueCheckpoint,
+	DatabaseCache:           512,
+	TrieCleanCache:          154,
+	TrieDirtyCache:          256,
+	TrieTimeout:             60 * time.Minute,
+	SnapshotCache:           102,
+	FilterLogCacheSize:      32,
+	LogQueryLimit:           1000,
+	Miner:                   miner.DefaultConfig,
+	TxPool:                  legacypool.DefaultConfig,
+	BlobPool:                blobpool.DefaultConfig,
+	RPCGasCap:               50000000,
+	RPCEVMTimeout:           5 * time.Second,
+	GPO:                     FullNodeGPO,
+	RPCTxFeeCap:             1, // 1 ether
+	TxSyncDefaultTimeout:    20 * time.Second,
+	TxSyncMaxTimeout:        1 * time.Minute,
+	SlowBlockThreshold:      -1, // Disabled by default; set via --debug.logslowblock flag
+	RangeLimit:              0,
 }
 
 //go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
@@ -110,6 +114,13 @@ type Config struct {
 	LogExportCheckpoints string // export log index checkpoints to file
 	StateHistory         uint64 `toml:",omitempty"` // The maximum number of blocks from head whose state histories are reserved.
 	MaxDiffLayers        int    `toml:",omitempty"` // Maximum diff layers allowed in the layer tree.
+	TrienodeHistory      int64  `toml:",omitempty"` // Number of blocks from the chain head for which trienode histories are retained
+
+	// The frequency of full-value encoding. For example, a value of 16 means
+	// that, on average, for a given trie node across its 16 consecutive historical
+	// versions, only one version is stored in full format, while the others
+	// are stored in diff mode for storage compression.
+	NodeFullValueCheckpoint uint32 `toml:",omitempty"`
 
 	// State scheme represents the scheme used to store ethereum states and trie
 	// nodes on top. It can be 'hash', 'path', or none which means use the scheme
@@ -120,6 +131,11 @@ type Config struct {
 	// canonical chain of all remote peers. Setting the option makes geth verify the
 	// presence of these blocks for every new peer connection.
 	RequiredBlocks map[uint64]common.Hash `toml:"-"`
+
+	// SlowBlockThreshold is the block execution time threshold beyond which
+	// detailed statistics are logged. Negative means disabled (default), zero
+	// logs all blocks, positive filters by execution time.
+	SlowBlockThreshold time.Duration `toml:",omitempty"`
 
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`
@@ -192,6 +208,9 @@ type Config struct {
 	// EIP-7966: eth_sendRawTransactionSync timeouts
 	TxSyncDefaultTimeout time.Duration `toml:",omitempty"`
 	TxSyncMaxTimeout     time.Duration `toml:",omitempty"`
+
+	// RangeLimit restricts the maximum range (end - start) for range queries.
+	RangeLimit uint64 `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.
