@@ -140,8 +140,11 @@ func IntrinsicMultiGas(data []byte, accessList types.AccessList, authList []type
 		}
 	}
 	if accessList != nil {
-		gas.SaturatingIncrementInto(multigas.ResourceKindStorageAccess, uint64(len(accessList))*params.TxAccessListAddressGas)
-		gas.SaturatingIncrementInto(multigas.ResourceKindStorageAccess, uint64(accessList.StorageKeys())*params.TxAccessListStorageKeyGas)
+		// Access lists (EIP-2930) pre-warm addresses and storage keys so that subsequent reads
+		// are cheaper. This is a pre-paid read access fee — no persistent state is modified.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
+		gas.SaturatingIncrementInto(multigas.ResourceKindStorageAccessRead, uint64(len(accessList))*params.TxAccessListAddressGas)
+		gas.SaturatingIncrementInto(multigas.ResourceKindStorageAccessRead, uint64(accessList.StorageKeys())*params.TxAccessListStorageKeyGas)
 	}
 	if authList != nil {
 		gas.SaturatingIncrementInto(multigas.ResourceKindStorageGrowth, uint64(len(authList))*params.CallNewAccountGas)
