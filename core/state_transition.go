@@ -140,8 +140,8 @@ func IntrinsicMultiGas(data []byte, accessList types.AccessList, authList []type
 		}
 	}
 	if accessList != nil {
-		gas.SaturatingIncrementInto(multigas.ResourceKindStorageAccess, uint64(len(accessList))*params.TxAccessListAddressGas)
-		gas.SaturatingIncrementInto(multigas.ResourceKindStorageAccess, uint64(accessList.StorageKeys())*params.TxAccessListStorageKeyGas)
+		gas.SaturatingIncrementInto(multigas.ResourceKindStorageAccessWrite, uint64(len(accessList))*params.TxAccessListAddressGas)
+		gas.SaturatingIncrementInto(multigas.ResourceKindStorageAccessWrite, uint64(accessList.StorageKeys())*params.TxAccessListStorageKeyGas)
 	}
 	if authList != nil {
 		gas.SaturatingIncrementInto(multigas.ResourceKindStorageGrowth, uint64(len(authList))*params.CallNewAccountGas)

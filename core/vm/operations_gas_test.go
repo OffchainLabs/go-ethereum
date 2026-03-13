@@ -96,7 +96,7 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.HexToHash("0x1234"),
 			expectedMultiGas: multigas.MultiGasFromPairs(
-				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccessRead, Amount: params.ColdSloadCostEIP2929},
 				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.WarmStorageReadCostEIP2929},
 			),
 		},
@@ -123,7 +123,7 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.Hash{},
-			expectedMultiGas: multigas.StorageAccessGas(params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929),
 			expectedRefund:   params.SstoreClearsScheduleRefundEIP2200,
 		},
 		{
@@ -132,7 +132,7 @@ func TestMakeGasSStoreFunc(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.HexToHash("0x5678"),
-			expectedMultiGas: multigas.StorageAccessGas(params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929),
 		},
 		// Dirty update cases (original != current)
 		{
@@ -203,7 +203,7 @@ func TestGasSStoreFuncEip2200(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.HexToHash("0x1234"),
-			expectedMultiGas: multigas.StorageAccessGas(params.SloadGasEIP2200),
+			expectedMultiGas: multigas.StorageAccessReadGas(params.SloadGasEIP2200),
 		},
 		// (2.1.1) Create slot from 0
 		{
@@ -219,7 +219,7 @@ func TestGasSStoreFuncEip2200(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.Hash{},
-			expectedMultiGas: multigas.StorageAccessGas(params.SstoreResetGasEIP2200),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.SstoreResetGasEIP2200),
 			expectedRefund:   params.SstoreClearsScheduleRefundEIP2200,
 		},
 		// (2.1.2) Write existing value (no refund)
@@ -228,7 +228,7 @@ func TestGasSStoreFuncEip2200(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.HexToHash("0x5678"),
-			expectedMultiGas: multigas.StorageAccessGas(params.SstoreResetGasEIP2200),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.SstoreResetGasEIP2200),
 		},
 		// (2.2.1.2) Delete dirty slot
 		{
@@ -236,7 +236,7 @@ func TestGasSStoreFuncEip2200(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x5678"),
 			newValue:         common.Hash{},
-			expectedMultiGas: multigas.StorageAccessGas(params.SloadGasEIP2200),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.SloadGasEIP2200),
 			expectedRefund:   params.SstoreClearsScheduleRefundEIP2200,
 		},
 		// (2.2.1.1) Recreate dirty slot
@@ -246,7 +246,7 @@ func TestGasSStoreFuncEip2200(t *testing.T) {
 			currentValue:     common.Hash{},
 			newValue:         common.HexToHash("0x5678"),
 			refundValue:      params.SstoreClearsScheduleRefundEIP2200,
-			expectedMultiGas: multigas.StorageAccessGas(params.SloadGasEIP2200),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.SloadGasEIP2200),
 		},
 		// (2.2.2.1) Reset to original empty slot
 		{
@@ -254,7 +254,7 @@ func TestGasSStoreFuncEip2200(t *testing.T) {
 			originalValue:    common.Hash{},
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.Hash{},
-			expectedMultiGas: multigas.StorageAccessGas(params.SloadGasEIP2200),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.SloadGasEIP2200),
 			expectedRefund:   params.SstoreSetGasEIP2200 - params.SloadGasEIP2200,
 		},
 		// (2.2.2.2) Reset to original value
@@ -263,7 +263,7 @@ func TestGasSStoreFuncEip2200(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x5678"),
 			newValue:         common.HexToHash("0x1234"),
-			expectedMultiGas: multigas.StorageAccessGas(params.SloadGasEIP2200),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.SloadGasEIP2200),
 			expectedRefund:   params.SstoreResetGasEIP2200 - params.SloadGasEIP2200,
 		},
 		// (2.2) Generic dirty update
@@ -272,7 +272,7 @@ func TestGasSStoreFuncEip2200(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x5678"),
 			newValue:         common.HexToHash("0x9abc"),
-			expectedMultiGas: multigas.StorageAccessGas(params.SloadGasEIP2200),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.SloadGasEIP2200),
 		},
 	}
 
@@ -289,7 +289,7 @@ func TestGasSStoreFuncEip1283(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.HexToHash("0x1234"),
-			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreNoopGas),
+			expectedMultiGas: multigas.StorageAccessReadGas(params.NetSstoreNoopGas),
 		},
 		// Cases where original == current
 		{
@@ -304,7 +304,7 @@ func TestGasSStoreFuncEip1283(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.Hash{},
-			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreCleanGas),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.NetSstoreCleanGas),
 			expectedRefund:   params.NetSstoreClearRefund,
 		},
 		{
@@ -312,7 +312,7 @@ func TestGasSStoreFuncEip1283(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.HexToHash("0x5678"),
-			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreCleanGas),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.NetSstoreCleanGas),
 		},
 		// Dirty update cases (original != current)
 		{
@@ -321,14 +321,14 @@ func TestGasSStoreFuncEip1283(t *testing.T) {
 			currentValue:     common.Hash{}, // was deleted in current tx
 			newValue:         common.HexToHash("0x5678"),
 			refundValue:      params.SstoreClearsScheduleRefundEIP2200, // simulate refund from deletion
-			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreDirtyGas),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.NetSstoreDirtyGas),
 		},
 		{
 			name:             "delete slot (2.2.1.2)",
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x5678"), // was changed in current tx
 			newValue:         common.Hash{},              // delete
-			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreDirtyGas),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.NetSstoreDirtyGas),
 			expectedRefund:   params.NetSstoreClearRefund,
 		},
 		{
@@ -336,7 +336,7 @@ func TestGasSStoreFuncEip1283(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x5678"),
 			newValue:         common.HexToHash("0x9abc"),
-			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreDirtyGas),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.NetSstoreDirtyGas),
 		},
 		// Reset to original cases (original == value but original != current)
 		{
@@ -344,7 +344,7 @@ func TestGasSStoreFuncEip1283(t *testing.T) {
 			originalValue:    common.Hash{},
 			currentValue:     common.HexToHash("0x1234"), // was created in current tx
 			newValue:         common.Hash{},              // back to original empty
-			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreDirtyGas),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.NetSstoreDirtyGas),
 			expectedRefund:   params.NetSstoreResetClearRefund,
 		},
 		{
@@ -352,7 +352,7 @@ func TestGasSStoreFuncEip1283(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x5678"), // was changed in current tx
 			newValue:         common.HexToHash("0x1234"), // back to original value
-			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreDirtyGas),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.NetSstoreDirtyGas),
 			expectedRefund:   params.NetSstoreResetRefund,
 		},
 		{
@@ -360,7 +360,7 @@ func TestGasSStoreFuncEip1283(t *testing.T) {
 			originalValue:    common.Hash{},
 			currentValue:     common.HexToHash("0x1234"), // was created in current tx
 			newValue:         common.HexToHash("0x5678"), // change to different value
-			expectedMultiGas: multigas.StorageAccessGas(params.NetSstoreDirtyGas),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.NetSstoreDirtyGas),
 		},
 	}
 
@@ -387,7 +387,7 @@ func TestGasSStoreFuncLegacy(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.Hash{},
-			expectedMultiGas: multigas.StorageAccessGas(params.SstoreClearGas),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.SstoreClearGas),
 			expectedRefund:   params.SstoreRefundGas,
 		},
 		{
@@ -395,7 +395,7 @@ func TestGasSStoreFuncLegacy(t *testing.T) {
 			originalValue:    common.HexToHash("0x1234"),
 			currentValue:     common.HexToHash("0x1234"),
 			newValue:         common.HexToHash("0x5678"),
-			expectedMultiGas: multigas.StorageAccessGas(params.SstoreResetGas),
+			expectedMultiGas: multigas.StorageAccessWriteGas(params.SstoreResetGas),
 		},
 	}
 
@@ -429,7 +429,7 @@ func TestGasSStore4762(t *testing.T) {
 
 	expectedStorageAccessGas := params.WitnessBranchReadCost + params.WitnessChunkReadCost +
 		params.WitnessBranchWriteCost + params.WitnessChunkWriteCost
-	expectedMultiGas := multigas.StorageAccessGas(expectedStorageAccessGas)
+	expectedMultiGas := multigas.StorageAccessWriteGas(expectedStorageAccessGas)
 
 	multiGas, err := gasSStore4762(evm, contract, stack, mem, 0)
 	if err != nil {
@@ -446,7 +446,7 @@ func TestGasSSLoad2929(t *testing.T) {
 		// Load new entry
 		func(_ *Contract, _ StateDB) (common.Hash, multigas.MultiGas) {
 			return common.HexToHash("0xdeadbeef"), multigas.MultiGasFromPairs(
-				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccessRead, Amount: params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929},
 				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.WarmStorageReadCostEIP2929},
 			)
 		},
@@ -463,15 +463,15 @@ func TestGasSLoad4762(t *testing.T) {
 	testGasSLoad(t, gasSLoad4762,
 		// Load a new entry
 		func(_ *Contract, _ StateDB) (common.Hash, multigas.MultiGas) {
-			return common.HexToHash("0xdeadbeef"), multigas.StorageAccessGas(params.WitnessBranchReadCost + params.WitnessChunkReadCost)
+			return common.HexToHash("0xdeadbeef"), multigas.StorageAccessReadGas(params.WitnessBranchReadCost + params.WitnessChunkReadCost)
 		},
 		// Load same entry
 		func(_ *Contract, _ StateDB) (common.Hash, multigas.MultiGas) {
-			return common.HexToHash("0xdeadbeef"), multigas.StorageAccessGas(params.WarmStorageReadCostEIP2929)
+			return common.HexToHash("0xdeadbeef"), multigas.StorageAccessReadGas(params.WarmStorageReadCostEIP2929)
 		},
 		// Load adjacent entry
 		func(_ *Contract, _ StateDB) (common.Hash, multigas.MultiGas) {
-			return common.HexToHash("0xdeadbef0"), multigas.StorageAccessGas(params.WitnessChunkReadCost)
+			return common.HexToHash("0xdeadbef0"), multigas.StorageAccessReadGas(params.WitnessChunkReadCost)
 		},
 	)
 }
@@ -599,7 +599,7 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 			// For EIP-2929 (access lists)
 			wasColdAccess := !tc.isEIP2929 || !evm.StateDB.AddressInAccessList(targetAddr)
 			if tc.isEIP2929 && wasColdAccess && !tc.slotInAccessList {
-				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, params.ColdAccountAccessCostEIP2929-params.WarmStorageReadCostEIP2929)
+				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessRead, params.ColdAccountAccessCostEIP2929-params.WarmStorageReadCostEIP2929)
 			}
 
 			// Apply chain rules
@@ -628,13 +628,13 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 			// EIP4762 storage access gas for value transfers
 			if tc.isEIP4762 && tc.transfersValue && !tc.isSystemCall {
 				valueTransferGas := evm.AccessEvents.ValueTransferGas(contract.Address(), caller, contract.Gas)
-				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, valueTransferGas)
+				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessWrite, valueTransferGas)
 			}
 
 			// For EIP-4762 (Witnesses gas)
 			if tc.addWitnessGas && !contract.IsSystemCall {
 				// Calculated in `touchAddressAndChargeGas` WitnessBranchReadCost + WitnessChunkReadCost = 2100
-				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, 2100)
+				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessRead, 2100)
 			}
 
 			// Call the function
@@ -1185,7 +1185,7 @@ func TestGasSelfdestruct(t *testing.T) {
 		{
 			name:              "selfdestruct exisit with EIP-150 with refund",
 			isEIP150:          true,
-			expectedMultiGas:  multigas.StorageAccessGas(params.SelfdestructGasEIP150),
+			expectedMultiGas:  multigas.StorageAccessWriteGas(params.SelfdestructGasEIP150),
 			beneficiaryExists: true,
 			expectedRefund:    params.SelfdestructRefundGas,
 		},
@@ -1193,7 +1193,7 @@ func TestGasSelfdestruct(t *testing.T) {
 			name:              "selfdestruct not-exisit with EIP-150 and EIP-158 without refund",
 			isEIP150:          true,
 			isEIP158:          true,
-			expectedMultiGas:  multigas.StorageAccessGas(params.SelfdestructGasEIP150),
+			expectedMultiGas:  multigas.StorageAccessWriteGas(params.SelfdestructGasEIP150),
 			hasBeenDestructed: true,
 		},
 		{
@@ -1202,7 +1202,7 @@ func TestGasSelfdestruct(t *testing.T) {
 			isEIP150:          true,
 			isEIP158:          true,
 			expectedMultiGas: multigas.MultiGasFromPairs(
-				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.SelfdestructGasEIP150},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccessWrite, Amount: params.SelfdestructGasEIP150},
 				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.CreateBySelfdestructGas},
 			),
 			expectedRefund: params.SelfdestructRefundGas,
@@ -1218,20 +1218,20 @@ func TestMakeSelfdestructGasFn(t *testing.T) {
 		{
 			name: "selfdestruct - no access list - with refund",
 			expectedMultiGas: multigas.MultiGasFromPairs(
-				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdAccountAccessCostEIP2929},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccessRead, Amount: params.ColdAccountAccessCostEIP2929},
 				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.CreateBySelfdestructGas},
 			),
 			expectedRefund: params.SelfdestructRefundGas,
 		},
 		{
 			name:              "has been destructed - no access list - no refund",
-			expectedMultiGas:  multigas.StorageAccessGas(params.ColdAccountAccessCostEIP2929),
+			expectedMultiGas:  multigas.StorageAccessReadGas(params.ColdAccountAccessCostEIP2929),
 			hasBeenDestructed: true,
 		},
 		{
 			name: "selfdestruct - in access list - with refund",
 			expectedMultiGas: multigas.MultiGasFromPairs(
-				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdAccountAccessCostEIP2929},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccessRead, Amount: params.ColdAccountAccessCostEIP2929},
 				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.CreateBySelfdestructGas},
 			),
 			expectedRefund:   params.SelfdestructRefundGas,
@@ -1239,7 +1239,7 @@ func TestMakeSelfdestructGasFn(t *testing.T) {
 		},
 		{
 			name:              "has been destructed - in access list - no refund",
-			expectedMultiGas:  multigas.StorageAccessGas(params.ColdAccountAccessCostEIP2929),
+			expectedMultiGas:  multigas.StorageAccessReadGas(params.ColdAccountAccessCostEIP2929),
 			hasBeenDestructed: true,
 			slotInAccessList:  true,
 		},
@@ -1275,7 +1275,7 @@ func TestGasSelfdestructEIP4762(t *testing.T) {
 	stack.push(new(uint256.Int).SetBytes(beneficiaryAddr.Bytes()))
 
 	expectedStorageAccessGas := accessListForExpected.BasicDataGas(contractAddr, false, contract.Gas, false) + accessListForExpected.BasicDataGas(beneficiaryAddr, false, contract.Gas, false)
-	expectedMultiGas := multigas.StorageAccessGas(expectedStorageAccessGas)
+	expectedMultiGas := multigas.StorageAccessReadGas(expectedStorageAccessGas)
 
 	multiGas, err := gasSelfdestructEIP4762(evm, contract, stack, mem, 0)
 	if err != nil {
@@ -1346,7 +1346,7 @@ func TestMemoryCopierGas(t *testing.T) {
 		// CALLDATACOPY, CODECOPY, MCOPY, RETURNDATACOPY -> computation
 		{stackpos: 2, size: 64, dim: multigas.ResourceKindComputation},
 		// EXTCODECOPY -> storage access
-		{stackpos: 3, size: 96, dim: multigas.ResourceKindStorageAccess},
+		{stackpos: 3, size: 96, dim: multigas.ResourceKindStorageAccessRead},
 	}
 
 	for _, tt := range tests {
@@ -1466,7 +1466,7 @@ func TestGasCodeCopyEIP4762(t *testing.T) {
 				single := expectedMultiGas.SingleGas()
 				aeExp := state.NewAccessEvents(evm.StateDB.PointCache())
 				_, wanted := aeExp.CodeChunksRangeGas(contract.Address(), copyOff, nonPadded, uint64(len(contract.Code)), false, contract.Gas-single)
-				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, wanted)
+				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessRead, wanted)
 			}
 
 			multiGas, err := gasCodeCopyEip4762(evm, contract, stack, mem, c.memorySize)
@@ -1538,7 +1538,7 @@ func TestGasExtCodeCopyEIP4762(t *testing.T) {
 			if err != nil {
 				t.Fatalf("memoryGasCost failed: %v", err)
 			}
-			expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, toWordSize(c.length)*params.CopyGas)
+			expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessRead, toWordSize(c.length)*params.CopyGas)
 
 			// expected EIP-4762 addition
 			if c.expectWarm {
@@ -1547,7 +1547,7 @@ func TestGasExtCodeCopyEIP4762(t *testing.T) {
 				singleGas := expectedMultiGas.SingleGas()
 				accessEventsForExpected := state.NewAccessEvents(evm.StateDB.PointCache())
 				wgas := accessEventsForExpected.BasicDataGas(c.addr, false, contract.Gas-singleGas, true)
-				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, wgas)
+				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessRead, wgas)
 			}
 
 			multiGas, err := gasExtCodeCopyEIP4762(evm, contract, stack, mem, c.memorySize)
@@ -1609,7 +1609,7 @@ func TestGasExtCodeCopyEIP2929(t *testing.T) {
 				t.Fatalf("Unexpected error: %v", err)
 			}
 
-			got := multiGas.Get(multigas.ResourceKindStorageAccess)
+			got := multiGas.Get(multigas.ResourceKindStorageAccessRead)
 			if got != tt.expectDelta {
 				t.Errorf("expected storage-access delta %d, got %d", tt.expectDelta, got)
 			}
@@ -1665,7 +1665,7 @@ func TestGasEip2929AccountCheck(t *testing.T) {
 				expectedMultiGas = multigas.ZeroGas()
 			} else {
 				extra := params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
-				expectedMultiGas = multigas.StorageAccessGas(extra)
+				expectedMultiGas = multigas.StorageAccessReadGas(extra)
 			}
 
 			multiGas, err := gasEip2929AccountCheck(evm, contract, stack, mem, 0)
@@ -1740,7 +1740,7 @@ func TestGasBalanceExtCodeSizeExtCodeHash4762(t *testing.T) {
 				expectedMultiGas = multigas.ZeroGas()
 			} else {
 				basicDataGas := evm.AccessEvents.BasicDataGas(tt.addr, false, contract.Gas, true)
-				expectedMultiGas = multigas.StorageAccessGas(basicDataGas)
+				expectedMultiGas = multigas.StorageAccessReadGas(basicDataGas)
 			}
 
 			// Reset AccessEvents so the call sees the same state

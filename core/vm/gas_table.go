@@ -86,13 +86,13 @@ func memoryCopierGas(stackpos int) gasFunc {
 		}
 
 		// Distribute copy gas by dimension:
-		// - For EXTCODECOPY: count as ResourceKindStorageAccess since it is the only opcode
+		// - For EXTCODECOPY: count as ResourceKindStorageAccessRead since it is the only opcode
 		// using stack position 3 and reading from the state trie.
 		// - For others: count as ResourceKindComputation since they are in-memory operations
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		var dim multigas.ResourceKind
 		if stackpos == 3 {
-			dim = multigas.ResourceKindStorageAccess // EXTCODECOPY
+			dim = multigas.ResourceKindStorageAccessRead // EXTCODECOPY
 		} else {
 			dim = multigas.ResourceKindComputation // CALLDATACOPY, CODECOPY, MCOPY, RETURNDATACOPY
 		}
@@ -130,9 +130,9 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 			return multigas.StorageGrowthGas(params.SstoreSetGas), nil
 		case current != (common.Hash{}) && y.Sign() == 0: // non 0 => 0
 			evm.StateDB.AddRefund(params.SstoreRefundGas)
-			return multigas.StorageAccessGas(params.SstoreClearGas), nil
+			return multigas.StorageAccessWriteGas(params.SstoreClearGas), nil
 		default: // non 0 => non 0 (or 0 => 0)
-			return multigas.StorageAccessGas(params.SstoreResetGas), nil
+			return multigas.StorageAccessWriteGas(params.SstoreResetGas), nil
 		}
 	}
 
@@ -152,7 +152,7 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 	//			(2.2.2.2.) Otherwise, add 4800 gas to refund counter.
 	value := common.Hash(y.Bytes32())
 	if current == value { // noop (1)
-		return multigas.StorageAccessGas(params.NetSstoreNoopGas), nil
+		return multigas.StorageAccessReadGas(params.NetSstoreNoopGas), nil
 	}
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
@@ -162,7 +162,7 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 		if value == (common.Hash{}) { // delete slot (2.1.2b)
 			evm.StateDB.AddRefund(params.NetSstoreClearRefund)
 		}
-		return multigas.StorageAccessGas(params.NetSstoreCleanGas), nil // write existing slot (2.1.2)
+		return multigas.StorageAccessWriteGas(params.NetSstoreCleanGas), nil // write existing slot (2.1.2)
 	}
 	if original != (common.Hash{}) {
 		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
@@ -178,7 +178,7 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 			evm.StateDB.AddRefund(params.NetSstoreResetRefund)
 		}
 	}
-	return multigas.StorageAccessGas(params.NetSstoreDirtyGas), nil
+	return multigas.StorageAccessWriteGas(params.NetSstoreDirtyGas), nil
 }
 
 // Here come the EIP2200 rules:
@@ -209,7 +209,7 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	value := common.Hash(y.Bytes32())
 
 	if current == value { // noop (1)
-		return multigas.StorageAccessGas(params.SloadGasEIP2200), nil
+		return multigas.StorageAccessReadGas(params.SloadGasEIP2200), nil
 	}
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
@@ -219,7 +219,7 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 			evm.StateDB.AddRefund(params.SstoreClearsScheduleRefundEIP2200)
 		}
 
-		return multigas.StorageAccessGas(params.SstoreResetGasEIP2200), nil
+		return multigas.StorageAccessWriteGas(params.SstoreResetGasEIP2200), nil
 	}
 	if original != (common.Hash{}) {
 		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
@@ -235,7 +235,7 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 			evm.StateDB.AddRefund(params.SstoreResetGasEIP2200 - params.SloadGasEIP2200)
 		}
 	}
-	return multigas.StorageAccessGas(params.SloadGasEIP2200), nil // dirty update (2.2)
+	return multigas.StorageAccessWriteGas(params.SloadGasEIP2200), nil // dirty update (2.2)
 }
 
 func makeGasLog(n uint64) gasFunc {
@@ -541,7 +541,7 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	if evm.chainRules.IsEIP150 {
 		// Selfdestruct operation considered as storage access.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-		multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccess, params.SelfdestructGasEIP150)
+		multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessWrite, params.SelfdestructGasEIP150)
 		var address = common.Address(stack.Back(0).Bytes20())
 
 		// New account creation considered as storage growth.

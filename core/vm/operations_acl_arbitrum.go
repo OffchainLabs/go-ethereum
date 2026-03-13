@@ -34,9 +34,9 @@ func WasmStateLoadCost(db StateDB, program common.Address, key common.Hash) mult
 		// If he does afford it, we can skip checking the same thing later on, during execution
 		db.AddSlotToAccessList(program, key)
 
-		// Cold slot access considered as storage access + computation
+		// Cold slot access considered as storage access read + computation
 		return multigas.MultiGasFromPairs(
-			multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929},
+			multigas.Pair{Kind: multigas.ResourceKindStorageAccessRead, Amount: params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929},
 			multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.WarmStorageReadCostEIP2929},
 		)
 	}
@@ -55,7 +55,7 @@ func WasmStateStoreCost(db StateDB, program common.Address, key, value common.Ha
 
 	// Check slot presence in the access list
 	if addrPresent, slotPresent := db.SlotInAccessList(program, key); !slotPresent {
-		cost.SaturatingIncrementInto(multigas.ResourceKindStorageAccess, params.ColdSloadCostEIP2929)
+		cost.SaturatingIncrementInto(multigas.ResourceKindStorageAccessRead, params.ColdSloadCostEIP2929)
 		// If the caller cannot afford the cost, this change will be rolled back
 		db.AddSlotToAccessList(program, key)
 		if !addrPresent {
@@ -78,7 +78,7 @@ func WasmStateStoreCost(db StateDB, program common.Address, key, value common.Ha
 		}
 		// EIP-2200 original clause:
 		//		return params.SstoreResetGasEIP2200, nil // write existing slot (2.1.2)
-		return cost.SaturatingIncrement(multigas.ResourceKindStorageAccess, params.SstoreResetGasEIP2200-params.ColdSloadCostEIP2929)
+		return cost.SaturatingIncrement(multigas.ResourceKindStorageAccessWrite, params.SstoreResetGasEIP2200-params.ColdSloadCostEIP2929)
 	}
 	if original != (common.Hash{}) {
 		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
@@ -129,8 +129,8 @@ func WasmCallCost(db StateDB, contract common.Address, value *uint256.Int, budge
 	if !warmAccess {
 		db.AddAddressToAccessList(contract)
 
-		// Cold slot access considered as storage access.
-		if apply(multigas.ResourceKindStorageAccess, coldCost) {
+		// Cold slot access considered as storage access read.
+		if apply(multigas.ResourceKindStorageAccessRead, coldCost) {
 			return total, ErrOutOfGas
 		}
 	}
@@ -158,14 +158,14 @@ func WasmAccountTouchCost(cfg *params.ChainConfig, db StateDB, addr common.Addre
 	cost := multigas.ZeroGas()
 	if withCode {
 		extCodeCost := cfg.MaxCodeSize() / params.DefaultMaxCodeSize * params.ExtcodeSizeGasEIP150
-		cost.SaturatingIncrementInto(multigas.ResourceKindStorageAccess, extCodeCost)
+		cost.SaturatingIncrementInto(multigas.ResourceKindStorageAccessRead, extCodeCost)
 	}
 
 	if !db.AddressInAccessList(addr) {
 		db.AddAddressToAccessList(addr)
-		// Cold slot read -> storage access + computation
+		// Cold slot read -> storage access read + computation
 		return cost.SaturatingAdd(multigas.MultiGasFromPairs(
-			multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929},
+			multigas.Pair{Kind: multigas.ResourceKindStorageAccessRead, Amount: params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929},
 			multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.WarmStorageReadCostEIP2929},
 		))
 	}
