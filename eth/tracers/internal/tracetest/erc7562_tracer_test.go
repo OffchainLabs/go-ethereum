@@ -119,7 +119,7 @@ func TestErc7562Tracer(t *testing.T) {
 			if tracer.Hooks != nil {
 				logState = state.NewHookedState(st.StateDB, tracer.Hooks)
 			}
-			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, core.NewMessageReplayContext())
+			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, core.NewMessageReplayContext(false))
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}

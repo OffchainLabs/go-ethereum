@@ -60,7 +60,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 	workers.SetLimit(max(1, 4*runtime.NumCPU()/5)) // Aggressively run the prefetching
 
 	// Iterate over and process the individual transactions
-	runCtx := NewMessageEthcallContext()
+	runCtx := NewMessageEthcallContext(p.chain.CraneliftFallback())
 	for i, tx := range block.Transactions() {
 		stateCpy := statedb.Copy() // closure
 		workers.Go(func() error {

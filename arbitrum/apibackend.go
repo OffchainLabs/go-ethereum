@@ -52,6 +52,10 @@ type APIBackend struct {
 	sync                  SyncProgressBackend
 }
 
+func (a *APIBackend) CraneliftFallback() bool {
+	return a.b.arb.BlockChain().CraneliftFallback()
+}
+
 func (a *APIBackend) RPCTxSyncDefaultTimeout() time.Duration {
 	return a.b.config.TxSyncDefaultTimeout
 }

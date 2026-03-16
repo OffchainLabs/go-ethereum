@@ -91,6 +91,15 @@ func (bc *BlockChain) ReorgToOldBlock(newHead *types.Block) error {
 	return nil
 }
 
+func (bc *BlockChain) SetCraneliftFallback(enabled bool) {
+	bc.craneliftFallback = enabled
+	bc.hc.craneliftFallback = enabled
+}
+
+func (bc *BlockChain) CraneliftFallback() bool {
+	return bc.craneliftFallback
+}
+
 func (bc *BlockChain) ClipToPostNitroGenesis(blockNum rpc.BlockNumber) (rpc.BlockNumber, rpc.BlockNumber) {
 	currentBlock := rpc.BlockNumber(bc.CurrentBlock().Number.Uint64())
 	nitroGenesis := rpc.BlockNumber(bc.Config().ArbitrumChainParams.GenesisBlockNum)

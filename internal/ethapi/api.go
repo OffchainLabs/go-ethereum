@@ -905,7 +905,7 @@ func (api *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockN
 		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		blockNrOrHash = &latest
 	}
-	result, err := DoCall(ctx, api.b, args, *blockNrOrHash, overrides, blockOverrides, api.b.RPCEVMTimeout(), api.b.RPCGasCap(), core.NewMessageEthcallContext())
+	result, err := DoCall(ctx, api.b, args, *blockNrOrHash, overrides, blockOverrides, api.b.RPCEVMTimeout(), api.b.RPCGasCap(), core.NewMessageEthcallContext(core.CraneliftFallbackFrom(api.b)))
 	if err != nil {
 		if client := fallbackClientFor(api.b, err); client != nil {
 			var res hexutil.Bytes
@@ -1004,7 +1004,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	// Run the gas estimation and wrap any revertals into a custom return
 	// Arbitrum: this also appropriately recursively calls another args.ToMessage with increased gasCap by posterCostInL2Gas amount
-	call := args.ToMessage(header.BaseFee, gasCap, header, state, core.NewMessageGasEstimationContext(), true)
+	call := args.ToMessage(header.BaseFee, gasCap, header, state, core.NewMessageGasEstimationContext(core.CraneliftFallbackFrom(b)), true)
 
 	// Arbitrum: raise the gas cap to ignore L1 costs so that it's compute-only
 	if gasCap > 0 {
@@ -1554,7 +1554,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	if args.AccessList != nil {
 		prevTracer = logger.NewAccessListTracer(*args.AccessList, addressesToExclude)
 	}
-	runCtx := core.NewMessageEthcallContext()
+	runCtx := core.NewMessageEthcallContext(core.CraneliftFallbackFrom(b))
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, 0, nil, err

@@ -95,7 +95,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
-	runCtx := NewMessageReplayContext()
+	runCtx := NewMessageReplayContext(craneliftFallbackFrom(p.chain))
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee, runCtx)
@@ -225,8 +225,8 @@ func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64) (*types.Receipt, *ExecutionResult, error) {
-	return ApplyTransactionWithResultFilter(evm, gp, statedb, header, tx, usedGas, NewMessageReplayContext(), nil)
+func ApplyTransaction(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, craneliftFallback bool) (*types.Receipt, *ExecutionResult, error) {
+	return ApplyTransactionWithResultFilter(evm, gp, statedb, header, tx, usedGas, NewMessageReplayContext(craneliftFallback), nil)
 }
 
 func ApplyTransactionWithResultFilter(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, runCtx *MessageRunContext, resultFilter func(*ExecutionResult) error) (*types.Receipt, *ExecutionResult, error) {

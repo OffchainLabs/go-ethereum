@@ -266,7 +266,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 		tracker = newStateTracker(maximumPendingTraceStates, start.NumberU64())
 	)
 
-	runCtx := core.NewMessageReplayContext()
+	runCtx := core.NewMessageReplayContext(core.CraneliftFallbackFrom(api.backend))
 
 	for th := 0; th < threads; th++ {
 		pend.Add(1)
@@ -552,7 +552,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	if !chainConfig.IsArbitrum() && chainConfig.IsPrague(block.Number(), block.Time(), vmctx.ArbOSVersion) {
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
-	runCtx := core.NewMessageReplayContext()
+	runCtx := core.NewMessageReplayContext(core.CraneliftFallbackFrom(api.backend))
 	for i, tx := range block.Transactions() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -634,7 +634,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		signer       = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time(), arbosVersion)
 		results      = make([]*txTraceResult, len(txs))
 	)
-	runCtx := core.NewMessageReplayContext()
+	runCtx := core.NewMessageReplayContext(core.CraneliftFallbackFrom(api.backend))
 	for i, tx := range txs {
 		// Generate the next state snapshot fast without tracing
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee(), runCtx)
@@ -666,7 +666,7 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 		results      = make([]*txTraceResult, len(txs))
 		pend         sync.WaitGroup
 	)
-	runCtx := core.NewMessageReplayContext()
+	runCtx := core.NewMessageReplayContext(core.CraneliftFallbackFrom(api.backend))
 	threads := runtime.NumCPU()
 	if threads > len(txs) {
 		threads = len(txs)
@@ -800,7 +800,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
-	runCtx := core.NewMessageReplayContext()
+	runCtx := core.NewMessageReplayContext(core.CraneliftFallbackFrom(api.backend))
 	for i, tx := range block.Transactions() {
 		// Prepare the transaction for un-traced execution
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee(), runCtx)
@@ -905,7 +905,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 	}
 	defer release()
 
-	msg, err := core.TransactionToMessage(tx, types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time(), vmctx.ArbOSVersion), block.BaseFee(), core.NewMessageReplayContext())
+	msg, err := core.TransactionToMessage(tx, types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time(), vmctx.ArbOSVersion), block.BaseFee(), core.NewMessageReplayContext(core.CraneliftFallbackFrom(api.backend)))
 	if err != nil {
 		return nil, err
 	}
@@ -999,7 +999,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		return nil, err
 	}
 	var (
-		msg         = args.ToMessage(blockContext.BaseFee, api.backend.RPCGasCap(), block.Header(), statedb, core.NewMessageEthcallContext(), true)
+		msg         = args.ToMessage(blockContext.BaseFee, api.backend.RPCGasCap(), block.Header(), statedb, core.NewMessageEthcallContext(core.CraneliftFallbackFrom(api.backend)), true)
 		tx          = args.ToTransaction(types.LegacyTxType)
 		traceConfig *TraceConfig
 	)

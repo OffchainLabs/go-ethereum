@@ -226,59 +226,65 @@ const (
 type MessageRunContext struct {
 	runMode messageRunMode
 
-	wasmCacheTag uint32
-	wasmTargets  []rawdb.WasmTarget
+	wasmCacheTag      uint32
+	wasmTargets       []rawdb.WasmTarget
+	craneliftFallback bool
 }
 
-func NewMessageSequencingContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
-	messageSequencingCtx := NewMessageCommitContext(wasmTargets)
+func NewMessageSequencingContext(wasmTargets []rawdb.WasmTarget, craneliftFallback bool) *MessageRunContext {
+	messageSequencingCtx := NewMessageCommitContext(wasmTargets, craneliftFallback)
 	messageSequencingCtx.runMode = messageSequencingMode
 	return messageSequencingCtx
 }
 
-func NewMessageCommitContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
+func NewMessageCommitContext(wasmTargets []rawdb.WasmTarget, craneliftFallback bool) *MessageRunContext {
 	if len(wasmTargets) == 0 {
 		wasmTargets = []rawdb.WasmTarget{rawdb.LocalTarget()}
 	}
 	return &MessageRunContext{
-		runMode:      messageCommitMode,
-		wasmCacheTag: 1,
-		wasmTargets:  wasmTargets,
+		runMode:           messageCommitMode,
+		wasmCacheTag:      1,
+		wasmTargets:       wasmTargets,
+		craneliftFallback: craneliftFallback,
 	}
 }
 
-func NewMessageReplayContext() *MessageRunContext {
+func NewMessageReplayContext(craneliftFallback bool) *MessageRunContext {
 	return &MessageRunContext{
-		runMode:     messageReplayMode,
-		wasmTargets: []rawdb.WasmTarget{rawdb.LocalTarget()},
+		runMode:           messageReplayMode,
+		wasmTargets:       []rawdb.WasmTarget{rawdb.LocalTarget()},
+		craneliftFallback: craneliftFallback,
 	}
 }
 
-func NewMessageRecordingContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
+func NewMessageRecordingContext(wasmTargets []rawdb.WasmTarget, craneliftFallback bool) *MessageRunContext {
 	if len(wasmTargets) == 0 {
 		wasmTargets = []rawdb.WasmTarget{rawdb.LocalTarget()}
 	}
 	return &MessageRunContext{
-		runMode:     messageRecordingMode,
-		wasmTargets: wasmTargets,
+		runMode:           messageRecordingMode,
+		wasmTargets:       wasmTargets,
+		craneliftFallback: craneliftFallback,
 	}
 }
 
-func NewMessagePrefetchContext() *MessageRunContext {
-	return NewMessageReplayContext()
+func NewMessagePrefetchContext(craneliftFallback bool) *MessageRunContext {
+	return NewMessageReplayContext(craneliftFallback)
 }
 
-func NewMessageEthcallContext() *MessageRunContext {
+func NewMessageEthcallContext(craneliftFallback bool) *MessageRunContext {
 	return &MessageRunContext{
-		runMode:     messageEthcallMode,
-		wasmTargets: []rawdb.WasmTarget{rawdb.LocalTarget()},
+		runMode:           messageEthcallMode,
+		wasmTargets:       []rawdb.WasmTarget{rawdb.LocalTarget()},
+		craneliftFallback: craneliftFallback,
 	}
 }
 
-func NewMessageGasEstimationContext() *MessageRunContext {
+func NewMessageGasEstimationContext(craneliftFallback bool) *MessageRunContext {
 	return &MessageRunContext{
-		runMode:     messageGasEstimationMode,
-		wasmTargets: []rawdb.WasmTarget{rawdb.LocalTarget()},
+		runMode:           messageGasEstimationMode,
+		wasmTargets:       []rawdb.WasmTarget{rawdb.LocalTarget()},
+		craneliftFallback: craneliftFallback,
 	}
 }
 
@@ -317,6 +323,27 @@ func (c *MessageRunContext) WasmCacheTag() uint32 {
 
 func (c *MessageRunContext) WasmTargets() []rawdb.WasmTarget {
 	return c.wasmTargets
+}
+
+func (c *MessageRunContext) CraneliftFallback() bool {
+	return c.craneliftFallback
+}
+
+// craneliftFallbackFrom extracts the cranelift fallback setting from an object
+// that may implement it (e.g. BlockChain, HeaderChain). Returns false if unsupported.
+func craneliftFallbackFrom(v interface{}) bool {
+	type fallbacker interface {
+		CraneliftFallback() bool
+	}
+	if cf, ok := v.(fallbacker); ok {
+		return cf.CraneliftFallback()
+	}
+	return false
+}
+
+// CraneliftFallbackFrom is the exported version for use outside the core package.
+func CraneliftFallbackFrom(v interface{}) bool {
+	return craneliftFallbackFrom(v)
 }
 
 func (c *MessageRunContext) RunModeMetricName() string {

@@ -384,6 +384,7 @@ type BlockChain struct {
 	numberOfBlocksToSkipStateSaving      uint32
 	amountOfGasInBlocksToSkipStateSaving uint64
 	gcprocRandOffset                     time.Duration // random offset for gcproc time
+	craneliftFallback                    bool          // fall back to Cranelift when LLVM compilation fails
 }
 
 type trieGcEntry struct {

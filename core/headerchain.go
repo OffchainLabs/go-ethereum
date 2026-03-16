@@ -67,6 +67,12 @@ type HeaderChain struct {
 
 	procInterrupt func() bool
 	engine        consensus.Engine
+
+	craneliftFallback bool // fall back to Cranelift when LLVM compilation fails
+}
+
+func (hc *HeaderChain) CraneliftFallback() bool {
+	return hc.craneliftFallback
 }
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
