@@ -46,6 +46,13 @@ var (
 	// persistentStateIDKey tracks the id of latest stored state(for path-based only).
 	persistentStateIDKey = []byte("LastStateID")
 
+	// freezerCleanupTailKey tracks the exclusive upper bound of frozen blocks
+	// that have been deleted from the key-value database. Blocks in [1, tail)
+	// are expected to have been removed (either by this code or by prior code
+	// versions that deleted blocks immediately without a safety margin).
+	// Block 0 (genesis) is always retained.
+	freezerCleanupTailKey = []byte("FreezerCleanupTail")
+
 	// lastPivotKey tracks the last pivot block used by fast sync (to reenable on sethead).
 	lastPivotKey = []byte("LastPivot")
 
