@@ -56,8 +56,8 @@ func TestApplyMessageReturnsMultiGas(t *testing.T) {
 
 	expectedMultigas := multigas.MultiGasFromPairs(
 		multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.TxGas + 3 + 3}, // IntrinsicGas+PUSH4+PUSH1
-		multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: 2100},               // SSTORE
-		multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: 20000},              // SSTORE
+		multigas.Pair{Kind: multigas.ResourceKindStorageAccessRead, Amount: 2100},           // SSTORE cold access
+		multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: 20000},              // SSTORE new slot
 	)
 	if got, want := res.UsedMultiGas, expectedMultigas; got != want {
 		t.Errorf("unexpected multi gas: got %v, want %v", got, want)
@@ -152,7 +152,7 @@ func TestCreateReturnsMultiGas(t *testing.T) {
 	// - SSTORE (new slot): 2100 access + 20000 growth
 	expectedMultigas := multigas.MultiGasFromPairs(
 		multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: vm.GasFastestStep * 2},
-		multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929},
+		multigas.Pair{Kind: multigas.ResourceKindStorageAccessRead, Amount: params.ColdSloadCostEIP2929},
 		multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.SstoreSetGasEIP2200},
 	)
 
@@ -218,7 +218,7 @@ func TestIntrinsicGas(t *testing.T) {
 			accessList: types.AccessList{{Address: common.Address{1}, StorageKeys: []common.Hash{{2}, {3}}}},
 			want: multigas.MultiGasFromPairs(
 				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: params.TxGas},
-				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.TxAccessListAddressGas + 2*params.TxAccessListStorageKeyGas},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccessRead, Amount: params.TxAccessListAddressGas + 2*params.TxAccessListStorageKeyGas},
 			),
 		},
 		{
@@ -308,7 +308,7 @@ func TestCallVariantsMultiGas(t *testing.T) {
 			expectErr: nil,
 			expectedMultiGas: multigas.MultiGasFromPairs(
 				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: vm.GasFastestStep * 2},
-				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccessRead, Amount: params.ColdSloadCostEIP2929},
 				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.SstoreSetGasEIP2200},
 			),
 		},
@@ -330,7 +330,7 @@ func TestCallVariantsMultiGas(t *testing.T) {
 			expectErr: nil,
 			expectedMultiGas: multigas.MultiGasFromPairs(
 				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: vm.GasFastestStep * 2},
-				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccessRead, Amount: params.ColdSloadCostEIP2929},
 				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.SstoreSetGasEIP2200},
 			),
 		},
@@ -342,7 +342,7 @@ func TestCallVariantsMultiGas(t *testing.T) {
 			expectErr: vm.ErrWriteProtection,
 			expectedMultiGas: multigas.MultiGasFromPairs(
 				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: refinedComputationGas},
-				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: params.ColdSloadCostEIP2929},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccessRead, Amount: params.ColdSloadCostEIP2929},
 				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.SstoreSetGasEIP2200},
 			),
 		},
