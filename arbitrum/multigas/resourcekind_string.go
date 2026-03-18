@@ -11,21 +11,23 @@ func _() {
 	_ = x[ResourceKindUnknown-0]
 	_ = x[ResourceKindComputation-1]
 	_ = x[ResourceKindHistoryGrowth-2]
-	_ = x[ResourceKindStorageAccess-3]
-	_ = x[ResourceKindStorageGrowth-4]
-	_ = x[ResourceKindSingleDim-5]
-	_ = x[ResourceKindL2Calldata-6]
-	_ = x[ResourceKindWasmComputation-7]
-	_ = x[NumResourceKind-8]
+	_ = x[ResourceKindStorageAccessRead-3]
+	_ = x[ResourceKindStorageAccessWrite-4]
+	_ = x[ResourceKindStorageGrowth-5]
+	_ = x[ResourceKindSingleDim-6]
+	_ = x[ResourceKindL2Calldata-7]
+	_ = x[ResourceKindWasmComputation-8]
+	_ = x[NumResourceKind-9]
 }
 
-const _ResourceKind_name = "UnknownComputationHistoryGrowthStorageAccessStorageGrowthSingleDimL2CalldataWasmComputationNumResourceKind"
+const _ResourceKind_name = "UnknownComputationHistoryGrowthStorageAccessReadStorageAccessWriteStorageGrowthSingleDimL2CalldataWasmComputationNumResourceKind"
 
-var _ResourceKind_index = [...]uint8{0, 7, 18, 31, 44, 57, 66, 76, 91, 106}
+var _ResourceKind_index = [...]uint8{0, 7, 18, 31, 48, 66, 79, 88, 98, 113, 128}
 
 func (i ResourceKind) String() string {
-	if i >= ResourceKind(len(_ResourceKind_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_ResourceKind_index)-1 {
 		return "ResourceKind(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _ResourceKind_name[_ResourceKind_index[i]:_ResourceKind_index[i+1]]
+	return _ResourceKind_name[_ResourceKind_index[idx]:_ResourceKind_index[idx+1]]
 }
