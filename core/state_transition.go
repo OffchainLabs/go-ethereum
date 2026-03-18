@@ -790,10 +790,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// are 0. This avoids a negative effectiveTip being applied to
 		// the coinbase when simulating calls.
 	} else {
-		// Only charge the tip on compute gas, not poster gas.
-		// The poster is compensated separately in EndTxHook.
-		computeGasUsed := st.gasUsed() - st.evm.ProcessingHook.PosterGas()
-		fee := new(uint256.Int).SetUint64(computeGasUsed)
+		fee := new(uint256.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTipU256)
 		st.state.AddBalance(tipReceipient, fee, tracing.BalanceIncreaseRewardTransactionFee)
 		tipAmount = fee.ToBig()
