@@ -1807,7 +1807,7 @@ func MarshalReceipt(receipt *types.Receipt, blockHash common.Hash, blockNumber u
 		}
 
 		if chainConfig.IsArbitrumNitro(header.Number) {
-			fields["effectiveGasPrice"] = hexutil.Uint64(receipt.EffectiveGasPrice.Uint64())
+			fields["effectiveGasPrice"] = hexutil.Uint64(header.BaseFee.Uint64())
 			fields["l1BlockNumber"] = hexutil.Uint64(types.DeserializeHeaderExtraInformation(header).L1BlockNumber)
 		} else {
 			inner := tx.GetInner()
