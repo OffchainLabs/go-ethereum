@@ -38,6 +38,22 @@ const (
 	// freezerBatchLimit is the maximum number of blocks to freeze in one batch
 	// before doing an fsync and deleting it from the key-value store.
 	freezerBatchLimit = 30000
+
+	// freezerCleanupMargin is the number of blocks to keep in the key-value
+	// database after they have been frozen into the ancient store. After an
+	// unclean shutdown, repair() may truncate the freezer head to restore
+	// cross-table consistency. Retaining these blocks in the key-value store
+	// allows freezeRange() to re-freeze them via nofreezedb. Without this
+	// margin, a crash could leave blocks missing from both stores, making the
+	// node unable to start (especially for L2 nodes that cannot re-sync
+	// pruned blocks from peers).
+	//
+	// Set to freezerBatchLimit as a practical heuristic: each freeze cycle
+	// writes at most that many blocks before calling SyncAncient (flush), so
+	// the unflushed window per cycle — and thus the typical repair()
+	// truncation distance — is bounded by this value. Corruption beyond
+	// this margin triggers the startup check in Open() and halts the node.
+	freezerCleanupMargin = freezerBatchLimit
 )
 
 // chainFreezer is a wrapper of chain ancient store with additional chain freezing
@@ -48,6 +64,14 @@ type chainFreezer struct {
 
 	// Optional Era database used as a backup for the pruned chain.
 	eradb *eradb.Store
+
+	// cleanupMargin is the number of most-recently-frozen blocks that remain
+	// in the KV store after being copied to the ancient store. Cleanup
+	// incrementally deletes frozen blocks from KV up to frozen-cleanupMargin,
+	// tracking progress via the persisted cleanup tail.
+	// Defaults to freezerCleanupMargin; overridden in tests.
+	// Must be set before freeze() is started and not modified afterward.
+	cleanupMargin uint64
 
 	quit    chan struct{}
 	wg      sync.WaitGroup
@@ -63,9 +87,10 @@ type chainFreezer struct {
 func newChainFreezer(datadir string, eraDir string, namespace string, readonly bool) (*chainFreezer, error) {
 	if datadir == "" {
 		return &chainFreezer{
-			ancients: NewMemoryFreezer(readonly, chainFreezerTableConfigs),
-			quit:     make(chan struct{}),
-			trigger:  make(chan chan struct{}),
+			ancients:      NewMemoryFreezer(readonly, chainFreezerTableConfigs),
+			cleanupMargin: freezerCleanupMargin,
+			quit:          make(chan struct{}),
+			trigger:       make(chan chan struct{}),
 		}, nil
 	}
 	freezer, err := NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerTableConfigs)
@@ -77,10 +102,11 @@ func newChainFreezer(datadir string, eraDir string, namespace string, readonly b
 		return nil, err
 	}
 	return &chainFreezer{
-		ancients: freezer,
-		eradb:    edb,
-		quit:     make(chan struct{}),
-		trigger:  make(chan chan struct{}),
+		ancients:      freezer,
+		eradb:         edb,
+		cleanupMargin: freezerCleanupMargin,
+		quit:          make(chan struct{}),
+		trigger:       make(chan chan struct{}),
 	}, nil
 }
 
@@ -220,14 +246,90 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		if err := f.SyncAncient(); err != nil {
 			log.Crit("Failed to flush frozen tables", "err", err)
 		}
-		// Wipe out all data from the active database
+		// Delete frozen blocks from the key-value store, stopping cleanupMargin
+		// blocks behind the freezer head so repair()-truncated entries remain
+		// available for re-freezing.
+		frozen, err = f.Ancients()
+		if err != nil {
+			log.Error("Failed to read frozen count after sync, skipping cleanup", "err", err)
+			backoff = true
+			continue
+		}
+		var cleanupLimit uint64
+		if frozen > f.cleanupMargin {
+			cleanupLimit = frozen - f.cleanupMargin
+		}
+		// Determine where cleanup should start. Genesis (block 0) is always
+		// kept in the key-value store for Open() genesis hash validation.
+		prev, prevOk, prevErr := readFreezerCleanupTailStrict(db)
+		if prevErr != nil {
+			log.Error("Failed to read cleanup tail, skipping cleanup", "err", prevErr)
+			backoff = true
+			continue
+		}
+		var cleanupStart uint64
+		switch {
+		case prevOk:
+			cleanupStart = max(prev, 1)
+		case cleanupLimit == 0:
+			// Nothing to clean up yet (frozen <= margin).
+		case frozen > params.FullImmutabilityThreshold:
+			// Significant frozen history but no cleanup tail suggests upgrade
+			// from code that predates the safety margin feature. Skip ahead
+			// to cleanupLimit since those blocks were already deleted by old code.
+			cleanupStart = cleanupLimit
+			log.Warn("Cleanup tail missing despite significant frozen history (upgrade from old code?)",
+				"frozen", frozen, "newTail", cleanupStart)
+		default:
+			// Fresh install: clean from block 1 so early blocks don't
+			// remain in the KV store permanently. Per-cycle cap prevents stalling.
+			cleanupStart = 1
+			log.Info("Initialized freezer cleanup tail (first run with safety margin)", "tail", cleanupStart)
+		}
+		// Cap per-cycle work to avoid stalling when cleanup has a large backlog
+		// (e.g., first run after upgrade).
+		if cleanupLimit > cleanupStart+freezerBatchLimit {
+			cleanupLimit = cleanupStart + freezerBatchLimit
+		}
+		// Wipe out all data from the active database. Has()+Get() distinguishes
+		// missing keys from I/O errors to avoid advancing the tail past
+		// unverifiable blocks.
 		batch := db.NewBatch()
-		for i := 0; i < len(ancients); i++ {
-			// Always keep the genesis block in active database
-			if first+uint64(i) != 0 {
-				DeleteBlockWithoutNumber(batch, ancients[i], first+uint64(i))
-				DeleteCanonicalHash(batch, first+uint64(i))
+		var skipped uint64
+		for number := cleanupStart; number < cleanupLimit; number++ {
+			key := headerHashKey(number)
+			exists, err := db.Has(key)
+			if err != nil {
+				log.Error("I/O error during cleanup, aborting cycle",
+					"number", number, "err", err)
+				cleanupLimit = number // don't advance tail past unreadable blocks
+				backoff = true
+				break
 			}
+			if !exists {
+				skipped++
+				continue
+			}
+			hashData, err := db.Get(key)
+			if err != nil {
+				// Has() succeeded but Get() failed — transient I/O error.
+				log.Error("Failed to read canonical hash during cleanup",
+					"number", number, "err", err)
+				cleanupLimit = number
+				backoff = true
+				break
+			}
+			hash := common.BytesToHash(hashData)
+			DeleteBlockWithoutNumber(batch, hash, number)
+			DeleteCanonicalHash(batch, number)
+		}
+		if skipped > 0 {
+			logFn := log.Info
+			if skipped == cleanupLimit-cleanupStart {
+				logFn = log.Warn // All blocks missing is unusual.
+			}
+			logFn("Skipped cleanup of blocks already absent from KV (normal after crash recovery)",
+				"count", skipped, "start", cleanupStart, "limit", cleanupLimit)
 		}
 		if err := batch.Write(); err != nil {
 			log.Crit("Failed to delete frozen canonical blocks", "err", err)
@@ -236,15 +338,11 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 
 		// Wipe out side chains also and track dangling side chains
 		var dangling []common.Hash
-		frozen, _ = f.Ancients() // Needs reload after during freezeRange
-		for number := first; number < frozen; number++ {
-			// Always keep the genesis block in active database
-			if number != 0 {
-				dangling = ReadAllHashes(db, number)
-				for _, hash := range dangling {
-					log.Trace("Deleting side chain", "number", number, "hash", hash)
-					DeleteBlock(batch, hash, number)
-				}
+		for number := cleanupStart; number < cleanupLimit; number++ {
+			dangling = ReadAllHashes(db, number)
+			for _, hash := range dangling {
+				log.Trace("Deleting side chain", "number", number, "hash", hash)
+				DeleteBlock(batch, hash, number)
 			}
 		}
 		if err := batch.Write(); err != nil {
@@ -252,38 +350,55 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		}
 		batch.Reset()
 
-		// Step into the future and delete any dangling side chains
-		if frozen > 0 {
-			tip := frozen
-			for len(dangling) > 0 {
-				drop := make(map[common.Hash]struct{})
-				for _, hash := range dangling {
-					log.Debug("Dangling parent from Freezer", "number", tip-1, "hash", hash)
-					drop[hash] = struct{}{}
-				}
-				children := ReadAllHashes(db, tip)
-				for i := 0; i < len(children); i++ {
-					// Dig up the child and ensure it's dangling
-					child := ReadHeader(nfdb, children[i], tip)
-					if child == nil {
-						log.Error("Missing dangling header", "number", tip, "hash", children[i])
-						continue
-					}
-					if _, ok := drop[child.ParentHash]; !ok {
-						children = append(children[:i], children[i+1:]...)
-						i--
-						continue
-					}
-					// Delete all block data associated with the child
-					log.Debug("Deleting dangling block", "number", tip, "hash", children[i], "parent", child.ParentHash)
-					DeleteBlock(batch, children[i], tip)
-				}
-				dangling = children
-				tip++
+		// Step into the future and delete any dangling side chains.
+		// Bound the chase to avoid unbounded iteration on corrupted data.
+		tip := cleanupLimit
+		for danglingDepth := 0; len(dangling) > 0 && danglingDepth < freezerBatchLimit; danglingDepth++ {
+			drop := make(map[common.Hash]struct{})
+			for _, hash := range dangling {
+				log.Debug("Dangling parent from Freezer", "number", tip-1, "hash", hash)
+				drop[hash] = struct{}{}
 			}
-			if err := batch.Write(); err != nil {
-				log.Crit("Failed to delete dangling side blocks", "err", err)
+			children := ReadAllHashes(db, tip)
+			for i := 0; i < len(children); i++ {
+				// Dig up the child and ensure it's dangling
+				child := ReadHeader(nfdb, children[i], tip)
+				if child == nil {
+					log.Error("Missing dangling header", "number", tip, "hash", children[i])
+					continue
+				}
+				if _, ok := drop[child.ParentHash]; !ok {
+					children = append(children[:i], children[i+1:]...)
+					i--
+					continue
+				}
+				// Delete all block data associated with the child
+				log.Debug("Deleting dangling block", "number", tip, "hash", children[i], "parent", child.ParentHash)
+				DeleteBlock(batch, children[i], tip)
 			}
+			dangling = children
+			tip++
+		}
+		if len(dangling) > 0 {
+			log.Error("Dangling side chain chase exceeded maximum depth, remaining orphans may persist",
+				"remaining", len(dangling), "depth", freezerBatchLimit, "tip", tip)
+		}
+		// Persist the cleanup tail with the side chain batch. A crash between
+		// the canonical batch and this one is harmless: the Has() check in the
+		// cleanup loop skips already-deleted blocks on re-iteration.
+		// Write when cleanup made progress (madeProgress), or on first-time
+		// init including the upgrade path where cleanupStart == cleanupLimit
+		// (firstInit). Skip if frozen regressed (cleanupLimit < cleanupStart).
+		madeProgress := cleanupLimit > cleanupStart
+		firstInit := cleanupLimit > 0 && !prevOk
+		if madeProgress || firstInit {
+			WriteFreezerCleanupTail(batch, cleanupLimit)
+		} else if cleanupLimit > 0 && cleanupLimit < cleanupStart {
+			log.Warn("Skipping cleanup tail update: frozen count regressed (will self-heal once freezer recovers)",
+				"cleanupLimit", cleanupLimit, "cleanupStart", cleanupStart)
+		}
+		if err := batch.Write(); err != nil {
+			log.Crit("Failed to delete dangling side blocks", "err", err)
 		}
 
 		// Log something friendly for the user

@@ -295,19 +295,52 @@ func Open(db ethdb.KeyValueStore, opts OpenOptions) (ethdb.Database, error) {
 	//     not frozen anything yet. Ensure that no blocks are missing yet from the
 	//     key-value store, since that would mean we already had an old freezer.
 
+	// Check if the frozen block count has fallen behind the key-value cleanup
+	// tail, which would indicate an unrecoverable data gap. This can occur when:
+	// 1. The ancient store directory was deleted/replaced while keeping the kvdb
+	// 2. The freezer was truncated by repair() to a point below the cleanup
+	//    tail, meaning blocks already deleted from the KV store are no
+	//    longer available in the freezer
+	// 3. Manual intervention that truncated the freezer below the cleanup tail
+	frozen, err := frdb.Ancients()
+	if err != nil {
+		frdb.Close()
+		printChainMetadata(db)
+		return nil, fmt.Errorf("failed to retrieve ancient count: %v", err)
+	}
+	cleanupTail, hasCleanupTail, err := readFreezerCleanupTailStrict(db)
+	if err != nil {
+		frdb.Close()
+		printChainMetadata(db)
+		return nil, err
+	}
+	if hasCleanupTail && cleanupTail > frozen {
+		frdb.Close()
+		printChainMetadata(db)
+		return nil, fmt.Errorf("freezer data loss beyond safety margin: freezer has %d blocks but "+
+			"blocks up to %d have already been removed from the key-value store (cleanup tail). "+
+			"The node cannot recover this data automatically. "+
+			"If you have verified the ancient store is intact, you may remove the %q key (hex: %x) "+
+			"from the database (WARNING: incorrect removal may cause silent data corruption). "+
+			"Otherwise, restore from a snapshot or resync from genesis",
+			frozen, cleanupTail, freezerCleanupTailKey, freezerCleanupTailKey)
+	}
+
 	// If the genesis hash is empty, we have a new key-value store, so nothing to
 	// validate in this method. If, however, the genesis hash is not nil, compare
 	// it to the freezer content.
 	if kvgenesis, _ := db.Get(headerHashKey(0)); len(kvgenesis) > 0 {
-		if frozen, _ := frdb.Ancients(); frozen > 0 {
+		if frozen > 0 {
 			// If the freezer already contains something, ensure that the genesis blocks
 			// match, otherwise we might mix up freezers across chains and destroy both
 			// the freezer and the key-value store.
 			frgenesis, err := frdb.Ancient(ChainFreezerHashTable, 0)
 			if err != nil {
+				frdb.Close()
 				printChainMetadata(db)
 				return nil, fmt.Errorf("failed to retrieve genesis from ancient %v", err)
 			} else if !bytes.Equal(kvgenesis, frgenesis) {
+				frdb.Close()
 				printChainMetadata(db)
 				return nil, fmt.Errorf("genesis mismatch: %#x (leveldb) != %#x (ancients)", kvgenesis, frgenesis)
 			}
@@ -318,6 +351,7 @@ func Open(db ethdb.KeyValueStore, opts OpenOptions) (ethdb.Database, error) {
 				// Reject startup if the database has a more recent head.
 				head, ok := ReadHeaderNumber(db, ReadHeadHeaderHash(db))
 				if !ok {
+					frdb.Close()
 					printChainMetadata(db)
 					return nil, fmt.Errorf("could not read header number, hash %v", ReadHeadHeaderHash(db))
 				}
@@ -331,6 +365,7 @@ func Open(db ethdb.KeyValueStore, opts OpenOptions) (ethdb.Database, error) {
 						}
 					}
 					// We are about to exit on error. Print database metadata before exiting
+					frdb.Close()
 					printChainMetadata(db)
 					return nil, fmt.Errorf("gap in the chain between ancients [0 - #%d] and leveldb [#%d - #%d] ",
 						frozen-1, number, head)
@@ -350,6 +385,7 @@ func Open(db ethdb.KeyValueStore, opts OpenOptions) (ethdb.Database, error) {
 				// Key-value store contains more data than the genesis block, make sure we
 				// didn't freeze anything yet.
 				if kvblob, _ := db.Get(headerHashKey(1)); len(kvblob) == 0 {
+					frdb.Close()
 					printChainMetadata(db)
 					return nil, errors.New("ancient chain segments already extracted, please set --datadir.ancient to the correct path")
 				}
@@ -710,6 +746,7 @@ var knownMetadataKeys = [][]byte{
 	uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
 	persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
 	filterMapsRangeKey, headStateHistoryIndexKey, VerkleTransitionStatePrefix,
+	freezerCleanupTailKey,
 }
 
 // printChainMetadata prints out chain metadata to stderr.
@@ -744,6 +781,11 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 		{"snapshotRecoveryNumber", pp(ReadSnapshotRecoveryNumber(db))},
 		{"snapshotRoot", fmt.Sprintf("%v", ReadSnapshotRoot(db))},
 		{"txIndexTail", pp(ReadTxIndexTail(db))},
+	}
+	if tail, ok := ReadFreezerCleanupTail(db); ok {
+		data = append(data, []string{"freezerCleanupTail", pp(&tail)})
+	} else {
+		data = append(data, []string{"freezerCleanupTail", "<not set>"})
 	}
 	if b := ReadSkeletonSyncStatus(db); b != nil {
 		data = append(data, []string{"SkeletonSyncStatus", string(b)})
