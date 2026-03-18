@@ -312,9 +312,6 @@ func (t *Transaction) EffectiveGasPrice(ctx context.Context) (*hexutil.Big, erro
 	if header.BaseFee == nil {
 		return (*hexutil.Big)(tx.GasPrice()), nil
 	}
-	if t.r.backend.ChainConfig().IsArbitrum() {
-		return (*hexutil.Big)(header.BaseFee), nil
-	}
 	gasFeeCap, effectivePrice := tx.GasFeeCap(), new(big.Int).Add(tx.GasTipCap(), header.BaseFee)
 	if effectivePrice.Cmp(gasFeeCap) < 0 {
 		return (*hexutil.Big)(effectivePrice), nil
