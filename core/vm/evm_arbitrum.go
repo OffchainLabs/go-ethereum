@@ -86,7 +86,7 @@ func (p DefaultTxProcessor) HeldGas() uint64 { return 0 }
 
 func (p DefaultTxProcessor) NonrefundableGas() uint64 { return 0 }
 
-func (p DefaultTxProcessor) CollectTips() bool { return false }
+func (p DefaultTxProcessor) CollectTips() bool { return true }
 
 func (p DefaultTxProcessor) PosterGas() uint64 { return 0 }
 
