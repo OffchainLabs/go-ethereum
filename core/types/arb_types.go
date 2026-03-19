@@ -617,14 +617,14 @@ func (t *ArbitrumInternalTx) sigHash(chainID *big.Int) common.Hash {
 		})
 }
 
-const ARBOS_VERSION_DROPTIP_OLD = 9 // TODO: 9 or offset?
+const ARBOS_VERSION_COLLECTTIPS_OLD = 9 // TODO: 9 or offset?
 
 type HeaderInfo struct {
 	SendRoot           common.Hash
 	SendCount          uint64
 	L1BlockNumber      uint64
 	ArbOSFormatVersion uint64
-	DropTip            bool
+	CollectTips        bool
 }
 
 func (info HeaderInfo) extra() []byte {
@@ -636,10 +636,10 @@ func (info HeaderInfo) mixDigest() [32]byte {
 	binary.BigEndian.PutUint64(mixDigest[:8], info.SendCount)
 	binary.BigEndian.PutUint64(mixDigest[8:16], info.L1BlockNumber)
 	binary.BigEndian.PutUint64(mixDigest[16:24], info.ArbOSFormatVersion)
-	if info.DropTip || info.ArbOSFormatVersion == ARBOS_VERSION_DROPTIP_OLD {
-		mixDigest[25] = 0
-	} else {
+	if info.CollectTips && info.ArbOSFormatVersion != ARBOS_VERSION_COLLECTTIPS_OLD {
 		mixDigest[25] = 1
+	} else {
+		mixDigest[25] = 0
 	}
 	return mixDigest
 }
@@ -660,12 +660,12 @@ func DeserializeHeaderExtraInformation(header *Header) HeaderInfo {
 	extra.SendCount = binary.BigEndian.Uint64(header.MixDigest[:8])
 	extra.L1BlockNumber = binary.BigEndian.Uint64(header.MixDigest[8:16])
 	extra.ArbOSFormatVersion = binary.BigEndian.Uint64(header.MixDigest[16:24])
-	if extra.ArbOSFormatVersion == ARBOS_VERSION_DROPTIP_OLD {
-		extra.DropTip = false
+	if extra.ArbOSFormatVersion == ARBOS_VERSION_COLLECTTIPS_OLD {
+		extra.CollectTips = true
 	} else if header.MixDigest[25]&0x1 == 1 {
-		extra.DropTip = false
+		extra.CollectTips = true
 	} else {
-		extra.DropTip = true
+		extra.CollectTips = false
 	}
 	return extra
 }

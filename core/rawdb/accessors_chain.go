@@ -625,11 +625,11 @@ func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, time uint64,
 	if header != nil && header.ExcessBlobGas != nil {
 		blobGasPrice = eip4844.CalcBlobFee(config, header)
 	}
-	dropTip := false
+	collectTips := false
 	if config.IsArbitrum() && header != nil {
-		dropTip = types.DeserializeHeaderExtraInformation(header).DropTip
+		collectTips = types.DeserializeHeaderExtraInformation(header).CollectTips
 	}
-	if err := receipts.DeriveFields(config, hash, number, time, baseFee, blobGasPrice, body.Transactions, dropTip); err != nil {
+	if err := receipts.DeriveFields(config, hash, number, time, baseFee, blobGasPrice, body.Transactions, collectTips); err != nil {
 		log.Error("Failed to derive block receipts fields", "hash", hash, "number", number, "err", err)
 		return nil
 	}

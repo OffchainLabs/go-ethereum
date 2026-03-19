@@ -53,7 +53,7 @@ type TxProcessingHook interface {
 	PopContract()
 	HeldGas() uint64
 	NonrefundableGas() uint64
-	DropTip() bool
+	CollectTips() bool
 	PosterGas() uint64
 	EndTxHook(totalGasUsed uint64, usedMultiGas multigas.MultiGas, evmSuccess bool)
 	ScheduledTxes() types.Transactions
@@ -86,7 +86,7 @@ func (p DefaultTxProcessor) HeldGas() uint64 { return 0 }
 
 func (p DefaultTxProcessor) NonrefundableGas() uint64 { return 0 }
 
-func (p DefaultTxProcessor) DropTip() bool { return false }
+func (p DefaultTxProcessor) CollectTips() bool { return false }
 
 func (p DefaultTxProcessor) PosterGas() uint64 { return 0 }
 

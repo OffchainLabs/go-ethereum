@@ -627,8 +627,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// 5. there is no overflow when calculating intrinsic gas
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
 
-	// Arbitrum: drop tip for delayed (and old) messages
-	if st.evm.ProcessingHook.DropTip() && st.msg.GasPrice.Cmp(st.evm.Context.BaseFee) > 0 {
+	// Arbitrum: drop tip when tip collection is not enabled
+	if !st.evm.ProcessingHook.CollectTips() && st.msg.GasPrice.Cmp(st.evm.Context.BaseFee) > 0 {
 		st.msg.GasPrice = st.evm.Context.BaseFee
 		st.msg.GasTipCap = common.Big0
 	}
@@ -804,7 +804,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 
 	// Arbitrum: record the tip
-	if tracer := st.evm.Config.Tracer; tracer != nil && !st.evm.ProcessingHook.DropTip() && tracer.CaptureArbitrumTransfer != nil {
+	if tracer := st.evm.Config.Tracer; tracer != nil && st.evm.ProcessingHook.CollectTips() && tracer.CaptureArbitrumTransfer != nil {
 		tracer.CaptureArbitrumTransfer(nil, &tipReceipient, tipAmount, false, tracing.BalanceIncreaseRewardTransactionFee)
 	}
 
