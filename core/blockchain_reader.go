@@ -242,7 +242,13 @@ func (bc *BlockChain) GetCanonicalReceipt(tx *types.Transaction, blockHash commo
 	if err != nil {
 		return nil, err
 	}
-	arbosVersion := types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion
+	arbosVersion := uint64(0)
+	dropTip := false
+	if bc.chainConfig.IsArbitrum() {
+		arbosExtra := types.DeserializeHeaderExtraInformation(header)
+		arbosVersion = arbosExtra.ArbOSFormatVersion
+		dropTip = arbosExtra.DropTip
+	}
 	signer := types.MakeSigner(bc.chainConfig, new(big.Int).SetUint64(blockNumber), header.Time, arbosVersion)
 	receipt.DeriveFields(signer, types.DeriveReceiptContext{
 		BlockHash:    blockHash,
@@ -254,6 +260,7 @@ func (bc *BlockChain) GetCanonicalReceipt(tx *types.Transaction, blockHash commo
 		LogIndex:     ctx.LogIndex,
 		Tx:           tx,
 		TxIndex:      uint(txIndex),
+		DropTip:      dropTip,
 	})
 	return receipt, nil
 }

@@ -2530,7 +2530,11 @@ func (bc *BlockChain) collectReceiptsAndLogs(b *types.Block, removed bool) ([]*t
 		blobGasPrice = eip4844.CalcBlobFee(bc.chainConfig, b.Header())
 	}
 	receipts := rawdb.ReadRawReceipts(bc.db, b.Hash(), b.NumberU64())
-	if err := receipts.DeriveFields(bc.chainConfig, b.Hash(), b.NumberU64(), b.Time(), b.BaseFee(), blobGasPrice, b.Transactions()); err != nil {
+	dropTip := false
+	if bc.chainConfig.IsArbitrum() {
+		dropTip = types.DeserializeHeaderExtraInformation(b.Header()).DropTip
+	}
+	if err := receipts.DeriveFields(bc.chainConfig, b.Hash(), b.NumberU64(), b.Time(), b.BaseFee(), blobGasPrice, b.Transactions(), dropTip); err != nil {
 		log.Error("Failed to derive block receipts fields", "hash", b.Hash(), "number", b.NumberU64(), "err", err)
 	}
 	var logs []*types.Log
