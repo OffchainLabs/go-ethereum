@@ -2530,7 +2530,7 @@ func (bc *BlockChain) collectReceiptsAndLogs(b *types.Block, removed bool) ([]*t
 		blobGasPrice = eip4844.CalcBlobFee(bc.chainConfig, b.Header())
 	}
 	receipts := rawdb.ReadRawReceipts(bc.db, b.Hash(), b.NumberU64())
-	collectTips := false
+	collectTips := true
 	if bc.chainConfig.IsArbitrum() {
 		collectTips = types.DeserializeHeaderExtraInformation(b.Header()).CollectTips
 	}

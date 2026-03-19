@@ -625,7 +625,7 @@ func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, time uint64,
 	if header != nil && header.ExcessBlobGas != nil {
 		blobGasPrice = eip4844.CalcBlobFee(config, header)
 	}
-	collectTips := false
+	collectTips := true
 	if config.IsArbitrum() && header != nil {
 		collectTips = types.DeserializeHeaderExtraInformation(header).CollectTips
 	}

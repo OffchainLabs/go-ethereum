@@ -243,7 +243,7 @@ func (bc *BlockChain) GetCanonicalReceipt(tx *types.Transaction, blockHash commo
 		return nil, err
 	}
 	arbosVersion := uint64(0)
-	collectTips := false
+	collectTips := true // non-Arbitrum chains always collect tips
 	if bc.chainConfig.IsArbitrum() {
 		arbosExtra := types.DeserializeHeaderExtraInformation(header)
 		arbosVersion = arbosExtra.ArbOSFormatVersion

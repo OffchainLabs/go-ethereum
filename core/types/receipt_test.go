@@ -333,7 +333,7 @@ func TestDeriveFields(t *testing.T) {
 	blobGasPrice := big.NewInt(920)
 	receipts := getTestReceipts()
 	derivedReceipts := clearComputedFieldsOnReceipts(receipts)
-	err := Receipts(derivedReceipts).DeriveFields(params.TestChainConfig, blockHash, blockNumber.Uint64(), blockTime, basefee, blobGasPrice, txs, false)
+	err := Receipts(derivedReceipts).DeriveFields(params.TestChainConfig, blockHash, blockNumber.Uint64(), blockTime, basefee, blobGasPrice, txs, true)
 	if err != nil {
 		t.Fatalf("DeriveFields(...) = %v, want <nil>", err)
 	}
