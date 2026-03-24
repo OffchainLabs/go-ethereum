@@ -19,6 +19,7 @@ package state
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/arbitrum/filter"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/stateless"
@@ -365,11 +366,11 @@ func (s *hookedStateDB) SetAddressChecker(checker AddressChecker) {
 	s.inner.SetAddressChecker(checker)
 }
 
-func (s *hookedStateDB) TouchAddress(addr common.Address) {
-	s.inner.TouchAddress(addr)
+func (s *hookedStateDB) TouchAddress(record filter.FilteredAddressRecord) {
+	s.inner.TouchAddress(record)
 }
 
-func (s *hookedStateDB) IsAddressFiltered() bool {
+func (s *hookedStateDB) IsAddressFiltered() (bool, []filter.FilteredAddressRecord) {
 	return s.inner.IsAddressFiltered()
 }
 
