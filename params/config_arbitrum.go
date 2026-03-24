@@ -55,6 +55,7 @@ const ArbosVersion_MultiConstraintFix = ArbosVersion_51
 const ArbosVersion_MultiGasConstraintsVersion = ArbosVersion_60
 const ArbosVersion_StylusContractLimit = ArbosVersion_60
 const ArbosVersion_TransactionFiltering = ArbosVersion_60
+const ArbosVersion_StylusActivationGas = ArbosVersion_60
 
 const DefaultMaxUncompressedBatchSize = 16 * 1024 * 1024 // 16 MB
 
