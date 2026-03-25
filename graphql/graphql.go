@@ -313,7 +313,10 @@ func (t *Transaction) EffectiveGasPrice(ctx context.Context) (*hexutil.Big, erro
 		return (*hexutil.Big)(tx.GasPrice()), nil
 	}
 	if t.r.backend.ChainConfig().IsArbitrum() {
-		return (*hexutil.Big)(header.BaseFee), nil
+		arbExtra := types.DeserializeHeaderExtraInformation(header)
+		if !arbExtra.CollectTips {
+			return (*hexutil.Big)(header.BaseFee), nil
+		}
 	}
 	gasFeeCap, effectivePrice := tx.GasFeeCap(), new(big.Int).Add(tx.GasTipCap(), header.BaseFee)
 	if effectivePrice.Cmp(gasFeeCap) < 0 {
