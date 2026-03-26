@@ -836,6 +836,10 @@ func runScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, state
 		if err != nil {
 			return nil, err
 		}
+
+		// Arbitrum: touch scheduled tx addresses
+		core.TouchTxAddresses(state, scheduled[0], msg.From)
+
 		// The scheduling transaction will "use" all of the gas available to it,
 		// but it's really just passing it on to the scheduled tx, so we subtract it out here.
 		if result.UsedGas >= msg.GasLimit {

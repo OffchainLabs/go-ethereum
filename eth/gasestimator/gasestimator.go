@@ -275,6 +275,16 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 		return res, err
 	}
 
+	// Arbitrum: set up address filtering
+	filtering := core.SetupTxFiltering(dirtyState)
+	if filtering {
+		dirtyState.SetTxContext(common.Hash{}, 0)
+		dirtyState.TouchAddress(call.From)
+		if call.To != nil {
+			dirtyState.TouchAddress(*call.To)
+		}
+	}
+
 	evm := opts.Backend.GetEVM(ctx, dirtyState, opts.Header, &vm.Config{NoBaseFee: true}, &evmContext)
 	go func() {
 		<-ctx.Done()
@@ -293,6 +303,13 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	result, err = opts.RunScheduledTxes(ctx, opts.Backend, dirtyState, opts.Header, evmContext, call.TxRunContext, result)
 	if err != nil {
 		return nil, err
+	}
+
+	// Arbitrum: apply event filter and check if any touched address is filtered
+	if filtering {
+		if err := core.CheckTxFiltering(dirtyState); err != nil {
+			return nil, err
+		}
 	}
 
 	return result, nil
