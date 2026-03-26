@@ -38,17 +38,20 @@ type FilterReason struct {
 }
 
 type FilteredAddressRecord struct {
-	Address common.Address `json:"address"`
+	Address     common.Address `json:"address"`
+	FilterSetId string         `json:"filterSetId"`
 	FilterReason
 }
 
 type FilteredTxReport struct {
-	TxHash            common.Hash             `json:"txHash"`
-	TxRLP             hexutil.Bytes           `json:"txRLP"`
-	FilteredAddresses []FilteredAddressRecord `json:"filteredAddresses"`
-	BlockNumber       uint64                  `json:"blockNumber"`
-	ParentBlockHash   common.Hash             `json:"parentBlockHash"`
-	PositionInBlock   uint64                  `json:"positionInBlock"`
-	FilteredAt        time.Time               `json:"filteredAt"`
-	IsDelayed         bool                    `json:"isDelayed"`
+	ID                     string                  `json:"id"`
+	TxHash                 common.Hash             `json:"txHash"`
+	TxRLP                  hexutil.Bytes           `json:"txRLP"`
+	FilteredAddresses      []FilteredAddressRecord `json:"filteredAddresses"`
+	BlockNumber            uint64                  `json:"blockNumber"`
+	ParentBlockHash        common.Hash             `json:"parentBlockHash"`
+	PositionInBlock        uint64                  `json:"positionInBlock"`
+	FilteredAt             time.Time               `json:"filteredAt"`
+	IsDelayed              bool                    `json:"isDelayed"`
+	DelayedInboxRequestId  *common.Hash            `json:"delayedInboxRequestId,omitempty"`
 }
