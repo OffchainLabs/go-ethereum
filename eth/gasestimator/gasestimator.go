@@ -23,6 +23,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/arbitrum/retryables"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -227,7 +228,7 @@ func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit ui
 
 	// Execute the call and separate execution faults caused by a lack of gas or
 	// other non-fixable conditions
-	result, err := run(ctx, call, opts)
+	result, err := Run(ctx, call, opts)
 	if err != nil {
 		if errors.Is(err, core.ErrIntrinsicGas) {
 			return true, nil, nil // Special case, raise gas limit
@@ -240,9 +241,9 @@ func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit ui
 	return result.Failed(), result, nil
 }
 
-// run assembles the EVM as defined by the consensus rules and runs the requested
+// Run assembles the EVM as defined by the consensus rules and runs the requested
 // call invocation.
-func run(ctx context.Context, call *core.Message, opts *Options) (*core.ExecutionResult, error) {
+func Run(ctx context.Context, call *core.Message, opts *Options) (*core.ExecutionResult, error) {
 	// Assemble the call and the call context
 	var (
 		evmContext = core.NewEVMBlockContext(opts.Header, opts.Chain, nil)
@@ -300,15 +301,20 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	}
 
 	// Arbitrum: a tx can schedule another (see retryables)
-	result, err = opts.RunScheduledTxes(ctx, opts.Backend, dirtyState, opts.Header, evmContext, call.TxRunContext, result)
+	runScheduled := opts.RunScheduledTxes
+	if runScheduled == nil {
+		runScheduled = retryables.RunScheduledTxes
+	}
+	result, err = runScheduled(ctx, opts.Backend, dirtyState, opts.Header, evmContext, call.TxRunContext, result)
 	if err != nil {
 		return nil, err
 	}
 
 	// Arbitrum: apply event filter and check if any touched address is filtered
 	if filtering {
-		if err := core.CheckTxFiltering(dirtyState); err != nil {
-			return nil, err
+		core.CheckTxFiltering(dirtyState)
+		if dirtyState.IsAddressFiltered() {
+			return nil, state.ErrArbTxFilter
 		}
 	}
 

@@ -28,6 +28,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/arbitrum/retryables"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -820,55 +821,11 @@ func applyMessageWithEVM(ctx context.Context, evm *vm.EVM, msg *core.Message, st
 	}
 
 	// Arbitrum: a tx can schedule another (see retryables)
-	result, err = runScheduledTxes(ctx, b, state, header, blockContext, msg.TxRunContext, result)
+	result, err = retryables.RunScheduledTxes(ctx, b, state, header, blockContext, msg.TxRunContext, result)
 	if err != nil {
 		return nil, err
 	}
 
-	return result, nil
-}
-
-func runScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, state *state.StateDB, header *types.Header, blockCtx vm.BlockContext, runCtx *core.MessageRunContext, result *core.ExecutionResult) (*core.ExecutionResult, error) {
-	scheduled := result.ScheduledTxes
-	for runCtx.IsGasEstimation() && len(scheduled) > 0 {
-		// This will panic if the scheduled tx is signed, but we only schedule unsigned ones
-		msg, err := core.TransactionToMessage(scheduled[0], types.NewArbitrumSigner(nil), header.BaseFee, runCtx)
-		if err != nil {
-			return nil, err
-		}
-
-		// Arbitrum: touch scheduled tx addresses
-		core.TouchTxAddresses(state, scheduled[0], msg.From)
-
-		// The scheduling transaction will "use" all of the gas available to it,
-		// but it's really just passing it on to the scheduled tx, so we subtract it out here.
-		if result.UsedGas >= msg.GasLimit {
-			result.UsedGas -= msg.GasLimit
-		} else {
-			log.Warn("Scheduling tx used less gas than scheduled tx has available", "usedGas", result.UsedGas, "scheduledGas", msg.GasLimit)
-			result.UsedGas = 0
-		}
-		// make a new EVM for the scheduled Tx (an EVM must never be reused)
-		evm := b.GetEVM(ctx, state, header, &vm.Config{NoBaseFee: true}, &blockCtx)
-		go func() {
-			<-ctx.Done()
-			evm.Cancel()
-		}()
-
-		scheduledTxResult, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(gomath.MaxUint64))
-		if err != nil {
-			return nil, err // Bail out
-		}
-		if err := state.Error(); err != nil {
-			return nil, err
-		}
-		if scheduledTxResult.Failed() {
-			return scheduledTxResult, nil
-		}
-		// Add back in any gas used by the scheduled transaction.
-		result.UsedGas += scheduledTxResult.UsedGas
-		scheduled = append(scheduled[1:], scheduledTxResult.ScheduledTxes...)
-	}
 	return result, nil
 }
 
@@ -996,7 +953,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		State:            state,
 		Backend:          b,
 		ErrorRatio:       gasestimator.EstimateGasErrorRatio,
-		RunScheduledTxes: runScheduledTxes,
+		RunScheduledTxes: retryables.RunScheduledTxes,
 	}
 	// Set any required transaction default, but make sure the gas cap itself is not messed with
 	// if it was not specified in the original argument list.
