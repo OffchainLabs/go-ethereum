@@ -44,14 +44,14 @@ type FilteredAddressRecord struct {
 }
 
 type FilteredTxReport struct {
-	ID                     string                  `json:"id"`
-	TxHash                 common.Hash             `json:"txHash"`
-	TxRLP                  hexutil.Bytes           `json:"txRLP"`
-	FilteredAddresses      []FilteredAddressRecord `json:"filteredAddresses"`
-	BlockNumber            uint64                  `json:"blockNumber"`
-	ParentBlockHash        common.Hash             `json:"parentBlockHash"`
-	PositionInBlock        uint64                  `json:"positionInBlock"`
-	FilteredAt             time.Time               `json:"filteredAt"`
-	IsDelayed              bool                    `json:"isDelayed"`
-	DelayedInboxRequestId  *common.Hash            `json:"delayedInboxRequestId,omitempty"`
+	ID                    string                  `json:"id"`
+	TxHash                common.Hash             `json:"txHash"`
+	TxRLP                 hexutil.Bytes           `json:"txRLP"`
+	FilteredAddresses     []FilteredAddressRecord `json:"filteredAddresses"`
+	BlockNumber           uint64                  `json:"blockNumber"`
+	ParentBlockHash       common.Hash             `json:"parentBlockHash"`
+	PositionInBlock       uint64                  `json:"positionInBlock"`
+	FilteredAt            time.Time               `json:"filteredAt"`
+	IsDelayed             bool                    `json:"isDelayed"`
+	DelayedInboxRequestId *common.Hash            `json:"delayedInboxRequestId,omitempty"`
 }
