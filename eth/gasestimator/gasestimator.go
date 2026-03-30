@@ -23,7 +23,6 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/arbitrum/retryables"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -302,11 +301,7 @@ func Run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	}
 
 	// Arbitrum: a tx can schedule another (see retryables)
-	runScheduled := opts.RunScheduledTxes
-	if runScheduled == nil {
-		runScheduled = retryables.RunScheduledTxes
-	}
-	result, err = runScheduled(ctx, opts.Backend, dirtyState, opts.Header, evmContext, call.TxRunContext, result, opts.TxFilter)
+	result, err = opts.RunScheduledTxes(ctx, opts.Backend, dirtyState, opts.Header, evmContext, call.TxRunContext, result, opts.TxFilter)
 	if err != nil {
 		return nil, err
 	}
