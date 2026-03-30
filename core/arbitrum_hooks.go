@@ -51,14 +51,15 @@ var RPCPostingGasHook = func(msg *Message, header *types.Header, statedb *state.
 // Renders a solidity error in human-readable form
 var RenderRPCError func(data []byte) error
 
-// SetupTxFiltering configures address filtering on statedb, returns true if filtering is active.
-var SetupTxFiltering = func(statedb *state.StateDB) bool { return false }
-
-// TouchTxAddresses touches all filterable addresses for a transaction (sender, to, aliased, retryable fields).
-var TouchTxAddresses = func(statedb *state.StateDB, tx *types.Transaction, sender common.Address) {}
-
-// CheckTxFiltering applies event filter and checks if any touched address is filtered.
-var CheckTxFiltering = func(statedb *state.StateDB) error { return nil }
+// TxFilterer provides address-based transaction filtering.
+type TxFilterer interface {
+	// Setup activates address filtering on statedb.
+	Setup(statedb *state.StateDB)
+	// TouchAddresses marks filterable addresses for a scheduled tx.
+	TouchAddresses(statedb *state.StateDB, tx *types.Transaction, sender common.Address)
+	// CheckFiltered applies event filtering and returns ErrArbTxFilter if filtered.
+	CheckFiltered(statedb *state.StateDB) error
+}
 
 type NodeInterfaceBackendAPI interface {
 	ChainConfig() *params.ChainConfig

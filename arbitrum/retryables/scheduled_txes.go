@@ -12,8 +12,8 @@ import (
 )
 
 // RunScheduledTxes executes scheduled transactions (retryable redeems) including
-// cascading redeems. Touches addresses for filtering via the TouchTxAddresses hook.
-func RunScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, statedb *state.StateDB, header *types.Header, blockCtx vm.BlockContext, runCtx *core.MessageRunContext, result *core.ExecutionResult) (*core.ExecutionResult, error) {
+// cascading redeems. When txFilter is non-nil, touches addresses for filtering.
+func RunScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, statedb *state.StateDB, header *types.Header, blockCtx vm.BlockContext, runCtx *core.MessageRunContext, result *core.ExecutionResult, txFilter core.TxFilterer) (*core.ExecutionResult, error) {
 	scheduled := result.ScheduledTxes
 	for runCtx.IsGasEstimation() && len(scheduled) > 0 {
 		msg, err := core.TransactionToMessage(scheduled[0], types.NewArbitrumSigner(nil), header.BaseFee, runCtx)
@@ -21,7 +21,9 @@ func RunScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, state
 			return nil, err
 		}
 
-		core.TouchTxAddresses(statedb, scheduled[0], msg.From)
+		if txFilter != nil {
+			txFilter.TouchAddresses(statedb, scheduled[0], msg.From)
+		}
 
 		if result.UsedGas >= msg.GasLimit {
 			result.UsedGas -= msg.GasLimit

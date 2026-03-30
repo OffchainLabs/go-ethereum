@@ -50,7 +50,8 @@ type Options struct {
 	State            *state.StateDB           // Pre-state on top of which to estimate the gas
 	BlockOverrides   *override.BlockOverrides // Block overrides to apply during the estimation
 	Backend          core.NodeInterfaceBackendAPI
-	RunScheduledTxes func(context.Context, core.NodeInterfaceBackendAPI, *state.StateDB, *types.Header, vm.BlockContext, *core.MessageRunContext, *core.ExecutionResult) (*core.ExecutionResult, error)
+	TxFilter         core.TxFilterer
+	RunScheduledTxes func(context.Context, core.NodeInterfaceBackendAPI, *state.StateDB, *types.Header, vm.BlockContext, *core.MessageRunContext, *core.ExecutionResult, core.TxFilterer) (*core.ExecutionResult, error)
 
 	ErrorRatio float64 // Allowed overestimation ratio for faster estimation termination
 }
@@ -277,8 +278,8 @@ func Run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	}
 
 	// Arbitrum: set up address filtering
-	filtering := core.SetupTxFiltering(dirtyState)
-	if filtering {
+	if opts.TxFilter != nil {
+		opts.TxFilter.Setup(dirtyState)
 		dirtyState.SetTxContext(common.Hash{}, 0)
 		dirtyState.TouchAddress(call.From)
 		if call.To != nil {
@@ -305,16 +306,15 @@ func Run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	if runScheduled == nil {
 		runScheduled = retryables.RunScheduledTxes
 	}
-	result, err = runScheduled(ctx, opts.Backend, dirtyState, opts.Header, evmContext, call.TxRunContext, result)
+	result, err = runScheduled(ctx, opts.Backend, dirtyState, opts.Header, evmContext, call.TxRunContext, result, opts.TxFilter)
 	if err != nil {
 		return nil, err
 	}
 
-	// Arbitrum: apply event filter and check if any touched address is filtered
-	if filtering {
-		core.CheckTxFiltering(dirtyState)
-		if dirtyState.IsAddressFiltered() {
-			return nil, state.ErrArbTxFilter
+	// Arbitrum: check address filtering result
+	if opts.TxFilter != nil {
+		if err := opts.TxFilter.CheckFiltered(dirtyState); err != nil {
+			return nil, err
 		}
 	}
 

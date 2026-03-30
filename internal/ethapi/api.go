@@ -821,7 +821,7 @@ func applyMessageWithEVM(ctx context.Context, evm *vm.EVM, msg *core.Message, st
 	}
 
 	// Arbitrum: a tx can schedule another (see retryables)
-	result, err = retryables.RunScheduledTxes(ctx, b, state, header, blockContext, msg.TxRunContext, result)
+	result, err = retryables.RunScheduledTxes(ctx, b, state, header, blockContext, msg.TxRunContext, result, nil)
 	if err != nil {
 		return nil, err
 	}
