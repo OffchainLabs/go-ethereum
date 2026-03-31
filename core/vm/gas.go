@@ -17,8 +17,6 @@
 package vm
 
 import (
-	"github.com/ethereum/go-ethereum/arbitrum/multigas"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -53,24 +51,4 @@ func callGas(isEip150 bool, availableGas, base uint64, callCost *uint256.Int) (u
 	}
 
 	return callCost.Uint64(), nil
-}
-
-// addConstantMultiGas adds to usedMultiGas the constant multi-gas cost of an opcode.
-func addConstantMultiGas(usedMultiGas *multigas.MultiGas, cost uint64, op OpCode) {
-	// SELFDESTRUCT is a special case because it charges for storage access but it isn't
-	// dependent on any input data. We charge a small computational cost for warm access like
-	// other multi-dimensional gas opcodes, and the rest is storage access to delete the
-	// contract from the database.
-	// Note we only need to cover EIP150 because it the current cost, and SELFDESTRUCT cost was
-	// zero previously.
-	if op == SELFDESTRUCT && cost == params.SelfdestructGasEIP150 {
-		// To improve performance, we call UncheckedIncrementInto instead of
-		// SaturatingIncrementInto. We know this is safe because addConstantMultiGas is only
-		// called inside EVM.Run(). At that point, we know that multi-gas won't overflow
-		// because the function would end with out-of-gas first.
-		usedMultiGas.UncheckedIncrementInto(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929)
-		usedMultiGas.UncheckedIncrementInto(multigas.ResourceKindStorageAccessWrite, cost-params.WarmStorageReadCostEIP2929)
-	} else {
-		usedMultiGas.UncheckedIncrementInto(multigas.ResourceKindComputation, cost)
-	}
 }

@@ -204,7 +204,7 @@ func (z *MultiGas) SaturatingAddInto(x MultiGas) {
 // UncheckedAddInto adds x into z in-place without checking for overflow. This function can be used to
 // improve performance in places we know there won't be an overflow. For instance, when
 // go-ethereum's upstream code also doesn't check for overflows.
-func (z *MultiGas) UncheckedAddInto(x MultiGas) {
+func (z *MultiGas) UncheckedAddInto(x *MultiGas) {
 	for i := range int(NumResourceKind) {
 		z.gas[i] = z.gas[i] + x.gas[i]
 	}

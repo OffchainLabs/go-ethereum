@@ -207,12 +207,9 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
 		// for tracing: this gas consumption event is emitted below in the debug section.
-		if contract.Gas < cost {
-			return nil, ErrOutOfGas
-		} else {
-			contract.Gas -= cost
+		if err := contract.AddConstantMultiGas(cost, op); err != nil {
+			return nil, err
 		}
-		addConstantMultiGas(&contract.UsedMultiGas, cost, op)
 
 		// All ops with a dynamic memory usage also has a dynamic gas cost.
 		var memorySize uint64
@@ -241,15 +238,9 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
 			}
 			// for tracing: this gas consumption event is emitted below in the debug section.
-			if contract.Gas < dynamicCost {
-				return nil, ErrOutOfGas
-			} else {
-				contract.Gas -= dynamicCost
+			if err := contract.AddDynamicMultiGas(&multigasDynamicCost); err != nil {
+				return nil, err
 			}
-			// To improve performance, we call UncheckedAddInto instead of
-			// SaturatingAddInto. We know this is safe because multi-gas won't overflow
-			// before the function ends with out-of-gas.
-			contract.UsedMultiGas.UncheckedAddInto(multigasDynamicCost)
 		}
 
 		// Do tracing before potential memory expansion
