@@ -41,7 +41,7 @@ type Backend struct {
 	filterSystem *filters.FilterSystem
 }
 
-func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publisher ArbInterface, filterConfig filters.Config, stateScheme string) (*Backend, *filters.FilterSystem, error) {
+func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publisher ArbInterface, filterConfig filters.Config, stateScheme string, txFilter core.TxFilterer) (*Backend, *filters.FilterSystem, error) {
 	backend := &Backend{
 		arb:     publisher,
 		stack:   stack,
@@ -84,7 +84,7 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 		backend.stack.ApplyAPIFilter(rpcFilter)
 	}
 
-	filterSystem, err := createRegisterAPIBackend(backend, filterConfig, config.ClassicRedirect, config.ClassicRedirectTimeout, config.BlockRedirects)
+	filterSystem, err := createRegisterAPIBackend(backend, filterConfig, config.ClassicRedirect, config.ClassicRedirectTimeout, config.BlockRedirects, txFilter)
 	if err != nil {
 		return nil, nil, err
 	}

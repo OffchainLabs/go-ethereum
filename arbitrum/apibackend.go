@@ -50,6 +50,7 @@ type APIBackend struct {
 	fallbackClient        types.FallbackClient
 	archiveClientsManager *archiveFallbackClientsManager
 	sync                  SyncProgressBackend
+	txFilter              core.TxFilterer
 }
 
 func (a *APIBackend) RPCTxSyncDefaultTimeout() time.Duration {
@@ -132,7 +133,7 @@ type SyncProgressBackend interface {
 	BlockMetadataByNumber(ctx context.Context, blockNum uint64) (common.BlockMetadata, error)
 }
 
-func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration, archiveRedirects []BlockRedirectConfig) (*filters.FilterSystem, error) {
+func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fallbackClientUrl string, fallbackClientTimeout time.Duration, archiveRedirects []BlockRedirectConfig, txFilter core.TxFilterer) (*filters.FilterSystem, error) {
 	fallbackClient, err := CreateFallbackClient(fallbackClientUrl, fallbackClientTimeout, false)
 	if err != nil {
 		return nil, err
@@ -148,6 +149,7 @@ func createRegisterAPIBackend(backend *Backend, filterConfig filters.Config, fal
 		b:                     backend,
 		fallbackClient:        fallbackClient,
 		archiveClientsManager: archiveClientsManager,
+		txFilter:              txFilter,
 	}
 	filterSystem := filters.NewFilterSystem(backend.apiBackend, filterConfig)
 	backend.stack.RegisterAPIs(backend.apiBackend.GetAPIs(filterSystem))
@@ -779,6 +781,8 @@ func (a *APIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) 
 func (a *APIBackend) ChainConfig() *params.ChainConfig {
 	return a.BlockChain().Config()
 }
+
+func (a *APIBackend) TxFilter() core.TxFilterer { return a.txFilter }
 
 func (a *APIBackend) Engine() consensus.Engine {
 	return a.b.Engine()
