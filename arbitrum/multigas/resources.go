@@ -168,10 +168,8 @@ func (z MultiGas) SafeAdd(x MultiGas) (MultiGas, bool) {
 	}
 
 	for i := 0; i < int(NumResourceKind); i++ {
-		res.gas[i], overflow = safeScalarAdd(res.gas[i], x.gas[i])
-		if overflow {
-			return z, true
-		}
+		// If the total didn't overflow, it is impossible for a single dimension to overflow
+		res.gas[i] = res.gas[i] + x.gas[i]
 	}
 
 	return res, false
