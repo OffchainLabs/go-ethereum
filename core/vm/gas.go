@@ -64,9 +64,9 @@ func addConstantMultiGas(usedMultiGas *multigas.MultiGas, cost uint64, op OpCode
 	// Note we only need to cover EIP150 because it the current cost, and SELFDESTRUCT cost was
 	// zero previously.
 	if op == SELFDESTRUCT && cost == params.SelfdestructGasEIP150 {
-		usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929)
-		usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindStorageAccessWrite, cost-params.WarmStorageReadCostEIP2929)
+		usedMultiGas.UncheckedIncrementInto(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929)
+		usedMultiGas.UncheckedIncrementInto(multigas.ResourceKindStorageAccessWrite, cost-params.WarmStorageReadCostEIP2929)
 	} else {
-		usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, cost)
+		usedMultiGas.UncheckedIncrementInto(multigas.ResourceKindComputation, cost)
 	}
 }

@@ -203,6 +203,17 @@ func (z *MultiGas) SaturatingAddInto(x MultiGas) {
 	z.refund, _ = saturatingScalarAdd(z.refund, x.refund)
 }
 
+// UncheckedAddInto adds x into z in-place without checking for overflow. This function can be used to
+// improve performance in places we know there won't be an overflow. For instance, when
+// go-ethereum's upstream code also doesn't check for overflows.
+func (z *MultiGas) UncheckedAddInto(x MultiGas) {
+	for i := range int(NumResourceKind) {
+		z.gas[i] = z.gas[i] + x.gas[i]
+	}
+	z.total = z.total + x.total
+	z.refund = z.refund + x.refund
+}
+
 // SafeSub returns a copy of z with the per-kind, total, and refund gas
 // subtracted by the values from x. It returns the updated value and true if
 // a underflow occurred.
@@ -298,6 +309,14 @@ func (z MultiGas) SaturatingDecrement(kind ResourceKind, gas uint64) MultiGas {
 func (z *MultiGas) SaturatingIncrementInto(kind ResourceKind, gas uint64) {
 	z.gas[kind], _ = saturatingScalarAdd(z.gas[kind], gas)
 	z.total, _ = saturatingScalarAdd(z.total, gas)
+}
+
+// UncheckedIncrementInto increments the given resource kind and total in-place without checking for
+// overflow. This function can be used to improve performance in places we know there won't be an
+// overflow. For instance, when go-ethereum's upstream code also doesn't check for overflows.
+func (z *MultiGas) UncheckedIncrementInto(kind ResourceKind, gas uint64) {
+	z.gas[kind] = z.gas[kind] + gas
+	z.total = z.total + gas
 }
 
 // SingleGas returns the single-dimensional total gas.

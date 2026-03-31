@@ -246,7 +246,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			} else {
 				contract.Gas -= dynamicCost
 			}
-			contract.UsedMultiGas.SaturatingAddInto(multigasDynamicCost)
+			contract.UsedMultiGas.UncheckedAddInto(multigasDynamicCost)
 		}
 
 		// Do tracing before potential memory expansion
