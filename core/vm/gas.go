@@ -64,6 +64,10 @@ func addConstantMultiGas(usedMultiGas *multigas.MultiGas, cost uint64, op OpCode
 	// Note we only need to cover EIP150 because it the current cost, and SELFDESTRUCT cost was
 	// zero previously.
 	if op == SELFDESTRUCT && cost == params.SelfdestructGasEIP150 {
+		// To improve performance, we call UncheckedIncrementInto instead of
+		// SaturatingIncrementInto. We know this is safe because addConstantMultiGas is only
+		// called inside EVM.Run(). At that point, we know that multi-gas won't overflow
+		// because the function would end with out-of-gas first.
 		usedMultiGas.UncheckedIncrementInto(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929)
 		usedMultiGas.UncheckedIncrementInto(multigas.ResourceKindStorageAccessWrite, cost-params.WarmStorageReadCostEIP2929)
 	} else {

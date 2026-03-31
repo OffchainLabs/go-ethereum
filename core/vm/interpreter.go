@@ -246,6 +246,9 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			} else {
 				contract.Gas -= dynamicCost
 			}
+			// To improve performance, we call UncheckedAddInto instead of
+			// SaturatingAddInto. We know this is safe because multi-gas won't overflow
+			// before the function ends with out-of-gas.
 			contract.UsedMultiGas.UncheckedAddInto(multigasDynamicCost)
 		}
 
