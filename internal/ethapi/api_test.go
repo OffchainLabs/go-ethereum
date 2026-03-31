@@ -718,7 +718,8 @@ func (b testBackend) HistoryPruningCutoff() uint64 {
 	bn, _ := b.chain.HistoryPruningCutoff()
 	return bn
 }
-func (b testBackend) TxFilter() core.TxFilterer { return nil
+func (b testBackend) TxFilter() core.TxFilterer {
+	return nil
 }
 
 func TestEstimateGas(t *testing.T) {
