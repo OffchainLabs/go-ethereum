@@ -131,7 +131,7 @@ func (z MultiGas) Get(kind ResourceKind) uint64 {
 func (z MultiGas) With(kind ResourceKind, amount uint64) (MultiGas, bool) {
 	res, overflow := z, false
 
-	res.total, overflow = saturatingScalarAdd(z.total-z.gas[kind], amount)
+	res.total, overflow = safeScalarAdd(z.total-z.gas[kind], amount)
 	if overflow {
 		return z, true
 	}
@@ -158,20 +158,20 @@ func (z MultiGas) WithRefund(amount uint64) MultiGas {
 func (z MultiGas) SafeAdd(x MultiGas) (MultiGas, bool) {
 	res, overflow := z, false
 
+	res.total, overflow = safeScalarAdd(res.total, x.total)
+	if overflow {
+		return z, true
+	}
+	res.refund, overflow = safeScalarAdd(res.refund, x.refund)
+	if overflow {
+		return z, true
+	}
+
 	for i := 0; i < int(NumResourceKind); i++ {
-		res.gas[i], overflow = saturatingScalarAdd(res.gas[i], x.gas[i])
+		res.gas[i], overflow = safeScalarAdd(res.gas[i], x.gas[i])
 		if overflow {
 			return z, true
 		}
-	}
-
-	res.total, overflow = saturatingScalarAdd(res.total, x.total)
-	if overflow {
-		return z, true
-	}
-	res.refund, overflow = saturatingScalarAdd(res.refund, x.refund)
-	if overflow {
-		return z, true
 	}
 
 	return res, false
@@ -184,11 +184,11 @@ func (z MultiGas) SaturatingAdd(x MultiGas) MultiGas {
 	res := z
 
 	for i := 0; i < int(NumResourceKind); i++ {
-		res.gas[i], _ = saturatingScalarAdd(res.gas[i], x.gas[i])
+		res.gas[i] = saturatingScalarAdd(res.gas[i], x.gas[i])
 	}
 
-	res.total, _ = saturatingScalarAdd(res.total, x.total)
-	res.refund, _ = saturatingScalarAdd(res.refund, x.refund)
+	res.total = saturatingScalarAdd(res.total, x.total)
+	res.refund = saturatingScalarAdd(res.refund, x.refund)
 	return res
 }
 
@@ -197,10 +197,10 @@ func (z MultiGas) SaturatingAdd(x MultiGas) MultiGas {
 // This is a hot-path helper; the public immutable API remains preferred elsewhere.
 func (z *MultiGas) SaturatingAddInto(x MultiGas) {
 	for i := 0; i < int(NumResourceKind); i++ {
-		z.gas[i], _ = saturatingScalarAdd(z.gas[i], x.gas[i])
+		z.gas[i] = saturatingScalarAdd(z.gas[i], x.gas[i])
 	}
-	z.total, _ = saturatingScalarAdd(z.total, x.total)
-	z.refund, _ = saturatingScalarAdd(z.refund, x.refund)
+	z.total = saturatingScalarAdd(z.total, x.total)
+	z.refund = saturatingScalarAdd(z.refund, x.refund)
 }
 
 // UncheckedAddInto adds x into z in-place without checking for overflow. This function can be used to
@@ -256,12 +256,12 @@ func (z MultiGas) SaturatingSub(x MultiGas) MultiGas {
 func (z MultiGas) SafeIncrement(kind ResourceKind, gas uint64) (MultiGas, bool) {
 	res, overflow := z, false
 
-	res.gas[kind], overflow = saturatingScalarAdd(z.gas[kind], gas)
+	res.gas[kind], overflow = safeScalarAdd(z.gas[kind], gas)
 	if overflow {
 		return z, true
 	}
 
-	res.total, overflow = saturatingScalarAdd(z.total, gas)
+	res.total, overflow = safeScalarAdd(z.total, gas)
 	if overflow {
 		return z, true
 	}
@@ -273,8 +273,8 @@ func (z MultiGas) SafeIncrement(kind ResourceKind, gas uint64) (MultiGas, bool) 
 // and the total incremented by gas. On overflow, the field(s) are clamped to MaxUint64.
 func (z MultiGas) SaturatingIncrement(kind ResourceKind, gas uint64) MultiGas {
 	res := z
-	res.gas[kind], _ = saturatingScalarAdd(z.gas[kind], gas)
-	res.total, _ = saturatingScalarAdd(z.total, gas)
+	res.gas[kind], _ = safeScalarAdd(z.gas[kind], gas)
+	res.total, _ = safeScalarAdd(z.total, gas)
 	return res
 }
 
@@ -307,8 +307,8 @@ func (z MultiGas) SaturatingDecrement(kind ResourceKind, gas uint64) MultiGas {
 // Unlike SaturatingIncrement, this method mutates the receiver directly and
 // is intended for VM hot paths where avoiding value copies is critical.
 func (z *MultiGas) SaturatingIncrementInto(kind ResourceKind, gas uint64) {
-	z.gas[kind], _ = saturatingScalarAdd(z.gas[kind], gas)
-	z.total, _ = saturatingScalarAdd(z.total, gas)
+	z.gas[kind] = saturatingScalarAdd(z.gas[kind], gas)
+	z.total = saturatingScalarAdd(z.total, gas)
 }
 
 // UncheckedIncrementInto increments the given resource kind and total in-place without checking for
@@ -441,7 +441,7 @@ func (z *MultiGas) DecodeRLP(s *rlp.Stream) error {
 func (z *MultiGas) recomputeTotal() (overflow bool) {
 	z.total = 0
 	for i := 0; i < int(NumResourceKind); i++ {
-		z.total, overflow = saturatingScalarAdd(z.total, z.gas[i])
+		z.total, overflow = safeScalarAdd(z.total, z.gas[i])
 		if overflow {
 			return
 		}
@@ -449,15 +449,24 @@ func (z *MultiGas) recomputeTotal() (overflow bool) {
 	return
 }
 
-// saturatingScalarAdd adds two uint64 values, returning the sum and a boolean
-// indicating whether an overflow occurred. If an overflow occurs, the sum is
-// set to math.MaxUint64.
-func saturatingScalarAdd(a, b uint64) (uint64, bool) {
+// safeScalarAdd adds two uint64 values, returning the sum and a boolean indicating whether an
+// overflow occurred. If an overflow occurs, the sum is set to math.MaxUint64.
+func safeScalarAdd(a, b uint64) (uint64, bool) {
 	sum, carry := bits.Add64(a, b, 0)
 	if carry != 0 {
 		return math.MaxUint64, true
 	}
 	return sum, false
+}
+
+// saturatingScalarAdd adds two uint64 values, returning the sum. If an overflow occurs, the sum is
+// set to math.MaxUint64.
+func saturatingScalarAdd(a, b uint64) uint64 {
+	sum, carry := bits.Add64(a, b, 0)
+	if carry != 0 {
+		return math.MaxUint64
+	}
+	return sum
 }
 
 // saturatingScalarSub subtracts two uint64 values, returning the difference and a boolean
