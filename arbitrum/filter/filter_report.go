@@ -1,8 +1,6 @@
 package filter
 
 import (
-	"time"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -24,34 +22,29 @@ const (
 	ReasonSelfdestructBeneficiary       FilterReasonType = "selfdestruct_beneficiary"
 )
 
+// lint:require-exhaustive-initialization
 type RawLog struct {
 	Address common.Address `json:"address"`
 	Topics  []common.Hash  `json:"topics"`
 	Data    hexutil.Bytes  `json:"data"`
 }
 
-type FilterReason struct {
-	Reason            FilterReasonType `json:"reason"`
-	MatchedEvent      string           `json:"matchedEvent,omitempty"`
-	MatchedTopicIndex int              `json:"matchedTopicIndex,omitempty"`
-	RawLog            *RawLog          `json:"rawLog,omitempty"`
+// lint:require-exhaustive-initialization
+type EventRuleMatch struct {
+	MatchedEvent      string  `json:"matchedEvent"`
+	MatchedTopicIndex int     `json:"matchedTopicIndex,omitempty"`
+	RawLog            *RawLog `json:"rawLog,omitempty"`
 }
 
+// lint:require-exhaustive-initialization
+type FilterReason struct {
+	Reason FilterReasonType `json:"reason"`
+	*EventRuleMatch
+}
+
+// lint:require-exhaustive-initialization
 type FilteredAddressRecord struct {
 	Address     common.Address `json:"address"`
 	FilterSetId string         `json:"filterSetId"`
 	FilterReason
-}
-
-type FilteredTxReport struct {
-	ID                    string                  `json:"id"`
-	TxHash                common.Hash             `json:"txHash"`
-	TxRLP                 hexutil.Bytes           `json:"txRLP"`
-	FilteredAddresses     []FilteredAddressRecord `json:"filteredAddresses"`
-	BlockNumber           uint64                  `json:"blockNumber"`
-	ParentBlockHash       common.Hash             `json:"parentBlockHash"`
-	PositionInBlock       uint64                  `json:"positionInBlock"`
-	FilteredAt            time.Time               `json:"filteredAt"`
-	IsDelayed             bool                    `json:"isDelayed"`
-	DelayedInboxRequestId *common.Hash            `json:"delayedInboxRequestId,omitempty"`
 }

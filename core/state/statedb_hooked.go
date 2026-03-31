@@ -366,7 +366,7 @@ func (s *hookedStateDB) SetAddressChecker(checker AddressChecker) {
 	s.inner.SetAddressChecker(checker)
 }
 
-func (s *hookedStateDB) TouchAddress(record filter.FilteredAddressRecord) {
+func (s *hookedStateDB) TouchAddress(record *filter.FilteredAddressRecord) {
 	s.inner.TouchAddress(record)
 }
 

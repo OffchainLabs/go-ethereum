@@ -924,7 +924,7 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		return nil, ErrWriteProtection
 	}
 	beneficiary := scope.Stack.pop()
-	evm.StateDB.TouchAddress(filter.FilteredAddressRecord{
+	evm.StateDB.TouchAddress(&filter.FilteredAddressRecord{
 		Address:      beneficiary.Bytes20(),
 		FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary},
 	})
@@ -958,7 +958,7 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 	}
 
 	beneficiary := scope.Stack.pop()
-	evm.StateDB.TouchAddress(filter.FilteredAddressRecord{
+	evm.StateDB.TouchAddress(&filter.FilteredAddressRecord{
 		Address:      beneficiary.Bytes20(),
 		FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary},
 	})
