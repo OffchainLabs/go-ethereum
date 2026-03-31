@@ -41,6 +41,10 @@ var (
 	activatedAsmArmPrefix  = WasmPrefix{0x00, 'w', 'r'} // (prefix, moduleHash) -> stylus asm for ARM system
 	activatedAsmX86Prefix  = WasmPrefix{0x00, 'w', 'x'} // (prefix, moduleHash) -> stylus asm for x86 system
 	activatedAsmHostPrefix = WasmPrefix{0x00, 'w', 'h'} // (prefix, moduleHash) -> stylus asm for system other then ARM and x86
+
+	activatedAsmArmCraneliftPrefix  = WasmPrefix{0x00, 'c', 'r'} // (prefix, moduleHash) -> cranelift asm for ARM system
+	activatedAsmX86CraneliftPrefix  = WasmPrefix{0x00, 'c', 'x'} // (prefix, moduleHash) -> cranelift asm for x86 system
+	activatedAsmHostCraneliftPrefix = WasmPrefix{0x00, 'c', 'h'} // (prefix, moduleHash) -> cranelift asm for system other than ARM and x86
 )
 
 func WasmPrefixesExceptWavm() [][]byte {
