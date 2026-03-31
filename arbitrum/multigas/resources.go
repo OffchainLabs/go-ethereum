@@ -219,13 +219,13 @@ func (z MultiGas) SafeSub(x MultiGas) (MultiGas, bool) {
 	res, underflow := z, false
 
 	for i := 0; i < int(NumResourceKind); i++ {
-		res.gas[i], underflow = saturatingScalarSub(res.gas[i], x.gas[i])
+		res.gas[i], underflow = safeScalarSub(res.gas[i], x.gas[i])
 		if underflow {
 			return z, true
 		}
 	}
 
-	res.refund, underflow = saturatingScalarSub(res.refund, x.refund)
+	res.refund, underflow = safeScalarSub(res.refund, x.refund)
 	if underflow {
 		return z, true
 	}
@@ -241,9 +241,9 @@ func (z MultiGas) SafeSub(x MultiGas) (MultiGas, bool) {
 func (z MultiGas) SaturatingSub(x MultiGas) MultiGas {
 	res := z
 	for i := 0; i < int(NumResourceKind); i++ {
-		res.gas[i], _ = saturatingScalarSub(res.gas[i], x.gas[i])
+		res.gas[i] = saturatingScalarSub(res.gas[i], x.gas[i])
 	}
-	res.refund, _ = saturatingScalarSub(res.refund, x.refund)
+	res.refund = saturatingScalarSub(res.refund, x.refund)
 	res.recomputeTotal()
 	return res
 }
@@ -271,8 +271,8 @@ func (z MultiGas) SafeIncrement(kind ResourceKind, gas uint64) (MultiGas, bool) 
 // and the total incremented by gas. On overflow, the field(s) are clamped to MaxUint64.
 func (z MultiGas) SaturatingIncrement(kind ResourceKind, gas uint64) MultiGas {
 	res := z
-	res.gas[kind], _ = safeScalarAdd(z.gas[kind], gas)
-	res.total, _ = safeScalarAdd(z.total, gas)
+	res.gas[kind] = saturatingScalarAdd(z.gas[kind], gas)
+	res.total = saturatingScalarAdd(z.total, gas)
 	return res
 }
 
@@ -467,13 +467,22 @@ func saturatingScalarAdd(a, b uint64) uint64 {
 	return sum
 }
 
-// saturatingScalarSub subtracts two uint64 values, returning the difference and a boolean
-// indicating whether an underflow occurred. If an underflow occurs, the difference is
-// set to 0.
-func saturatingScalarSub(a, b uint64) (uint64, bool) {
+// safeScalarSub subtracts two uint64 values, returning the difference and a boolean indicating
+// whether an underflow occurred. If an underflow occurs, the difference is set to 0.
+func safeScalarSub(a, b uint64) (uint64, bool) {
 	diff, borrow := bits.Sub64(a, b, 0)
 	if borrow != 0 {
 		return 0, true
 	}
 	return diff, false
+}
+
+// saturatingScalarSub subtracts two uint64 values returning the difference. If an underflow occurs,
+// the difference is set to 0.
+func saturatingScalarSub(a, b uint64) uint64 {
+	diff, borrow := bits.Sub64(a, b, 0)
+	if borrow != 0 {
+		return 0
+	}
+	return diff
 }
