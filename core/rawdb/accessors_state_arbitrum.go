@@ -88,6 +88,74 @@ func CraneliftTarget(target WasmTarget) (WasmTarget, error) {
 	}
 }
 
+func IsCraneliftTarget(target WasmTarget) bool {
+	switch target {
+	case TargetArm64Cranelift, TargetAmd64Cranelift, TargetHostCranelift:
+		return true
+	default:
+		return false
+	}
+}
+
+// SplitAsmMap separates a unified asmMap into consensus (non-cranelift) and
+// cranelift entries. This allows callers to pass only consensus targets to
+// ActivateWasm (which has consistency checks) while persisting cranelift
+// entries separately to the wasm store.
+func SplitAsmMap(asmMap map[WasmTarget][]byte) (consensus map[WasmTarget][]byte, cranelift map[WasmTarget][]byte) {
+	consensus = make(map[WasmTarget][]byte)
+	cranelift = make(map[WasmTarget][]byte)
+	for target, asm := range asmMap {
+		if IsCraneliftTarget(target) {
+			cranelift[target] = asm
+		} else {
+			consensus[target] = asm
+		}
+	}
+	return consensus, cranelift
+}
+
+// BaseTarget returns the singlepass base target for a cranelift target.
+func BaseTarget(target WasmTarget) (WasmTarget, error) {
+	switch target {
+	case TargetArm64Cranelift:
+		return TargetArm64, nil
+	case TargetAmd64Cranelift:
+		return TargetAmd64, nil
+	case TargetHostCranelift:
+		return TargetHost, nil
+	default:
+		return "", fmt.Errorf("not a cranelift target: %v", target)
+	}
+}
+
+// DeduplicateAsmMap returns a map keyed by base (non-cranelift) targets, where
+// each entry holds the best available ASM: singlepass if it exists, otherwise
+// cranelift. Non-native targets (wasm, wavm) are passed through as-is.
+// This ensures every compiled program is represented exactly once under its
+// base target key, regardless of which compiler produced the ASM.
+func DeduplicateAsmMap(asmMap map[WasmTarget][]byte) map[WasmTarget][]byte {
+	result := make(map[WasmTarget][]byte, len(asmMap))
+	// First pass: add all non-cranelift entries.
+	for target, asm := range asmMap {
+		if !IsCraneliftTarget(target) {
+			result[target] = asm
+		}
+	}
+	// Second pass: add cranelift entries only if the base target is missing.
+	for target, asm := range asmMap {
+		if IsCraneliftTarget(target) {
+			base, err := BaseTarget(target)
+			if err != nil {
+				continue
+			}
+			if _, exists := result[base]; !exists {
+				result[base] = asm
+			}
+		}
+	}
+	return result
+}
+
 func IsSupportedWasmTarget(target WasmTarget) bool {
 	_, err := activatedAsmKeyPrefix(target)
 	return err == nil
