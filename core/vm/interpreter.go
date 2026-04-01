@@ -207,7 +207,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
 		// for tracing: this gas consumption event is emitted below in the debug section.
-		if err := contract.AddConstantMultiGas(cost, op); err != nil {
+		if err := addConstantMultiGas(contract, cost, op); err != nil {
 			return nil, err
 		}
 
@@ -238,7 +238,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
 			}
 			// for tracing: this gas consumption event is emitted below in the debug section.
-			if err := contract.AddDynamicMultiGas(&multigasDynamicCost); err != nil {
+			if err := addDynamicMultiGas(contract, dynamicCost, &multigasDynamicCost); err != nil {
 				return nil, err
 			}
 		}

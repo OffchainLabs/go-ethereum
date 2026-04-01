@@ -38,7 +38,7 @@ func TestConstantMultiGas(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			contract := &Contract{Gas: math.MaxUint64}
-			if contract.AddConstantMultiGas(tc.cost, tc.op); contract.UsedMultiGas != tc.want {
+			if addConstantMultiGas(contract, tc.cost, tc.op); contract.UsedMultiGas != tc.want {
 				t.Errorf("wrong constant multigas: got %v, want %v", contract.UsedMultiGas, tc.want)
 			}
 		})
