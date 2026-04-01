@@ -62,6 +62,7 @@ const DefaultMaxUncompressedBatchSize = 16 * 1024 * 1024 // 16 MB
 type ArbitrumChainParams struct {
 	EnableArbOS               bool
 	AllowDebugPrecompiles     bool
+	DisableOffchainArbOwner   bool
 	DataAvailabilityCommittee bool
 	InitialArbOSVersion       uint64
 	InitialChainOwner         common.Address
@@ -95,6 +96,10 @@ func (c *ChainConfig) MaxInitCodeSize() uint64 {
 
 func (c *ChainConfig) DebugMode() bool {
 	return c.ArbitrumChainParams.AllowDebugPrecompiles
+}
+
+func (c *ChainConfig) DisableOffchainArbOwner() bool {
+	return c.ArbitrumChainParams.DisableOffchainArbOwner
 }
 
 func (c *ChainConfig) MaxUncompressedBatchSize() uint64 {
