@@ -36,13 +36,11 @@ type EventRuleMatch struct {
 	RawLog            *RawLog `json:"rawLog,omitempty"`
 }
 
-// lint:require-exhaustive-initialization
 type FilterReason struct {
 	Reason FilterReasonType `json:"reason"`
 	*EventRuleMatch
 }
 
-// lint:require-exhaustive-initialization
 type FilteredAddressRecord struct {
 	Address     common.Address `json:"address"`
 	FilterSetId string         `json:"filterSetId"`
