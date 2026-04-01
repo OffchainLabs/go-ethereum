@@ -42,6 +42,7 @@ import (
 type Backend interface {
 	FallbackClient() types.FallbackClient
 	ArchiveFallbackClient(blockNum uint64) types.FallbackClient
+	TxFilter() core.TxFilterer
 
 	// General Ethereum API
 	SyncProgress(ctx context.Context) ethereum.SyncProgress
@@ -95,7 +96,6 @@ type Backend interface {
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
 	HistoryPruningCutoff() uint64
-	TxFilter() core.TxFilterer
 
 	// This is copied from filters.Backend
 	// eth/filters needs to be initialized from this backend type, so methods needed by

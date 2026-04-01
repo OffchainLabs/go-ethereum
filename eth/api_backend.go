@@ -57,9 +57,6 @@ func (b *EthAPIBackend) ChainConfig() *params.ChainConfig {
 	return b.eth.blockchain.Config()
 }
 
-// TxFilter returns nil — address filtering is Arbitrum-specific.
-func (b *EthAPIBackend) TxFilter() core.TxFilterer { return nil }
-
 func (b *EthAPIBackend) CurrentBlock() *types.Header {
 	return b.eth.blockchain.CurrentBlock()
 }
@@ -514,3 +511,5 @@ func (b *EthAPIBackend) FallbackClient() types.FallbackClient {
 func (b *EthAPIBackend) ArchiveFallbackClient(_ uint64) types.FallbackClient {
 	return nil
 }
+
+func (b *EthAPIBackend) TxFilter() core.TxFilterer { return nil }

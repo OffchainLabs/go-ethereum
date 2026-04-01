@@ -321,7 +321,6 @@ func (b *backendMock) BlobBaseFee(ctx context.Context) *big.Int { return big.New
 
 func (b *backendMock) CurrentHeader() *types.Header     { return b.current }
 func (b *backendMock) ChainConfig() *params.ChainConfig { return b.config }
-func (b *backendMock) TxFilter() core.TxFilterer        { return nil }
 
 // Other methods needed to implement Backend interface.
 func (b *backendMock) SyncProgress(ctx context.Context) ethereum.SyncProgress {
@@ -418,6 +417,8 @@ func (b *backendMock) FallbackClient() types.FallbackClient {
 func (b *backendMock) ArchiveFallbackClient(_ uint64) types.FallbackClient {
 	return nil
 }
+
+func (b *backendMock) TxFilter() core.TxFilterer { return nil }
 
 func (b *backendMock) SyncProgressMap(ctx context.Context) map[string]interface{} {
 	return nil

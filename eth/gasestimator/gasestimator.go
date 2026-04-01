@@ -228,7 +228,7 @@ func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit ui
 
 	// Execute the call and separate execution faults caused by a lack of gas or
 	// other non-fixable conditions
-	result, err := Run(ctx, call, opts)
+	result, err := run(ctx, call, opts)
 	if err != nil {
 		if errors.Is(err, core.ErrIntrinsicGas) {
 			return true, nil, nil // Special case, raise gas limit
@@ -241,9 +241,14 @@ func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit ui
 	return result.Failed(), result, nil
 }
 
-// Run assembles the EVM as defined by the consensus rules and runs the requested
-// call invocation.
+// Public API for gas estimation. Separated to simplify upstream merges.
 func Run(ctx context.Context, call *core.Message, opts *Options) (*core.ExecutionResult, error) {
+	return run(ctx, call, opts)
+}
+
+// run assembles the EVM as defined by the consensus rules and runs the requested
+// call invocation.
+func run(ctx context.Context, call *core.Message, opts *Options) (*core.ExecutionResult, error) {
 	// Assemble the call and the call context
 	var (
 		evmContext = core.NewEVMBlockContext(opts.Header, opts.Chain, nil)
@@ -277,13 +282,13 @@ func Run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	}
 
 	// Arbitrum: set up address filtering
-	var txFilter core.TxFilterer
+	var txFilterer core.TxFilterer
 	if opts.EnableFiltering {
-		txFilter = opts.Backend.TxFilter()
+		txFilterer = opts.Backend.TxFilter()
 	}
-	if txFilter != nil {
-		txFilter.Setup(dirtyState)
-		dirtyState.SetTxContext(common.Hash{}, 0)
+	if txFilterer != nil {
+		txFilterer.Setup(dirtyState)
+
 		dirtyState.TouchAddress(call.From)
 		if call.To != nil {
 			dirtyState.TouchAddress(*call.To)
@@ -305,14 +310,14 @@ func Run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	}
 
 	// Arbitrum: a tx can schedule another (see retryables)
-	result, err = opts.RunScheduledTxes(ctx, opts.Backend, dirtyState, opts.Header, evmContext, call.TxRunContext, result, txFilter)
+	result, err = opts.RunScheduledTxes(ctx, opts.Backend, dirtyState, opts.Header, evmContext, call.TxRunContext, result, txFilterer)
 	if err != nil {
 		return nil, err
 	}
 
 	// Arbitrum: check address filtering result
-	if txFilter != nil {
-		if err := txFilter.CheckFiltered(dirtyState); err != nil {
+	if txFilterer != nil {
+		if err := txFilterer.CheckFiltered(dirtyState); err != nil {
 			return nil, err
 		}
 	}

@@ -710,6 +710,10 @@ func (b testBackend) ArchiveFallbackClient(_ uint64) types.FallbackClient {
 	return nil
 }
 
+func (b testBackend) TxFilter() core.TxFilterer {
+	return nil
+}
+
 func (b testBackend) SyncProgressMap(ctx context.Context) map[string]interface{} {
 	return map[string]interface{}{}
 }
@@ -717,9 +721,6 @@ func (b testBackend) SyncProgressMap(ctx context.Context) map[string]interface{}
 func (b testBackend) HistoryPruningCutoff() uint64 {
 	bn, _ := b.chain.HistoryPruningCutoff()
 	return bn
-}
-func (b testBackend) TxFilter() core.TxFilterer {
-	return nil
 }
 
 func TestEstimateGas(t *testing.T) {

@@ -55,9 +55,9 @@ var RenderRPCError func(data []byte) error
 type TxFilterer interface {
 	// Setup activates address filtering on statedb.
 	Setup(statedb *state.StateDB)
-	// TouchAddresses marks filterable addresses for a scheduled tx.
+	// TouchAddresses marks sender, recipient, aliased, and retryable addresses for filtering.
 	TouchAddresses(statedb *state.StateDB, tx *types.Transaction, sender common.Address)
-	// CheckFiltered applies event filtering and returns ErrArbTxFilter if filtered.
+	// CheckFiltered applies event filtering and returns state.ErrArbTxFilter if filtered.
 	CheckFiltered(statedb *state.StateDB) error
 }
 
