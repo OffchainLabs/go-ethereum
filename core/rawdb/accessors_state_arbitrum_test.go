@@ -47,10 +47,10 @@ func TestBaseTarget(t *testing.T) {
 
 func TestSplitAsmMap(t *testing.T) {
 	asmMap := map[WasmTarget][]byte{
-		TargetArm64:           []byte("sp"),
-		TargetArm64Cranelift:  []byte("cl"),
-		TargetWasm:            []byte("wasm"),
-		TargetWavm:            []byte("wavm"),
+		TargetArm64:          []byte("sp"),
+		TargetArm64Cranelift: []byte("cl"),
+		TargetWasm:           []byte("wasm"),
+		TargetWavm:           []byte("wavm"),
 	}
 	consensus, cranelift := SplitAsmMap(asmMap)
 
@@ -77,9 +77,9 @@ func TestSplitAsmMap(t *testing.T) {
 func TestDeduplicateAsmMap(t *testing.T) {
 	// Both singlepass and cranelift exist: singlepass wins.
 	asmMap := map[WasmTarget][]byte{
-		TargetArm64:           []byte("singlepass"),
-		TargetArm64Cranelift:  []byte("cranelift"),
-		TargetWavm:            []byte("wavm"),
+		TargetArm64:          []byte("singlepass"),
+		TargetArm64Cranelift: []byte("cranelift"),
+		TargetWavm:           []byte("wavm"),
 	}
 	result := DeduplicateAsmMap(asmMap)
 	if string(result[TargetArm64]) != "singlepass" {
@@ -128,10 +128,10 @@ func TestDeduplicateAsmMap(t *testing.T) {
 
 	// Multiple targets, mixed: arm64 has both (singlepass wins), amd64 cranelift-only.
 	asmMap = map[WasmTarget][]byte{
-		TargetArm64:           []byte("arm-sp"),
-		TargetArm64Cranelift:  []byte("arm-cl"),
-		TargetAmd64Cranelift:  []byte("amd-cl"),
-		TargetWavm:            []byte("wavm"),
+		TargetArm64:          []byte("arm-sp"),
+		TargetArm64Cranelift: []byte("arm-cl"),
+		TargetAmd64Cranelift: []byte("amd-cl"),
+		TargetWavm:           []byte("wavm"),
 	}
 	result = DeduplicateAsmMap(asmMap)
 	if string(result[TargetArm64]) != "arm-sp" {
