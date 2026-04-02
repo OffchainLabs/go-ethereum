@@ -169,6 +169,16 @@ func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asmMap map
 	}
 }
 
+// Deletes the activated asm for a given moduleHash and target
+func DeleteActivatedAsm(db ethdb.KeyValueWriter, target WasmTarget, moduleHash common.Hash) error {
+	prefix, err := activatedAsmKeyPrefix(target)
+	if err != nil {
+		return err
+	}
+	key := activatedKey(prefix, moduleHash)
+	return db.Delete(key[:])
+}
+
 // Stores the activated asm for a given moduleHash and target
 func WriteActivatedAsm(db ethdb.KeyValueWriter, target WasmTarget, moduleHash common.Hash, asm []byte) {
 	prefix, err := activatedAsmKeyPrefix(target)

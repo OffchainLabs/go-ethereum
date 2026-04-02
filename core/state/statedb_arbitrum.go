@@ -204,25 +204,29 @@ func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarg
 		return nil
 	}
 	s.arbExtraData.activatedWasms[moduleHash] = dedupAsms
-	s.journal.append(wasmActivation{
-		moduleHash: moduleHash,
-	})
 
-	// Persist cranelift entries under their cranelift-specific keys (e.g.,
-	// TargetArm64Cranelift) directly to the wasm store. DeduplicateAsmMap
+	// Persist cranelift entries eagerly under their cranelift-specific keys
+	// (e.g., TargetArm64Cranelift) to the wasm store. DeduplicateAsmMap
 	// collapses these into base target keys for the consistency check, so the
-	// cranelift keys must be stored separately for getCraneliftAsm to find
-	// them without recompiling.
+	// cranelift keys must be stored separately for getCraneliftAsm (in
+	// arbos/programs) to find them without recompiling.
 	_, craneliftAsms := rawdb.SplitAsmMap(asmMap)
+	var craneliftTargets []rawdb.WasmTarget
 	if len(craneliftAsms) > 0 {
 		if db := s.db.WasmStore(); db != nil {
 			batch := db.NewBatch()
 			rawdb.WriteActivation(batch, moduleHash, craneliftAsms)
 			if err := batch.Write(); err != nil {
-				log.Error("failed to persist cranelift ASMs to wasm store", "moduleHash", moduleHash, "err", err)
+				return fmt.Errorf("failed to persist cranelift ASMs for module %v: %w", moduleHash, err)
 			}
+			craneliftTargets = slices.Collect(maps.Keys(craneliftAsms))
 		}
 	}
+	// Record in journal so revert can delete eagerly-written cranelift entries.
+	s.journal.append(wasmActivation{
+		moduleHash:       moduleHash,
+		craneliftTargets: craneliftTargets,
+	})
 	return nil
 }
 
@@ -262,10 +266,8 @@ func (s *StateDB) ActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash common.
 		if asm := s.db.ActivatedAsm(target, moduleHash); len(asm) > 0 {
 			asmMap[target] = asm
 		} else if ct, err := rawdb.CraneliftTarget(target); err == nil {
-			// Target is only missing if neither singlepass nor cranelift exists.
 			if ctAsm := s.db.ActivatedAsm(ct, moduleHash); len(ctAsm) > 0 {
 				asmMap[target] = ctAsm
-				asmMap[ct] = ctAsm
 			} else {
 				missingTargets = append(missingTargets, target)
 			}

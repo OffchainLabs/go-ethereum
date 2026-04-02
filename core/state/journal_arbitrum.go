@@ -1,16 +1,29 @@
 package state
 
 import (
+	"slices"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type wasmActivation struct {
-	moduleHash common.Hash
+	moduleHash       common.Hash
+	craneliftTargets []rawdb.WasmTarget // cranelift targets eagerly written to wasm store
 }
 
 func (ch wasmActivation) revert(s *StateDB) {
 	delete(s.arbExtraData.activatedWasms, ch.moduleHash)
+	if len(ch.craneliftTargets) > 0 {
+		if db := s.db.WasmStore(); db != nil {
+			for _, target := range ch.craneliftTargets {
+				if err := rawdb.DeleteActivatedAsm(db, target, ch.moduleHash); err != nil {
+					log.Error("failed to revert cranelift ASM", "target", target, "moduleHash", ch.moduleHash, "err", err)
+				}
+			}
+		}
+	}
 }
 
 func (ch wasmActivation) dirtied() *common.Address {
@@ -19,7 +32,8 @@ func (ch wasmActivation) dirtied() *common.Address {
 
 func (ch wasmActivation) copy() journalEntry {
 	return wasmActivation{
-		moduleHash: ch.moduleHash,
+		moduleHash:       ch.moduleHash,
+		craneliftTargets: slices.Clone(ch.craneliftTargets),
 	}
 }
 

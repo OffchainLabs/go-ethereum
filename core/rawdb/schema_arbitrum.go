@@ -52,6 +52,9 @@ func WasmPrefixesExceptWavm() [][]byte {
 	prefixes = append(prefixes, activatedAsmArmPrefix[:])
 	prefixes = append(prefixes, activatedAsmX86Prefix[:])
 	prefixes = append(prefixes, activatedAsmHostPrefix[:])
+	prefixes = append(prefixes, activatedAsmArmCraneliftPrefix[:])
+	prefixes = append(prefixes, activatedAsmX86CraneliftPrefix[:])
+	prefixes = append(prefixes, activatedAsmHostCraneliftPrefix[:])
 	return prefixes
 }
 
