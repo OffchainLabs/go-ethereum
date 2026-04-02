@@ -172,19 +172,13 @@ func NewStylusRootPrefix(dictionary byte) []byte {
 // If the asmMap is added to the newly activated wasms, then wasmActivation is added to the journal so the operation can be reverted and the new entry removed in StateDB.RevertToSnapshot.
 // note: all ActivateWasm calls in given StateDB cycle (cycle reset by statedb commit) requires that the asmMap contain entries for the same targets as the first asmMap passed to ActivateWasm in the cycle. This is assumed in other parts of the code.
 func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarget][]byte) error {
-	// Deduplicate: collapse cranelift entries into their base targets so that
-	// the consistency check sees the same target set regardless of whether
-	// individual programs used the cranelift fallback. Singlepass takes
-	// precedence when both exist for the same base target.
-	dedupAsms := rawdb.DeduplicateAsmMap(asmMap)
-
 	// check consistency of targets with any previous activation
 	// that should be impossible if the ActivateWasm is used correctly, but check for early bug detection
 	for _, previouslyActivated := range s.arbExtraData.activatedWasms {
-		inconsistent := len(dedupAsms) != len(previouslyActivated)
+		inconsistent := len(asmMap) != len(previouslyActivated)
 		if !inconsistent {
 			for target := range previouslyActivated {
-				if _, ok := dedupAsms[target]; !ok {
+				if _, ok := asmMap[target]; !ok {
 					inconsistent = true
 					break
 				}
@@ -192,7 +186,7 @@ func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarg
 		}
 		if inconsistent {
 			previousTargets := slices.Collect(maps.Keys(previouslyActivated))
-			newTargets := slices.Collect(maps.Keys(dedupAsms))
+			newTargets := slices.Collect(maps.Keys(asmMap))
 			log.Error("Inconsistent stylus compile targets used with StateDB, previously activated module with different target list", "moduleHash", moduleHash, "previousTargets", previousTargets, "newTargets", newTargets)
 			return errors.New("inconsistent stylus compile targets")
 		}
@@ -203,29 +197,10 @@ func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarg
 	if exists {
 		return nil
 	}
-	s.arbExtraData.activatedWasms[moduleHash] = dedupAsms
+	s.arbExtraData.activatedWasms[moduleHash] = asmMap
 
-	// Persist cranelift entries eagerly under their cranelift-specific keys
-	// (e.g., TargetArm64Cranelift) to the wasm store. DeduplicateAsmMap
-	// collapses these into base target keys for the consistency check, so the
-	// cranelift keys must be stored separately for getCraneliftAsm (in
-	// arbos/programs) to find them without recompiling.
-	_, craneliftAsms := rawdb.SplitAsmMap(asmMap)
-	var craneliftTargets []rawdb.WasmTarget
-	if len(craneliftAsms) > 0 {
-		if db := s.db.WasmStore(); db != nil {
-			batch := db.NewBatch()
-			rawdb.WriteActivation(batch, moduleHash, craneliftAsms)
-			if err := batch.Write(); err != nil {
-				return fmt.Errorf("failed to persist cranelift ASMs for module %v: %w", moduleHash, err)
-			}
-			craneliftTargets = slices.Collect(maps.Keys(craneliftAsms))
-		}
-	}
-	// Record in journal so revert can delete eagerly-written cranelift entries.
 	s.journal.append(wasmActivation{
-		moduleHash:       moduleHash,
-		craneliftTargets: craneliftTargets,
+		moduleHash: moduleHash,
 	})
 	return nil
 }
@@ -265,12 +240,6 @@ func (s *StateDB) ActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash common.
 	for _, target := range targets {
 		if asm := s.db.ActivatedAsm(target, moduleHash); len(asm) > 0 {
 			asmMap[target] = asm
-		} else if ct, err := rawdb.CraneliftTarget(target); err == nil {
-			if ctAsm := s.db.ActivatedAsm(ct, moduleHash); len(ctAsm) > 0 {
-				asmMap[target] = ctAsm
-			} else {
-				missingTargets = append(missingTargets, target)
-			}
 		} else {
 			missingTargets = append(missingTargets, target)
 		}
