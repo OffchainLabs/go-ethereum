@@ -198,7 +198,6 @@ func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarg
 		return nil
 	}
 	s.arbExtraData.activatedWasms[moduleHash] = asmMap
-
 	s.journal.append(wasmActivation{
 		moduleHash: moduleHash,
 	})
