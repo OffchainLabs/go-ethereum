@@ -254,6 +254,11 @@ func (s *StateDB) GetStylusPagesOpen() uint16 {
 	return s.arbExtraData.openWasmPages
 }
 
+func (s *StateDB) SetStylusPages(open, ever uint16) {
+	s.arbExtraData.openWasmPages = open
+	s.arbExtraData.everWasmPages = ever
+}
+
 func (s *StateDB) SetStylusPagesOpen(open uint16) {
 	s.arbExtraData.openWasmPages = open
 }
