@@ -97,6 +97,22 @@ func IsCraneliftTarget(target WasmTarget) bool {
 	}
 }
 
+// BaseTarget maps a cranelift target back to its base target (e.g.,
+// TargetArm64Cranelift → TargetArm64). Returns an error if the target
+// is not a cranelift variant.
+func BaseTarget(target WasmTarget) (WasmTarget, error) {
+	switch target {
+	case TargetArm64Cranelift:
+		return TargetArm64, nil
+	case TargetAmd64Cranelift:
+		return TargetAmd64, nil
+	case TargetHostCranelift:
+		return TargetHost, nil
+	default:
+		return "", fmt.Errorf("no base target for: %v", target)
+	}
+}
+
 func IsSupportedWasmTarget(target WasmTarget) bool {
 	_, err := activatedAsmKeyPrefix(target)
 	return err == nil
