@@ -952,7 +952,6 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		BlockOverrides:   blockOverrides,
 		State:            state,
 		Backend:          b,
-		EnableFiltering:  true,
 		ErrorRatio:       gasestimator.EstimateGasErrorRatio,
 		RunScheduledTxes: retryables.RunScheduledTxes,
 	}

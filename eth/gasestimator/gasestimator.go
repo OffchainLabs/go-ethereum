@@ -48,7 +48,6 @@ type Options struct {
 	Header           *types.Header            // Header defining the block context to execute in
 	State            *state.StateDB           // Pre-state on top of which to estimate the gas
 	BlockOverrides   *override.BlockOverrides // Block overrides to apply during the estimation
-	EnableFiltering  bool                     // Enable address filtering during execution
 	Backend          core.NodeInterfaceBackendAPI
 	RunScheduledTxes func(context.Context, core.NodeInterfaceBackendAPI, *state.StateDB, *types.Header, vm.BlockContext, *core.MessageRunContext, *core.ExecutionResult, core.TxFilterer) (*core.ExecutionResult, error)
 
@@ -282,10 +281,7 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	}
 
 	// Arbitrum: set up address filtering
-	var txFilterer core.TxFilterer
-	if opts.EnableFiltering {
-		txFilterer = opts.Backend.TxFilter()
-	}
+	txFilterer := opts.Backend.TxFilter()
 	if txFilterer != nil {
 		txFilterer.Setup(dirtyState)
 
