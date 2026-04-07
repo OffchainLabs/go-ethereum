@@ -43,6 +43,6 @@ type FilterReason struct {
 
 type FilteredAddressRecord struct {
 	Address     common.Address `json:"address"`
-	FilterSetId string         `json:"filterSetId"`
+	FilterSetID string         `json:"filterSetId"`
 	FilterReason
 }
