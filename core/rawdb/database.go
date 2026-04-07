@@ -727,7 +727,7 @@ func printChainMetadata(db ethdb.KeyValueStore) {
 func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 	pp := func(val *uint64) string {
 		if val == nil {
-			return "<nil>"
+			return "not set (new or uninitialized database)"
 		}
 		return fmt.Sprintf("%d (%#x)", *val, *val)
 	}
