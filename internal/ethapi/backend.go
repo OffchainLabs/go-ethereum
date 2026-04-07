@@ -42,6 +42,7 @@ import (
 type Backend interface {
 	FallbackClient() types.FallbackClient
 	ArchiveFallbackClient(blockNum uint64) types.FallbackClient
+	TxFilter() core.TxFilterer
 
 	// General Ethereum API
 	SyncProgress(ctx context.Context) ethereum.SyncProgress

@@ -51,6 +51,16 @@ var RPCPostingGasHook = func(msg *Message, header *types.Header, statedb *state.
 // Renders a solidity error in human-readable form
 var RenderRPCError func(data []byte) error
 
+// TxFilterer provides address-based transaction filtering.
+type TxFilterer interface {
+	// Setup activates address filtering on statedb.
+	Setup(statedb *state.StateDB)
+	// TouchAddresses marks sender, recipient, aliased, and retryable addresses for filtering.
+	TouchAddresses(statedb *state.StateDB, tx *types.Transaction, sender common.Address)
+	// CheckFiltered applies event filtering and returns state.ErrArbTxFilter if filtered.
+	CheckFiltered(statedb *state.StateDB) error
+}
+
 type NodeInterfaceBackendAPI interface {
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Header
@@ -58,4 +68,5 @@ type NodeInterfaceBackendAPI interface {
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	GetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error)
 	GetEVM(ctx context.Context, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM
+	TxFilter() TxFilterer
 }
