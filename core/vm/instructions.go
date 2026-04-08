@@ -926,7 +926,7 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	beneficiary := scope.Stack.pop()
 	evm.StateDB.TouchAddress(&filter.FilteredAddressRecord{
 		Address:      beneficiary.Bytes20(),
-		FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary},
+		FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary, EventRuleMatch: nil},
 	})
 	balance := evm.StateDB.GetBalance(scope.Contract.Address())
 	evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
@@ -960,7 +960,7 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 	beneficiary := scope.Stack.pop()
 	evm.StateDB.TouchAddress(&filter.FilteredAddressRecord{
 		Address:      beneficiary.Bytes20(),
-		FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary},
+		FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary, EventRuleMatch: nil},
 	})
 	balance := evm.StateDB.GetBalance(scope.Contract.Address())
 	evm.StateDB.SubBalance(scope.Contract.Address(), balance, tracing.BalanceDecreaseSelfdestruct)
