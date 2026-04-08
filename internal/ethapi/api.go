@@ -779,6 +779,13 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 	if err != nil || res != nil {
 		return res, err
 	}
+
+	// Arbitrum: set up address filtering (after InterceptRPCMessage, matching gasestimator order)
+	txFilterer := b.TxFilter()
+	if txFilterer != nil {
+		txFilterer.Setup(state)
+		txFilterer.TouchFromTo(state, msg.From, msg.To)
+	}
 	// Lower the basefee to 0 to avoid breaking EVM
 	// invariants (basefee < feecap).
 	if msg.GasPrice.Sign() == 0 {
@@ -797,6 +804,15 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 	// a "trie root missing" type of error will masquerade as e.g. "insufficient gas"
 	if err := state.Error(); err != nil {
 		return nil, err
+	}
+	// Arbitrum: run scheduled txes for address filtering and check result
+	if txFilterer != nil && err == nil {
+		if _, ferr := retryables.RunScheduledTxes(ctx, b, state, header, *blockContext, msg.TxRunContext, res, txFilterer); ferr != nil {
+			return nil, ferr
+		}
+		if ferr := txFilterer.ApplyEventsAndCheckFiltered(state); ferr != nil {
+			return nil, ferr
+		}
 	}
 	return res, err
 }

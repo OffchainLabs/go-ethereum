@@ -284,11 +284,7 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	txFilterer := opts.Backend.TxFilter()
 	if txFilterer != nil {
 		txFilterer.Setup(dirtyState)
-
-		dirtyState.TouchAddress(call.From)
-		if call.To != nil {
-			dirtyState.TouchAddress(*call.To)
-		}
+		txFilterer.TouchFromTo(dirtyState, call.From, call.To)
 	}
 
 	evm := opts.Backend.GetEVM(ctx, dirtyState, opts.Header, &vm.Config{NoBaseFee: true}, &evmContext)
@@ -313,7 +309,7 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 
 	// Arbitrum: check address filtering result
 	if txFilterer != nil {
-		if err := txFilterer.CheckFiltered(dirtyState); err != nil {
+		if err := txFilterer.ApplyEventsAndCheckFiltered(dirtyState); err != nil {
 			return nil, err
 		}
 	}
