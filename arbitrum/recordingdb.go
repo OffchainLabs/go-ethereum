@@ -143,7 +143,7 @@ type RecordingChainContext struct {
 	initialBlockNumber     uint64
 }
 
-func newRecordingChainContext(inner core.ChainContext, blocknumber uint64) *RecordingChainContext {
+func NewRecordingChainContext(inner core.ChainContext, blocknumber uint64) *RecordingChainContext {
 	return &RecordingChainContext{
 		bc:                     inner,
 		minBlockNumberAccessed: blocknumber,
@@ -315,7 +315,7 @@ func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeade
 		if !lastBlockHeader.Number.IsUint64() {
 			return nil, nil, nil, errors.New("block number not uint64")
 		}
-		recordingChainContext = newRecordingChainContext(r.bc, lastBlockHeader.Number.Uint64())
+		recordingChainContext = NewRecordingChainContext(r.bc, lastBlockHeader.Number.Uint64())
 	}
 	finalDereference = nil
 	return recordingStateDb, recordingChainContext, recordingKeyValue, nil

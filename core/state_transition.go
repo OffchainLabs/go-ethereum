@@ -229,8 +229,9 @@ const (
 type MessageRunContext struct {
 	runMode messageRunMode
 
-	wasmCacheTag uint32
-	wasmTargets  []rawdb.WasmTarget
+	wasmCacheTag   uint32
+	wasmTargets    []rawdb.WasmTarget
+	eagerRecording bool // when true, WASM programs are recorded during commit mode
 }
 
 func NewMessageSequencingContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
@@ -312,6 +313,17 @@ func (c *MessageRunContext) IsEthcall() bool {
 
 func (c *MessageRunContext) IsRecording() bool {
 	return c.runMode == messageRecordingMode
+}
+
+// ShouldRecordPrograms returns true if Stylus WASM programs should be captured.
+// This is true in recording mode (replay) and in eager recording mode (live capture).
+func (c *MessageRunContext) ShouldRecordPrograms() bool {
+	return c.runMode == messageRecordingMode || c.eagerRecording
+}
+
+// SetEagerRecording enables eager WASM recording during commit mode.
+func (c *MessageRunContext) SetEagerRecording(enabled bool) {
+	c.eagerRecording = enabled
 }
 
 func (c *MessageRunContext) WasmCacheTag() uint32 {

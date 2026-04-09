@@ -245,6 +245,18 @@ func (db *Database) repairHistory() error {
 	}
 	// Truncate the extra state histories above in freezer in case it's not
 	// aligned with the disk layer. It might happen after a unclean shutdown.
+	//
+	// Skip truncation if the freezer is empty. This can happen when the
+	// database was initialized with genesis state (stateID > 0) but no
+	// state histories have been written yet (e.g., after WriteOrTestGenblock
+	// in Arbitrum's initialization path).
+	frozen, err := db.stateFreezer.Ancients()
+	if err != nil {
+		log.Crit("Failed to retrieve head of state history", "err", err)
+	}
+	if frozen == 0 {
+		return nil
+	}
 	pruned, err := truncateFromHead(db.stateFreezer, typeStateHistory, id)
 	if err != nil {
 		log.Crit("Failed to truncate extra state histories", "err", err)
