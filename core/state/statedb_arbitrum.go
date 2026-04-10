@@ -27,6 +27,8 @@ import (
 	"runtime"
 	"slices"
 
+	"github.com/google/uuid"
+
 	"github.com/ethereum/go-ethereum/arbitrum/filter"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -326,6 +328,9 @@ type AddressCheckerState interface {
 type AddressChecker interface {
 	// NewTxState creates fresh state for a new transaction.
 	NewTxState() AddressCheckerState
+
+	// FilterSetID returns the UUID of the currently loaded filter set.
+	FilterSetID() uuid.UUID
 }
 
 type ArbitrumExtraData struct {

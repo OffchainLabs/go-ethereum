@@ -19,6 +19,8 @@ package state
 import (
 	"math/big"
 
+	"github.com/google/uuid"
+
 	"github.com/ethereum/go-ethereum/arbitrum/filter"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -372,6 +374,10 @@ func (s *hookedStateDB) TouchAddress(record *filter.FilteredAddressRecord) {
 
 func (s *hookedStateDB) IsAddressFiltered() (bool, []filter.FilteredAddressRecord) {
 	return s.inner.IsAddressFiltered()
+}
+
+func (s *hookedStateDB) FilterSetID() uuid.UUID {
+	return s.inner.FilterSetID()
 }
 
 func (s *hookedStateDB) Recording() bool {
