@@ -1,8 +1,6 @@
 package filter
 
 import (
-	"github.com/google/uuid"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -46,7 +44,7 @@ type FilterReason struct {
 
 // lint:require-exhaustive-initialization
 type FilteredAddressRecord struct {
-	FilterSetID uuid.UUID      `json:"filterSetId"`
+	FilterSetID string         `json:"filterSetId"`
 	Address     common.Address `json:"address"`
 	FilterReason
 }

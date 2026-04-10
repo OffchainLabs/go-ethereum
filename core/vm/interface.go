@@ -19,8 +19,6 @@ package vm
 import (
 	"math/big"
 
-	"github.com/google/uuid"
-
 	"github.com/ethereum/go-ethereum/arbitrum/filter"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -60,7 +58,7 @@ type StateDB interface {
 	SetAddressChecker(checker state.AddressChecker)
 	TouchAddress(record *filter.FilteredAddressRecord)
 	IsAddressFiltered() (bool, []filter.FilteredAddressRecord)
-	FilterSetID() uuid.UUID
+	FilterSetID() string
 
 	Recording() bool
 	Deterministic() bool

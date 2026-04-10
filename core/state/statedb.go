@@ -29,8 +29,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/ethereum/go-ethereum/arbitrum/filter"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -237,11 +235,11 @@ func (s *StateDB) IsAddressFiltered() (bool, []filter.FilteredAddressRecord) {
 	return false, nil
 }
 
-func (s *StateDB) FilterSetID() uuid.UUID {
+func (s *StateDB) FilterSetID() string {
 	if s.arbExtraData.addressChecker != nil {
 		return s.arbExtraData.addressChecker.FilterSetID()
 	}
-	return uuid.Nil
+	return ""
 }
 
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
