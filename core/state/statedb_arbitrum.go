@@ -168,6 +168,34 @@ func NewStylusRootPrefix(dictionary byte) []byte {
 	return append(prefix, dictionary)
 }
 
+// hasAsmForTarget checks whether asmMap contains an entry for the given target,
+// treating a cranelift target key as equivalent to its base target (e.g.,
+// TargetArm64Cranelift satisfies TargetArm64 and vice versa). This is needed
+// because activateProgramInternal stores cranelift-fallback ASM under the
+// cranelift key when singlepass compilation fails.
+// Both directions are required: base→cranelift for when the caller requests a
+// base target but the map has the cranelift key, and cranelift→base for when
+// ActivateWasm's consistency check iterates a previouslyActivated map that
+// used cranelift fallback against a new asmMap where singlepass succeeded.
+func hasAsmForTarget(asmMap map[rawdb.WasmTarget][]byte, target rawdb.WasmTarget) bool {
+	if _, ok := asmMap[target]; ok {
+		return true
+	}
+	// base → cranelift (e.g., target is TargetArm64, map has TargetArm64Cranelift)
+	if craneliftTarget, err := rawdb.CraneliftTarget(target); err == nil {
+		if _, ok := asmMap[craneliftTarget]; ok {
+			return true
+		}
+	}
+	// cranelift → base (e.g., target is TargetArm64Cranelift, map has TargetArm64)
+	if baseTarget, err := rawdb.BaseTarget(target); err == nil {
+		if _, ok := asmMap[baseTarget]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 // ActivateWasm adds asmMap to newly activated wasms map under moduleHash key, but only if the key doesn't already exist in the map.
 // If the asmMap is added to the newly activated wasms, then wasmActivation is added to the journal so the operation can be reverted and the new entry removed in StateDB.RevertToSnapshot.
 // note: all ActivateWasm calls in given StateDB cycle (cycle reset by statedb commit) requires that the asmMap contain entries for the same targets as the first asmMap passed to ActivateWasm in the cycle. This is assumed in other parts of the code.
@@ -178,7 +206,7 @@ func (s *StateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarg
 		inconsistent := len(asmMap) != len(previouslyActivated)
 		if !inconsistent {
 			for target := range previouslyActivated {
-				if _, ok := asmMap[target]; !ok {
+				if !hasAsmForTarget(asmMap, target) {
 					inconsistent = true
 					break
 				}
@@ -228,7 +256,7 @@ func (s *StateDB) ActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash common.
 	asmMap := s.arbExtraData.activatedWasms[moduleHash]
 	if asmMap != nil {
 		for _, target := range targets {
-			if _, exists := asmMap[target]; !exists {
+			if !hasAsmForTarget(asmMap, target) {
 				return nil, targets, fmt.Errorf("newly activated wasms for module %v exist, but they don't contain asm for target %v", moduleHash, target)
 			}
 		}
@@ -252,6 +280,11 @@ func (s *StateDB) GetStylusPages() (uint16, uint16) {
 
 func (s *StateDB) GetStylusPagesOpen() uint16 {
 	return s.arbExtraData.openWasmPages
+}
+
+func (s *StateDB) SetStylusPages(open, ever uint16) {
+	s.arbExtraData.openWasmPages = open
+	s.arbExtraData.everWasmPages = ever
 }
 
 func (s *StateDB) SetStylusPagesOpen(open uint16) {

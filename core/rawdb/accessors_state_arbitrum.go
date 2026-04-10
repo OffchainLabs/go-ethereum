@@ -34,6 +34,10 @@ const (
 	TargetArm64 WasmTarget = "arm64"
 	TargetAmd64 WasmTarget = "amd64"
 	TargetHost  WasmTarget = "host"
+
+	TargetArm64Cranelift WasmTarget = "arm64-cranelift"
+	TargetAmd64Cranelift WasmTarget = "amd64-cranelift"
+	TargetHostCranelift  WasmTarget = "host-cranelift"
 )
 
 func LocalTarget() WasmTarget {
@@ -59,10 +63,54 @@ func activatedAsmKeyPrefix(target WasmTarget) (WasmPrefix, error) {
 		prefix = activatedAsmX86Prefix
 	case TargetHost:
 		prefix = activatedAsmHostPrefix
+	case TargetArm64Cranelift:
+		prefix = activatedAsmArmCraneliftPrefix
+	case TargetAmd64Cranelift:
+		prefix = activatedAsmX86CraneliftPrefix
+	case TargetHostCranelift:
+		prefix = activatedAsmHostCraneliftPrefix
 	default:
 		return WasmPrefix{}, fmt.Errorf("invalid target: %v", target)
 	}
 	return prefix, nil
+}
+
+func CraneliftTarget(target WasmTarget) (WasmTarget, error) {
+	switch target {
+	case TargetArm64:
+		return TargetArm64Cranelift, nil
+	case TargetAmd64:
+		return TargetAmd64Cranelift, nil
+	case TargetHost:
+		return TargetHostCranelift, nil
+	default:
+		return "", fmt.Errorf("no cranelift target for: %v", target)
+	}
+}
+
+func IsCraneliftTarget(target WasmTarget) bool {
+	switch target {
+	case TargetArm64Cranelift, TargetAmd64Cranelift, TargetHostCranelift:
+		return true
+	default:
+		return false
+	}
+}
+
+// BaseTarget maps a cranelift target back to its base target (e.g.,
+// TargetArm64Cranelift → TargetArm64). Returns an error if the target
+// is not a cranelift variant.
+func BaseTarget(target WasmTarget) (WasmTarget, error) {
+	switch target {
+	case TargetArm64Cranelift:
+		return TargetArm64, nil
+	case TargetAmd64Cranelift:
+		return TargetAmd64, nil
+	case TargetHostCranelift:
+		return TargetHost, nil
+	default:
+		return "", fmt.Errorf("no base target for: %v", target)
+	}
 }
 
 func IsSupportedWasmTarget(target WasmTarget) bool {
