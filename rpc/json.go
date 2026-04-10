@@ -126,12 +126,12 @@ func errorMessage(err error) *jsonrpcMessage {
 		Code:    ErrcodeDefault,
 		Message: err.Error(),
 	}}
-	ec, ok := err.(Error)
-	if ok {
+	var ec Error
+	if errors.As(err, &ec) {
 		msg.Error.Code = ec.ErrorCode()
 	}
-	de, ok := err.(DataError)
-	if ok {
+	var de DataError
+	if errors.As(err, &de) {
 		msg.Error.Data = de.ErrorData()
 	}
 	return msg
@@ -156,6 +156,19 @@ func (err *jsonError) ErrorCode() int {
 
 func (err *jsonError) ErrorData() interface{} {
 	return err.Data
+}
+
+// Is reports whether target carries the same JSON-RPC error code as err.
+// This allows errors.Is(receivedErr, sentinel) to work on the client side
+// when receivedErr is a jsonError reconstructed from the wire and sentinel
+// is any error that exposes an ErrorCode() int method.
+func (err *jsonError) Is(target error) bool {
+	type errorCoder interface{ ErrorCode() int }
+	t, ok := target.(errorCoder)
+	if !ok {
+		return false
+	}
+	return err.Code == t.ErrorCode()
 }
 
 // Conn is a subset of the methods of net.Conn which are sufficient for ServerCodec.
