@@ -338,6 +338,10 @@ func (s *hookedStateDB) SetStylusPagesOpen(open uint16) {
 	s.inner.SetStylusPagesOpen(open)
 }
 
+func (s *hookedStateDB) SetStylusPages(open, ever uint16) {
+	s.inner.SetStylusPages(open, ever)
+}
+
 func (s *hookedStateDB) AddStylusPages(new uint16) (uint16, uint16) {
 	return s.inner.AddStylusPages(new)
 }
