@@ -12,7 +12,9 @@ import (
 )
 
 // RunScheduledTxes executes scheduled transactions (retryable redeems) including
-// cascading redeems. When txFilterer is non-nil, touches addresses for filtering.
+// cascading redeems. It runs when either gas estimation is active (to account for
+// scheduled gas usage) or when txFilterer is non-nil (to execute scheduled txes
+// and collect their touched addresses for address-based filtering).
 func RunScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, statedb *state.StateDB, header *types.Header, blockCtx vm.BlockContext, runCtx *core.MessageRunContext, result *core.ExecutionResult, txFilterer core.TxFilterer) (*core.ExecutionResult, error) {
 	if !runCtx.IsGasEstimation() && txFilterer == nil {
 		return result, nil
