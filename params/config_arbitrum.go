@@ -40,12 +40,14 @@ const ArbosVersion_40 = uint64(40)
 const ArbosVersion_41 = uint64(41)
 const ArbosVersion_50 = uint64(50)
 const ArbosVersion_51 = uint64(51)
+const ArbosVersion_59 = uint64(59)
 const ArbosVersion_60 = uint64(60)
 
 const ArbosVersion_FixRedeemGas = ArbosVersion_11
 const ArbosVersion_Stylus = ArbosVersion_30
 const ArbosVersion_StylusFixes = ArbosVersion_31
 const ArbosVersion_StylusChargingFixes = ArbosVersion_32
+const ArbosVersion_StylusV3 = ArbosVersion_59
 const MaxArbosVersionSupported = ArbosVersion_51
 const MaxDebugArbosVersionSupported = ArbosVersion_60
 const ArbosVersion_Dia = ArbosVersion_50
