@@ -366,16 +366,12 @@ func (s *hookedStateDB) SetAddressChecker(checker AddressChecker) {
 	s.inner.SetAddressChecker(checker)
 }
 
-func (s *hookedStateDB) TouchAddress(record *filter.FilteredAddressRecord) {
-	s.inner.TouchAddress(record)
+func (s *hookedStateDB) TouchAddress(addr filter.FilteredAddressWithReason) {
+	s.inner.TouchAddress(addr)
 }
 
 func (s *hookedStateDB) IsAddressFiltered() (bool, []filter.FilteredAddressRecord) {
 	return s.inner.IsAddressFiltered()
-}
-
-func (s *hookedStateDB) FilterSetID() string {
-	return s.inner.FilterSetID()
 }
 
 func (s *hookedStateDB) Recording() bool {

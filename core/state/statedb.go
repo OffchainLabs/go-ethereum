@@ -222,9 +222,9 @@ func (s *StateDB) SetAddressChecker(checker AddressChecker) {
 	s.arbExtraData.addressChecker = checker
 }
 
-func (s *StateDB) TouchAddress(record *filter.FilteredAddressRecord) {
+func (s *StateDB) TouchAddress(addr filter.FilteredAddressWithReason) {
 	if s.arbExtraData.addressCheckerState != nil {
-		s.arbExtraData.addressCheckerState.TouchAddress(record)
+		s.arbExtraData.addressCheckerState.TouchAddress(addr)
 	}
 }
 
@@ -233,13 +233,6 @@ func (s *StateDB) IsAddressFiltered() (bool, []filter.FilteredAddressRecord) {
 		return s.arbExtraData.addressCheckerState.IsFiltered()
 	}
 	return false, nil
-}
-
-func (s *StateDB) FilterSetID() string {
-	if s.arbExtraData.addressChecker != nil {
-		return s.arbExtraData.addressChecker.FilterSetID()
-	}
-	return ""
 }
 
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
