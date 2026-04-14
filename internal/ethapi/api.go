@@ -784,7 +784,10 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 	txFilterer := b.TxFilter()
 	if txFilterer != nil {
 		txFilterer.Setup(state)
-		txFilterer.TouchFromTo(state, msg.From, msg.To)
+		state.TouchAddress(msg.From)
+		if msg.To != nil {
+			state.TouchAddress(*msg.To)
+		}
 	}
 	// Lower the basefee to 0 to avoid breaking EVM
 	// invariants (basefee < feecap).

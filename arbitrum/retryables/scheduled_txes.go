@@ -16,6 +16,7 @@ import (
 // scheduled gas usage) or when txFilterer is non-nil (to execute scheduled txes
 // and collect their touched addresses for address-based filtering).
 func RunScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, statedb *state.StateDB, header *types.Header, blockCtx vm.BlockContext, runCtx *core.MessageRunContext, result *core.ExecutionResult, txFilterer core.TxFilterer) (*core.ExecutionResult, error) {
+	// If we're not doing gas estimation and there's no tx filter, we don't need to run scheduled txes at all.
 	if !runCtx.IsGasEstimation() && txFilterer == nil {
 		return result, nil
 	}
@@ -28,9 +29,10 @@ func RunScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, state
 		}
 
 		if txFilterer != nil {
-			txFilterer.TouchScheduledTxAddresses(statedb, scheduled[0], msg.From)
+			txFilterer.TouchAddresses(statedb, scheduled[0], msg.From)
 		}
 
+		// For gas estimation, we want to account scheduled txes' gas usage
 		if runCtx.IsGasEstimation() {
 			if result.UsedGas >= msg.GasLimit {
 				result.UsedGas -= msg.GasLimit
