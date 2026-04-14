@@ -44,6 +44,7 @@ type StateDB interface {
 	// Arbitrum: track stylus's memory footprint
 	GetStylusPages() (uint16, uint16)
 	GetStylusPagesOpen() uint16
+	SetStylusPages(open, ever uint16)
 	SetStylusPagesOpen(open uint16)
 	AddStylusPages(new uint16) (uint16, uint16)
 	AddStylusPagesEver(new uint16)
