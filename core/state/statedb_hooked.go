@@ -371,7 +371,7 @@ func (s *hookedStateDB) SetAddressChecker(checker AddressChecker) {
 }
 
 func (s *hookedStateDB) TouchAddress(touched filter.FilteredAddressWithReason) {
-	s.inner.TouchAddress(touched)
+	s.inner.TouchAddress(&touched)
 }
 
 func (s *hookedStateDB) IsAddressFiltered() (bool, []filter.FilteredAddressRecord) {

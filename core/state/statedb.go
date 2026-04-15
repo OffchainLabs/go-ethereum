@@ -222,9 +222,9 @@ func (s *StateDB) SetAddressChecker(checker AddressChecker) {
 	s.arbExtraData.addressChecker = checker
 }
 
-func (s *StateDB) TouchAddress(touched filter.FilteredAddressWithReason) {
+func (s *StateDB) TouchAddress(touched *filter.FilteredAddressWithReason) {
 	if s.arbExtraData.addressCheckerState != nil {
-		s.arbExtraData.addressCheckerState.TouchAddress(touched)
+		s.arbExtraData.addressCheckerState.TouchAddress(*touched)
 	}
 }
 
