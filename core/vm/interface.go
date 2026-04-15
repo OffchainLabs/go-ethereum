@@ -57,7 +57,7 @@ type StateDB interface {
 	ClearTxFilter()
 	IsTxFiltered() bool
 	SetAddressChecker(checker state.AddressChecker)
-	TouchAddress(filter.FilteredAddressWithReason)
+	TouchAddress(*filter.FilteredAddressWithReason)
 	IsAddressFiltered() (bool, []filter.FilteredAddressRecord)
 
 	Recording() bool

@@ -348,7 +348,7 @@ type AddressCheckerState interface {
 	// TouchAddress records an address access and checks if it should be filtered.
 	// The checker is responsible for attaching the filter set ID to produce the
 	// final FilteredAddressRecord.
-	TouchAddress(filter.FilteredAddressWithReason)
+	TouchAddress(*filter.FilteredAddressWithReason)
 
 	// IsFiltered returns whether any touched address was filtered and the
 	// list of filtered address records collected during the transaction.
