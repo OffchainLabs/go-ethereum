@@ -49,6 +49,7 @@ const ArbosVersion_StylusChargingFixes = ArbosVersion_32
 const MaxArbosVersionSupported = ArbosVersion_51
 const MaxDebugArbosVersionSupported = ArbosVersion_60
 const ArbosVersion_Dia = ArbosVersion_50
+const ArbosVersion_Elara = ArbosVersion_60
 
 const ArbosVersion_SingleGasConstraintsVersion = ArbosVersion_50
 const ArbosVersion_MultiConstraintFix = ArbosVersion_51

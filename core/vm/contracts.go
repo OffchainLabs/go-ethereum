@@ -214,6 +214,8 @@ func init() {
 
 func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 	switch {
+	case rules.IsElara:
+		return PrecompiledContractsStartingFromArbOS60
 	case rules.IsDia:
 		return PrecompiledContractsStartingFromArbOS50
 	case rules.IsStylus:
@@ -247,6 +249,8 @@ func ActivePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 // ActivePrecompiles returns the precompile addresses enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
+	case rules.IsElara:
+		return PrecompiledAddressesStartingFromArbOS60
 	case rules.IsDia:
 		return PrecompiledAddressesStartingFromArbOS50
 	case rules.IsStylus:
