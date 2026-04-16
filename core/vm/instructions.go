@@ -20,6 +20,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/arbitrum/filter"
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -923,7 +924,10 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		return nil, ErrWriteProtection
 	}
 	beneficiary := scope.Stack.pop()
-	evm.StateDB.TouchAddress(beneficiary.Bytes20())
+	evm.StateDB.TouchAddress(&filter.FilteredAddressRecord{
+		Address:      beneficiary.Bytes20(),
+		FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary, EventRuleMatch: nil},
+	})
 	balance := evm.StateDB.GetBalance(scope.Contract.Address())
 	evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
 	evm.StateDB.SelfDestruct(scope.Contract.Address())
@@ -954,7 +958,10 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 	}
 
 	beneficiary := scope.Stack.pop()
-	evm.StateDB.TouchAddress(beneficiary.Bytes20())
+	evm.StateDB.TouchAddress(&filter.FilteredAddressRecord{
+		Address:      beneficiary.Bytes20(),
+		FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary, EventRuleMatch: nil},
+	})
 	balance := evm.StateDB.GetBalance(scope.Contract.Address())
 	evm.StateDB.SubBalance(scope.Contract.Address(), balance, tracing.BalanceDecreaseSelfdestruct)
 	evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
