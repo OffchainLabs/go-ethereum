@@ -19,6 +19,7 @@ package core
 import (
 	"context"
 
+	"github.com/ethereum/go-ethereum/arbitrum/filter"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -57,8 +58,9 @@ type TxFilterer interface {
 	Setup(statedb *state.StateDB)
 	// TouchAddresses marks sender, recipient, aliased, and retryable addresses for filtering.
 	TouchAddresses(statedb *state.StateDB, tx *types.Transaction, sender common.Address)
-	// CheckFiltered applies event filtering and returns state.ErrArbTxFilter if filtered.
-	CheckFiltered(statedb *state.StateDB) error
+	// CheckFiltered applies event filtering and returns state.ErrArbTxFilter along
+	// with the matching records if the transaction is filtered.
+	CheckFiltered(statedb *state.StateDB) ([]filter.FilteredAddressRecord, error)
 }
 
 type NodeInterfaceBackendAPI interface {
