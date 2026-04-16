@@ -28,6 +28,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/arbitrum/filter"
 	"github.com/ethereum/go-ethereum/arbitrum/retryables"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -784,9 +785,9 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 	txFilterer := b.TxFilter()
 	if txFilterer != nil {
 		txFilterer.Setup(state)
-		state.TouchAddress(msg.From)
+		state.TouchAddress(&filter.FilteredAddressRecord{Address: msg.From, FilterReason: filter.FilterReason{Reason: filter.ReasonFrom, EventRuleMatch: nil}})
 		if msg.To != nil {
-			state.TouchAddress(*msg.To)
+			state.TouchAddress(&filter.FilteredAddressRecord{Address: *msg.To, FilterReason: filter.FilterReason{Reason: filter.ReasonTo, EventRuleMatch: nil}})
 		}
 	}
 	// Lower the basefee to 0 to avoid breaking EVM
