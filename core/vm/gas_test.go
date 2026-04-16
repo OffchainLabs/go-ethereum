@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"math"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
@@ -36,9 +37,9 @@ func TestConstantMultiGas(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := multigas.ZeroGas()
-			if addConstantMultiGas(&got, tc.cost, tc.op); got != tc.want {
-				t.Errorf("wrong constant multigas: got %v, want %v", got, tc.want)
+			contract := &Contract{Gas: math.MaxUint64}
+			if addConstantMultiGas(contract, tc.cost, tc.op); contract.UsedMultiGas != tc.want {
+				t.Errorf("wrong constant multigas: got %v, want %v", contract.UsedMultiGas, tc.want)
 			}
 		})
 	}

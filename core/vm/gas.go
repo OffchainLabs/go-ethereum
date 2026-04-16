@@ -55,8 +55,14 @@ func callGas(isEip150 bool, availableGas, base uint64, callCost *uint256.Int) (u
 	return callCost.Uint64(), nil
 }
 
-// addConstantMultiGas adds to usedMultiGas the constant multi-gas cost of an opcode.
-func addConstantMultiGas(usedMultiGas *multigas.MultiGas, cost uint64, op OpCode) {
+// addConstantMultiGas decreases the gas used and adds to usedMultiGas the constant multi-gas cost of an opcode.
+// Returns error if out of gas.
+func addConstantMultiGas(c *Contract, cost uint64, op OpCode) error {
+	if c.Gas < cost {
+		return ErrOutOfGas
+	}
+	c.Gas -= cost
+
 	// SELFDESTRUCT is a special case because it charges for storage access but it isn't
 	// dependent on any input data. We charge a small computational cost for warm access like
 	// other multi-dimensional gas opcodes, and the rest is storage access to delete the
@@ -64,9 +70,22 @@ func addConstantMultiGas(usedMultiGas *multigas.MultiGas, cost uint64, op OpCode
 	// Note we only need to cover EIP150 because it the current cost, and SELFDESTRUCT cost was
 	// zero previously.
 	if op == SELFDESTRUCT && cost == params.SelfdestructGasEIP150 {
-		usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929)
-		usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindStorageAccessWrite, cost-params.WarmStorageReadCostEIP2929)
+		// It is safe to call UncheckedIncrementInto because because we checked single gas.
+		c.UsedMultiGas.UncheckedIncrementInto(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929)
+		c.UsedMultiGas.UncheckedIncrementInto(multigas.ResourceKindStorageAccessWrite, cost-params.WarmStorageReadCostEIP2929)
 	} else {
-		usedMultiGas.SaturatingIncrementInto(multigas.ResourceKindComputation, cost)
+		c.UsedMultiGas.UncheckedIncrementInto(multigas.ResourceKindComputation, cost)
 	}
+	return nil
+}
+
+// addDynamicMultiGas decreases the gas used and increases the multi gas. Returns error if out of gas.
+func addDynamicMultiGas(c *Contract, dynamicCost uint64, multigasDynamicCost *multigas.MultiGas) error {
+	if c.Gas < dynamicCost {
+		return ErrOutOfGas
+	}
+	c.Gas -= dynamicCost
+	// It is safe to call UncheckedAddInto because because we checked single gas.
+	c.UsedMultiGas.UncheckedAddInto(multigasDynamicCost)
+	return nil
 }
