@@ -29,6 +29,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/arbitrum/filter"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -221,17 +222,17 @@ func (s *StateDB) SetAddressChecker(checker AddressChecker) {
 	s.arbExtraData.addressChecker = checker
 }
 
-func (s *StateDB) TouchAddress(addr common.Address) {
+func (s *StateDB) TouchAddress(record *filter.FilteredAddressRecord) {
 	if s.arbExtraData.addressCheckerState != nil {
-		s.arbExtraData.addressCheckerState.TouchAddress(addr)
+		s.arbExtraData.addressCheckerState.TouchAddress(record)
 	}
 }
 
-func (s *StateDB) IsAddressFiltered() bool {
+func (s *StateDB) IsAddressFiltered() (bool, []filter.FilteredAddressRecord) {
 	if s.arbExtraData.addressCheckerState != nil {
 		return s.arbExtraData.addressCheckerState.IsFiltered()
 	}
-	return false
+	return false, nil
 }
 
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
