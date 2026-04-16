@@ -23,6 +23,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/arbitrum/filter"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -285,9 +286,9 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	if txFilterer != nil {
 		txFilterer.Setup(dirtyState)
 
-		dirtyState.TouchAddress(call.From)
+		dirtyState.TouchAddress(&filter.FilteredAddressRecord{Address: call.From, FilterReason: filter.FilterReason{Reason: filter.ReasonFrom, EventRuleMatch: nil}})
 		if call.To != nil {
-			dirtyState.TouchAddress(*call.To)
+			dirtyState.TouchAddress(&filter.FilteredAddressRecord{Address: *call.To, FilterReason: filter.FilterReason{Reason: filter.ReasonTo, EventRuleMatch: nil}})
 		}
 	}
 

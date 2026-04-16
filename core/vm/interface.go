@@ -19,6 +19,7 @@ package vm
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/arbitrum/filter"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -56,8 +57,8 @@ type StateDB interface {
 	ClearTxFilter()
 	IsTxFiltered() bool
 	SetAddressChecker(checker state.AddressChecker)
-	TouchAddress(addr common.Address)
-	IsAddressFiltered() bool
+	TouchAddress(record *filter.FilteredAddressRecord)
+	IsAddressFiltered() (bool, []filter.FilteredAddressRecord)
 
 	Recording() bool
 	Deterministic() bool

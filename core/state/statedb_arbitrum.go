@@ -27,6 +27,7 @@ import (
 	"runtime"
 	"slices"
 
+	"github.com/ethereum/go-ethereum/arbitrum/filter"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -345,11 +346,12 @@ var ErrArbTxFilter error = errors.New("internal error")
 // Implementations manage their own synchronization (sync, WaitGroup, channels, etc).
 type AddressCheckerState interface {
 	// TouchAddress records an address access and checks if it should be filtered.
-	TouchAddress(addr common.Address)
+	TouchAddress(record *filter.FilteredAddressRecord)
 
-	// IsFiltered returns whether any touched address was filtered.
+	// IsFiltered returns whether any touched address was filtered and the
+	// list of filtered address records collected during the transaction.
 	// Blocks until all pending checks complete (implementation-specific).
-	IsFiltered() bool
+	IsFiltered() (bool, []filter.FilteredAddressRecord)
 }
 
 // AddressChecker creates per-tx state instances for address filtering.
