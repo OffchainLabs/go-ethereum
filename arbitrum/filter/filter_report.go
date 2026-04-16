@@ -43,7 +43,13 @@ type FilterReason struct {
 }
 
 // lint:require-exhaustive-initialization
-type FilteredAddressRecord struct {
+type FilteredAddressWithReason struct {
 	Address common.Address `json:"address"`
 	FilterReason
+}
+
+// lint:require-exhaustive-initialization
+type FilteredAddressRecord struct {
+	FilterSetID string `json:"filterSetId"`
+	FilteredAddressWithReason
 }
