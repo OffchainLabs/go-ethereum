@@ -258,6 +258,52 @@ func WriteLastPivotNumber(db ethdb.KeyValueWriter, pivot uint64) {
 	}
 }
 
+// ReadFreezerCleanupTail retrieves the cleanup tail — the exclusive upper bound
+// such that frozen blocks in [1, tail) have been deleted from the key-value
+// database. Returns (0, false) if the key is missing or on I/O error
+// (silently), or if the data is corrupt (with an error log).
+// Use readFreezerCleanupTailStrict where error propagation is required.
+func ReadFreezerCleanupTail(db ethdb.KeyValueReader) (uint64, bool) {
+	data, _ := db.Get(freezerCleanupTailKey)
+	if len(data) != 8 {
+		if len(data) > 0 { // Key exists but data is corrupt
+			log.Error("Corrupt freezer cleanup tail data", "len", len(data), "expected", 8)
+		}
+		return 0, false
+	}
+	return binary.BigEndian.Uint64(data), true
+}
+
+// readFreezerCleanupTailStrict is like ReadFreezerCleanupTail but returns
+// errors instead of suppressing them. Used where silent error suppression
+// is not acceptable (e.g. Open() startup validation, freeze() runtime cleanup).
+func readFreezerCleanupTailStrict(db ethdb.KeyValueReader) (uint64, bool, error) {
+	exists, err := db.Has(freezerCleanupTailKey)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to check freezer cleanup tail key: %w", err)
+	}
+	if !exists {
+		return 0, false, nil
+	}
+	data, err := db.Get(freezerCleanupTailKey)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to read freezer cleanup tail: %w", err)
+	}
+	if len(data) != 8 {
+		return 0, false, fmt.Errorf("corrupt freezer cleanup tail data: found %d bytes, expected 8", len(data))
+	}
+	return binary.BigEndian.Uint64(data), true, nil
+}
+
+// WriteFreezerCleanupTail stores the exclusive upper bound of frozen blocks
+// that have been deleted from the key-value database (blocks in [1, number)
+// are expected to have been removed).
+func WriteFreezerCleanupTail(db ethdb.KeyValueWriter, number uint64) {
+	if err := db.Put(freezerCleanupTailKey, encodeBlockNumber(number)); err != nil {
+		log.Crit("Failed to store freezer cleanup tail", "err", err)
+	}
+}
+
 // ReadTxIndexTail retrieves the number of oldest indexed block
 // whose transaction indices has been indexed.
 func ReadTxIndexTail(db ethdb.KeyValueReader) *uint64 {
