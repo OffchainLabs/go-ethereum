@@ -58,7 +58,10 @@ type TxFilterer interface {
 	Setup(statedb *state.StateDB)
 	// TouchAddresses marks sender, recipient, aliased, and retryable addresses for filtering.
 	TouchAddresses(statedb *state.StateDB, tx *types.Transaction, sender common.Address)
-	// CheckFiltered applies event filtering and returns state.ErrArbTxFilter if filtered.
+	// CheckFiltered applies event filtering and returns any filtered address records.
+	// If the transaction is filtered, it returns the matching records together with
+	// state.ErrArbTxFilter. On success, callers should expect no filtering error and
+	// no filtered address records.
 	CheckFiltered(statedb *state.StateDB) ([]filter.FilteredAddressRecord, error)
 }
 
