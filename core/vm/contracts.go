@@ -218,6 +218,8 @@ func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 		return PrecompiledContractsStartingFromArbOS60
 	case rules.IsDia:
 		return PrecompiledContractsStartingFromArbOS50
+	case rules.IsGreaterEqual41:
+		return PrecompiledContractsStartingFromArbOS41
 	case rules.IsStylus:
 		return PrecompiledContractsStartingFromArbOS30
 	case rules.IsArbitrum:
@@ -253,6 +255,8 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 		return PrecompiledAddressesStartingFromArbOS60
 	case rules.IsDia:
 		return PrecompiledAddressesStartingFromArbOS50
+	case rules.IsGreaterEqual41:
+		return PrecompiledAddressesStartingFromArbOS41
 	case rules.IsStylus:
 		return PrecompiledAddressesStartingFromArbOS30
 	case rules.IsArbitrum:
