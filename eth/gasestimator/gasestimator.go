@@ -228,7 +228,7 @@ func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit ui
 
 	// Execute the call and separate execution faults caused by a lack of gas or
 	// other non-fixable conditions
-	result, err := run(ctx, call, opts)
+	result, _, err := run(ctx, call, opts)
 	if err != nil {
 		if errors.Is(err, core.ErrIntrinsicGas) {
 			return true, nil, nil // Special case, raise gas limit
@@ -242,13 +242,14 @@ func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit ui
 }
 
 // Public API for gas estimation. Separated to simplify upstream merges.
-func Run(ctx context.Context, call *core.Message, opts *Options) (*core.ExecutionResult, error) {
+// When address filtering trips, the returned records describe the filtered addresses.
+func Run(ctx context.Context, call *core.Message, opts *Options) (*core.ExecutionResult, []filter.FilteredAddressRecord, error) {
 	return run(ctx, call, opts)
 }
 
 // run assembles the EVM as defined by the consensus rules and runs the requested
 // call invocation.
-func run(ctx context.Context, call *core.Message, opts *Options) (*core.ExecutionResult, error) {
+func run(ctx context.Context, call *core.Message, opts *Options) (*core.ExecutionResult, []filter.FilteredAddressRecord, error) {
 	// Assemble the call and the call context
 	var (
 		evmContext = core.NewEVMBlockContext(opts.Header, opts.Chain, nil)
@@ -256,7 +257,7 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	)
 	if opts.BlockOverrides != nil {
 		if err := opts.BlockOverrides.Apply(&evmContext); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	// Lower the basefee to 0 to avoid breaking EVM
@@ -278,7 +279,7 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	var res *core.ExecutionResult
 	call, res, err := core.InterceptRPCMessage(call, ctx, dirtyState, opts.Header, opts.Backend, &evmContext)
 	if err != nil || res != nil {
-		return res, err
+		return res, nil, err
 	}
 
 	// Arbitrum: set up address filtering
@@ -300,24 +301,28 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	// Execute the call, returning a wrapped error or the result
 	result, err := core.ApplyMessage(evm, call, new(core.GasPool).AddGas(math.MaxUint64))
 	if vmerr := dirtyState.Error(); vmerr != nil {
-		return nil, vmerr
+		return nil, nil, vmerr
 	}
 	if err != nil {
-		return result, fmt.Errorf("failed with %d gas: %w", call.GasLimit, err)
+		return result, nil, fmt.Errorf("failed with %d gas: %w", call.GasLimit, err)
 	}
 
 	// Arbitrum: a tx can schedule another (see retryables)
 	result, err = opts.RunScheduledTxes(ctx, opts.Backend, dirtyState, opts.Header, evmContext, call.TxRunContext, result, txFilterer)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Arbitrum: check address filtering result
 	if txFilterer != nil {
-		if err := txFilterer.CheckFiltered(dirtyState); err != nil {
-			return nil, err
+		records, err := txFilterer.CheckFiltered(dirtyState)
+		if err != nil {
+			if errors.Is(err, state.ErrArbTxFilter) {
+				return nil, records, err
+			}
+			return nil, nil, err
 		}
 	}
 
-	return result, nil
+	return result, nil, nil
 }
