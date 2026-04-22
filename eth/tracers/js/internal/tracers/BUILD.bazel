@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "tracers",
+    srcs = ["tracers.go"],
+    embedsrcs = [
+        "4byte_tracer_legacy.js",
+        "bigram_tracer.js",
+        "call_tracer_legacy.js",
+        "evmdis_tracer.js",
+        "noop_tracer_legacy.js",
+        "opcount_tracer.js",
+        "prestate_tracer_legacy.js",
+        "trigram_tracer.js",
+        "unigram_tracer.js",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/eth/tracers/js/internal/tracers",
+    visibility = ["//go-ethereum/eth/tracers/js:__subpackages__"],
+)

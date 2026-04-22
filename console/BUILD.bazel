@@ -1,0 +1,40 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "console",
+    srcs = [
+        "bridge.go",
+        "console.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/console",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/console/prompt",
+        "//go-ethereum/internal/jsre",
+        "//go-ethereum/internal/jsre/deps",
+        "//go-ethereum/internal/web3ext",
+        "//go-ethereum/log",
+        "//go-ethereum/rpc",
+        "@com_github_dop251_goja//:goja",
+        "@com_github_mattn_go_colorable//:go-colorable",
+        "@com_github_peterh_liner//:liner",
+    ],
+)
+
+go_test(
+    name = "console_test",
+    srcs = ["console_test.go"],
+    data = glob(["testdata/**"]),
+    embed = [":console"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/console/prompt",
+        "//go-ethereum/core",
+        "//go-ethereum/eth",
+        "//go-ethereum/eth/ethconfig",
+        "//go-ethereum/internal/jsre",
+        "//go-ethereum/miner",
+        "//go-ethereum/node",
+    ],
+)

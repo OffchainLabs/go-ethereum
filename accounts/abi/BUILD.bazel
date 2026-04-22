@@ -1,0 +1,56 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "abi",
+    srcs = [
+        "abi.go",
+        "argument.go",
+        "doc.go",
+        "error.go",
+        "error_handling.go",
+        "event.go",
+        "method.go",
+        "pack.go",
+        "reflect.go",
+        "selector_parser.go",
+        "topics.go",
+        "type.go",
+        "unpack.go",
+        "utils.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/accounts/abi",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/math",
+        "//go-ethereum/crypto",
+    ],
+)
+
+go_test(
+    name = "abi_test",
+    srcs = [
+        "abi_test.go",
+        "abifuzzer_test.go",
+        "event_test.go",
+        "method_test.go",
+        "pack_test.go",
+        "packing_test.go",
+        "reflect_test.go",
+        "selector_parser_test.go",
+        "topics_test.go",
+        "type_test.go",
+        "unpack_test.go",
+    ],
+    embed = [":abi"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/math",
+        "//go-ethereum/crypto",
+        "//go-ethereum/internal/testrand",
+        "@com_github_davecgh_go_spew//spew",
+        "@com_github_google_gofuzz//:gofuzz",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)

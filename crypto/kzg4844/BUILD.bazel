@@ -1,0 +1,27 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "kzg4844",
+    srcs = [
+        "kzg4844.go",
+        "kzg4844_ckzg_nocgo.go",
+        "kzg4844_gokzg.go",
+    ],
+    embedsrcs = ["trusted_setup.json"],
+    importpath = "github.com/ethereum/go-ethereum/crypto/kzg4844",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common/hexutil",
+        "@com_github_crate_crypto_go_eth_kzg//:go-eth-kzg",
+    ],
+)
+
+go_test(
+    name = "kzg4844_test",
+    srcs = ["kzg4844_test.go"],
+    embed = [":kzg4844"],
+    deps = [
+        "@com_github_consensys_gnark_crypto//ecc/bls12-381/fr",
+        "@com_github_crate_crypto_go_eth_kzg//:go-eth-kzg",
+    ],
+)

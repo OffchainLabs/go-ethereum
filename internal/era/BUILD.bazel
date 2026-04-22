@@ -1,0 +1,32 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "era",
+    srcs = [
+        "accumulator.go",
+        "builder.go",
+        "era.go",
+        "iterator.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/internal/era",
+    visibility = ["//go-ethereum:__subpackages__"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/core/types",
+        "//go-ethereum/internal/era/e2store",
+        "//go-ethereum/rlp",
+        "@com_github_ferranbt_fastssz//:fastssz",
+        "@com_github_golang_snappy//:snappy",
+    ],
+)
+
+go_test(
+    name = "era_test",
+    srcs = ["era_test.go"],
+    embed = [":era"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/core/types",
+        "//go-ethereum/rlp",
+    ],
+)

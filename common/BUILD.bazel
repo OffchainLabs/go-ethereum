@@ -1,0 +1,37 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "common",
+    srcs = [
+        "big.go",
+        "bytes.go",
+        "debug.go",
+        "eta.go",
+        "format.go",
+        "path.go",
+        "range.go",
+        "size.go",
+        "test_utils.go",
+        "types.go",
+        "types_arbitrum.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/common",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/arbcrypto",
+        "//go-ethereum/common/hexutil",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)
+
+go_test(
+    name = "common_test",
+    srcs = [
+        "bytes_test.go",
+        "eta_test.go",
+        "range_test.go",
+        "size_test.go",
+        "types_test.go",
+    ],
+    embed = [":common"],
+)

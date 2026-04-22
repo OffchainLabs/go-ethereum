@@ -1,0 +1,53 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "filtermaps",
+    srcs = [
+        "chain_view.go",
+        "checkpoints.go",
+        "filtermaps.go",
+        "indexer.go",
+        "map_renderer.go",
+        "matcher.go",
+        "matcher_backend.go",
+        "math.go",
+    ],
+    embedsrcs = [
+        "checkpoints_holesky.json",
+        "checkpoints_hoodi.json",
+        "checkpoints_mainnet.json",
+        "checkpoints_sepolia.json",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/core/filtermaps",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/lru",
+        "//go-ethereum/common/mclock",
+        "//go-ethereum/core/rawdb",
+        "//go-ethereum/core/types",
+        "//go-ethereum/ethdb",
+        "//go-ethereum/log",
+        "//go-ethereum/metrics",
+    ],
+)
+
+go_test(
+    name = "filtermaps_test",
+    srcs = [
+        "indexer_test.go",
+        "matcher_test.go",
+        "math_test.go",
+    ],
+    embed = [":filtermaps"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/consensus/ethash",
+        "//go-ethereum/core",
+        "//go-ethereum/core/rawdb",
+        "//go-ethereum/core/types",
+        "//go-ethereum/ethdb",
+        "//go-ethereum/params",
+        "//go-ethereum/rlp",
+    ],
+)

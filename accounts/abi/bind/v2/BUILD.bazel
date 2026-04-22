@@ -1,0 +1,63 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "bind",
+    srcs = [
+        "auth.go",
+        "backend.go",
+        "base.go",
+        "dep_tree.go",
+        "lib.go",
+        "util.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/accounts/abi/bind/v2",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum",
+        "//go-ethereum/accounts",
+        "//go-ethereum/accounts/abi",
+        "//go-ethereum/accounts/external",
+        "//go-ethereum/accounts/keystore",
+        "//go-ethereum/common",
+        "//go-ethereum/core/types",
+        "//go-ethereum/crypto",
+        "//go-ethereum/event",
+        "//go-ethereum/log",
+        "//go-ethereum/rpc",
+    ],
+)
+
+go_test(
+    name = "bind_test",
+    srcs = [
+        "base_test.go",
+        "dep_tree_test.go",
+        "generate_test.go",
+        "lib_test.go",
+        "util_test.go",
+    ],
+    embed = [":bind"],
+    deps = [
+        "//go-ethereum",
+        "//go-ethereum/accounts/abi",
+        "//go-ethereum/accounts/abi/abigen",
+        "//go-ethereum/accounts/abi/bind/backends",
+        "//go-ethereum/accounts/abi/bind/v2/internal/contracts/events",
+        "//go-ethereum/accounts/abi/bind/v2/internal/contracts/nested_libraries",
+        "//go-ethereum/accounts/abi/bind/v2/internal/contracts/solc_errors",
+        "//go-ethereum/cmd/utils",
+        "//go-ethereum/common",
+        "//go-ethereum/common/compiler",
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/core/types",
+        "//go-ethereum/crypto",
+        "//go-ethereum/eth/ethconfig",
+        "//go-ethereum/ethclient",
+        "//go-ethereum/ethclient/simulated",
+        "//go-ethereum/node",
+        "//go-ethereum/params",
+        "//go-ethereum/rlp",
+        "@com_github_stretchr_testify//assert",
+        "@org_golang_x_exp//rand",
+    ],
+)

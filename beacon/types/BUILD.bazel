@@ -1,0 +1,42 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "types",
+    srcs = [
+        "beacon_block.go",
+        "committee.go",
+        "exec_header.go",
+        "exec_payload.go",
+        "gen_header_json.go",
+        "gen_syncaggregate_json.go",
+        "header.go",
+        "light_sync.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/beacon/types",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/beacon/merkle",
+        "//go-ethereum/beacon/params",
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/core/types",
+        "//go-ethereum/trie",
+        "@com_github_holiman_uint256//:uint256",
+        "@com_github_protolambda_bls12_381_util//:bls12-381-util",
+        "@com_github_protolambda_zrnt//eth2/beacon/capella",
+        "@com_github_protolambda_zrnt//eth2/beacon/common",
+        "@com_github_protolambda_zrnt//eth2/beacon/deneb",
+        "@com_github_protolambda_zrnt//eth2/beacon/electra",
+        "@com_github_protolambda_zrnt//eth2/configs",
+        "@com_github_protolambda_ztyp//codec",
+        "@com_github_protolambda_ztyp//tree",
+    ],
+)
+
+go_test(
+    name = "types_test",
+    srcs = ["beacon_block_test.go"],
+    data = glob(["testdata/**"]),
+    embed = [":types"],
+    deps = ["//go-ethereum/common"],
+)

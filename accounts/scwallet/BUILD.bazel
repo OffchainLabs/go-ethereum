@@ -1,0 +1,26 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "scwallet",
+    srcs = [
+        "apdu.go",
+        "hub.go",
+        "securechannel.go",
+        "wallet.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/accounts/scwallet",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum",
+        "//go-ethereum/accounts",
+        "//go-ethereum/common",
+        "//go-ethereum/core/types",
+        "//go-ethereum/crypto",
+        "//go-ethereum/event",
+        "//go-ethereum/log",
+        "@com_github_gballet_go_libpcsclite//:go-libpcsclite",
+        "@com_github_status_im_keycard_go//derivationpath",
+        "@org_golang_x_crypto//pbkdf2",
+        "@org_golang_x_text//unicode/norm",
+    ],
+)

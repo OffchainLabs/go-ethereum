@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "graphiql",
+    srcs = ["build.go"],
+    embedsrcs = [
+        "graphiql.min.css",
+        "graphiql.min.js",
+        "index.html",
+        "react-dom.production.min.js",
+        "react.production.min.js",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/graphql/internal/graphiql",
+    visibility = ["//go-ethereum/graphql:__subpackages__"],
+)

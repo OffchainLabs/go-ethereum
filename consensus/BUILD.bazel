@@ -1,0 +1,18 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "consensus",
+    srcs = [
+        "consensus.go",
+        "errors.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/consensus",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/core/state",
+        "//go-ethereum/core/types",
+        "//go-ethereum/core/vm",
+        "//go-ethereum/params",
+    ],
+)

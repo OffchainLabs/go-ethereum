@@ -1,0 +1,51 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "enode",
+    srcs = [
+        "idscheme.go",
+        "iter.go",
+        "localnode.go",
+        "node.go",
+        "nodedb.go",
+        "urlv4.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/p2p/enode",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/arbcrypto",
+        "//go-ethereum/common/math",
+        "//go-ethereum/crypto",
+        "//go-ethereum/log",
+        "//go-ethereum/p2p/enr",
+        "//go-ethereum/p2p/netutil",
+        "//go-ethereum/rlp",
+        "@com_github_syndtr_goleveldb//leveldb",
+        "@com_github_syndtr_goleveldb//leveldb/errors",
+        "@com_github_syndtr_goleveldb//leveldb/iterator",
+        "@com_github_syndtr_goleveldb//leveldb/opt",
+        "@com_github_syndtr_goleveldb//leveldb/storage",
+        "@com_github_syndtr_goleveldb//leveldb/util",
+    ],
+)
+
+go_test(
+    name = "enode_test",
+    srcs = [
+        "idscheme_test.go",
+        "iter_test.go",
+        "localnode_test.go",
+        "node_test.go",
+        "nodedb_test.go",
+        "urlv4_test.go",
+    ],
+    embed = [":enode"],
+    deps = [
+        "//go-ethereum/crypto",
+        "//go-ethereum/p2p/enr",
+        "//go-ethereum/p2p/netutil",
+        "//go-ethereum/rlp",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)

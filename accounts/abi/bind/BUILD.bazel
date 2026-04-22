@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "bind",
+    srcs = ["old.go"],
+    importpath = "github.com/ethereum/go-ethereum/accounts/abi/bind",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/accounts",
+        "//go-ethereum/accounts/abi",
+        "//go-ethereum/accounts/abi/abigen",
+        "//go-ethereum/accounts/abi/bind/v2:bind",
+        "//go-ethereum/accounts/external",
+        "//go-ethereum/accounts/keystore",
+        "//go-ethereum/common",
+        "//go-ethereum/core/types",
+        "//go-ethereum/crypto",
+        "//go-ethereum/log",
+    ],
+)

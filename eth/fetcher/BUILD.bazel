@@ -1,0 +1,36 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "fetcher",
+    srcs = [
+        "metrics.go",
+        "tx_fetcher.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/eth/fetcher",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/lru",
+        "//go-ethereum/common/mclock",
+        "//go-ethereum/core/txpool",
+        "//go-ethereum/core/types",
+        "//go-ethereum/log",
+        "//go-ethereum/metrics",
+    ],
+)
+
+go_test(
+    name = "fetcher_test",
+    srcs = ["tx_fetcher_test.go"],
+    embed = [":fetcher"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/mclock",
+        "//go-ethereum/core/txpool",
+        "//go-ethereum/core/types",
+        "//go-ethereum/crypto",
+        "//go-ethereum/crypto/kzg4844",
+        "//go-ethereum/params",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)

@@ -1,0 +1,22 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "lru",
+    srcs = [
+        "basiclru.go",
+        "basiclru_arbitrum.go",
+        "blob_lru.go",
+        "lru.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/common/lru",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "lru_test",
+    srcs = [
+        "basiclru_test.go",
+        "blob_lru_test.go",
+    ],
+    embed = [":lru"],
+)

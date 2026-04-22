@@ -1,0 +1,29 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "trienode",
+    srcs = [
+        "node.go",
+        "proof.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/trie/trienode",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/crypto",
+        "//go-ethereum/ethdb",
+        "//go-ethereum/rlp",
+    ],
+)
+
+go_test(
+    name = "trienode_test",
+    srcs = ["node_test.go"],
+    embed = [":trienode"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/crypto",
+        "//go-ethereum/internal/testrand",
+        "@com_github_davecgh_go_spew//spew",
+    ],
+)

@@ -1,0 +1,29 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+# This BUILD file carries the gazelle prefix for the go-ethereum subtree.
+# The parent workspace (github.com/offchainlabs/nitro) has a local `replace`
+# directive in go.mod pointing github.com/ethereum/go-ethereum at this
+# directory. Gazelle picks up the nested prefix when generating BUILDs under
+# go-ethereum/, so imports like "github.com/ethereum/go-ethereum/common"
+# resolve to //go-ethereum/common.
+
+# gazelle:prefix github.com/ethereum/go-ethereum
+# gazelle:go_naming_convention import
+
+# Vendored submodules / non-Go paths inside go-ethereum.
+# gazelle:exclude build
+# gazelle:exclude docs
+# gazelle:exclude tests/fuzzers
+# gazelle:exclude tests/testdata
+
+go_library(
+    name = "go-ethereum",
+    srcs = ["interfaces.go"],
+    importpath = "github.com/ethereum/go-ethereum",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/core/types",
+    ],
+)

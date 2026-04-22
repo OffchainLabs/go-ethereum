@@ -1,0 +1,55 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "workload_lib",
+    srcs = [
+        "client.go",
+        "filtertest.go",
+        "filtertestfuzz.go",
+        "filtertestgen.go",
+        "filtertestperf.go",
+        "historytest.go",
+        "historytestgen.go",
+        "main.go",
+        "testsuite.go",
+        "tracetest.go",
+        "tracetestgen.go",
+    ],
+    embedsrcs = [
+        "queries/filter_queries_mainnet.json",
+        "queries/filter_queries_sepolia.json",
+        "queries/history_mainnet.json",
+        "queries/history_sepolia.json",
+        "queries/trace_mainnet.json",
+        "queries/trace_sepolia.json",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/cmd/workload",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//go-ethereum",
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/common/lru",
+        "//go-ethereum/core/history",
+        "//go-ethereum/core/types",
+        "//go-ethereum/crypto",
+        "//go-ethereum/eth/tracers",
+        "//go-ethereum/eth/tracers/logger",
+        "//go-ethereum/ethclient",
+        "//go-ethereum/ethclient/gethclient",
+        "//go-ethereum/internal/debug",
+        "//go-ethereum/internal/flags",
+        "//go-ethereum/internal/utesting",
+        "//go-ethereum/log",
+        "//go-ethereum/params",
+        "//go-ethereum/rlp",
+        "//go-ethereum/rpc",
+        "@com_github_urfave_cli_v2//:cli",
+    ],
+)
+
+go_binary(
+    name = "workload",
+    embed = [":workload_lib"],
+    visibility = ["//visibility:public"],
+)

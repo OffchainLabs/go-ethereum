@@ -1,0 +1,31 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "params",
+    srcs = [
+        "config.go",
+        "networks.go",
+        "params.go",
+    ],
+    embedsrcs = [
+        "checkpoint_holesky.hex",
+        "checkpoint_hoodi.hex",
+        "checkpoint_mainnet.hex",
+        "checkpoint_sepolia.hex",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/beacon/params",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/beacon/merkle",
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/log",
+        "@in_gopkg_yaml_v3//:yaml_v3",
+    ],
+)
+
+go_test(
+    name = "params_test",
+    srcs = ["config_test.go"],
+    embed = [":params"],
+)

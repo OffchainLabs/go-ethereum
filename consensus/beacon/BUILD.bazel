@@ -1,0 +1,21 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "beacon",
+    srcs = ["consensus.go"],
+    importpath = "github.com/ethereum/go-ethereum/consensus/beacon",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/consensus",
+        "//go-ethereum/consensus/misc/eip1559",
+        "//go-ethereum/consensus/misc/eip4844",
+        "//go-ethereum/core/state",
+        "//go-ethereum/core/tracing",
+        "//go-ethereum/core/types",
+        "//go-ethereum/core/vm",
+        "//go-ethereum/params",
+        "//go-ethereum/trie",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)

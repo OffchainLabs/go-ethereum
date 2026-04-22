@@ -1,0 +1,54 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "filters",
+    srcs = [
+        "api.go",
+        "filter.go",
+        "filter_system.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/eth/filters",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum",
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/common/lru",
+        "//go-ethereum/core",
+        "//go-ethereum/core/filtermaps",
+        "//go-ethereum/core/history",
+        "//go-ethereum/core/types",
+        "//go-ethereum/ethdb",
+        "//go-ethereum/event",
+        "//go-ethereum/internal/ethapi",
+        "//go-ethereum/log",
+        "//go-ethereum/params",
+        "//go-ethereum/rpc",
+    ],
+)
+
+go_test(
+    name = "filters_test",
+    srcs = [
+        "api_test.go",
+        "filter_system_test.go",
+        "filter_test.go",
+    ],
+    embed = [":filters"],
+    deps = [
+        "//go-ethereum/accounts/abi",
+        "//go-ethereum/common",
+        "//go-ethereum/consensus/ethash",
+        "//go-ethereum/core",
+        "//go-ethereum/core/filtermaps",
+        "//go-ethereum/core/rawdb",
+        "//go-ethereum/core/types",
+        "//go-ethereum/crypto",
+        "//go-ethereum/ethdb",
+        "//go-ethereum/event",
+        "//go-ethereum/internal/ethapi",
+        "//go-ethereum/params",
+        "//go-ethereum/rpc",
+        "//go-ethereum/triedb",
+    ],
+)

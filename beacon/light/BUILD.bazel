@@ -1,0 +1,38 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "light",
+    srcs = [
+        "canonical.go",
+        "committee_chain.go",
+        "head_tracker.go",
+        "range.go",
+        "test_helpers.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/beacon/light",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/beacon/merkle",
+        "//go-ethereum/beacon/params",
+        "//go-ethereum/beacon/types",
+        "//go-ethereum/common",
+        "//go-ethereum/common/lru",
+        "//go-ethereum/common/mclock",
+        "//go-ethereum/core/rawdb",
+        "//go-ethereum/ethdb",
+        "//go-ethereum/log",
+        "//go-ethereum/rlp",
+    ],
+)
+
+go_test(
+    name = "light_test",
+    srcs = ["committee_chain_test.go"],
+    embed = [":light"],
+    deps = [
+        "//go-ethereum/beacon/params",
+        "//go-ethereum/beacon/types",
+        "//go-ethereum/common/mclock",
+        "//go-ethereum/ethdb/memorydb",
+    ],
+)

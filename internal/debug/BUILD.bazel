@@ -1,0 +1,25 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "debug",
+    srcs = [
+        "api.go",
+        "flags.go",
+        "loudpanic.go",
+        "trace.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/internal/debug",
+    visibility = ["//go-ethereum:__subpackages__"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/internal/flags",
+        "//go-ethereum/log",
+        "//go-ethereum/metrics",
+        "//go-ethereum/metrics/exp",
+        "@com_github_hashicorp_go_bexpr//:go-bexpr",
+        "@com_github_mattn_go_colorable//:go-colorable",
+        "@com_github_mattn_go_isatty//:go-isatty",
+        "@com_github_urfave_cli_v2//:cli",
+        "@in_gopkg_natefinch_lumberjack_v2//:lumberjack_v2",
+    ],
+)

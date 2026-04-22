@@ -1,0 +1,29 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "rlpgen_lib",
+    srcs = [
+        "gen.go",
+        "main.go",
+        "types.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/rlp/rlpgen",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//go-ethereum/rlp/internal/rlpstruct",
+        "@org_golang_x_tools//go/packages",
+    ],
+)
+
+go_binary(
+    name = "rlpgen",
+    embed = [":rlpgen_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "rlpgen_test",
+    srcs = ["gen_test.go"],
+    data = glob(["testdata/**"]),
+    embed = [":rlpgen_lib"],
+)

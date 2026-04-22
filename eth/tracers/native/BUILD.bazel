@@ -1,0 +1,57 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "native",
+    srcs = [
+        "4byte.go",
+        "call.go",
+        "call_flat.go",
+        "erc7562.go",
+        "gen_account_json.go",
+        "gen_callframe_json.go",
+        "gen_callframewithopcodes_json.go",
+        "gen_flatcallaction_json.go",
+        "gen_flatcallresult_json.go",
+        "keccak256_preimage.go",
+        "mux.go",
+        "noop.go",
+        "prestate.go",
+        "tracer_arbitrum.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/eth/tracers/native",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/accounts/abi",
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/core/tracing",
+        "//go-ethereum/core/types",
+        "//go-ethereum/core/vm",
+        "//go-ethereum/crypto",
+        "//go-ethereum/eth/tracers",
+        "//go-ethereum/eth/tracers/internal",
+        "//go-ethereum/log",
+        "//go-ethereum/params",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)
+
+go_test(
+    name = "native_test",
+    srcs = [
+        "call_flat_test.go",
+        "keccak256_preimage_test.go",
+    ],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/core/tracing",
+        "//go-ethereum/core/types",
+        "//go-ethereum/core/vm",
+        "//go-ethereum/crypto",
+        "//go-ethereum/eth/tracers",
+        "//go-ethereum/params",
+        "@com_github_holiman_uint256//:uint256",
+        "@com_github_stretchr_testify//require",
+    ],
+)

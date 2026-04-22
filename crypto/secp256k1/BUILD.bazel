@@ -1,0 +1,47 @@
+# gazelle:ignore
+# Hand-maintained BUILD for vendored libsecp256k1.
+# secp256.go amalgamates C sources via `#include "./libsecp256k1/..."`
+# inside the cgo preamble. Under `go build`, cgo injects `-I<pkgdir>` and the
+# preprocessor falls back to -I search when the `./` relative lookup misses.
+# We reproduce that by wrapping the libsecp256k1 tree in a cc_library whose
+# textual_hdrs expose the .c/.h files at the right relative path. The files
+# are NOT separately compiled (textual_hdrs skips compilation), so we avoid
+# the duplicate-symbol collision from listing them in srcs.
+
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+cc_library(
+    name = "libsecp256k1_cdeps",
+    hdrs = ["ext.h"],
+    textual_hdrs = glob([
+        "libsecp256k1/include/**/*.h",
+        "libsecp256k1/src/**/*.h",
+        "libsecp256k1/src/**/*.c",
+        "libsecp256k1/contrib/**/*.h",
+    ]),
+    includes = ["."],
+    visibility = ["//visibility:private"],
+)
+
+go_library(
+    name = "secp256k1",
+    srcs = [
+        "curve.go",
+        "panic_cb.go",
+        "scalar_mult_cgo.go",
+        "scalar_mult_nocgo.go",
+        "secp256.go",
+    ],
+    cdeps = [":libsecp256k1_cdeps"],
+    cgo = True,
+    importpath = "github.com/ethereum/go-ethereum/crypto/secp256k1",
+    visibility = ["//visibility:public"],
+    deps = ["//go-ethereum/common/math"],
+)
+
+go_test(
+    name = "secp256k1_test",
+    srcs = ["secp256_test.go"],
+    embed = [":secp256k1"],
+)

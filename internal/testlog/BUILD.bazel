@@ -1,0 +1,16 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "testlog",
+    srcs = ["testlog.go"],
+    importpath = "github.com/ethereum/go-ethereum/internal/testlog",
+    visibility = ["//go-ethereum:__subpackages__"],
+    deps = ["//go-ethereum/log"],
+)
+
+go_test(
+    name = "testlog_test",
+    srcs = ["testlog_test.go"],
+    embed = [":testlog"],
+    deps = ["//go-ethereum/log"],
+)

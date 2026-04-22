@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "utesting",
+    srcs = ["utesting.go"],
+    importpath = "github.com/ethereum/go-ethereum/internal/utesting",
+    visibility = ["//go-ethereum:__subpackages__"],
+)
+
+go_test(
+    name = "utesting_test",
+    srcs = ["utesting_test.go"],
+    embed = [":utesting"],
+)

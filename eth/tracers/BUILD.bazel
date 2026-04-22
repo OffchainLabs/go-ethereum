@@ -1,0 +1,63 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "tracers",
+    srcs = [
+        "api.go",
+        "dir.go",
+        "live.go",
+        "tracker.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/eth/tracers",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/consensus",
+        "//go-ethereum/core",
+        "//go-ethereum/core/rawdb",
+        "//go-ethereum/core/state",
+        "//go-ethereum/core/tracing",
+        "//go-ethereum/core/types",
+        "//go-ethereum/core/vm",
+        "//go-ethereum/eth/tracers/logger",
+        "//go-ethereum/ethdb",
+        "//go-ethereum/internal/ethapi",
+        "//go-ethereum/internal/ethapi/override",
+        "//go-ethereum/log",
+        "//go-ethereum/params",
+        "//go-ethereum/rlp",
+        "//go-ethereum/rpc",
+    ],
+)
+
+go_test(
+    name = "tracers_test",
+    srcs = [
+        "api_test.go",
+        "tracers_test.go",
+        "tracker_test.go",
+    ],
+    embed = [":tracers"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/consensus",
+        "//go-ethereum/consensus/beacon",
+        "//go-ethereum/consensus/ethash",
+        "//go-ethereum/core",
+        "//go-ethereum/core/rawdb",
+        "//go-ethereum/core/state",
+        "//go-ethereum/core/tracing",
+        "//go-ethereum/core/types",
+        "//go-ethereum/core/vm",
+        "//go-ethereum/crypto",
+        "//go-ethereum/eth/tracers/logger",
+        "//go-ethereum/ethdb",
+        "//go-ethereum/internal/ethapi",
+        "//go-ethereum/internal/ethapi/override",
+        "//go-ethereum/params",
+        "//go-ethereum/rpc",
+        "//go-ethereum/tests",
+    ],
+)

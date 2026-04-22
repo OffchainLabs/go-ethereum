@@ -1,0 +1,35 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "abigen",
+    srcs = [
+        "bind.go",
+        "bindv2.go",
+        "template.go",
+    ],
+    embedsrcs = [
+        "source.go.tpl",
+        "source2.go.tpl",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/accounts/abi/abigen",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/accounts/abi",
+        "//go-ethereum/log",
+    ],
+)
+
+go_test(
+    name = "abigen_test",
+    srcs = [
+        "bind_test.go",
+        "bindv2_test.go",
+    ],
+    data = glob(["testdata/**"]),
+    embed = [":abigen"],
+    deps = [
+        "//go-ethereum/accounts/abi",
+        "//go-ethereum/common",
+        "//go-ethereum/crypto",
+    ],
+)

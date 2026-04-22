@@ -1,0 +1,18 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "abidump_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/ethereum/go-ethereum/cmd/abidump",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//go-ethereum/signer/core/apitypes",
+        "//go-ethereum/signer/fourbyte",
+    ],
+)
+
+go_binary(
+    name = "abidump",
+    embed = [":abidump_lib"],
+    visibility = ["//visibility:public"],
+)

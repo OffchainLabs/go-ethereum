@@ -1,0 +1,34 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "fourbyte",
+    srcs = [
+        "abi.go",
+        "fourbyte.go",
+        "validation.go",
+    ],
+    embedsrcs = ["4byte.json"],
+    importpath = "github.com/ethereum/go-ethereum/signer/fourbyte",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/accounts/abi",
+        "//go-ethereum/common",
+        "//go-ethereum/signer/core/apitypes",
+    ],
+)
+
+go_test(
+    name = "fourbyte_test",
+    srcs = [
+        "abi_test.go",
+        "fourbyte_test.go",
+        "validation_test.go",
+    ],
+    embed = [":fourbyte"],
+    deps = [
+        "//go-ethereum/accounts/abi",
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/signer/core/apitypes",
+    ],
+)

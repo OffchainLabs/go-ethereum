@@ -1,0 +1,22 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "api",
+    srcs = [
+        "api_server.go",
+        "light_api.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/beacon/light/api",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/beacon/light/request",
+        "//go-ethereum/beacon/light/sync",
+        "//go-ethereum/beacon/merkle",
+        "//go-ethereum/beacon/params",
+        "//go-ethereum/beacon/types",
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/log",
+        "@com_github_donovanhide_eventsource//:eventsource",
+    ],
+)

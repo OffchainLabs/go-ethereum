@@ -1,0 +1,38 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "bls12381",
+    srcs = [
+        "arithmetic_fallback.go",
+        "bls12_381.go",
+        "field_element.go",
+        "fp.go",
+        "fp12.go",
+        "fp2.go",
+        "fp6.go",
+        "g1.go",
+        "g2.go",
+        "gt.go",
+        "isogeny.go",
+        "pairing.go",
+        "swu.go",
+        "utils.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/crypto/bls12381",
+    visibility = ["//visibility:public"],
+    deps = ["//go-ethereum/common"],
+)
+
+go_test(
+    name = "bls12381_test",
+    srcs = [
+        "bls12_381_test.go",
+        "field_element_test.go",
+        "fp_test.go",
+        "g1_test.go",
+        "g2_test.go",
+        "pairing_test.go",
+    ],
+    embed = [":bls12381"],
+    deps = ["//go-ethereum/common"],
+)

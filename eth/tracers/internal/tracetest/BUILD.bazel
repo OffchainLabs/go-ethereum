@@ -1,0 +1,49 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "tracetest",
+    srcs = ["util.go"],
+    importpath = "github.com/ethereum/go-ethereum/eth/tracers/internal/tracetest",
+    visibility = ["//go-ethereum/eth/tracers:__subpackages__"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/math",
+        "//go-ethereum/consensus/misc/eip4844",
+        "//go-ethereum/core",
+        "//go-ethereum/core/types",
+        "//go-ethereum/core/vm",
+        "//go-ethereum/eth/tracers/js",
+        "//go-ethereum/eth/tracers/native",
+    ],
+)
+
+go_test(
+    name = "tracetest_test",
+    srcs = [
+        "calltrace_test.go",
+        "erc7562_tracer_test.go",
+        "flat_calltrace_test.go",
+        "prestate_test.go",
+        "supply_test.go",
+    ],
+    data = glob(["testdata/**"]),
+    embed = [":tracetest"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/consensus/beacon",
+        "//go-ethereum/consensus/ethash",
+        "//go-ethereum/core",
+        "//go-ethereum/core/rawdb",
+        "//go-ethereum/core/state",
+        "//go-ethereum/core/types",
+        "//go-ethereum/core/vm",
+        "//go-ethereum/crypto",
+        "//go-ethereum/eth/tracers",
+        "//go-ethereum/eth/tracers/live",
+        "//go-ethereum/params",
+        "//go-ethereum/rlp",
+        "//go-ethereum/tests",
+        "@com_github_stretchr_testify//require",
+    ],
+)

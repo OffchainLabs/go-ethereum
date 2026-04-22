@@ -1,0 +1,22 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "memorydb",
+    srcs = ["memorydb.go"],
+    importpath = "github.com/ethereum/go-ethereum/ethdb/memorydb",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/ethdb",
+    ],
+)
+
+go_test(
+    name = "memorydb_test",
+    srcs = ["memorydb_test.go"],
+    embed = [":memorydb"],
+    deps = [
+        "//go-ethereum/ethdb",
+        "//go-ethereum/ethdb/dbtest",
+    ],
+)

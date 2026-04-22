@@ -1,0 +1,22 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "mclock",
+    srcs = [
+        "alarm.go",
+        "mclock.go",
+        "mclock.s",
+        "simclock.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/common/mclock",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "mclock_test",
+    srcs = [
+        "alarm_test.go",
+        "simclock_test.go",
+    ],
+    embed = [":mclock"],
+)

@@ -1,0 +1,79 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "arbcrypto",
+    srcs = [
+        "ecrecovery_nocgo.go",
+        "ecrecovery_wasm.go",
+        "keccak.go",
+        "keccak_wasm.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/arbcrypto",
+    visibility = ["//visibility:public"],
+    deps = select({
+        "@rules_go//go/platform:386": [
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//:secp256k1",
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//ecdsa",
+            "@org_golang_x_crypto//sha3",
+        ],
+        "@rules_go//go/platform:amd64": [
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//:secp256k1",
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//ecdsa",
+            "@org_golang_x_crypto//sha3",
+        ],
+        "@rules_go//go/platform:arm": [
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//:secp256k1",
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//ecdsa",
+            "@org_golang_x_crypto//sha3",
+        ],
+        "@rules_go//go/platform:arm64": [
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//:secp256k1",
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//ecdsa",
+            "@org_golang_x_crypto//sha3",
+        ],
+        "@rules_go//go/platform:mips": [
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//:secp256k1",
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//ecdsa",
+            "@org_golang_x_crypto//sha3",
+        ],
+        "@rules_go//go/platform:mips64": [
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//:secp256k1",
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//ecdsa",
+            "@org_golang_x_crypto//sha3",
+        ],
+        "@rules_go//go/platform:mips64le": [
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//:secp256k1",
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//ecdsa",
+            "@org_golang_x_crypto//sha3",
+        ],
+        "@rules_go//go/platform:mipsle": [
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//:secp256k1",
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//ecdsa",
+            "@org_golang_x_crypto//sha3",
+        ],
+        "@rules_go//go/platform:ppc64": [
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//:secp256k1",
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//ecdsa",
+            "@org_golang_x_crypto//sha3",
+        ],
+        "@rules_go//go/platform:ppc64le": [
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//:secp256k1",
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//ecdsa",
+            "@org_golang_x_crypto//sha3",
+        ],
+        "@rules_go//go/platform:riscv64": [
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//:secp256k1",
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//ecdsa",
+            "@org_golang_x_crypto//sha3",
+        ],
+        "@rules_go//go/platform:s390x": [
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//:secp256k1",
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//ecdsa",
+            "@org_golang_x_crypto//sha3",
+        ],
+        "@rules_go//go/platform:wasm": [
+            "@com_github_decred_dcrd_dcrec_secp256k1_v4//:secp256k1",
+        ],
+        "//conditions:default": [],
+    }),
+)

@@ -1,0 +1,27 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "log",
+    srcs = [
+        "format.go",
+        "handler.go",
+        "handler_glog.go",
+        "logger.go",
+        "logger_arbitrum.go",
+        "root.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/log",
+    visibility = ["//visibility:public"],
+    deps = ["@com_github_holiman_uint256//:uint256"],
+)
+
+go_test(
+    name = "log_test",
+    srcs = [
+        "format_test.go",
+        "logger_test.go",
+        "root_test.go",
+    ],
+    embed = [":log"],
+    deps = ["@com_github_holiman_uint256//:uint256"],
+)

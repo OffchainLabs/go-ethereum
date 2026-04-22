@@ -1,0 +1,16 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "eradl",
+    srcs = ["eradl.go"],
+    embedsrcs = [
+        "checksums_mainnet.txt",
+        "checksums_sepolia.txt",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/internal/era/eradl",
+    visibility = ["//go-ethereum:__subpackages__"],
+    deps = [
+        "//go-ethereum/internal/download",
+        "//go-ethereum/internal/era",
+    ],
+)

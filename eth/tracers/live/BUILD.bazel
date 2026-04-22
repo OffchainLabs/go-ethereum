@@ -1,0 +1,26 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "live",
+    srcs = [
+        "block_insert_times.go",
+        "gen_supplyinfoburn.go",
+        "gen_supplyinfoissuance.go",
+        "noop.go",
+        "supply.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/eth/tracers/live",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/consensus/misc/eip4844",
+        "//go-ethereum/core/tracing",
+        "//go-ethereum/core/types",
+        "//go-ethereum/core/vm",
+        "//go-ethereum/eth/tracers",
+        "//go-ethereum/log",
+        "//go-ethereum/params",
+        "@in_gopkg_natefinch_lumberjack_v2//:lumberjack_v2",
+    ],
+)

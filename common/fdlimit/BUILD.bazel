@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "fdlimit",
+    srcs = [
+        "fdlimit_bsd.go",
+        "fdlimit_darwin.go",
+        "fdlimit_unix.go",
+        "fdlimit_windows.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/common/fdlimit",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "fdlimit_test",
+    srcs = ["fdlimit_test.go"],
+    embed = [":fdlimit"],
+)

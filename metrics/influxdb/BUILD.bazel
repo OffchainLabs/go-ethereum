@@ -1,0 +1,31 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "influxdb",
+    srcs = [
+        "influxdb.go",
+        "influxdbv1.go",
+        "influxdbv2.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/metrics/influxdb",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/log",
+        "//go-ethereum/metrics",
+        "@com_github_influxdata_influxdb1_client//v2:influxdb1-client",
+        "@com_github_influxdata_influxdb_client_go_v2//:influxdb-client-go",
+        "@com_github_influxdata_influxdb_client_go_v2//api",
+    ],
+)
+
+go_test(
+    name = "influxdb_test",
+    srcs = ["influxdb_test.go"],
+    data = glob(["testdata/**"]),
+    embed = [":influxdb"],
+    deps = [
+        "//go-ethereum/metrics",
+        "//go-ethereum/metrics/internal",
+        "@com_github_influxdata_influxdb_client_go_v2//:influxdb-client-go",
+    ],
+)

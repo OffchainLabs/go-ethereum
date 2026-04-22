@@ -1,0 +1,35 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "sync",
+    srcs = [
+        "head_sync.go",
+        "test_helpers.go",
+        "types.go",
+        "update_sync.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/beacon/light/sync",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/beacon/light",
+        "//go-ethereum/beacon/light/request",
+        "//go-ethereum/beacon/params",
+        "//go-ethereum/beacon/types",
+        "//go-ethereum/common",
+        "//go-ethereum/log",
+    ],
+)
+
+go_test(
+    name = "sync_test",
+    srcs = [
+        "head_sync_test.go",
+        "update_sync_test.go",
+    ],
+    embed = [":sync"],
+    deps = [
+        "//go-ethereum/beacon/light/request",
+        "//go-ethereum/beacon/types",
+        "//go-ethereum/common",
+    ],
+)

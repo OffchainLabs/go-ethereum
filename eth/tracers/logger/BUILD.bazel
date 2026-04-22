@@ -1,0 +1,37 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "logger",
+    srcs = [
+        "access_list_tracer.go",
+        "gen_callframe.go",
+        "gen_structlog.go",
+        "logger.go",
+        "logger_json.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/eth/tracers/logger",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/common/math",
+        "//go-ethereum/core/tracing",
+        "//go-ethereum/core/types",
+        "//go-ethereum/core/vm",
+        "//go-ethereum/params",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)
+
+go_test(
+    name = "logger_test",
+    srcs = ["logger_test.go"],
+    embed = [":logger"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/core/state",
+        "//go-ethereum/core/vm",
+        "//go-ethereum/params",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)

@@ -1,0 +1,70 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "rpc",
+    srcs = [
+        "client.go",
+        "client_arbitrum.go",
+        "client_opt.go",
+        "context_headers.go",
+        "doc.go",
+        "endpoints.go",
+        "errors.go",
+        "handler.go",
+        "http.go",
+        "inproc.go",
+        "ipc.go",
+        "ipc_unix.go",
+        "ipc_wasm.go",
+        "ipc_windows.go",
+        "json.go",
+        "metrics.go",
+        "server.go",
+        "service.go",
+        "stdio.go",
+        "subscription.go",
+        "types.go",
+        "websocket.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/rpc",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/log",
+        "//go-ethereum/metrics",
+        "//go-ethereum/p2p/netutil",
+        "@com_github_deckarep_golang_set_v2//:golang-set",
+        "@com_github_gorilla_websocket//:websocket",
+    ] + select({
+        "@rules_go//go/platform:windows": [
+            "@com_github_microsoft_go_winio//:go-winio",
+        ],
+        "//conditions:default": [],
+    }),
+)
+
+go_test(
+    name = "rpc_test",
+    srcs = [
+        "client_example_test.go",
+        "client_opt_test.go",
+        "client_test.go",
+        "http_test.go",
+        "server_test.go",
+        "subscription_test.go",
+        "testservice_test.go",
+        "types_test.go",
+        "websocket_test.go",
+    ],
+    data = glob(["testdata/**"]),
+    embed = [":rpc"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+        "//go-ethereum/core/types",
+        "//go-ethereum/log",
+        "@com_github_davecgh_go_spew//spew",
+        "@com_github_gorilla_websocket//:websocket",
+    ],
+)

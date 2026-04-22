@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "arbitrum_types",
+    srcs = ["txoptions.go"],
+    importpath = "github.com/ethereum/go-ethereum/arbitrum_types",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/math",
+        "//go-ethereum/core/state",
+        "//go-ethereum/rpc",
+        "@com_github_pkg_errors//:errors",
+    ],
+)

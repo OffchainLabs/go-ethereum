@@ -1,0 +1,24 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "gnark",
+    srcs = [
+        "g1.go",
+        "g2.go",
+        "gt.go",
+        "pairing.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/crypto/bn256/gnark",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common/bitutil",
+        "@com_github_consensys_gnark_crypto//ecc/bn254",
+    ],
+)
+
+go_test(
+    name = "gnark_test",
+    srcs = ["native_format_test.go"],
+    embed = [":gnark"],
+    deps = ["@com_github_consensys_gnark_crypto//ecc/bn254"],
+)

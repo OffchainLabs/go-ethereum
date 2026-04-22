@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "math",
+    srcs = [
+        "big.go",
+        "integer.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/common/math",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "math_test",
+    srcs = [
+        "big_test.go",
+        "integer_test.go",
+    ],
+    embed = [":math"],
+)

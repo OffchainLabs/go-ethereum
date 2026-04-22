@@ -1,0 +1,27 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "jsre",
+    srcs = [
+        "completion.go",
+        "jsre.go",
+        "pretty.go",
+    ],
+    importpath = "github.com/ethereum/go-ethereum/internal/jsre",
+    visibility = ["//go-ethereum:__subpackages__"],
+    deps = [
+        "//go-ethereum/common",
+        "@com_github_dop251_goja//:goja",
+        "@com_github_fatih_color//:color",
+    ],
+)
+
+go_test(
+    name = "jsre_test",
+    srcs = [
+        "completion_test.go",
+        "jsre_test.go",
+    ],
+    embed = [":jsre"],
+    deps = ["@com_github_dop251_goja//:goja"],
+)

@@ -1,0 +1,28 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "rlpdump_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/ethereum/go-ethereum/cmd/rlpdump",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/rlp",
+    ],
+)
+
+go_binary(
+    name = "rlpdump",
+    embed = [":rlpdump_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "rlpdump_test",
+    srcs = ["rlpdump_test.go"],
+    embed = [":rlpdump_lib"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+    ],
+)

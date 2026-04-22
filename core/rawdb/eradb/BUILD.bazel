@@ -1,0 +1,27 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "eradb",
+    srcs = ["eradb.go"],
+    importpath = "github.com/ethereum/go-ethereum/core/rawdb/eradb",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common/lru",
+        "//go-ethereum/internal/era",
+        "//go-ethereum/log",
+        "//go-ethereum/rlp",
+    ],
+)
+
+go_test(
+    name = "eradb_test",
+    srcs = ["eradb_test.go"],
+    data = glob(["testdata/**"]),
+    embed = [":eradb"],
+    deps = [
+        "//go-ethereum/core/types",
+        "//go-ethereum/rlp",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)

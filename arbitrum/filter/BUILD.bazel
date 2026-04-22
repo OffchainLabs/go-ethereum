@@ -1,0 +1,12 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "filter",
+    srcs = ["filter_report.go"],
+    importpath = "github.com/ethereum/go-ethereum/arbitrum/filter",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go-ethereum/common",
+        "//go-ethereum/common/hexutil",
+    ],
+)
