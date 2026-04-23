@@ -19,9 +19,10 @@ const (
 	ResourceKindUnknown ResourceKind = iota
 	ResourceKindComputation
 	ResourceKindHistoryGrowth
-	ResourceKindStorageAccess
+	ResourceKindStorageAccessRead
+	ResourceKindStorageAccessWrite
 	ResourceKindStorageGrowth
-	ResourceKindL1Calldata
+	ResourceKindSingleDim
 	ResourceKindL2Calldata
 	ResourceKindWasmComputation
 	NumResourceKind
@@ -86,9 +87,14 @@ func HistoryGrowthGas(amount uint64) MultiGas {
 	return NewMultiGas(ResourceKindHistoryGrowth, amount)
 }
 
-// StorageAccessGas returns a MultiGas initialized with storage access gas.
-func StorageAccessGas(amount uint64) MultiGas {
-	return NewMultiGas(ResourceKindStorageAccess, amount)
+// StorageAccessReadGas returns a MultiGas initialized with storage access read gas.
+func StorageAccessReadGas(amount uint64) MultiGas {
+	return NewMultiGas(ResourceKindStorageAccessRead, amount)
+}
+
+// StorageAccessWriteGas returns a MultiGas initialized with storage access write gas.
+func StorageAccessWriteGas(amount uint64) MultiGas {
+	return NewMultiGas(ResourceKindStorageAccessWrite, amount)
 }
 
 // StorageGrowthGas returns a MultiGas initialized with storage growth gas.
@@ -96,9 +102,13 @@ func StorageGrowthGas(amount uint64) MultiGas {
 	return NewMultiGas(ResourceKindStorageGrowth, amount)
 }
 
-// L1CalldataGas returns a MultiGas initialized with L1 calldata gas.
-func L1CalldataGas(amount uint64) MultiGas {
-	return NewMultiGas(ResourceKindL1Calldata, amount)
+// SingleDimGas returns a MultiGas initialized with single-dimensional gas such as L1 calldata cost and
+// retryable redeem gas donation.
+// For more information on single-dimensional gas check the design decision docs:
+//   - nitro/docs/decisions/0002-multi-dimensional-gas-metering.md
+//   - nitro/docs/decisions/0003-multi-dimensional-gas-refunds.md
+func SingleDimGas(amount uint64) MultiGas {
+	return NewMultiGas(ResourceKindSingleDim, amount)
 }
 
 // L2CalldataGas returns a MultiGas initialized with L2 calldata gas.
@@ -301,31 +311,33 @@ func (z MultiGas) IsZero() bool {
 
 // multiGasJSON is an auxiliary type for JSON marshaling/unmarshaling of MultiGas.
 type multiGasJSON struct {
-	Unknown         hexutil.Uint64 `json:"unknown"`
-	Computation     hexutil.Uint64 `json:"computation"`
-	HistoryGrowth   hexutil.Uint64 `json:"historyGrowth"`
-	StorageAccess   hexutil.Uint64 `json:"storageAccess"`
-	StorageGrowth   hexutil.Uint64 `json:"storageGrowth"`
-	L1Calldata      hexutil.Uint64 `json:"l1Calldata"`
-	L2Calldata      hexutil.Uint64 `json:"l2Calldata"`
-	WasmComputation hexutil.Uint64 `json:"wasmComputation"`
-	Refund          hexutil.Uint64 `json:"refund"`
-	Total           hexutil.Uint64 `json:"total"`
+	Unknown            hexutil.Uint64 `json:"unknown"`
+	Computation        hexutil.Uint64 `json:"computation"`
+	HistoryGrowth      hexutil.Uint64 `json:"historyGrowth"`
+	StorageAccessRead  hexutil.Uint64 `json:"storageAccessRead"`
+	StorageAccessWrite hexutil.Uint64 `json:"storageAccessWrite"`
+	StorageGrowth      hexutil.Uint64 `json:"storageGrowth"`
+	SingleDim          hexutil.Uint64 `json:"singleDim"`
+	L2Calldata         hexutil.Uint64 `json:"l2Calldata"`
+	WasmComputation    hexutil.Uint64 `json:"wasmComputation"`
+	Refund             hexutil.Uint64 `json:"refund"`
+	Total              hexutil.Uint64 `json:"total"`
 }
 
 // MarshalJSON implements json.Marshaler for MultiGas.
 func (z MultiGas) MarshalJSON() ([]byte, error) {
 	return json.Marshal(multiGasJSON{
-		Unknown:         hexutil.Uint64(z.gas[ResourceKindUnknown]),
-		Computation:     hexutil.Uint64(z.gas[ResourceKindComputation]),
-		HistoryGrowth:   hexutil.Uint64(z.gas[ResourceKindHistoryGrowth]),
-		StorageAccess:   hexutil.Uint64(z.gas[ResourceKindStorageAccess]),
-		StorageGrowth:   hexutil.Uint64(z.gas[ResourceKindStorageGrowth]),
-		L1Calldata:      hexutil.Uint64(z.gas[ResourceKindL1Calldata]),
-		L2Calldata:      hexutil.Uint64(z.gas[ResourceKindL2Calldata]),
-		WasmComputation: hexutil.Uint64(z.gas[ResourceKindWasmComputation]),
-		Refund:          hexutil.Uint64(z.refund),
-		Total:           hexutil.Uint64(z.total),
+		Unknown:            hexutil.Uint64(z.gas[ResourceKindUnknown]),
+		Computation:        hexutil.Uint64(z.gas[ResourceKindComputation]),
+		HistoryGrowth:      hexutil.Uint64(z.gas[ResourceKindHistoryGrowth]),
+		StorageAccessRead:  hexutil.Uint64(z.gas[ResourceKindStorageAccessRead]),
+		StorageAccessWrite: hexutil.Uint64(z.gas[ResourceKindStorageAccessWrite]),
+		StorageGrowth:      hexutil.Uint64(z.gas[ResourceKindStorageGrowth]),
+		SingleDim:          hexutil.Uint64(z.gas[ResourceKindSingleDim]),
+		L2Calldata:         hexutil.Uint64(z.gas[ResourceKindL2Calldata]),
+		WasmComputation:    hexutil.Uint64(z.gas[ResourceKindWasmComputation]),
+		Refund:             hexutil.Uint64(z.refund),
+		Total:              hexutil.Uint64(z.total),
 	})
 }
 
@@ -339,9 +351,10 @@ func (z *MultiGas) UnmarshalJSON(data []byte) error {
 	z.gas[ResourceKindUnknown] = uint64(j.Unknown)
 	z.gas[ResourceKindComputation] = uint64(j.Computation)
 	z.gas[ResourceKindHistoryGrowth] = uint64(j.HistoryGrowth)
-	z.gas[ResourceKindStorageAccess] = uint64(j.StorageAccess)
+	z.gas[ResourceKindStorageAccessRead] = uint64(j.StorageAccessRead)
+	z.gas[ResourceKindStorageAccessWrite] = uint64(j.StorageAccessWrite)
 	z.gas[ResourceKindStorageGrowth] = uint64(j.StorageGrowth)
-	z.gas[ResourceKindL1Calldata] = uint64(j.L1Calldata)
+	z.gas[ResourceKindSingleDim] = uint64(j.SingleDim)
 	z.gas[ResourceKindL2Calldata] = uint64(j.L2Calldata)
 	z.gas[ResourceKindWasmComputation] = uint64(j.WasmComputation)
 	z.refund = uint64(j.Refund)

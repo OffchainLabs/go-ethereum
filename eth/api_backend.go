@@ -516,3 +516,5 @@ func (b *EthAPIBackend) FallbackClient() types.FallbackClient {
 func (b *EthAPIBackend) ArchiveFallbackClient(_ uint64) types.FallbackClient {
 	return nil
 }
+
+func (b *EthAPIBackend) TxFilter() core.TxFilterer { return nil }

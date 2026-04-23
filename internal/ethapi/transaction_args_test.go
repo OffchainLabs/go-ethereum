@@ -418,6 +418,8 @@ func (b *backendMock) ArchiveFallbackClient(_ uint64) types.FallbackClient {
 	return nil
 }
 
+func (b *backendMock) TxFilter() core.TxFilterer { return nil }
+
 func (b *backendMock) SyncProgressMap(ctx context.Context) map[string]interface{} {
 	return nil
 }

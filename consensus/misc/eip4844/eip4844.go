@@ -211,6 +211,21 @@ func LatestMaxBlobsPerBlock(cfg *params.ChainConfig) int {
 	return bcfg.Max
 }
 
+// CalcBlobFeeWithConfig calculates the blob base fee using a BlobConfig directly,
+// without requiring a full ChainConfig. This is useful when the blob schedule
+// is obtained from an external source (e.g., eth_config RPC).
+func CalcBlobFeeWithConfig(bc *params.BlobConfig, excessBlobGas *uint64) *big.Int {
+	if bc == nil || excessBlobGas == nil {
+		return big.NewInt(0)
+	}
+	gethBc := &BlobConfig{
+		Target:         bc.Target,
+		Max:            bc.Max,
+		UpdateFraction: bc.UpdateFraction,
+	}
+	return gethBc.blobBaseFee(*excessBlobGas)
+}
+
 // TargetBlobsPerBlock returns the target blobs per block for a block at the given timestamp.
 func TargetBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
 	blobConfig, err := latestBlobConfig(cfg, time)

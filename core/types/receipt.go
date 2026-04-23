@@ -292,6 +292,9 @@ type DeriveReceiptContext struct {
 	LogIndex     uint // Number of logs in the block until this receipt
 	Tx           *Transaction
 	TxIndex      uint
+
+	// arbitrum: collect tips
+	CollectTips bool
 }
 
 // DeriveFields fills the receipt with computed fields based on consensus
@@ -303,7 +306,11 @@ func (r *Receipt) DeriveFields(signer Signer, context DeriveReceiptContext) {
 	if r.Type != ArbitrumLegacyTxType {
 		r.GasUsed = context.GasUsed
 	}
-	r.EffectiveGasPrice = context.Tx.inner.effectiveGasPrice(new(big.Int), context.BaseFee)
+	if context.CollectTips {
+		r.EffectiveGasPrice = context.Tx.inner.effectiveGasPrice(new(big.Int), context.BaseFee)
+	} else {
+		r.EffectiveGasPrice = context.BaseFee
+	}
 
 	// EIP-4844 blob transaction fields
 	if context.Tx.Type() == BlobTxType {
@@ -486,7 +493,7 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 
 // DeriveFields fills the receipts with their computed fields based on consensus
 // data and contextual infos like containing block and transactions.
-func (rs Receipts) DeriveFields(config *params.ChainConfig, blockHash common.Hash, blockNumber uint64, blockTime uint64, baseFee *big.Int, blobGasPrice *big.Int, txs []*Transaction) error {
+func (rs Receipts) DeriveFields(config *params.ChainConfig, blockHash common.Hash, blockNumber uint64, blockTime uint64, baseFee *big.Int, blobGasPrice *big.Int, txs []*Transaction, collectTips bool) error {
 	signer := MakeSigner(config, new(big.Int).SetUint64(blockNumber), blockTime, params.MaxArbosVersionSupported)
 
 	logIndex := uint(0)
@@ -508,6 +515,7 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, blockHash common.Has
 			LogIndex:     logIndex,
 			Tx:           txs[i],
 			TxIndex:      uint(i),
+			CollectTips:  collectTips,
 		})
 		logIndex += uint(len(rs[i].Logs))
 	}

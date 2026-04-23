@@ -23,6 +23,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/arbitrum/filter"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -49,7 +50,7 @@ type Options struct {
 	State            *state.StateDB           // Pre-state on top of which to estimate the gas
 	BlockOverrides   *override.BlockOverrides // Block overrides to apply during the estimation
 	Backend          core.NodeInterfaceBackendAPI
-	RunScheduledTxes func(context.Context, core.NodeInterfaceBackendAPI, *state.StateDB, *types.Header, vm.BlockContext, *core.MessageRunContext, *core.ExecutionResult) (*core.ExecutionResult, error)
+	RunScheduledTxes func(context.Context, core.NodeInterfaceBackendAPI, *state.StateDB, *types.Header, vm.BlockContext, *core.MessageRunContext, *core.ExecutionResult, core.TxFilterer) (*core.ExecutionResult, error)
 
 	ErrorRatio float64 // Allowed overestimation ratio for faster estimation termination
 }
@@ -240,6 +241,11 @@ func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit ui
 	return result.Failed(), result, nil
 }
 
+// Public API for gas estimation. Separated to simplify upstream merges.
+func Run(ctx context.Context, call *core.Message, opts *Options) (*core.ExecutionResult, error) {
+	return run(ctx, call, opts)
+}
+
 // run assembles the EVM as defined by the consensus rules and runs the requested
 // call invocation.
 func run(ctx context.Context, call *core.Message, opts *Options) (*core.ExecutionResult, error) {
@@ -275,6 +281,17 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 		return res, err
 	}
 
+	// Arbitrum: set up address filtering
+	txFilterer := opts.Backend.TxFilter()
+	if txFilterer != nil {
+		txFilterer.Setup(dirtyState)
+
+		dirtyState.TouchAddress(&filter.FilteredAddressRecord{Address: call.From, FilterReason: filter.FilterReason{Reason: filter.ReasonFrom, EventRuleMatch: nil}})
+		if call.To != nil {
+			dirtyState.TouchAddress(&filter.FilteredAddressRecord{Address: *call.To, FilterReason: filter.FilterReason{Reason: filter.ReasonTo, EventRuleMatch: nil}})
+		}
+	}
+
 	evm := opts.Backend.GetEVM(ctx, dirtyState, opts.Header, &vm.Config{NoBaseFee: true}, &evmContext)
 	go func() {
 		<-ctx.Done()
@@ -290,9 +307,16 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	}
 
 	// Arbitrum: a tx can schedule another (see retryables)
-	result, err = opts.RunScheduledTxes(ctx, opts.Backend, dirtyState, opts.Header, evmContext, call.TxRunContext, result)
+	result, err = opts.RunScheduledTxes(ctx, opts.Backend, dirtyState, opts.Header, evmContext, call.TxRunContext, result, txFilterer)
 	if err != nil {
 		return nil, err
+	}
+
+	// Arbitrum: check address filtering result
+	if txFilterer != nil {
+		if err := txFilterer.CheckFiltered(dirtyState); err != nil {
+			return nil, err
+		}
 	}
 
 	return result, nil

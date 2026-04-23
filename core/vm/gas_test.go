@@ -19,7 +19,7 @@ func TestConstantMultiGas(t *testing.T) {
 			op:   SELFDESTRUCT,
 			want: multigas.MultiGasFromPairs(
 				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: 100},
-				multigas.Pair{Kind: multigas.ResourceKindStorageAccess, Amount: 4900},
+				multigas.Pair{Kind: multigas.ResourceKindStorageAccessWrite, Amount: 4900},
 			),
 		},
 		{

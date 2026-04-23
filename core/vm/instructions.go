@@ -20,6 +20,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/arbitrum/filter"
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -928,7 +929,10 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		beneficiary = common.Address(top.Bytes20())
 	)
 
-	evm.StateDB.TouchAddress(beneficiary)
+	evm.StateDB.TouchAddress(&filter.FilteredAddressRecord{
+		Address:      beneficiary,
+		FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary, EventRuleMatch: nil},
+	})
 
 	// The funds are burned immediately if the beneficiary is the caller itself,
 	// in this case, the beneficiary's balance is not increased.
@@ -971,7 +975,10 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 		return nil, ErrExecutionReverted
 	}
 
-	evm.StateDB.TouchAddress(beneficiary)
+	evm.StateDB.TouchAddress(&filter.FilteredAddressRecord{
+		Address:      beneficiary,
+		FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary, EventRuleMatch: nil},
+	})
 
 	// Contract is new and will actually be deleted.
 	if newContract {
