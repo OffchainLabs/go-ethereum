@@ -16,7 +16,80 @@
 
 package types
 
-import "testing"
+import (
+	"encoding/json"
+	"fmt"
+	"maps"
+	"strings"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+)
+
+// Decoder rules for ArbitrumUnsignedTx (0x65) JSON.
+func TestArbitrumUnsignedTxJSONDecode(t *testing.T) {
+	t.Parallel()
+	const (
+		mainnetFee  = "0x3b9aca00"
+		mainnetHash = "0x5618044241dade84af6c41b7d84496dc9823700f98b79751e257608dac570f6b"
+	)
+	mainnet := map[string]string{
+		"type":    "0x65",
+		"chainId": "0xa4b1",
+		"from":    "0x5d3919f12bcc35c26eee5f8226a9bee90c257ccc",
+		"to":      "0x0000000000000000000000000000000000000da0",
+		"nonce":   "0x0",
+		"gas":     "0x186a0",
+		"value":   "0x683cf676a5cc88b3b50",
+		"input":   "0x",
+	}
+	for _, tc := range []struct {
+		name                   string
+		gasPrice, maxFeePerGas string
+		wantErr, wantFeeCap    string
+		checkMainnetHash       bool
+	}{
+		{name: "mainnet legacy shape", gasPrice: mainnetFee, wantFeeCap: mainnetFee, checkMainnetHash: true},
+		{name: "maxFeePerGas only", maxFeePerGas: mainnetFee, wantFeeCap: mainnetFee},
+		{name: "both equal", gasPrice: mainnetFee, maxFeePerGas: mainnetFee, wantFeeCap: mainnetFee},
+		{name: "precedence gasPrice=0", gasPrice: "0x0", maxFeePerGas: "0x2", wantFeeCap: "0x2"},
+		{name: "both zero", gasPrice: "0x0", maxFeePerGas: "0x0", wantFeeCap: "0x0"},
+		{name: "conflict", gasPrice: "0x1", maxFeePerGas: "0x2", wantErr: "conflicting gasPrice and maxFeePerGas"},
+		{name: "gasPrice=0 alone", gasPrice: "0x0", wantErr: "(or 'gasPrice')"},
+		{name: "missing both", wantErr: "(or 'gasPrice')"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := maps.Clone(mainnet)
+			if tc.gasPrice != "" {
+				m["gasPrice"] = tc.gasPrice
+			}
+			if tc.maxFeePerGas != "" {
+				m["maxFeePerGas"] = tc.maxFeePerGas
+			}
+			data, err := json.Marshal(m)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var tx Transaction
+			err = json.Unmarshal(data, &tx)
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("err: got %v, want %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if got := fmt.Sprintf("0x%x", tx.GasFeeCap()); got != tc.wantFeeCap {
+				t.Fatalf("GasFeeCap: got %s, want %s", got, tc.wantFeeCap)
+			}
+			if tc.checkMainnetHash && tx.Hash() != common.HexToHash(mainnetHash) {
+				t.Fatalf("hash: got %s, want %s", tx.Hash(), mainnetHash)
+			}
+		})
+	}
+}
 
 func TestTxCalldataUnitsCache(t *testing.T) {
 	tx := &Transaction{}

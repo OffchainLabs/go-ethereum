@@ -119,6 +119,56 @@ func TestTransactionBlobTx(t *testing.T) {
 	testTransactionMarshal(t, tests, &config)
 }
 
+func TestArbitrumFeeTxRPCJSONRoundTrip(t *testing.T) {
+	t.Parallel()
+	to := common.HexToAddress("0xda0")
+	cfg := *params.TestChainConfig
+	cfg.ArbitrumChainParams = params.ArbitrumChainParams{EnableArbOS: true}
+	feeCap := big.NewInt(1e9)
+	for _, tc := range []struct {
+		name string
+		data types.TxData
+	}{
+		{"ArbitrumUnsignedTx", &types.ArbitrumUnsignedTx{
+			ChainId: big.NewInt(0xa4b1), From: common.Address{0x5d}, GasFeeCap: feeCap,
+			Gas: 1, To: &to, Value: big.NewInt(0), Data: []byte{},
+		}},
+		{"ArbitrumContractTx", &types.ArbitrumContractTx{
+			ChainId: big.NewInt(0xa4b1), From: common.Address{0x66}, GasFeeCap: feeCap,
+			Gas: 1, To: &to, Value: big.NewInt(0), Data: []byte{},
+		}},
+		{"ArbitrumRetryTx", &types.ArbitrumRetryTx{
+			ChainId: big.NewInt(0xa4b1), From: common.Address{0x68}, GasFeeCap: feeCap,
+			Gas: 1, To: &to, Value: big.NewInt(0), Data: []byte{},
+			MaxRefund: big.NewInt(0), SubmissionFeeRefund: big.NewInt(0),
+		}},
+		{"ArbitrumSubmitRetryableTx", &types.ArbitrumSubmitRetryableTx{
+			ChainId: big.NewInt(0xa4b1), From: common.Address{0x69}, GasFeeCap: feeCap,
+			Gas: 1, RetryTo: &to, RetryValue: big.NewInt(0), RetryData: []byte{},
+			L1BaseFee: big.NewInt(0), DepositValue: big.NewInt(0), MaxSubmissionFee: big.NewInt(0),
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tx := types.NewTx(tc.data)
+			rpcTx := newRPCTransaction(tx, common.Hash{}, 0, 0, 0, nil, &cfg, params.MaxArbosVersionSupported)
+			if rpcTx.GasFeeCap == nil {
+				t.Fatal("GasFeeCap (maxFeePerGas) not set: producer regression")
+			}
+			data, err := json.Marshal(rpcTx)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			var decoded types.Transaction
+			if err := decoded.UnmarshalJSON(data); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if decoded.Hash() != tx.Hash() {
+				t.Fatalf("hash: got %s, want %s", decoded.Hash(), tx.Hash())
+			}
+		})
+	}
+}
+
 type txData struct {
 	Tx   types.TxData
 	Want string
