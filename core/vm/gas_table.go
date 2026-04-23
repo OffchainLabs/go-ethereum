@@ -112,6 +112,9 @@ var (
 )
 
 func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
+	if evm.readOnly {
+		return multigas.ZeroGas(), ErrWriteProtection
+	}
 	var (
 		y, x              = stack.Back(1), stack.Back(0)
 		current, original = evm.StateDB.GetStateAndCommittedState(contract.Address(), x.Bytes32())
@@ -197,6 +200,9 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 //				(2.2.2.1.) If original value is 0, add SSTORE_SET_GAS - SLOAD_GAS to refund counter.
 //				(2.2.2.2.) Otherwise, add SSTORE_RESET_GAS - SLOAD_GAS gas to refund counter.
 func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
+	if evm.readOnly {
+		return multigas.ZeroGas(), ErrWriteProtection
+	}
 	// If we fail the minimum gas availability invariant, fail (0)
 	if contract.Gas <= params.SstoreSentryGasEIP2200 {
 		return multigas.ZeroGas(), errors.New("not enough gas for reentrancy sentry")
@@ -424,6 +430,10 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		address        = common.Address(stack.Back(1).Bytes20())
 	)
 
+	if evm.readOnly && transfersValue {
+		return multigas.ZeroGas(), ErrWriteProtection
+	}
+
 	// Storage slot writes (zero → nonzero) considered as storage growth.
 	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	if evm.chainRules.IsEIP158 {
@@ -536,6 +546,9 @@ func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 }
 
 func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
+	if evm.readOnly {
+		return multigas.ZeroGas(), ErrWriteProtection
+	}
 	multiGas := multigas.ZeroGas()
 	// EIP150 homestead gas reprice fork:
 	if evm.chainRules.IsEIP150 {

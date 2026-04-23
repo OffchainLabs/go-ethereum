@@ -538,17 +538,14 @@ func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumber) (*stateless.ExtWitness
 	if block == nil {
 		return &stateless.ExtWitness{}, fmt.Errorf("block number %v not found", bn)
 	}
-
 	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
 		return &stateless.ExtWitness{}, fmt.Errorf("block number %v found, but parent missing", bn)
 	}
-
-	result, err := bc.ProcessBlock(parent.Root, block, false, true)
+	result, err := bc.ProcessBlock(context.Background(), parent.Root, block, false, true)
 	if err != nil {
 		return &stateless.ExtWitness{}, err
 	}
-
 	return result.Witness().ToExtWitness(), nil
 }
 
@@ -558,16 +555,13 @@ func (api *DebugAPI) ExecutionWitnessByHash(hash common.Hash) (*stateless.ExtWit
 	if block == nil {
 		return &stateless.ExtWitness{}, fmt.Errorf("block hash %x not found", hash)
 	}
-
 	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
 		return &stateless.ExtWitness{}, fmt.Errorf("block number %x found, but parent missing", hash)
 	}
-
-	result, err := bc.ProcessBlock(parent.Root, block, false, true)
+	result, err := bc.ProcessBlock(context.Background(), parent.Root, block, false, true)
 	if err != nil {
 		return &stateless.ExtWitness{}, err
 	}
-
 	return result.Witness().ToExtWitness(), nil
 }
