@@ -303,9 +303,9 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 
 		// we expect the first number to come in to be [from]. Therefore, setting
 		// nextNum to from means that the queue gap-evaluation will work correctly
-		nextNum          = from
-		queue            = prque.New[int64, *blockTxHashes](nil)
-		blocks, txs      = 0, 0 // for stats reporting
+		nextNum           = from
+		queue             = prque.New[int64, *blockTxHashes](nil)
+		blocks, txs       = 0, 0 // for stats reporting
 		loggedFirstBanner = false
 	)
 	// Otherwise spin up the concurrent iterator and unindexer
