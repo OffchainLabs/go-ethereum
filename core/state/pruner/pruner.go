@@ -74,7 +74,7 @@ type Config struct {
 //   - iterate the database, delete all other state entries which
 //     don't belong to the target state and the genesis state
 //
-// It can take several hours(around 2 hours for mainnet) to finish
+// It can take several days for large databases (e.g. Arbitrum One) to finish
 // the whole pruning work. It's recommended to run this offline tool
 // periodically in order to release the disk usage and improve the
 // disk read performance to some extent.

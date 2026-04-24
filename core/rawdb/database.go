@@ -732,8 +732,14 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 		return fmt.Sprintf("%d (%#x)", *val, *val)
 	}
 
+	dbVersion := ReadDatabaseVersion(db)
+	dbVersionStr := "not set (new or uninitialized database)"
+	if dbVersion != nil {
+		dbVersionStr = fmt.Sprintf("%d (%#x)", *dbVersion, *dbVersion)
+	}
+
 	data := [][]string{
-		{"databaseVersion", pp(ReadDatabaseVersion(db))},
+		{"databaseVersion", dbVersionStr},
 		{"headBlockHash", fmt.Sprintf("%v", ReadHeadBlockHash(db))},
 		{"headFastBlockHash", fmt.Sprintf("%v", ReadHeadFastBlockHash(db))},
 		{"headHeaderHash", fmt.Sprintf("%v", ReadHeadHeaderHash(db))},
