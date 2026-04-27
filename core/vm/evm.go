@@ -254,8 +254,10 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, multigas.ZeroGas(), ErrDepth
 	}
-	// Fail if we're trying to transfer more than the available balance
-	if !value.IsZero() && !evm.Context.CanTransfer(evm.StateDB, caller, value) {
+	syscall := isSystemCall(caller)
+
+	// Fail if we're trying to transfer more than the available balance.
+	if !syscall && !value.IsZero() && !evm.Context.CanTransfer(evm.StateDB, caller, value) {
 		return nil, gas, multigas.ZeroGas(), ErrInsufficientBalance
 	}
 	snapshot := evm.StateDB.Snapshot()
@@ -285,8 +287,12 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
-	evm.Context.Transfer(evm.StateDB, caller, addr, value)
-
+	// Perform the value transfer only in non-syscall mode.
+	// Calling this is required even for zero-value transfers,
+	// to ensure the state clearing mechanism is applied.
+	if !syscall {
+		evm.Context.Transfer(evm.StateDB, caller, addr, value)
+	}
 	if isPrecompile {
 		info := &AdvancedPrecompileCall{
 			PrecompileAddress: addr,
