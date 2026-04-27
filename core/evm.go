@@ -44,6 +44,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		baseFee     *big.Int
 		blobBaseFee *big.Int
 		random      *common.Hash
+		slotNum     uint64
 	)
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
@@ -61,11 +62,15 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.Difficulty.Sign() == 0 {
 		random = &header.MixDigest
 	}
+	if header.SlotNumber != nil {
+		slotNum = *header.SlotNumber
+	}
 	arbOsVersion := types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion
 	if arbOsVersion > 0 {
 		difficultyHash := common.BigToHash(header.Difficulty)
 		random = &difficultyHash
 	}
+
 	return vm.BlockContext{
 		CanTransfer:  CanTransfer,
 		Transfer:     Transfer,
@@ -78,6 +83,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		BlobBaseFee:  blobBaseFee,
 		GasLimit:     header.GasLimit,
 		Random:       random,
+		SlotNum:      slotNum,
 		ArbOSVersion: arbOsVersion,
 	}
 }
