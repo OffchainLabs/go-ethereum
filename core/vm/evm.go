@@ -37,7 +37,7 @@ type (
 	// CanTransferFunc is the signature of a transfer guard function
 	CanTransferFunc func(StateDB, common.Address, *uint256.Int) bool
 	// TransferFunc is the signature of a transfer function
-	TransferFunc func(StateDB, common.Address, common.Address, *uint256.Int)
+	TransferFunc func(StateDB, common.Address, common.Address, *uint256.Int, *params.Rules)
 	// GetHashFunc returns the n'th block hash in the blockchain
 	// and is used by the BLOCKHASH EVM op code.
 	GetHashFunc func(uint64) common.Hash
@@ -294,8 +294,9 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	// Calling this is required even for zero-value transfers,
 	// to ensure the state clearing mechanism is applied.
 	if !syscall {
-		evm.Context.Transfer(evm.StateDB, caller, addr, value)
+		evm.Context.Transfer(evm.StateDB, caller, addr, value, &evm.chainRules)
 	}
+
 	if isPrecompile {
 		var stateDB StateDB
 		if evm.chainRules.IsAmsterdam {
@@ -649,7 +650,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 		// Charge consumed init gas as computation
 		usedMultiGas = usedMultiGas.SaturatingIncrement(multigas.ResourceKindComputation, consumed)
 	}
-	evm.Context.Transfer(evm.StateDB, caller, address, value)
+	evm.Context.Transfer(evm.StateDB, caller, address, value, &evm.chainRules)
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
@@ -681,8 +682,8 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 	}
 
 	// Check whether the max code size has been exceeded, assign err if the case.
-	if evm.chainRules.IsEIP158 && len(ret) > int(evm.chainConfig.MaxCodeSize()) {
-		return ret, ErrMaxCodeSizeExceeded
+	if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
+		return ret, err
 	}
 
 	// Reject code starting with 0xEF if EIP-3541 is enabled.

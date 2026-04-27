@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 
@@ -414,7 +415,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 
 		body := types.Body{Transactions: b.txs, Uncles: b.uncles, Withdrawals: b.withdrawals}
-		block, err := b.engine.FinalizeAndAssemble(cm, b.header, statedb, &body, b.receipts)
+		block, err := b.engine.FinalizeAndAssemble(context.Background(), cm, b.header, statedb, &body, b.receipts)
 		if err != nil {
 			panic(err)
 		}
@@ -484,13 +485,14 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 	if genesis.Config != nil && genesis.Config.IsVerkle(genesis.Config.ChainID, 0) {
 		triedbConfig = triedb.VerkleDefaults
 	}
-	triedb := triedb.NewDatabase(db, triedbConfig)
-	defer triedb.Close()
-	_, err := genesis.Commit(db, triedb, nil)
+	genesisTriedb := triedb.NewDatabase(db, triedbConfig)
+	block, err := genesis.Commit(db, genesisTriedb, nil)
 	if err != nil {
+		genesisTriedb.Close()
 		panic(err)
 	}
-	blocks, receipts := GenerateChain(genesis.Config, genesis.ToBlock(), engine, db, n, gen)
+	genesisTriedb.Close()
+	blocks, receipts := GenerateChain(genesis.Config, block, engine, db, n, gen)
 	return db, blocks, receipts
 }
 

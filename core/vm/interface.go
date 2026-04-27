@@ -127,6 +127,7 @@ type StateDB interface {
 	Snapshot() int
 
 	AddLog(*types.Log)
+	EmitLogsForBurnAccounts()
 	AddPreimage(common.Hash, []byte)
 
 	GetCurrentTxLogs() []*types.Log

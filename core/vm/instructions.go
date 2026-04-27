@@ -994,6 +994,13 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 		evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
 		evm.StateDB.AddBalance(beneficiary, balance, tracing.BalanceIncreaseSelfdestruct)
 	}
+	if evm.chainRules.IsAmsterdam && !balance.IsZero() {
+		if this != beneficiary {
+			evm.StateDB.AddLog(types.EthTransferLog(this, beneficiary, balance))
+		} else if newContract {
+			evm.StateDB.AddLog(types.EthBurnLog(this, balance))
+		}
+	}
 
 	if this == beneficiary {
 		// SelfDestruct6780 only destructs the contract if selfdestructing in the same transaction as contract creation
@@ -1154,9 +1161,6 @@ func makeLog(size int) executionFunc {
 			Address: scope.Contract.Address(),
 			Topics:  topics,
 			Data:    d,
-			// This is a non-consensus field, but assigned here because
-			// core/state doesn't know the current block number.
-			BlockNumber: evm.Context.BlockNumber.Uint64(),
 		})
 
 		return nil, nil

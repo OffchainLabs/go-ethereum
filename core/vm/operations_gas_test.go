@@ -987,6 +987,13 @@ func testGasCreateFunc(t *testing.T, gasImplFunc gasFunc, includeHashCost bool, 
 	}
 
 	evm := NewEVM(BlockContext{}, statedb, chainConfig, Config{})
+	if enableEip3860 {
+		// BlockContext{} has nil BlockNumber, so IsLondon (and thus IsShanghai)
+		// is false in the auto-derived rules. The new vm.CheckMaxInitCodeSize
+		// helper gates the init-code-size limit on rules.IsShanghai/IsAmsterdam,
+		// so set it explicitly here to exercise the EIP-3860 limit.
+		evm.chainRules.IsShanghai = true
+	}
 
 	caller := common.Address{}
 	contractAddr := common.Address{1}

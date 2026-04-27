@@ -359,7 +359,6 @@ func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
 		if err != nil {
 			return multiOld, err
 		}
-
 		// Temporarily add the gas charge back to the contract and return value. By
 		// adding it to the return, it will be charged outside of this function, as
 		// part of the dynamic gas. This will ensure it is correctly reported to

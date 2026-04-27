@@ -702,8 +702,10 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 
 	// Check whether the init code size has been exceeded.
-	if rules.IsShanghai && contractCreation && len(msg.Data) > int(st.evm.ChainConfig().MaxInitCodeSize()) {
-		return nil, fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(msg.Data), int(st.evm.ChainConfig().MaxInitCodeSize()))
+	if contractCreation {
+		if err := vm.CheckMaxInitCodeSize(&rules, uint64(len(msg.Data))); err != nil {
+			return nil, err
+		}
 	}
 
 	// Execute the preparatory steps for state transition which includes:
@@ -823,7 +825,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			st.evm.AccessEvents.AddAccount(st.evm.Context.Coinbase, true, math.MaxUint64)
 		}
 	}
-
 	// Arbitrum: record the tip
 	if tracer := st.evm.Config.Tracer; tracer != nil && st.evm.ProcessingHook.CollectTips() && tracer.CaptureArbitrumTransfer != nil {
 		tracer.CaptureArbitrumTransfer(nil, &tipReceipient, tipAmount, false, tracing.BalanceIncreaseRewardTransactionFee)
@@ -840,6 +841,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 	}
 
+	if rules.IsAmsterdam {
+		st.evm.StateDB.EmitLogsForBurnAccounts()
+	}
 	return &ExecutionResult{
 		UsedGas:          gasUsed,
 		MaxUsedGas:       peakGasUsed,

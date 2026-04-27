@@ -18,7 +18,6 @@ package vm
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
@@ -361,10 +360,10 @@ func gasCreateEip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	if overflow {
 		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
-	if size > evm.chainConfig.MaxInitCodeSize() {
-		return multigas.ZeroGas(), fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
+	if err := CheckMaxInitCodeSize(&evm.chainRules, size); err != nil {
+		return multigas.ZeroGas(), err
 	}
-	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
+	// Since size <= the protocol-defined maximum initcode size limit, these multiplication cannot overflow
 	moreGas := params.InitCodeWordGas * ((size + 31) / 32)
 
 	// Init code execution considered as computation.
@@ -383,10 +382,10 @@ func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 	if overflow {
 		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
-	if size > evm.chainConfig.MaxInitCodeSize() {
-		return multigas.ZeroGas(), fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
+	if err := CheckMaxInitCodeSize(&evm.chainRules, size); err != nil {
+		return multigas.ZeroGas(), err
 	}
-	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
+	// Since size <= the protocol-defined maximum initcode size limit, these multiplication cannot overflow
 	moreGas := (params.InitCodeWordGas + params.Keccak256WordGas) * ((size + 31) / 32)
 
 	// Init code execution and Keccak hashing both considered as computation.

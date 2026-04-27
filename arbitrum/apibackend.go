@@ -587,7 +587,7 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 			return statedb, NoopStateRelease, nil
 		}
 	}
-	liveState, liveStateRelease, err := stateFor(bc.StateCache(), bc.Snapshots())(header)
+	liveState, liveStateRelease, err := stateFor(state.NewDatabase(bc.TrieDB(), bc.CodeDB()), bc.Snapshots())(header)
 	if err == nil {
 		liveStatesReferencedCounter.Inc(1)
 		liveState.SetArbFinalizer(func(*state.ArbitrumExtraData) {

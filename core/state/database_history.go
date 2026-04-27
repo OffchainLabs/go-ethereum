@@ -17,11 +17,11 @@
 package state
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -222,22 +222,23 @@ func (r *historicalTrieReader) Storage(addr common.Address, key common.Hash) (co
 // HistoricDB is the implementation of Database interface, with the ability to
 // access historical state.
 type HistoricDB struct {
-	disk          ethdb.KeyValueStore
-	wasmdb        ethdb.KeyValueStore
-	triedb        *triedb.Database
-	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
-	codeSizeCache *lru.Cache[common.Hash, int]
+	disk   ethdb.KeyValueStore
+	wasmdb ethdb.KeyValueStore
+	triedb *triedb.Database
+	codedb *CodeDB
 }
 
 // NewHistoricDatabase creates a historic state database.
-func NewHistoricDatabase(disk ethdb.KeyValueStore, triedb *triedb.Database) *HistoricDB {
+func NewHistoricDatabase(triedb *triedb.Database, codedb *CodeDB) *HistoricDB {
+	if codedb == nil {
+		codedb = NewCodeDB(triedb.Disk())
+	}
 	wasmdb := triedb.Disk().WasmDataBase()
 	return &HistoricDB{
-		disk:          disk,
-		wasmdb:        wasmdb,
-		triedb:        triedb,
-		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
-		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
+		disk:   triedb.Disk(),
+		wasmdb: wasmdb,
+		triedb: triedb,
+		codedb: codedb,
 	}
 }
 
@@ -262,7 +263,7 @@ func (db *HistoricDB) Reader(stateRoot common.Hash) (Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newReader(newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache), combined), nil
+	return newReader(db.codedb.Reader(), combined), nil
 }
 
 // OpenTrie opens the main account trie. It's not supported by historic database.
@@ -314,4 +315,11 @@ func (db *HistoricDB) WasmStore() ethdb.KeyValueStore {
 
 func (db *HistoricDB) DiskDB() ethdb.KeyValueStore {
 	return db.disk
+}
+
+// Commit flushes all pending writes and finalizes the state transition,
+// committing the changes to the underlying storage. It returns an error
+// if the commit fails.
+func (db *HistoricDB) Commit(update *stateUpdate) error {
+	return errors.New("not implemented")
 }

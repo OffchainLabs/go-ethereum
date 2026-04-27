@@ -94,9 +94,7 @@ var (
 	accountReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/account/single/reads", nil)
 	storageReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/storage/single/reads", nil)
 	codeReadSingleTimer    = metrics.NewRegisteredResettingTimer("chain/code/single/reads", nil)
-
-	snapshotCommitTimer = metrics.NewRegisteredResettingTimer("chain/snapshot/commits", nil)
-	triedbCommitTimer   = metrics.NewRegisteredResettingTimer("chain/triedb/commits", nil)
+	triedbCommitTimer      = metrics.NewRegisteredResettingTimer("chain/triedb/commits", nil)
 
 	triedbSizeGauge         = metrics.NewRegisteredGauge("chain/triedb/size", nil)
 	triedbGCProcGauge       = metrics.NewRegisteredGauge("chain/triedb/gcproc", nil)
@@ -218,9 +216,8 @@ type BlockChainConfig struct {
 	MaxNumberOfBlocksToSkipStateSaving uint32
 	MaxAmountOfGasToSkipStateSaving    uint64
 
-	// This defines the cutoff block for history expiry.
-	// Blocks before this number may be unavailable in the chain database.
-	ChainHistoryMode history.HistoryMode
+	// HistoryPolicy defines the chain history pruning intent.
+	HistoryPolicy history.HistoryPolicy
 
 	// Misc options
 	NoPrefetch bool            // Whether to disable heuristic state prefetching when processing blocks
@@ -246,7 +243,6 @@ type BlockChainConfig struct {
 // Note the returned object is safe to modify!
 func DefaultConfig() *BlockChainConfig {
 	return &BlockChainConfig{
-
 		// Arbitrum Config Options
 		// note: some of the defaults are overwritten by nitro side config defaults
 
@@ -260,13 +256,13 @@ func DefaultConfig() *BlockChainConfig {
 		MaxAmountOfGasToSkipStateSaving:    0,
 		MaxDiffLayers:                      pathdb.DefaultMaxDiffLayers,
 
-		TrieCleanLimit:   256,
-		TrieDirtyLimit:   256,
-		TrieTimeLimit:    5 * time.Minute,
-		StateScheme:      rawdb.HashScheme,
-		SnapshotLimit:    256,
-		SnapshotWait:     true,
-		ChainHistoryMode: history.KeepAll,
+		TrieCleanLimit: 256,
+		TrieDirtyLimit: 256,
+		TrieTimeLimit:  5 * time.Minute,
+		StateScheme:    rawdb.HashScheme,
+		SnapshotLimit:  256,
+		SnapshotWait:   true,
+		HistoryPolicy:  history.HistoryPolicy{Mode: history.KeepAll},
 		// Transaction indexing is disabled by default.
 		// This is appropriate for most unit tests.
 		TxIndexer: nil,
@@ -367,7 +363,7 @@ type BlockChain struct {
 	lastWrite     uint64                           // Last block when the state was flushed
 	flushInterval atomic.Int64                     // Time interval (processing time) after which to flush a state
 	triedb        *triedb.Database                 // The database handler for maintaining trie nodes.
-	statedb       *state.CachingDB                 // State database to reuse between imports (contains state cache)
+	codedb        *state.CodeDB                    // The database handler for maintaining contract codes.
 	txIndexer     *txIndexer                       // Transaction indexer, might be nil if not enabled
 
 	hc               *HeaderChain
@@ -470,6 +466,7 @@ func NewBlockChain(db ethdb.Database, chainConfig *params.ChainConfig, genesis *
 		db:                 db,
 		triedb:             triedb,
 		triegc:             prque.New[int64, trieGcEntry](nil),
+		codedb:             state.NewCodeDB(db),
 		chainmu:            syncx.NewClosableMutex(),
 		bodyCache:          lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
 		bodyRLPCache:       lru.NewCache[common.Hash, rlp.RawValue](bodyCacheLimit),
@@ -490,7 +487,6 @@ func NewBlockChain(db ethdb.Database, chainConfig *params.ChainConfig, genesis *
 		bc.genesisBlock = bc.GetBlockByNumber(0)
 	}
 	bc.flushInterval.Store(int64(cfg.TrieTimeLimit))
-	bc.statedb = state.NewDatabase(bc.triedb, nil)
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(bc.hc)
@@ -672,9 +668,6 @@ func (bc *BlockChain) setupSnapshot() {
 			AsyncBuild: !bc.cfg.SnapshotWait,
 		}
 		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
-
-		// Re-initialize the state database with snapshot
-		bc.statedb = state.NewDatabase(bc.triedb, bc.snaps)
 	}
 }
 
@@ -792,45 +785,43 @@ func (bc *BlockChain) loadLastState() error {
 // initializeHistoryPruning sets bc.historyPrunePoint.
 func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 	freezerTail, _ := bc.db.Tail()
+	policy := bc.cfg.HistoryPolicy
 
-	switch bc.cfg.ChainHistoryMode {
+	switch policy.Mode {
 	case history.KeepAll:
-		if freezerTail == 0 {
-			return nil
+		if freezerTail > 0 {
+			// Database was pruned externally. Record the actual state.
+			log.Warn("Chain history database is pruned", "tail", freezerTail, "mode", policy.Mode)
+			bc.historyPrunePoint.Store(&history.PrunePoint{
+				BlockNumber: freezerTail,
+				BlockHash:   bc.GetCanonicalHash(freezerTail),
+			})
 		}
-		// The database was pruned somehow, so we need to figure out if it's a known
-		// configuration or an error.
-		predefinedPoint := history.PrunePoints[bc.genesisBlock.Hash()]
-		if predefinedPoint == nil || freezerTail != predefinedPoint.BlockNumber {
-			log.Error("Chain history database is pruned with unknown configuration", "tail", freezerTail)
-			return errors.New("unexpected database tail")
-		}
-		bc.historyPrunePoint.Store(predefinedPoint)
 		return nil
 
-	case history.KeepPostMerge:
-		if freezerTail == 0 && latest != 0 {
-			// This is the case where a user is trying to run with --history.chain
-			// postmerge directly on an existing DB. We could just trigger the pruning
-			// here, but it'd be a bit dangerous since they may not have intended this
-			// action to happen. So just tell them how to do it.
-			log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is not pruned.", bc.cfg.ChainHistoryMode.String()))
-			log.Error(fmt.Sprintf("Run 'geth prune-history' to prune pre-merge history."))
-			return errors.New("history pruning requested via configuration")
+	case history.KeepPostMerge, history.KeepPostPrague:
+		target := policy.Target
+		// Already at the target.
+		if freezerTail == target.BlockNumber {
+			bc.historyPrunePoint.Store(target)
+			return nil
 		}
-		predefinedPoint := history.PrunePoints[bc.genesisBlock.Hash()]
-		if predefinedPoint == nil {
-			log.Error("Chain history pruning is not supported for this network", "genesis", bc.genesisBlock.Hash())
-			return errors.New("history pruning requested for unknown network")
-		} else if freezerTail > 0 && freezerTail != predefinedPoint.BlockNumber {
-			log.Error("Chain history database is pruned to unknown block", "tail", freezerTail)
-			return errors.New("unexpected database tail")
+		// Database is pruned beyond the target.
+		if freezerTail > target.BlockNumber {
+			return fmt.Errorf("database pruned beyond requested history (tail=%d, target=%d)", freezerTail, target.BlockNumber)
 		}
-		bc.historyPrunePoint.Store(predefinedPoint)
+		// Database needs pruning (freezerTail < target).
+		if latest != 0 {
+			log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is not pruned to the target block.", policy.Mode.String()))
+			log.Error(fmt.Sprintf("Run 'geth prune-history --history.chain %s' to prune history.", policy.Mode.String()))
+			return errors.New("history pruning required")
+		}
+		// Fresh database (latest == 0), will sync from target point.
+		bc.historyPrunePoint.Store(target)
 		return nil
 
 	default:
-		return fmt.Errorf("invalid history mode: %d", bc.cfg.ChainHistoryMode)
+		return fmt.Errorf("invalid history mode: %d", policy.Mode)
 	}
 }
 
@@ -2292,11 +2283,12 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		startTime = time.Now()
 		statedb   *state.StateDB
 		interrupt atomic.Bool
+		sdb       = state.NewDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
 	)
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
 	if bc.cfg.NoPrefetch {
-		statedb, err = state.New(parentRoot, bc.statedb)
+		statedb, err = state.New(parentRoot, sdb)
 		if err != nil {
 			return nil, err
 		}
@@ -2306,23 +2298,27 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		//
 		// Note: the main processor and prefetcher share the same reader with a local
 		// cache for mitigating the overhead of state access.
-		prefetch, process, err := bc.statedb.ReadersWithCacheStats(parentRoot)
+		prefetch, process, err := sdb.ReadersWithCacheStats(parentRoot)
 		if err != nil {
 			return nil, err
 		}
-		throwaway, err := state.NewWithReader(parentRoot, bc.statedb, prefetch)
+		throwaway, err := state.NewWithReader(parentRoot, sdb, prefetch)
 		if err != nil {
 			return nil, err
 		}
-		statedb, err = state.NewWithReader(parentRoot, bc.statedb, process)
+		statedb, err = state.NewWithReader(parentRoot, sdb, process)
 		if err != nil {
 			return nil, err
 		}
 		// Upload the statistics of reader at the end
 		defer func() {
 			if result != nil {
-				result.stats.StatePrefetchCacheStats = prefetch.GetStats()
-				result.stats.StateReadCacheStats = process.GetStats()
+				if stater, ok := prefetch.(state.ReaderStater); ok {
+					result.stats.StatePrefetchCacheStats = stater.GetStats()
+				}
+				if stater, ok := process.(state.ReaderStater); ok {
+					result.stats.StateReadCacheStats = stater.GetStats()
+				}
 			}
 		}()
 		go func(start time.Time, throwaway *state.StateDB, block *types.Block) {
@@ -2341,24 +2337,18 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	// If we are past Byzantium, enable prefetching to pull in trie node paths
 	// while processing transactions. Before Byzantium the prefetcher is mostly
 	// useless due to the intermediate root hashing after each transaction.
-	var (
-		witness      *stateless.Witness
-		witnessStats *stateless.WitnessStats
-	)
+	var witness *stateless.Witness
 	if bc.chainConfig.IsByzantium(block.Number()) {
 		// Generate witnesses either if we're self-testing, or if it's the
 		// only block being inserted. A bit crude, but witnesses are huge,
 		// so we refuse to make an entire chain of them.
 		if config.StatelessSelfValidation || config.MakeWitness {
-			witness, err = stateless.NewWitness(block.Header(), bc)
+			witness, err = stateless.NewWitness(block.Header(), bc, config.EnableWitnessStats)
 			if err != nil {
 				return nil, err
 			}
-			if config.EnableWitnessStats {
-				witnessStats = stateless.NewWitnessStats()
-			}
 		}
-		statedb.StartPrefetcher("chain", witness, witnessStats)
+		statedb.StartPrefetcher("chain", witness)
 		defer statedb.StopPrefetcher()
 	}
 
@@ -2473,13 +2463,12 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		// Update the metrics touched during block commit
 		stats.AccountCommits = statedb.AccountCommits  // Account commits are complete, we can mark them
 		stats.StorageCommits = statedb.StorageCommits  // Storage commits are complete, we can mark them
-		stats.SnapshotCommit = statedb.SnapshotCommits // Snapshot commits are complete, we can mark them
-		stats.TrieDBCommit = statedb.TrieDBCommits     // Trie database commits are complete, we can mark them
-		stats.BlockWrite = time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.SnapshotCommits - statedb.TrieDBCommits
+		stats.DatabaseCommit = statedb.DatabaseCommits // Database commits are complete, we can mark them
+		stats.BlockWrite = time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.DatabaseCommits
 	}
 	// Report the collected witness statistics
-	if witnessStats != nil {
-		witnessStats.ReportMetrics(block.NumberU64())
+	if witness != nil {
+		witness.ReportMetrics(block.NumberU64())
 	}
 	elapsed := time.Since(startTime) + 1 // prevent zero division
 	stats.TotalTime = elapsed
@@ -2773,6 +2762,7 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 	// as the txlookups should be changed atomically, and all subsequent
 	// reads should be blocked until the mutation is complete.
 	bc.txLookupLock.Lock()
+	defer bc.txLookupLock.Unlock()
 
 	// Reorg can be executed, start reducing the chain's old blocks and appending
 	// the new blocks
@@ -2874,9 +2864,6 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 	}
 	// Reset the tx lookup cache to clear stale txlookup cache.
 	bc.txLookupCache.Purge()
-
-	// Release the tx-lookup lock after mutation.
-	bc.txLookupLock.Unlock()
 
 	return nil
 }
