@@ -1501,6 +1501,7 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorag
 		if err := batch.Write(); err != nil {
 			return nil, err
 		}
+		batch.Close()
 	}
 
 	if db := s.db.WasmStore(); db != nil && len(ret.activatedWasms) > 0 {

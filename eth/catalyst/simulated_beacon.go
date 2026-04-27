@@ -105,6 +105,8 @@ type SimulatedBeacon struct {
 
 func payloadVersion(config *params.ChainConfig, time uint64, header *types.Header) engine.PayloadVersion {
 	switch config.LatestFork(time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {
+	case forks.Amsterdam:
+		return engine.PayloadV4
 	case forks.BPO5, forks.BPO4, forks.BPO3, forks.BPO2, forks.BPO1, forks.Osaka, forks.Prague, forks.Cancun:
 		return engine.PayloadV3
 	case forks.Paris, forks.Shanghai:
@@ -198,18 +200,25 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		return fmt.Errorf("failed to sync txpool: %w", err)
 	}
 
-	version := payloadVersion(c.eth.BlockChain().Config(), timestamp, c.eth.BlockChain().CurrentBlock())
+	header := c.eth.BlockChain().CurrentBlock()
+	version := payloadVersion(c.eth.BlockChain().Config(), timestamp, header)
 	tracer := otel.Tracer("")
 
 	var random [32]byte
 	rand.Read(random[:])
-	fcResponse, err := c.engineAPI.forkchoiceUpdated(c.curForkchoiceState, &engine.PayloadAttributes{
+
+	attribute := &engine.PayloadAttributes{
 		Timestamp:             timestamp,
 		SuggestedFeeRecipient: feeRecipient,
 		Withdrawals:           withdrawals,
 		Random:                random,
 		BeaconRoot:            &common.Hash{},
-	}, version, false)
+	}
+	if c.eth.BlockChain().Config().LatestFork(timestamp, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) == forks.Amsterdam {
+		slotNumber := uint64(0)
+		attribute.SlotNumber = &slotNumber
+	}
+	fcResponse, err := c.engineAPI.forkchoiceUpdated(c.curForkchoiceState, attribute, version, false)
 	if err != nil {
 		return err
 	}

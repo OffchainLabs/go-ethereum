@@ -46,8 +46,7 @@ func TestApplyMessageReturnsMultiGas(t *testing.T) {
 		To:        &contract,
 	}
 
-	gp := new(GasPool)
-	gp.SetGas(30_000_000)
+	gp := NewGasPool(30_000_000)
 
 	res, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
@@ -94,7 +93,7 @@ func TestApplyMessageCalldataReturnsMultiGas(t *testing.T) {
 		To:        &contract,
 	}
 
-	gp := new(GasPool).AddGas(30_000_000)
+	gp := NewGasPool(30_000_000)
 
 	res, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
