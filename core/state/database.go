@@ -40,7 +40,6 @@ const (
 	activatedWasmCacheSize = 64 * 1024 * 1024
 )
 
-
 // Database wraps access to tries and contract code.
 type Database interface {
 	// Arbitrum: Read activated Stylus contracts

@@ -25,31 +25,28 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// CheckMaxInitCodeSize checks the size of contract initcode against the protocol-defined limit.
+// CheckMaxInitCodeSize checks the size of contract initcode against the
+// per-chain limit set on rules. Arbitrum chains may override the upstream
+// Amsterdam/Shanghai default via ArbitrumChainParams.MaxInitCodeSize.
 func CheckMaxInitCodeSize(rules *params.Rules, size uint64) error {
-	if rules.IsAmsterdam {
-		if size > params.MaxInitCodeSizeAmsterdam {
-			return fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, size, params.MaxInitCodeSizeAmsterdam)
-		}
-	} else if rules.IsShanghai {
-		if size > params.MaxInitCodeSize {
-			return fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, size, params.MaxInitCodeSize)
-		}
+	if !rules.IsArbitrum && !rules.IsAmsterdam && !rules.IsShanghai {
+		return nil
 	}
-
+	if size > rules.MaxInitCodeSize {
+		return fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, size, rules.MaxInitCodeSize)
+	}
 	return nil
 }
 
-// CheckMaxCodeSize checks the size of contract code against the protocol-defined limit.
+// CheckMaxCodeSize checks the size of contract code against the per-chain
+// limit set on rules. Arbitrum chains may override the upstream EIP-158/
+// Amsterdam default via ArbitrumChainParams.MaxCodeSize.
 func CheckMaxCodeSize(rules *params.Rules, size uint64) error {
-	if rules.IsAmsterdam {
-		if size > params.MaxCodeSizeAmsterdam {
-			return fmt.Errorf("%w: code size %v limit %v", ErrMaxCodeSizeExceeded, size, params.MaxCodeSizeAmsterdam)
-		}
-	} else if rules.IsEIP158 {
-		if size > params.MaxCodeSize {
-			return fmt.Errorf("%w: code size %v limit %v", ErrMaxCodeSizeExceeded, size, params.MaxCodeSize)
-		}
+	if !rules.IsArbitrum && !rules.IsEIP158 {
+		return nil
+	}
+	if size > rules.MaxCodeSize {
+		return fmt.Errorf("%w: code size %v limit %v", ErrMaxCodeSizeExceeded, size, rules.MaxCodeSize)
 	}
 	return nil
 }

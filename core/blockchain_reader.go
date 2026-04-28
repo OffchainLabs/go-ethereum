@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -465,6 +466,24 @@ func (bc *BlockChain) Genesis() *types.Block {
 // GetVMConfig returns the block chain VM config.
 func (bc *BlockChain) GetVMConfig() *vm.Config {
 	return &bc.cfg.VmConfig
+}
+
+// Arbitrum: StatelessSelfValidation reports whether execution-witness self-validation
+// is enabled on the chain config.
+func (bc *BlockChain) StatelessSelfValidation() bool {
+	return bc.cfg.StatelessSelfValidation
+}
+
+// Arbitrum: EnableWitnessStats reports whether witness trie access statistics
+// collection is enabled on the chain config.
+func (bc *BlockChain) EnableWitnessStats() bool {
+	return bc.cfg.EnableWitnessStats
+}
+
+// Arbitrum: WasmStore returns the underlying key-value store used for Stylus
+// activated-program data.
+func (bc *BlockChain) WasmStore() ethdb.KeyValueStore {
+	return bc.triedb.Disk().WasmDataBase()
 }
 
 // TxIndexProgress returns the transaction indexing progress.

@@ -68,8 +68,17 @@ type initerState struct {
 }
 
 func newIniterState(disk ethdb.Database, noWait bool) *initerState {
+	// When noWait is true, initialize the state to stateSynced synchronously
+	// so the indexer's run loop doesn't race with update() and skip its
+	// first indexing attempt for an entire heartbeat interval (15s) — that
+	// matters for archive-mode tests with non-realtime block timestamps,
+	// where update() would also pick stateSynced (via its noWait branch).
+	initial := stateSyncing
+	if noWait {
+		initial = stateSynced
+	}
 	s := &initerState{
-		state: stateSyncing,
+		state: initial,
 		disk:  disk,
 		term:  make(chan struct{}),
 	}

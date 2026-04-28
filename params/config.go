@@ -1443,6 +1443,11 @@ type Rules struct {
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka        bool
 	IsAmsterdam, IsVerkle                                   bool
+
+	// Arbitrum: per-chain code-size limits, derived from
+	// ArbitrumChainParams.MaxCodeSize/MaxInitCodeSize when set, or from the
+	// upstream Amsterdam/default constants otherwise.
+	MaxCodeSize, MaxInitCodeSize uint64
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1450,6 +1455,23 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, curren
 	// disallow setting Merge out of order
 	isMerge = isMerge && c.IsLondon(num)
 	isVerkle := isMerge && c.IsVerkle(num, timestamp)
+	isAmsterdam := isMerge && c.IsAmsterdam(num, timestamp)
+
+	// Arbitrum chains may override the protocol code-size limits via
+	// ArbitrumChainParams; non-Arbitrum chains follow the Amsterdam-aware
+	// upstream defaults.
+	var maxCodeSize, maxInitCodeSize uint64
+	if c.IsArbitrum() {
+		maxCodeSize = c.MaxCodeSize()
+		maxInitCodeSize = c.MaxInitCodeSize()
+	} else if isAmsterdam {
+		maxCodeSize = MaxCodeSizeAmsterdam
+		maxInitCodeSize = MaxInitCodeSizeAmsterdam
+	} else {
+		maxCodeSize = MaxCodeSize
+		maxInitCodeSize = MaxInitCodeSize
+	}
+
 	return Rules{
 		IsArbitrum:       c.IsArbitrum(),
 		IsStylus:         c.IsArbitrum() && currentArbosVersion >= ArbosVersion_Stylus,
@@ -1471,8 +1493,10 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, curren
 		IsCancun:         isMerge && c.IsCancun(num, timestamp, currentArbosVersion),
 		IsPrague:         isMerge && c.IsPrague(num, timestamp, currentArbosVersion),
 		IsOsaka:          isMerge && c.IsOsaka(num, timestamp, currentArbosVersion),
-		IsAmsterdam:      isMerge && c.IsAmsterdam(num, timestamp),
+		IsAmsterdam:      isAmsterdam,
 		IsVerkle:         isVerkle,
 		IsEIP4762:        isVerkle,
+		MaxCodeSize:      maxCodeSize,
+		MaxInitCodeSize:  maxInitCodeSize,
 	}
 }

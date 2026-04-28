@@ -205,6 +205,8 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 	return evm
 }
 
+func (evm *EVM) ChainRules() *params.Rules { return &evm.chainRules }
+
 // SetPrecompiles sets the precompiled contracts for the EVM.
 // This method is only used through RPC calls.
 // It is not thread-safe.

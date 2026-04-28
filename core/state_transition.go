@@ -612,6 +612,18 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	startHookUsedSingleGas := startHookUsedMultiGas.SingleGas()
 
 	if endTxNow {
+		// Arbitrum endTxNow paths (deposits, retryable submission, internal txs)
+		// bypass the normal SubGas/ReturnGas flow but still report gas used.
+		// Bump gp.cumulativeUsed so receipt.CumulativeGasUsed (and the GasUsed
+		// derived from it via DeriveFields) reflects this tx's contribution.
+		if startHookUsedSingleGas > 0 {
+			if subErr := st.gp.SubGas(startHookUsedSingleGas); subErr != nil {
+				return nil, subErr
+			}
+			if retErr := st.gp.ReturnGas(startHookUsedSingleGas, startHookUsedSingleGas); retErr != nil {
+				return nil, retErr
+			}
+		}
 		return &ExecutionResult{
 			UsedGas:       startHookUsedSingleGas,
 			MaxUsedGas:    startHookUsedSingleGas,
