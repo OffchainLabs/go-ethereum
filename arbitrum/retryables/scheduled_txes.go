@@ -39,7 +39,7 @@ func RunScheduledTxes(ctx context.Context, b core.NodeInterfaceBackendAPI, state
 			evm.Cancel()
 		}()
 
-		scheduledTxResult, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(math.MaxUint64))
+		scheduledTxResult, err := core.ApplyMessage(evm, msg, core.NewGasPool(math.MaxUint64))
 		if err != nil {
 			return nil, err
 		}

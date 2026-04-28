@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -237,14 +238,12 @@ func opKeccak256(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	offset, size := scope.Stack.pop(), scope.Stack.peek()
 	data := scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
 
-	evm.hasher.Reset()
-	evm.hasher.Write(data)
-	evm.hasher.Read(evm.hasherBuf[:])
+	hash := crypto.Keccak256Hash(data)
 
 	if evm.Config.EnablePreimageRecording {
-		evm.StateDB.AddPreimage(evm.hasherBuf, data)
+		evm.StateDB.AddPreimage(hash, data)
 	}
-	size.SetBytes(evm.hasherBuf[:])
+	size.SetBytes(hash[:])
 	return nil, nil
 }
 
@@ -923,21 +922,34 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if evm.readOnly {
 		return nil, ErrWriteProtection
 	}
-	beneficiary := scope.Stack.pop()
+	var (
+		this        = scope.Contract.Address()
+		balance     = evm.StateDB.GetBalance(this)
+		top         = scope.Stack.pop()
+		beneficiary = common.Address(top.Bytes20())
+	)
+
 	evm.StateDB.TouchAddress(&filter.FilteredAddressRecord{
-		Address:      beneficiary.Bytes20(),
+		Address:      beneficiary,
 		FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary, EventRuleMatch: nil},
 	})
-	balance := evm.StateDB.GetBalance(scope.Contract.Address())
-	evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
-	evm.StateDB.SelfDestruct(scope.Contract.Address())
-	if beneficiary.Bytes20() == scope.Contract.Address() {
+
+	// The funds are burned immediately if the beneficiary is the caller itself,
+	// in this case, the beneficiary's balance is not increased.
+	if this != beneficiary {
+		evm.StateDB.AddBalance(beneficiary, balance, tracing.BalanceIncreaseSelfdestruct)
+	}
+	// Clear any leftover funds for the account being destructed.
+	evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
+	evm.StateDB.SelfDestruct(this)
+	if this == beneficiary {
 		// Arbitrum: calling selfdestruct(this) burns the balance
 		evm.StateDB.ExpectBalanceBurn(balance.ToBig())
 	}
+
 	if tracer := evm.Config.Tracer; tracer != nil {
 		if tracer.OnEnter != nil {
-			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance.ToBig())
+			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, 0, balance.ToBig())
 		}
 		if tracer.OnExit != nil {
 			tracer.OnExit(evm.depth, []byte{}, 0, nil, false)
@@ -950,39 +962,182 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 	if evm.readOnly {
 		return nil, ErrWriteProtection
 	}
+	var (
+		this        = scope.Contract.Address()
+		balance     = evm.StateDB.GetBalance(this)
+		top         = scope.Stack.pop()
+		beneficiary = common.Address(top.Bytes20())
+		newContract = evm.StateDB.IsNewContract(this)
+	)
 
 	// Arbitrum: revert if acting account is a Stylus program
-	actingAddress := scope.Contract.Address()
-	if code := evm.StateDB.GetCode(actingAddress); state.IsStylusComponentPrefix(code, evm.chainRules.ArbOSVersion) {
+	if code := evm.StateDB.GetCode(this); state.IsStylusComponentPrefix(code, evm.chainRules.ArbOSVersion) {
 		return nil, ErrExecutionReverted
 	}
 
-	beneficiary := scope.Stack.pop()
 	evm.StateDB.TouchAddress(&filter.FilteredAddressRecord{
-		Address:      beneficiary.Bytes20(),
+		Address:      beneficiary,
 		FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary, EventRuleMatch: nil},
 	})
-	balance := evm.StateDB.GetBalance(scope.Contract.Address())
-	evm.StateDB.SubBalance(scope.Contract.Address(), balance, tracing.BalanceDecreaseSelfdestruct)
-	evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
-	evm.StateDB.SelfDestruct6780(scope.Contract.Address())
-	if beneficiary.Bytes20() == scope.Contract.Address() {
+
+	// Contract is new and will actually be deleted.
+	if newContract {
+		if this != beneficiary { // Skip no-op transfer when self-destructing to self.
+			evm.StateDB.AddBalance(beneficiary, balance, tracing.BalanceIncreaseSelfdestruct)
+		}
+		evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
+		evm.StateDB.SelfDestruct(this)
+	}
+
+	// Contract already exists, only do transfer if beneficiary is not self.
+	if !newContract && this != beneficiary {
+		evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
+		evm.StateDB.AddBalance(beneficiary, balance, tracing.BalanceIncreaseSelfdestruct)
+	}
+	if evm.chainRules.IsAmsterdam && !balance.IsZero() {
+		if this != beneficiary {
+			evm.StateDB.AddLog(types.EthTransferLog(this, beneficiary, balance))
+		} else if newContract {
+			evm.StateDB.AddLog(types.EthBurnLog(this, balance))
+		}
+	}
+
+	if this == beneficiary {
 		// SelfDestruct6780 only destructs the contract if selfdestructing in the same transaction as contract creation
 		// So we only account for the balance burn if the contract is actually destructed by checking if the balance is zero.
-		if evm.StateDB.GetBalance(scope.Contract.Address()).Sign() == 0 {
+		if evm.StateDB.GetBalance(this).Sign() == 0 {
 			// Arbitrum: calling selfdestruct(this) burns the balance
 			evm.StateDB.ExpectBalanceBurn(balance.ToBig())
 		}
 	}
 	if tracer := evm.Config.Tracer; tracer != nil {
 		if tracer.OnEnter != nil {
-			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance.ToBig())
+			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), this, beneficiary, []byte{}, 0, balance.ToBig())
 		}
 		if tracer.OnExit != nil {
 			tracer.OnExit(evm.depth, []byte{}, 0, nil, false)
 		}
 	}
 	return nil, errStopToken
+}
+
+// decodeSingle decodes the immediate operand of a backward-compatible DUPN or SWAPN instruction (EIP-8024)
+// https://eips.ethereum.org/EIPS/eip-8024
+func decodeSingle(x byte) int {
+	// Depths 1-16 are already covered by the legacy opcodes. The forbidden byte range [91, 127] removes
+	// 37 values from the 256 possible immediates, leaving 219 usable values, so this encoding covers depths
+	// 17 through 235. The immediate is encoded as (x + 111) % 256, where 111 is chosen so that these values
+	// avoid the forbidden range. Decoding is simply the modular inverse (i.e. 111+145=256).
+	return (int(x) + 145) % 256
+}
+
+// decodePair decodes the immediate operand of a backward-compatible EXCHANGE
+// instruction (EIP-8024) into stack indices (n, m) where 1 <= n < m
+// and n + m <= 30. The forbidden byte range [82, 127] removes 46 values from
+// the 256 possible immediates, leaving exactly 210 usable bytes.
+// https://eips.ethereum.org/EIPS/eip-8024
+func decodePair(x byte) (int, int) {
+	// XOR with 143 remaps the forbidden bytes [82, 127] to an unused corner
+	// of the 16x16 grid below.
+	k := int(x ^ 143)
+	// Split into row q and column r of a 16x16 grid. The 210 valid pairs
+	// occupy two triangles within this grid.
+	q, r := k/16, k%16
+	// Upper triangle (q < r): pairs where m <= 16, encoded directly as
+	// (q+1, r+1).
+	if q < r {
+		return q + 1, r + 1
+	}
+	// Lower triangle: pairs where m > 16, recovered as (r+1, 29-q).
+	return r + 1, 29 - q
+}
+
+func opDupN(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	code := scope.Contract.Code
+	i := *pc + 1
+
+	// If the immediate byte is missing, treat as 0x00 (same convention as PUSHn).
+	var x byte
+	if i < uint64(len(code)) {
+		x = code[i]
+	}
+
+	// This range is excluded to preserve compatibility with existing opcodes.
+	if x > 90 && x < 128 {
+		return nil, &ErrInvalidOpCode{opcode: OpCode(x)}
+	}
+	n := decodeSingle(x)
+
+	// DUPN duplicates the n'th stack item, so the stack must contain at least n elements.
+	if scope.Stack.len() < n {
+		return nil, &ErrStackUnderflow{stackLen: scope.Stack.len(), required: n}
+	}
+
+	//The n‘th stack item is duplicated at the top of the stack.
+	scope.Stack.push(scope.Stack.Back(n - 1))
+	*pc += 1
+	return nil, nil
+}
+
+func opSwapN(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	code := scope.Contract.Code
+	i := *pc + 1
+
+	// If the immediate byte is missing, treat as 0x00 (same convention as PUSHn).
+	var x byte
+	if i < uint64(len(code)) {
+		x = code[i]
+	}
+
+	// This range is excluded to preserve compatibility with existing opcodes.
+	if x > 90 && x < 128 {
+		return nil, &ErrInvalidOpCode{opcode: OpCode(x)}
+	}
+	n := decodeSingle(x)
+
+	// SWAPN operates on the top and n+1 stack items, so the stack must contain at least n+1 elements.
+	if scope.Stack.len() < n+1 {
+		return nil, &ErrStackUnderflow{stackLen: scope.Stack.len(), required: n + 1}
+	}
+
+	// The (n+1)‘th stack item is swapped with the top of the stack.
+	indexTop := scope.Stack.len() - 1
+	indexN := scope.Stack.len() - 1 - n
+	scope.Stack.data[indexTop], scope.Stack.data[indexN] = scope.Stack.data[indexN], scope.Stack.data[indexTop]
+	*pc += 1
+	return nil, nil
+}
+
+func opExchange(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	code := scope.Contract.Code
+	i := *pc + 1
+
+	// If the immediate byte is missing, treat as 0x00 (same convention as PUSHn).
+	var x byte
+	if i < uint64(len(code)) {
+		x = code[i]
+	}
+
+	// This range is excluded both to preserve compatibility with existing opcodes
+	// and to keep decode_pair’s 16-aligned arithmetic mapping valid (0–81, 128–255).
+	if x > 81 && x < 128 {
+		return nil, &ErrInvalidOpCode{opcode: OpCode(x)}
+	}
+	n, m := decodePair(x)
+	need := max(n, m) + 1
+
+	// EXCHANGE operates on the (n+1)'th and (m+1)'th stack items,
+	// so the stack must contain at least max(n, m)+1 elements.
+	if scope.Stack.len() < need {
+		return nil, &ErrStackUnderflow{stackLen: scope.Stack.len(), required: need}
+	}
+
+	// The (n+1)‘th stack item is swapped with the (m+1)‘th stack item.
+	indexN := scope.Stack.len() - 1 - n
+	indexM := scope.Stack.len() - 1 - m
+	scope.Stack.data[indexN], scope.Stack.data[indexM] = scope.Stack.data[indexM], scope.Stack.data[indexN]
+	*pc += 1
+	return nil, nil
 }
 
 // following functions are used by the instruction jump  table
@@ -1006,9 +1161,6 @@ func makeLog(size int) executionFunc {
 			Address: scope.Contract.Address(),
 			Topics:  topics,
 			Data:    d,
-			// This is a non-consensus field, but assigned here because
-			// core/state doesn't know the current block number.
-			BlockNumber: evm.Context.BlockNumber.Uint64(),
 		})
 
 		return nil, nil

@@ -20,9 +20,29 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math/bits"
+	"runtime"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 )
+
+// parallelDepth returns the tree depth below which Hash() spawns goroutines.
+func parallelDepth() int {
+	return min(bits.Len(uint(runtime.NumCPU())), 8)
+}
+
+// isDirty reports whether a BinaryNode child needs rehashing.
+func isDirty(n BinaryNode) bool {
+	switch v := n.(type) {
+	case *InternalNode:
+		return v.mustRecompute
+	case *StemNode:
+		return v.mustRecompute
+	default:
+		return false
+	}
+}
 
 func keyToPath(depth int, key []byte) ([]byte, error) {
 	if depth > 31*8 {
@@ -40,6 +60,9 @@ func keyToPath(depth int, key []byte) ([]byte, error) {
 type InternalNode struct {
 	left, right BinaryNode
 	depth       int
+
+	mustRecompute bool        // true if the hash needs to be recomputed
+	hash          common.Hash // cached hash when mustRecompute == false
 }
 
 // GetValuesAtStem retrieves the group of values located at the given stem key.
@@ -49,14 +72,26 @@ func (bt *InternalNode) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([
 	}
 
 	bit := stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
-	var child *BinaryNode
 	if bit == 0 {
-		child = &bt.left
-	} else {
-		child = &bt.right
+		if hn, ok := bt.left.(HashedNode); ok {
+			path, err := keyToPath(bt.depth, stem)
+			if err != nil {
+				return nil, fmt.Errorf("GetValuesAtStem resolve error: %w", err)
+			}
+			data, err := resolver(path, common.Hash(hn))
+			if err != nil {
+				return nil, fmt.Errorf("GetValuesAtStem resolve error: %w", err)
+			}
+			node, err := DeserializeNodeWithHash(data, bt.depth+1, common.Hash(hn))
+			if err != nil {
+				return nil, fmt.Errorf("GetValuesAtStem node deserialization error: %w", err)
+			}
+			bt.left = node
+		}
+		return bt.left.GetValuesAtStem(stem, resolver)
 	}
 
-	if hn, ok := (*child).(HashedNode); ok {
+	if hn, ok := bt.right.(HashedNode); ok {
 		path, err := keyToPath(bt.depth, stem)
 		if err != nil {
 			return nil, fmt.Errorf("GetValuesAtStem resolve error: %w", err)
@@ -65,13 +100,13 @@ func (bt *InternalNode) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([
 		if err != nil {
 			return nil, fmt.Errorf("GetValuesAtStem resolve error: %w", err)
 		}
-		node, err := DeserializeNode(data, bt.depth+1)
+		node, err := DeserializeNodeWithHash(data, bt.depth+1, common.Hash(hn))
 		if err != nil {
 			return nil, fmt.Errorf("GetValuesAtStem node deserialization error: %w", err)
 		}
-		*child = node
+		bt.right = node
 	}
-	return (*child).GetValuesAtStem(stem, resolver)
+	return bt.right.GetValuesAtStem(stem, resolver)
 }
 
 // Get retrieves the value for the given key.
@@ -79,6 +114,9 @@ func (bt *InternalNode) Get(key []byte, resolver NodeResolverFn) ([]byte, error)
 	values, err := bt.GetValuesAtStem(key[:31], resolver)
 	if err != nil {
 		return nil, fmt.Errorf("get error: %w", err)
+	}
+	if values == nil {
+		return nil, nil
 	}
 	return values[key[31]], nil
 }
@@ -93,15 +131,45 @@ func (bt *InternalNode) Insert(key []byte, value []byte, resolver NodeResolverFn
 // Copy creates a deep copy of the node.
 func (bt *InternalNode) Copy() BinaryNode {
 	return &InternalNode{
-		left:  bt.left.Copy(),
-		right: bt.right.Copy(),
-		depth: bt.depth,
+		left:          bt.left.Copy(),
+		right:         bt.right.Copy(),
+		depth:         bt.depth,
+		mustRecompute: bt.mustRecompute,
+		hash:          bt.hash,
 	}
 }
 
 // Hash returns the hash of the node.
 func (bt *InternalNode) Hash() common.Hash {
-	h := sha256.New()
+	if !bt.mustRecompute {
+		return bt.hash
+	}
+
+	// At shallow depths, parallelize when both children need rehashing:
+	// hash left subtree in a goroutine, right subtree inline, then combine.
+	// Skip goroutine overhead when only one child is dirty (common case
+	// for narrow state updates that touch a single path through the trie).
+	if bt.depth < parallelDepth() && isDirty(bt.left) && isDirty(bt.right) {
+		var input [64]byte
+		var lh common.Hash
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			lh = bt.left.Hash()
+		}()
+		rh := bt.right.Hash()
+		copy(input[32:], rh[:])
+		wg.Wait()
+		copy(input[:32], lh[:])
+		bt.hash = sha256.Sum256(input[:])
+		bt.mustRecompute = false
+		return bt.hash
+	}
+
+	// Deeper nodes: sequential using pooled hasher (goroutine overhead > hash cost)
+	h := newSha256()
+	defer returnSha256(h)
 	if bt.left != nil {
 		h.Write(bt.left.Hash().Bytes())
 	} else {
@@ -112,23 +180,64 @@ func (bt *InternalNode) Hash() common.Hash {
 	} else {
 		h.Write(zero[:])
 	}
-	return common.BytesToHash(h.Sum(nil))
+	bt.hash = common.BytesToHash(h.Sum(nil))
+	bt.mustRecompute = false
+	return bt.hash
 }
 
 // InsertValuesAtStem inserts a full value group at the given stem in the internal node.
 // Already-existing values will be overwritten.
 func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolver NodeResolverFn, depth int) (BinaryNode, error) {
-	var (
-		child *BinaryNode
-		err   error
-	)
+	var err error
 	bit := stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
 	if bit == 0 {
-		child = &bt.left
-	} else {
-		child = &bt.right
+		if bt.left == nil {
+			bt.left = Empty{}
+		}
+
+		if hn, ok := bt.left.(HashedNode); ok {
+			path, err := keyToPath(bt.depth, stem)
+			if err != nil {
+				return nil, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
+			}
+			data, err := resolver(path, common.Hash(hn))
+			if err != nil {
+				return nil, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
+			}
+			node, err := DeserializeNodeWithHash(data, bt.depth+1, common.Hash(hn))
+			if err != nil {
+				return nil, fmt.Errorf("InsertValuesAtStem node deserialization error: %w", err)
+			}
+			bt.left = node
+		}
+
+		bt.left, err = bt.left.InsertValuesAtStem(stem, values, resolver, depth+1)
+		bt.mustRecompute = true
+		return bt, err
 	}
-	*child, err = (*child).InsertValuesAtStem(stem, values, resolver, depth+1)
+
+	if bt.right == nil {
+		bt.right = Empty{}
+	}
+
+	if hn, ok := bt.right.(HashedNode); ok {
+		path, err := keyToPath(bt.depth, stem)
+		if err != nil {
+			return nil, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
+		}
+		data, err := resolver(path, common.Hash(hn))
+		if err != nil {
+			return nil, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
+		}
+		node, err := DeserializeNodeWithHash(data, bt.depth+1, common.Hash(hn))
+		if err != nil {
+			return nil, fmt.Errorf("InsertValuesAtStem node deserialization error: %w", err)
+		}
+		bt.right = node
+	}
+
+	bt.right, err = bt.right.InsertValuesAtStem(stem, values, resolver, depth+1)
+	bt.mustRecompute = true
 	return bt, err
 }
 

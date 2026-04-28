@@ -36,7 +36,7 @@ import (
 // ExecutionResult includes all output after executing given evm
 // message no matter the execution itself is successful or not.
 type ExecutionResult struct {
-	UsedGas    uint64 // Total used gas but include the refunded gas
+	UsedGas    uint64 // Total used gas, refunded gas is deducted
 	MaxUsedGas uint64 // Maximum gas consumed during execution, excluding gas refunds.
 	Err        error  // Any error encountered during the execution(listed in core/vm/errors.go)
 	ReturnData []byte // Returned data from evm(function result or data supplied with revert opcode)
@@ -350,9 +350,9 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 
 		Nonce:                 tx.Nonce(),
 		GasLimit:              tx.Gas(),
-		GasPrice:              new(big.Int).Set(tx.GasPrice()),
-		GasFeeCap:             new(big.Int).Set(tx.GasFeeCap()),
-		GasTipCap:             new(big.Int).Set(tx.GasTipCap()),
+		GasPrice:              tx.GasPrice(),
+		GasFeeCap:             tx.GasFeeCap(),
+		GasTipCap:             tx.GasTipCap(),
 		To:                    tx.To(),
 		Value:                 tx.Value(),
 		Data:                  tx.Data(),
@@ -383,6 +383,11 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
 func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, error) {
+	// Do not panic if the gas pool is nil. This is allowed when executing
+	// a single message via RPC invocation.
+	if gp == nil {
+		gp = NewGasPool(msg.GasLimit)
+	}
 	evm.SetTxContext(NewEVMTxContext(msg))
 	return newStateTransition(evm, msg, gp).execute()
 }
@@ -476,8 +481,8 @@ func (st *stateTransition) buyGas() error {
 		st.evm.Config.Tracer.OnGasChange(0, st.msg.GasLimit, tracing.GasChangeTxInitialBalance)
 	}
 	st.gasRemaining = st.msg.GasLimit
-
 	st.initialGas = st.msg.GasLimit
+
 	mgvalU256, _ := uint256.FromBig(mgval)
 	st.state.SubBalance(st.msg.From, mgvalU256, tracing.BalanceDecreaseGasBuy)
 
@@ -607,6 +612,18 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	startHookUsedSingleGas := startHookUsedMultiGas.SingleGas()
 
 	if endTxNow {
+		// Arbitrum endTxNow paths (deposits, retryable submission, internal txs)
+		// bypass the normal SubGas/ReturnGas flow but still report gas used.
+		// Bump gp.cumulativeUsed so receipt.CumulativeGasUsed (and the GasUsed
+		// derived from it via DeriveFields) reflects this tx's contribution.
+		if startHookUsedSingleGas > 0 {
+			if subErr := st.gp.SubGas(startHookUsedSingleGas); subErr != nil {
+				return nil, subErr
+			}
+			if retErr := st.gp.ReturnGas(startHookUsedSingleGas, startHookUsedSingleGas); retErr != nil {
+				return nil, retErr
+			}
+		}
 		return &ExecutionResult{
 			UsedGas:       startHookUsedSingleGas,
 			MaxUsedGas:    startHookUsedSingleGas,
@@ -697,8 +714,10 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 
 	// Check whether the init code size has been exceeded.
-	if rules.IsShanghai && contractCreation && len(msg.Data) > int(st.evm.ChainConfig().MaxInitCodeSize()) {
-		return nil, fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(msg.Data), int(st.evm.ChainConfig().MaxInitCodeSize()))
+	if contractCreation {
+		if err := vm.CheckMaxInitCodeSize(&rules, uint64(len(msg.Data))); err != nil {
+			return nil, err
+		}
 	}
 
 	// Execute the preparatory steps for state transition which includes:
@@ -777,8 +796,20 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			peakGasUsed = floorDataGas
 		}
 	}
+	// Return gas to the user
 	st.returnGas()
 
+	// Return gas to the gas pool
+	if rules.IsAmsterdam {
+		// Refund is excluded for returning
+		err = st.gp.ReturnGas(st.initialGas-peakGasUsed, st.gasUsed())
+	} else {
+		// Refund is included for returning
+		err = st.gp.ReturnGas(st.gasRemaining, st.gasUsed())
+	}
+	if err != nil {
+		return nil, err
+	}
 	effectiveTip := msg.GasPrice
 	if rules.IsLondon {
 		effectiveTip = new(big.Int).Sub(msg.GasPrice, st.evm.Context.BaseFee)
@@ -806,7 +837,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			st.evm.AccessEvents.AddAccount(st.evm.Context.Coinbase, true, math.MaxUint64)
 		}
 	}
-
 	// Arbitrum: record the tip
 	if tracer := st.evm.Config.Tracer; tracer != nil && st.evm.ProcessingHook.CollectTips() && tracer.CaptureArbitrumTransfer != nil {
 		tracer.CaptureArbitrumTransfer(nil, &tipReceipient, tipAmount, false, tracing.BalanceIncreaseRewardTransactionFee)
@@ -823,6 +853,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 	}
 
+	if rules.IsAmsterdam {
+		st.evm.StateDB.EmitLogsForBurnAccounts()
+	}
 	return &ExecutionResult{
 		UsedGas:          gasUsed,
 		MaxUsedGas:       peakGasUsed,
@@ -933,10 +966,6 @@ func (st *stateTransition) returnGas() {
 	if tracer := st.evm.Config.Tracer; tracer != nil && tracer.CaptureArbitrumTransfer != nil {
 		tracer.CaptureArbitrumTransfer(nil, &st.msg.From, remaining.ToBig(), false, tracing.BalanceIncreaseGasReturn)
 	}
-
-	// Also return remaining gas to the block gas counter so it is
-	// available for the next transaction.
-	st.gp.AddGas(st.gasRemaining)
 }
 
 // gasUsed returns the amount of gas used up by the state transition.

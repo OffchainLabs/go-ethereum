@@ -18,7 +18,7 @@ func TestOpCreatesMultiGas(t *testing.T) {
 
 	blockCtx := BlockContext{
 		CanTransfer: func(db StateDB, addr common.Address, amount *uint256.Int) bool { return true },
-		Transfer:    func(db StateDB, from, to common.Address, amount *uint256.Int) {},
+		Transfer:    func(db StateDB, from, to common.Address, amount *uint256.Int, rules *params.Rules) {},
 		GetHash:     func(uint64) common.Hash { return common.Hash{} },
 	}
 
@@ -86,7 +86,7 @@ func TestOpCallsMultiGas(t *testing.T) {
 		CanTransfer: func(db StateDB, addr common.Address, amount *uint256.Int) bool {
 			return true
 		},
-		Transfer: func(db StateDB, from, to common.Address, amount *uint256.Int) {},
+		Transfer: func(db StateDB, from, to common.Address, amount *uint256.Int, rules *params.Rules) {},
 		GetHash:  func(uint64) common.Hash { return common.Hash{} },
 	}
 

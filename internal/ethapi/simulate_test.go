@@ -80,7 +80,10 @@ func TestSimulateSanitizeBlockOrder(t *testing.T) {
 			expected:      []result{{number: 11, timestamp: 60}, {number: 12, timestamp: 72}, {number: 13, timestamp: 72}},
 		},
 	} {
-		sim := &simulator{base: &types.Header{Number: big.NewInt(int64(tc.baseNumber)), Time: tc.baseTimestamp}}
+		sim := &simulator{
+			base:   &types.Header{Number: big.NewInt(int64(tc.baseNumber)), Time: tc.baseTimestamp},
+			budget: newGasBudget(0),
+		}
 		res, err := sim.sanitizeChain(tc.blocks)
 		if err != nil {
 			if err.Error() == tc.err {

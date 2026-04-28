@@ -19,7 +19,9 @@ package override
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -58,12 +60,16 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 	if diff == nil {
 		return nil
 	}
+	// Iterate in deterministic order so error messages and behavior are stable (e.g. for tests).
+	addrs := slices.SortedFunc(maps.Keys(*diff), common.Address.Cmp)
+
 	// Tracks destinations of precompiles that were moved.
 	dirtyAddrs := make(map[common.Address]struct{})
-	for addr, account := range *diff {
+	for _, addr := range addrs {
 		if addr == types.ArbosStateAddress {
 			return fmt.Errorf("overriding address %v  not allowed", types.ArbosStateAddress)
 		}
+		account := (*diff)[addr]
 		// If a precompile was moved to this address already, it can't be overridden.
 		if _, ok := dirtyAddrs[addr]; ok {
 			return fmt.Errorf("account %s has already been overridden by a precompile", addr.Hex())

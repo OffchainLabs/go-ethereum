@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -379,7 +380,7 @@ func (bc *BlockChain) TxIndexDone() bool {
 
 // HasState checks if state trie is fully present in the database or not.
 func (bc *BlockChain) HasState(hash common.Hash) bool {
-	_, err := bc.statedb.OpenTrie(hash)
+	_, err := bc.triedb.NodeReader(hash)
 	return err == nil
 }
 
@@ -411,7 +412,7 @@ func (bc *BlockChain) stateRecoverable(root common.Hash) bool {
 func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) []byte {
 	// TODO(rjl493456442) The associated account address is also required
 	// in Verkle scheme. Fix it once snap-sync is supported for Verkle.
-	return bc.statedb.ContractCodeWithPrefix(common.Address{}, hash)
+	return bc.codedb.Reader().CodeWithPrefix(common.Address{}, hash)
 }
 
 // State returns a new mutable state based on the current HEAD block.
@@ -421,14 +422,14 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 
 // StateAt returns a new mutable state based on a particular point in time.
 func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, bc.statedb)
+	return state.New(root, state.NewDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
 }
 
 // HistoricState returns a historic state specified by the given root.
 // Live states are not available and won't be served, please use `State`
 // or `StateAt` instead.
 func (bc *BlockChain) HistoricState(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, state.NewHistoricDatabase(bc.db, bc.triedb))
+	return state.New(root, state.NewHistoricDatabase(bc.triedb, bc.codedb))
 }
 
 // Config retrieves the chain's fork configuration.
@@ -452,11 +453,6 @@ func (bc *BlockChain) Processor() Processor {
 	return bc.processor
 }
 
-// StateCache returns the caching database underpinning the blockchain instance.
-func (bc *BlockChain) StateCache() state.Database {
-	return bc.statedb
-}
-
 // GasLimit returns the gas limit of the current HEAD block.
 func (bc *BlockChain) GasLimit() uint64 {
 	return bc.CurrentBlock().GasLimit
@@ -470,6 +466,24 @@ func (bc *BlockChain) Genesis() *types.Block {
 // GetVMConfig returns the block chain VM config.
 func (bc *BlockChain) GetVMConfig() *vm.Config {
 	return &bc.cfg.VmConfig
+}
+
+// Arbitrum: StatelessSelfValidation reports whether execution-witness self-validation
+// is enabled on the chain config.
+func (bc *BlockChain) StatelessSelfValidation() bool {
+	return bc.cfg.StatelessSelfValidation
+}
+
+// Arbitrum: EnableWitnessStats reports whether witness trie access statistics
+// collection is enabled on the chain config.
+func (bc *BlockChain) EnableWitnessStats() bool {
+	return bc.cfg.EnableWitnessStats
+}
+
+// Arbitrum: WasmStore returns the underlying key-value store used for Stylus
+// activated-program data.
+func (bc *BlockChain) WasmStore() ethdb.KeyValueStore {
+	return bc.triedb.Disk().WasmDataBase()
 }
 
 // TxIndexProgress returns the transaction indexing progress.
@@ -498,6 +512,11 @@ func (bc *BlockChain) HistoryPruningCutoff() (uint64, common.Hash) {
 // TrieDB retrieves the low level trie database used for data storage.
 func (bc *BlockChain) TrieDB() *triedb.Database {
 	return bc.triedb
+}
+
+// CodeDB retrieves the low level contract code database used for data storage.
+func (bc *BlockChain) CodeDB() *state.CodeDB {
+	return bc.codedb
 }
 
 // HeaderChain returns the underlying header chain.
@@ -529,4 +548,14 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // block processing has started while false means it has stopped.
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
+}
+
+// SubscribeNewPayloadEvent registers a subscription for NewPayloadEvent.
+func (bc *BlockChain) SubscribeNewPayloadEvent(ch chan<- NewPayloadEvent) event.Subscription {
+	return bc.scope.Track(bc.newPayloadFeed.Subscribe(ch))
+}
+
+// SendNewPayloadEvent sends a NewPayloadEvent to subscribers.
+func (bc *BlockChain) SendNewPayloadEvent(ev NewPayloadEvent) {
+	bc.newPayloadFeed.Send(ev)
 }

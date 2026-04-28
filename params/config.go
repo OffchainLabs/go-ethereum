@@ -1436,7 +1436,6 @@ func (err *ConfigCompatError) Error() string {
 // phases.
 type Rules struct {
 	IsArbitrum, IsStylus, IsDia                             bool
-	ChainID                                                 *big.Int
 	ArbOSVersion                                            uint64
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsEIP2929, IsEIP4762                                    bool
@@ -1444,22 +1443,39 @@ type Rules struct {
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka        bool
 	IsAmsterdam, IsVerkle                                   bool
+
+	// Arbitrum: per-chain code-size limits, derived from
+	// ArbitrumChainParams.MaxCodeSize/MaxInitCodeSize when set, or from the
+	// upstream Amsterdam/default constants otherwise.
+	MaxCodeSize, MaxInitCodeSize uint64
 }
 
 // Rules ensures c's ChainID is not nil.
 func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, currentArbosVersion uint64) Rules {
-	chainID := c.ChainID
-	if chainID == nil {
-		chainID = new(big.Int)
-	}
 	// disallow setting Merge out of order
 	isMerge = isMerge && c.IsLondon(num)
 	isVerkle := isMerge && c.IsVerkle(num, timestamp)
+	isAmsterdam := isMerge && c.IsAmsterdam(num, timestamp)
+
+	// Arbitrum chains may override the protocol code-size limits via
+	// ArbitrumChainParams; non-Arbitrum chains follow the Amsterdam-aware
+	// upstream defaults.
+	var maxCodeSize, maxInitCodeSize uint64
+	if c.IsArbitrum() {
+		maxCodeSize = c.MaxCodeSize()
+		maxInitCodeSize = c.MaxInitCodeSize()
+	} else if isAmsterdam {
+		maxCodeSize = MaxCodeSizeAmsterdam
+		maxInitCodeSize = MaxInitCodeSizeAmsterdam
+	} else {
+		maxCodeSize = MaxCodeSize
+		maxInitCodeSize = MaxInitCodeSize
+	}
+
 	return Rules{
 		IsArbitrum:       c.IsArbitrum(),
 		IsStylus:         c.IsArbitrum() && currentArbosVersion >= ArbosVersion_Stylus,
 		IsDia:            c.IsArbitrum() && currentArbosVersion >= ArbosVersion_Dia,
-		ChainID:          new(big.Int).Set(chainID),
 		ArbOSVersion:     currentArbosVersion,
 		IsHomestead:      c.IsHomestead(num),
 		IsEIP150:         c.IsEIP150(num),
@@ -1477,8 +1493,10 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, curren
 		IsCancun:         isMerge && c.IsCancun(num, timestamp, currentArbosVersion),
 		IsPrague:         isMerge && c.IsPrague(num, timestamp, currentArbosVersion),
 		IsOsaka:          isMerge && c.IsOsaka(num, timestamp, currentArbosVersion),
-		IsAmsterdam:      isMerge && c.IsAmsterdam(num, timestamp),
+		IsAmsterdam:      isAmsterdam,
 		IsVerkle:         isVerkle,
 		IsEIP4762:        isVerkle,
+		MaxCodeSize:      maxCodeSize,
+		MaxInitCodeSize:  maxInitCodeSize,
 	}
 }
