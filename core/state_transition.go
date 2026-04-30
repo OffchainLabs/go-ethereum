@@ -224,6 +224,7 @@ const (
 	messageReplayMode
 	messageRecordingMode
 	messageSequencingMode
+	messageDelayedSequencingMode
 )
 
 type MessageRunContext struct {
@@ -237,6 +238,17 @@ func NewMessageSequencingContext(wasmTargets []rawdb.WasmTarget) *MessageRunCont
 	messageSequencingCtx := NewMessageCommitContext(wasmTargets)
 	messageSequencingCtx.runMode = messageSequencingMode
 	return messageSequencingCtx
+}
+
+// NewMessageDelayedSequencingContext is used when the sequencer builds a block
+// from a finalized L1 delayed-inbox message. Delayed messages cannot be
+// filtered post-commitment (censorship resistance), so consumers that gate
+// FilterTx on "sequencer is actively building a block" should use IsSequencing
+// (which returns false here) rather than IsCommitMode.
+func NewMessageDelayedSequencingContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
+	ctx := NewMessageCommitContext(wasmTargets)
+	ctx.runMode = messageDelayedSequencingMode
+	return ctx
 }
 
 func NewMessageCommitContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
@@ -285,12 +297,27 @@ func NewMessageGasEstimationContext() *MessageRunContext {
 	}
 }
 
+// IsSequencing returns true only when the sequencer is actively building a
+// block from a directly-received (not-yet-batch-posted) L2 transaction. This
+// is the predicate that gates pre-inclusion filtering (e.g. db.FilterTx).
+// Delayed-inbox sequencing does NOT satisfy this — use IsDelayedSequencing
+// for that case.
 func (c *MessageRunContext) IsSequencing() bool {
 	return c.runMode == messageSequencingMode
 }
 
+// IsDelayedSequencing returns true only when the sequencer is actively
+// building a block from a delayed-inbox message. These must not be filtered
+// (censorship resistance), so consumers of FilterTx should treat this as
+// "exempt from filtering" even though the block is still being committed.
+func (c *MessageRunContext) IsDelayedSequencing() bool {
+	return c.runMode == messageDelayedSequencingMode
+}
+
 func (c *MessageRunContext) IsCommitMode() bool {
-	return c.runMode == messageCommitMode || c.runMode == messageSequencingMode
+	return c.runMode == messageCommitMode ||
+		c.runMode == messageSequencingMode ||
+		c.runMode == messageDelayedSequencingMode
 }
 
 // these message modes are executed onchain so cannot make any gas shortcuts
@@ -326,6 +353,8 @@ func (c *MessageRunContext) RunModeMetricName() string {
 	switch c.runMode {
 	case messageSequencingMode:
 		return "sequencing_runmode"
+	case messageDelayedSequencingMode:
+		return "delayed_sequencing_runmode"
 	case messageCommitMode:
 		return "commit_runmode"
 	case messageGasEstimationMode:

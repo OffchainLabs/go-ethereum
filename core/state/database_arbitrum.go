@@ -16,3 +16,10 @@ func (db *CachingDB) ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Has
 	}
 	return asm
 }
+
+// arbNodeConfig is set once during ExecutionEngine.Initialize (before transaction
+// processing starts) and only read afterward, so atomic access is not needed.
+// Geth treats the value as opaque; Nitro asserts it back to its typed config struct
+// at the read site.
+func (db *CachingDB) ArbNodeConfig() any       { return db.arbNodeConfig }
+func (db *CachingDB) SetArbNodeConfig(cfg any) { db.arbNodeConfig = cfg }

@@ -372,3 +372,162 @@ func TestCallVariantsMultiGas(t *testing.T) {
 		})
 	}
 }
+
+// TestMessageRunContextPredicates pins down the predicate matrix for every
+// MessageRunContext constructor. The split between messageSequencingMode
+// (filterable) and messageDelayedSequencingMode (not filterable) is the whole
+// point of this type, so a regression that e.g. makes IsSequencing return true
+// for a delayed context would silently break censorship-resistance for Stylus
+// page-limit filtering in arbos/programs/api.go.
+func TestMessageRunContextPredicates(t *testing.T) {
+	type predicates struct {
+		isCommitMode              bool
+		isSequencing              bool
+		isDelayedSequencing       bool
+		isExecutedOnChain         bool
+		isGasEstimation           bool
+		isEthcall                 bool
+		isRecording               bool
+		isNonMutating             bool
+		expectedMetric            string
+		expectNonEmptyWasmTargets bool
+		expectedCacheTag          uint32
+	}
+
+	tests := []struct {
+		name string
+		ctx  *MessageRunContext
+		want predicates
+	}{
+		{
+			name: "commit",
+			ctx:  NewMessageCommitContext(nil),
+			want: predicates{
+				isCommitMode:              true,
+				isExecutedOnChain:         true,
+				expectedMetric:            "commit_runmode",
+				expectNonEmptyWasmTargets: true,
+				expectedCacheTag:          1,
+			},
+		},
+		{
+			name: "sequencing",
+			ctx:  NewMessageSequencingContext(nil),
+			want: predicates{
+				isCommitMode:              true,
+				isSequencing:              true,
+				isExecutedOnChain:         true,
+				expectedMetric:            "sequencing_runmode",
+				expectNonEmptyWasmTargets: true,
+				expectedCacheTag:          1,
+			},
+		},
+		{
+			name: "delayed_sequencing",
+			ctx:  NewMessageDelayedSequencingContext(nil),
+			want: predicates{
+				isCommitMode:              true,
+				isDelayedSequencing:       true,
+				isExecutedOnChain:         true,
+				expectedMetric:            "delayed_sequencing_runmode",
+				expectNonEmptyWasmTargets: true,
+				expectedCacheTag:          1,
+			},
+		},
+		{
+			name: "replay",
+			ctx:  NewMessageReplayContext(),
+			want: predicates{
+				isExecutedOnChain:         true,
+				expectedMetric:            "replay_runmode",
+				expectNonEmptyWasmTargets: true,
+			},
+		},
+		{
+			name: "recording",
+			ctx:  NewMessageRecordingContext(nil),
+			want: predicates{
+				isExecutedOnChain:         true,
+				isRecording:               true,
+				expectedMetric:            "recording_runmode",
+				expectNonEmptyWasmTargets: true,
+			},
+		},
+		{
+			name: "ethcall",
+			ctx:  NewMessageEthcallContext(),
+			want: predicates{
+				isEthcall:                 true,
+				isNonMutating:             true,
+				expectedMetric:            "eth_call_runmode",
+				expectNonEmptyWasmTargets: true,
+			},
+		},
+		{
+			name: "gas_estimation",
+			ctx:  NewMessageGasEstimationContext(),
+			want: predicates{
+				isGasEstimation:           true,
+				isNonMutating:             true,
+				expectedMetric:            "gas_estimation_runmode",
+				expectNonEmptyWasmTargets: true,
+			},
+		},
+	}
+
+	metricNames := make(map[string]struct{}, len(tests))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.ctx.IsCommitMode(); got != tt.want.isCommitMode {
+				t.Errorf("IsCommitMode() = %v, want %v", got, tt.want.isCommitMode)
+			}
+			if got := tt.ctx.IsSequencing(); got != tt.want.isSequencing {
+				t.Errorf("IsSequencing() = %v, want %v", got, tt.want.isSequencing)
+			}
+			if got := tt.ctx.IsDelayedSequencing(); got != tt.want.isDelayedSequencing {
+				t.Errorf("IsDelayedSequencing() = %v, want %v", got, tt.want.isDelayedSequencing)
+			}
+			if got := tt.ctx.IsExecutedOnChain(); got != tt.want.isExecutedOnChain {
+				t.Errorf("IsExecutedOnChain() = %v, want %v", got, tt.want.isExecutedOnChain)
+			}
+			if got := tt.ctx.IsGasEstimation(); got != tt.want.isGasEstimation {
+				t.Errorf("IsGasEstimation() = %v, want %v", got, tt.want.isGasEstimation)
+			}
+			if got := tt.ctx.IsEthcall(); got != tt.want.isEthcall {
+				t.Errorf("IsEthcall() = %v, want %v", got, tt.want.isEthcall)
+			}
+			if got := tt.ctx.IsRecording(); got != tt.want.isRecording {
+				t.Errorf("IsRecording() = %v, want %v", got, tt.want.isRecording)
+			}
+			if got := tt.ctx.IsNonMutating(); got != tt.want.isNonMutating {
+				t.Errorf("IsNonMutating() = %v, want %v", got, tt.want.isNonMutating)
+			}
+			if got := tt.ctx.RunModeMetricName(); got != tt.want.expectedMetric {
+				t.Errorf("RunModeMetricName() = %q, want %q", got, tt.want.expectedMetric)
+			}
+			if got := tt.ctx.WasmCacheTag(); got != tt.want.expectedCacheTag {
+				t.Errorf("WasmCacheTag() = %d, want %d", got, tt.want.expectedCacheTag)
+			}
+			if gotNonEmpty := len(tt.ctx.WasmTargets()) > 0; gotNonEmpty != tt.want.expectNonEmptyWasmTargets {
+				t.Errorf("len(WasmTargets()) non-empty = %v, want %v", gotNonEmpty, tt.want.expectNonEmptyWasmTargets)
+			}
+
+			if _, dup := metricNames[tt.want.expectedMetric]; dup {
+				t.Errorf("duplicate RunModeMetricName: %q", tt.want.expectedMetric)
+			}
+			metricNames[tt.want.expectedMetric] = struct{}{}
+		})
+	}
+
+	// Mutual exclusion: a sequencing context must not also be a delayed-sequencing
+	// context, and vice versa. This is the invariant that api.go's FilterTx guard
+	// relies on.
+	seq := NewMessageSequencingContext(nil)
+	del := NewMessageDelayedSequencingContext(nil)
+	if seq.IsDelayedSequencing() {
+		t.Error("NewMessageSequencingContext must not satisfy IsDelayedSequencing")
+	}
+	if del.IsSequencing() {
+		t.Error("NewMessageDelayedSequencingContext must not satisfy IsSequencing")
+	}
+}

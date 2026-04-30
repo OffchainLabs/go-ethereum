@@ -80,6 +80,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			// please re-enable it for better performance.
 			tdb := triedb.NewDatabase(eth.chainDb, triedb.HashDefaults)
 			database = state.NewDatabase(tdb, nil)
+			database.SetArbNodeConfig(eth.blockchain.StateCache().ArbNodeConfig())
 			if statedb, err = state.New(block.Root(), database); err == nil {
 				log.Info("Found disk backend for state trie", "root", block.Root(), "number", block.Number())
 				return statedb, noopReleaser, nil
@@ -98,6 +99,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		// please re-enable it for better performance.
 		tdb = triedb.NewDatabase(eth.chainDb, triedb.HashDefaults)
 		database = state.NewDatabase(tdb, nil)
+		database.SetArbNodeConfig(eth.blockchain.StateCache().ArbNodeConfig())
 
 		// If we didn't check the live database, do check state over ephemeral database,
 		// otherwise we would rewind past a persisted block (specific corner case is

@@ -549,8 +549,20 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.Nonce == nil {
 			return errors.New("missing required field 'nonce' in transaction")
 		}
-		if dec.MaxFeePerGas == nil {
-			return errors.New("missing required field 'maxFeePerGas' for txdata")
+		// Legacy RPC encoders emit gasPrice only for 0x65; accept as fallback
+		// for backward compat. gasPrice==0 is treated as unset (MarshalJSON
+		// emits 0 as a default).
+		feeCap := dec.MaxFeePerGas
+		if dec.MaxFeePerGas != nil && dec.GasPrice != nil {
+			gp := (*big.Int)(dec.GasPrice)
+			if gp.Sign() > 0 && gp.Cmp((*big.Int)(dec.MaxFeePerGas)) != 0 {
+				return errors.New("conflicting gasPrice and maxFeePerGas for txdata")
+			}
+		} else if dec.GasPrice != nil && (*big.Int)(dec.GasPrice).Sign() > 0 {
+			feeCap = dec.GasPrice
+		}
+		if feeCap == nil {
+			return errors.New("missing required field 'maxFeePerGas' (or 'gasPrice') for txdata")
 		}
 		if dec.Gas == nil {
 			return errors.New("missing required field 'gas' in txdata")
@@ -565,7 +577,7 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			ChainId:   (*big.Int)(dec.ChainID),
 			From:      *dec.From,
 			Nonce:     uint64(*dec.Nonce),
-			GasFeeCap: (*big.Int)(dec.MaxFeePerGas),
+			GasFeeCap: (*big.Int)(feeCap),
 			Gas:       uint64(*dec.Gas),
 			To:        dec.To,
 			Value:     (*big.Int)(dec.Value),

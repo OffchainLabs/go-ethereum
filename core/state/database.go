@@ -46,6 +46,12 @@ type Database interface {
 	ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) []byte
 	WasmStore() ethdb.KeyValueStore
 
+	// Arbitrum: opaque slot for Nitro-defined node-level configuration.
+	// Geth treats the value as opaque; Nitro stores and type-asserts its own
+	// config struct at the read site.
+	ArbNodeConfig() any
+	SetArbNodeConfig(cfg any)
+
 	// Reader returns a state reader associated with the specified state root.
 	Reader(root common.Hash) (Reader, error)
 
@@ -166,6 +172,7 @@ type activatedAsmCacheKey struct {
 type CachingDB struct {
 	// Arbitrum
 	activatedAsmCache *lru.SizeConstrainedCache[activatedAsmCacheKey, []byte]
+	arbNodeConfig     any
 
 	disk   ethdb.KeyValueStore
 	wasmdb ethdb.KeyValueStore

@@ -1347,6 +1347,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.GasFeeCap = (*hexutil.Big)(inner.GasFeeCap)
 		result.ChainID = (*hexutil.Big)(inner.ChainId)
 	case *types.ArbitrumUnsignedTx:
+		result.GasFeeCap = (*hexutil.Big)(inner.GasFeeCap)
 		result.ChainID = (*hexutil.Big)(inner.ChainId)
 	}
 	return result

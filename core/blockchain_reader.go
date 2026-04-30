@@ -429,7 +429,11 @@ func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 // Live states are not available and won't be served, please use `State`
 // or `StateAt` instead.
 func (bc *BlockChain) HistoricState(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, state.NewHistoricDatabase(bc.triedb, bc.codedb))
+	hdb := state.NewHistoricDatabase(bc.triedb, bc.codedb)
+	// Propagate node-level config from the live Database so that tx execution
+	// against historical state uses the same settings as live execution.
+	hdb.SetArbNodeConfig(bc.statedb.ArbNodeConfig())
+	return state.New(root, hdb)
 }
 
 // Config retrieves the chain's fork configuration.
