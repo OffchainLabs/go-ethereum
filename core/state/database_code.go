@@ -203,6 +203,10 @@ func (b *CodeBatch) Commit() error {
 // CodeDB is responsible for managing the contract code and provides the access
 // to it. It can be used as a global object, sharing it between multiple entities.
 type CodeDB struct {
+	// Arbitrum
+	activatedAsmCache *lru.SizeConstrainedCache[activatedAsmCacheKey, []byte]
+	arbNodeConfig     any
+
 	db    ethdb.KeyValueStore
 	cache *codeCache
 }
@@ -210,6 +214,9 @@ type CodeDB struct {
 // NewCodeDB constructs the contract code database with the provided key value store.
 func NewCodeDB(db ethdb.KeyValueStore) *CodeDB {
 	return &CodeDB{
+		// Arbitrum only
+		activatedAsmCache: lru.NewSizeConstrainedCache[activatedAsmCacheKey, []byte](activatedWasmCacheSize),
+
 		db:    db,
 		cache: newCodeCache(),
 	}

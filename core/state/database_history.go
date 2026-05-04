@@ -222,8 +222,6 @@ func (r *historicalTrieReader) Storage(addr common.Address, key common.Hash) (co
 // HistoricDB is the implementation of Database interface, with the ability to
 // access historical state.
 type HistoricDB struct {
-	arbNodeConfig any
-
 	disk   ethdb.KeyValueStore
 	wasmdb ethdb.KeyValueStore
 	triedb *triedb.Database
@@ -314,14 +312,6 @@ func (db *HistoricDB) ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Ha
 func (db *HistoricDB) WasmStore() ethdb.KeyValueStore {
 	return db.wasmdb
 }
-
-// ArbNodeConfig / SetArbNodeConfig mirror the CachingDB pair so that
-// historical-state execution paths (e.g., eth_call / tracers / estimate-gas
-// falling back to HistoricState under pathdb) see the same node-level config
-// as the live CachingDB. The caller copies the value from the live Database
-// into the HistoricDB at construction time (see BlockChain.HistoricState).
-func (db *HistoricDB) ArbNodeConfig() any       { return db.arbNodeConfig }
-func (db *HistoricDB) SetArbNodeConfig(cfg any) { db.arbNodeConfig = cfg }
 
 func (db *HistoricDB) DiskDB() ethdb.KeyValueStore {
 	return db.disk

@@ -432,7 +432,7 @@ func (bc *BlockChain) HistoricState(root common.Hash) (*state.StateDB, error) {
 	hdb := state.NewHistoricDatabase(bc.triedb, bc.codedb)
 	// Propagate node-level config from the live Database so that tx execution
 	// against historical state uses the same settings as live execution.
-	hdb.SetArbNodeConfig(bc.statedb.ArbNodeConfig())
+	hdb.CodeDB().SetArbNodeConfig(bc.CodeDB().ArbNodeConfig())
 	return state.New(root, hdb)
 }
 
