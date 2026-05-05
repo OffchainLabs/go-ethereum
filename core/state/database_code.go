@@ -207,15 +207,17 @@ type CodeDB struct {
 	activatedAsmCache *lru.SizeConstrainedCache[activatedAsmCacheKey, []byte]
 	arbNodeConfig     any
 
-	db    ethdb.KeyValueStore
-	cache *codeCache
+	wasmdb ethdb.KeyValueStore
+	db     ethdb.KeyValueStore
+	cache  *codeCache
 }
 
 // NewCodeDB constructs the contract code database with the provided key value store.
-func NewCodeDB(db ethdb.KeyValueStore) *CodeDB {
+func NewCodeDB(db ethdb.Database) *CodeDB {
 	return &CodeDB{
 		// Arbitrum only
 		activatedAsmCache: lru.NewSizeConstrainedCache[activatedAsmCacheKey, []byte](activatedWasmCacheSize),
+		wasmdb:            db.WasmDataBase(),
 
 		db:    db,
 		cache: newCodeCache(),

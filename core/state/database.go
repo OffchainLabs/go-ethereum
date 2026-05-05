@@ -35,16 +35,9 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
-const (
-	// Arbitrum: Cache size granted for caching clean compiled wasm code.
-	activatedWasmCacheSize = 64 * 1024 * 1024
-)
-
 // Database wraps access to tries and contract code.
 type Database interface {
-	// Arbitrum: Read activated Stylus contracts
-	ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) []byte
-	WasmStore() ethdb.KeyValueStore
+	// Arbitrum: expose CodeDB ia. for wasm store cached access
 	CodeDB() *CodeDB
 
 	// Reader returns a state reader associated with the specified state root.
@@ -165,11 +158,7 @@ type activatedAsmCacheKey struct {
 // state snapshot to provide functionalities for state access. It's meant to be a
 // long-live object and has a few caches inside for sharing between blocks.
 type CachingDB struct {
-	// Arbitrum
-	activatedAsmCache *lru.SizeConstrainedCache[activatedAsmCacheKey, []byte]
-
 	disk   ethdb.KeyValueStore
-	wasmdb ethdb.KeyValueStore
 	triedb *triedb.Database
 	codedb *CodeDB
 	snap   *snapshot.Tree
@@ -183,13 +172,8 @@ func NewDatabase(triedb *triedb.Database, codedb *CodeDB) *CachingDB {
 	if codedb == nil {
 		codedb = NewCodeDB(triedb.Disk())
 	}
-	wasmdb := triedb.Disk().WasmDataBase()
 	return &CachingDB{
-		// Arbitrum only
-		activatedAsmCache: lru.NewSizeConstrainedCache[activatedAsmCacheKey, []byte](activatedWasmCacheSize),
-
 		disk:                   triedb.Disk(),
-		wasmdb:                 wasmdb,
 		triedb:                 triedb,
 		codedb:                 codedb,
 		TransitionStatePerRoot: lru.NewCache[common.Hash, *overlay.TransitionState](1000),
@@ -354,10 +338,6 @@ func mustCopyTrie(t Trie) Trie {
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))
 	}
-}
-
-func (db *CachingDB) WasmStore() ethdb.KeyValueStore {
-	return db.wasmdb
 }
 
 func (db *CachingDB) DiskDB() ethdb.KeyValueStore {

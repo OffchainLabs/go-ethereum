@@ -1532,7 +1532,7 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorag
 			return nil, err
 		}
 	}
-	if db := s.db.WasmStore(); db != nil && len(ret.activatedWasms) > 0 {
+	if db := s.db.CodeDB().WasmStore(); db != nil && len(ret.activatedWasms) > 0 {
 		batch := db.NewBatch()
 		// Arbitrum: write Stylus programs to disk
 		for moduleHash, asmMap := range ret.activatedWasms {
