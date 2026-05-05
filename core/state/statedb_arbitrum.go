@@ -451,6 +451,10 @@ func (s *StateDB) StartRecording() {
 	s.arbExtraData.userWasms = make(UserWasms)
 }
 
+func (s *StateDB) IsRecording() bool {
+	return s.UserWasms() != nil
+}
+
 func (s *StateDB) RecordProgram(targets []rawdb.WasmTarget, moduleHash common.Hash) error {
 	if len(targets) == 0 {
 		// nothing to record
