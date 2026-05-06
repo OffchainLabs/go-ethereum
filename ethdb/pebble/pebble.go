@@ -231,7 +231,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 			{TargetFileSize: 64 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
 
 			// Pebble doesn't use the Bloom filter at level6 for read efficiency.
-			{TargetFileSize: 128 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 128 * 1024 * 1024},
 		}
 	} else {
 		for _, level := range extraOptions.Levels {
@@ -242,6 +242,8 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 				FilterPolicy:   bloom.FilterPolicy(10),
 			})
 		}
+		// don't use the Bloom filter at last level for read efficiency
+		levels[len(levels)-1].FilterPolicy = nil
 	}
 
 	// Ensure we have some minimal caching and file guarantees
