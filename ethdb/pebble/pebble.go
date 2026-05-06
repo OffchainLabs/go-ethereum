@@ -214,8 +214,8 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	if extraOptions == nil {
 		extraOptions = &ExtraOptions{}
 	}
-	if extraOptions.MemTableStopWritesThreshold <= 0 {
-		extraOptions.MemTableStopWritesThreshold = 4
+	if extraOptions.MemTableNumber <= 0 {
+		extraOptions.MemTableNumber = 4
 	}
 	if extraOptions.MaxConcurrentCompactions == nil {
 		extraOptions.MaxConcurrentCompactions = runtime.NumCPU
@@ -271,7 +271,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	// limit unchanged allows writes to be flushed more smoothly. This helps
 	// avoid compaction spikes and mitigates write stalls caused by heavy
 	// compaction workloads.
-	memTableNumber := extraOptions.MemTableStopWritesThreshold
+	memTableNumber := extraOptions.MemTableNumber
 	memTableSize := cache * 1024 * 1024 / 2 / memTableNumber
 
 	// The memory table size is currently capped at maxMemTableSize-1 due to a
