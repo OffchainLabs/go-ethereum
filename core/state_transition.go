@@ -232,6 +232,8 @@ type MessageRunContext struct {
 
 	wasmCacheTag uint32
 	wasmTargets  []rawdb.WasmTarget
+
+	tipRecording bool
 }
 
 func NewMessageSequencingContext(wasmTargets []rawdb.WasmTarget) *MessageRunContext {
@@ -277,6 +279,12 @@ func NewMessageRecordingContext(wasmTargets []rawdb.WasmTarget) *MessageRunConte
 		runMode:     messageRecordingMode,
 		wasmTargets: wasmTargets,
 	}
+}
+
+func NewTipRecordingContext(ctx *MessageRunContext) *MessageRunContext {
+	tipRecordingCtx := *ctx
+	tipRecordingCtx.tipRecording = true
+	return &tipRecordingCtx
 }
 
 func NewMessagePrefetchContext() *MessageRunContext {
@@ -339,6 +347,10 @@ func (c *MessageRunContext) IsEthcall() bool {
 
 func (c *MessageRunContext) IsRecording() bool {
 	return c.runMode == messageRecordingMode
+}
+
+func (c *MessageRunContext) IsTipRecording() bool {
+	return c.tipRecording
 }
 
 func (c *MessageRunContext) WasmCacheTag() uint32 {

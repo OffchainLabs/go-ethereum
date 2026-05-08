@@ -6,24 +6,20 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
-type tipNodeRecorder struct {
+type recordingNodeReader struct {
 	inner           database.NodeReader
 	recordingTrieDB *RecordingTrieDB
 }
 
-func (r *tipNodeRecorder) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
+func (r *recordingNodeReader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
 	preimage, err := r.inner.Node(owner, path, hash)
 	if err != nil {
 		return nil, err
@@ -35,24 +31,26 @@ func (r *tipNodeRecorder) Node(owner common.Hash, path []byte, hash common.Hash)
 }
 
 type RecordingTrieDB struct {
-	inner     *triedb.Database
-	mutex     sync.Mutex
-	preimages map[common.Hash][]byte
+	*triedb.Database
+	mutex      sync.Mutex
+	preimages  map[common.Hash][]byte
+	codeHashes map[common.Hash]struct{}
 }
 
 func NewRecordingTrieDB(inner *triedb.Database) *RecordingTrieDB {
 	return &RecordingTrieDB{
-		inner:     inner,
-		preimages: make(map[common.Hash][]byte),
+		Database:   inner,
+		preimages:  make(map[common.Hash][]byte),
+		codeHashes: make(map[common.Hash]struct{}),
 	}
 }
 
 func (d *RecordingTrieDB) NodeReader(stateRoot common.Hash) (database.NodeReader, error) {
-	reader, err := d.inner.NodeReader(stateRoot)
+	reader, err := d.Database.NodeReader(stateRoot)
 	if err != nil {
 		return nil, err
 	}
-	return &tipNodeRecorder{
+	return &recordingNodeReader{
 		inner:           reader,
 		recordingTrieDB: d,
 	}, nil
@@ -71,6 +69,13 @@ func (d *RecordingTrieDB) record(hash common.Hash, blob []byte) {
 	d.preimages[hash] = copied
 }
 
+func (d *RecordingTrieDB) recordCode(codeHash common.Hash) {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
+	d.codeHashes[codeHash] = struct{}{}
+}
+
 func (d *RecordingTrieDB) Preimages() map[common.Hash][]byte {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
@@ -82,20 +87,39 @@ func (d *RecordingTrieDB) Preimages() map[common.Hash][]byte {
 	return copied
 }
 
+func (d *RecordingTrieDB) CodeHashes() []common.Hash {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
+	codeHashes := make([]common.Hash, 0, len(d.codeHashes))
+	for codeHash := range d.codeHashes {
+		codeHashes = append(codeHashes, codeHash)
+	}
+	return codeHashes
+}
+
 type TipRecordingStateDatabase struct {
-	inner           state.Database
+	state.Database
 	recordingTrieDB *RecordingTrieDB
 }
 
 func NewTipRecordingStateDatabase(inner state.Database) *TipRecordingStateDatabase {
 	return &TipRecordingStateDatabase{
-		inner:           inner,
+		Database:        inner,
 		recordingTrieDB: NewRecordingTrieDB(inner.TrieDB()),
 	}
 }
 
 func (r *TipRecordingStateDatabase) Preimages() map[common.Hash][]byte {
 	return r.recordingTrieDB.Preimages()
+}
+
+func (r *TipRecordingStateDatabase) CodeHashes() []common.Hash {
+	return r.recordingTrieDB.CodeHashes()
+}
+
+func (r *TipRecordingStateDatabase) TrieDB() *triedb.Database {
+	return r.recordingTrieDB.Database
 }
 
 func (r *TipRecordingStateDatabase) OpenTrie(root common.Hash) (state.Trie, error) {
@@ -115,7 +139,7 @@ func (r *TipRecordingStateDatabase) OpenStorageTrie(stateRoot common.Hash, addre
 }
 
 func (r *TipRecordingStateDatabase) Reader(root common.Hash) (state.Reader, error) {
-	innerReader, err := r.inner.Reader(root)
+	innerReader, err := r.Database.Reader(root)
 	if err != nil {
 		return nil, err
 	}
@@ -133,38 +157,6 @@ func (r *TipRecordingStateDatabase) Reader(root common.Hash) (state.Reader, erro
 		subRoots:    make(map[common.Address]common.Hash),
 		subTries:    make(map[common.Address]state.Trie),
 	}, nil
-}
-
-func (r *TipRecordingStateDatabase) ArbNodeConfig() any {
-	return r.inner.ArbNodeConfig()
-}
-
-func (r *TipRecordingStateDatabase) SetArbNodeConfig(cfg any) {
-	r.inner.SetArbNodeConfig(cfg)
-}
-
-func (r *TipRecordingStateDatabase) ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) []byte {
-	return r.inner.ActivatedAsm(target, moduleHash)
-}
-
-func (r *TipRecordingStateDatabase) DiskDB() ethdb.KeyValueStore {
-	return r.inner.DiskDB()
-}
-
-func (r *TipRecordingStateDatabase) PointCache() *utils.PointCache {
-	return r.inner.PointCache()
-}
-
-func (r *TipRecordingStateDatabase) TrieDB() *triedb.Database {
-	return r.inner.TrieDB()
-}
-
-func (r *TipRecordingStateDatabase) WasmStore() ethdb.KeyValueStore {
-	return r.inner.WasmStore()
-}
-
-func (r *TipRecordingStateDatabase) Snapshot() *snapshot.Tree {
-	return r.inner.Snapshot()
 }
 
 type recordingReader struct {
@@ -236,15 +228,18 @@ func (r *recordingReader) Code(addr common.Address, codeHash common.Hash) ([]byt
 		return nil, err
 	}
 	if len(code) > 0 {
-		r.db.recordingTrieDB.record(codeHash, code)
+		r.db.recordingTrieDB.recordCode(codeHash)
 	}
 	return code, nil
 }
 
 func (r *recordingReader) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
-	code, err := r.Code(addr, codeHash)
+	size, err := r.innerReader.CodeSize(addr, codeHash)
 	if err != nil {
 		return 0, err
 	}
-	return len(code), nil
+	if size > 0 {
+		r.db.recordingTrieDB.recordCode(codeHash)
+	}
+	return size, nil
 }
