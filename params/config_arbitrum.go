@@ -47,7 +47,7 @@ const ArbosVersion_FixRedeemGas = ArbosVersion_11
 const ArbosVersion_Stylus = ArbosVersion_30
 const ArbosVersion_StylusFixes = ArbosVersion_31
 const ArbosVersion_StylusChargingFixes = ArbosVersion_32
-const MaxArbosVersionSupported = ArbosVersion_59
+const MaxArbosVersionSupported = ArbosVersion_60
 const MaxDebugArbosVersionSupported = ArbosVersion_60
 const ArbosVersion_Dia = ArbosVersion_50
 
