@@ -7,7 +7,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -64,9 +63,7 @@ func (d *RecordingTrieDB) record(hash common.Hash, blob []byte) {
 		return
 	}
 
-	copied := make([]byte, len(blob))
-	copy(copied, blob)
-	d.preimages[hash] = copied
+	d.preimages[hash] = blob
 }
 
 func (d *RecordingTrieDB) recordCode(codeHash common.Hash) {
@@ -82,7 +79,7 @@ func (d *RecordingTrieDB) Preimages() map[common.Hash][]byte {
 
 	copied := make(map[common.Hash][]byte, len(d.preimages))
 	for k, v := range d.preimages {
-		copied[k] = common.CopyBytes(v)
+		copied[k] = v
 	}
 	return copied
 }
@@ -139,91 +136,32 @@ func (r *TipRecordingStateDatabase) OpenStorageTrie(stateRoot common.Hash, addre
 }
 
 func (r *TipRecordingStateDatabase) Reader(root common.Hash) (state.Reader, error) {
-	innerReader, err := r.Database.Reader(root)
+	codeReader, err := r.Database.Reader(root)
 	if err != nil {
 		return nil, err
 	}
 
-	trie, err := r.OpenTrie(root)
+	stateReader, err := state.NewTrieReader(root, r.recordingTrieDB, r.Database.PointCache())
 	if err != nil {
 		return nil, err
 	}
 
 	return &recordingReader{
-		root:        root,
+		StateReader: stateReader,
 		db:          r,
-		innerReader: innerReader,
-		mainTrie:    trie,
-		subRoots:    make(map[common.Address]common.Hash),
-		subTries:    make(map[common.Address]state.Trie),
+		codeReader:  codeReader,
 	}, nil
 }
 
 type recordingReader struct {
-	root        common.Hash
-	db          *TipRecordingStateDatabase
-	innerReader state.Reader // for code reads (we intercept and record)
+	state.StateReader
 
-	// Trie state, mirroring trieReader in core/state/reader.go
-	mainTrie state.Trie
-	subRoots map[common.Address]common.Hash // Set of storage roots, cached when the account is resolved
-	subTries map[common.Address]state.Trie  // Group of storage tries, cached when it's resolved
-	lock     sync.Mutex                     // Lock for protecting concurrent read
-}
-
-// account is the inner version of Account and assumes the r.lock is already held.
-func (r *recordingReader) account(addr common.Address) (*types.StateAccount, error) {
-	account, err := r.mainTrie.GetAccount(addr)
-	if err != nil {
-		return nil, err
-	}
-	if account == nil {
-		r.subRoots[addr] = types.EmptyRootHash
-	} else {
-		r.subRoots[addr] = account.Root
-	}
-	return account, nil
-}
-
-func (r *recordingReader) Account(addr common.Address) (*types.StateAccount, error) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
-	return r.account(addr)
-}
-
-func (r *recordingReader) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
-	tr, found := r.subTries[addr]
-	if !found {
-		root, ok := r.subRoots[addr]
-		if !ok {
-			_, err := r.account(addr)
-			if err != nil {
-				return common.Hash{}, err
-			}
-			root = r.subRoots[addr]
-		}
-		var err error
-		tr, err = r.db.OpenStorageTrie(r.root, addr, root, nil)
-		if err != nil {
-			return common.Hash{}, err
-		}
-		r.subTries[addr] = tr
-	}
-	ret, err := tr.GetStorage(addr, slot.Bytes())
-	if err != nil {
-		return common.Hash{}, err
-	}
-	var value common.Hash
-	value.SetBytes(ret)
-	return value, nil
+	db         *TipRecordingStateDatabase
+	codeReader state.ContractCodeReader // for code reads (we intercept and record)
 }
 
 func (r *recordingReader) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
-	code, err := r.innerReader.Code(addr, codeHash)
+	code, err := r.codeReader.Code(addr, codeHash)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +172,7 @@ func (r *recordingReader) Code(addr common.Address, codeHash common.Hash) ([]byt
 }
 
 func (r *recordingReader) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
-	size, err := r.innerReader.CodeSize(addr, codeHash)
+	size, err := r.codeReader.CodeSize(addr, codeHash)
 	if err != nil {
 		return 0, err
 	}

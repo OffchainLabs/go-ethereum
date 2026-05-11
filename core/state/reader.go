@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/utils"
-	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
@@ -215,13 +214,27 @@ func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 	return value, nil
 }
 
+// TrieReaderDatabase is the trie database functionality needed by the
+// trie-backed state reader.
+type TrieReaderDatabase interface {
+	database.NodeDatabase
+	IsVerkle() bool
+	Disk() ethdb.Database
+}
+
+// NewTrieReader returns a trie-backed state reader using the supplied trie
+// database.
+func NewTrieReader(root common.Hash, db TrieReaderDatabase, pointCache *utils.PointCache) (StateReader, error) {
+	return newTrieReader(root, db, pointCache)
+}
+
 // trieReader implements the StateReader interface, providing functions to access
 // state from the referenced trie.
 //
 // trieReader is safe for concurrent read.
 type trieReader struct {
-	root common.Hash      // State root which uniquely represent a state
-	db   *triedb.Database // Database for loading trie
+	root common.Hash        // State root which uniquely represent a state
+	db   TrieReaderDatabase // Database for loading trie
 
 	// Main trie, resolved in constructor. Note either the Merkle-Patricia-tree
 	// or Verkle-tree is not safe for concurrent read.
@@ -234,7 +247,7 @@ type trieReader struct {
 
 // newTrieReader constructs a trie reader of the specific state. An error will be
 // returned if the associated trie specified by root is not existent.
-func newTrieReader(root common.Hash, db *triedb.Database, cache *utils.PointCache) (*trieReader, error) {
+func newTrieReader(root common.Hash, db TrieReaderDatabase, cache *utils.PointCache) (*trieReader, error) {
 	var (
 		tr  Trie
 		err error
