@@ -31,16 +31,15 @@ func (r *recordingNodeReader) Node(owner common.Hash, path []byte, hash common.H
 
 type RecordingTrieDB struct {
 	*triedb.Database
-	mutex      sync.Mutex
-	preimages  map[common.Hash][]byte
-	codeHashes map[common.Hash]struct{}
+	mutex     sync.Mutex
+	stopped   bool
+	preimages map[common.Hash][]byte
 }
 
 func NewRecordingTrieDB(inner *triedb.Database) *RecordingTrieDB {
 	return &RecordingTrieDB{
-		Database:   inner,
-		preimages:  make(map[common.Hash][]byte),
-		codeHashes: make(map[common.Hash]struct{}),
+		Database:  inner,
+		preimages: make(map[common.Hash][]byte),
 	}
 }
 
@@ -59,6 +58,9 @@ func (d *RecordingTrieDB) record(hash common.Hash, blob []byte) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 
+	if d.stopped {
+		return
+	}
 	if _, exists := d.preimages[hash]; exists {
 		return
 	}
@@ -66,43 +68,32 @@ func (d *RecordingTrieDB) record(hash common.Hash, blob []byte) {
 	d.preimages[hash] = blob
 }
 
-func (d *RecordingTrieDB) recordCode(codeHash common.Hash) {
+// StopRecording freezes the current recording so later trie reads are ignored.
+func (d *RecordingTrieDB) StopRecording() {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 
-	d.codeHashes[codeHash] = struct{}{}
+	d.stopped = true
 }
 
+// Preimages returns the recorded trie preimages. StopRecording must be called
+// first; the returned map is not safe while recording is active.
 func (d *RecordingTrieDB) Preimages() map[common.Hash][]byte {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-
-	copied := make(map[common.Hash][]byte, len(d.preimages))
-	for k, v := range d.preimages {
-		copied[k] = v
-	}
-	return copied
-}
-
-func (d *RecordingTrieDB) CodeHashes() []common.Hash {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-
-	codeHashes := make([]common.Hash, 0, len(d.codeHashes))
-	for codeHash := range d.codeHashes {
-		codeHashes = append(codeHashes, codeHash)
-	}
-	return codeHashes
+	return d.preimages
 }
 
 type TipRecordingStateDatabase struct {
 	state.Database
+	mutex           sync.Mutex
+	stopped         bool
+	codeHashes      map[common.Hash]struct{}
 	recordingTrieDB *RecordingTrieDB
 }
 
 func NewTipRecordingStateDatabase(inner state.Database) *TipRecordingStateDatabase {
 	return &TipRecordingStateDatabase{
 		Database:        inner,
+		codeHashes:      make(map[common.Hash]struct{}),
 		recordingTrieDB: NewRecordingTrieDB(inner.TrieDB()),
 	}
 }
@@ -111,8 +102,33 @@ func (r *TipRecordingStateDatabase) Preimages() map[common.Hash][]byte {
 	return r.recordingTrieDB.Preimages()
 }
 
+// StopRecording freezes the current tip recording.
+func (r *TipRecordingStateDatabase) StopRecording() {
+	r.mutex.Lock()
+	r.stopped = true
+	r.mutex.Unlock()
+
+	r.recordingTrieDB.StopRecording()
+}
+
+func (r *TipRecordingStateDatabase) recordCode(codeHash common.Hash) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	if r.stopped {
+		return
+	}
+	r.codeHashes[codeHash] = struct{}{}
+}
+
+// CodeHashes returns the recorded code hashes. StopRecording must be called
+// first; the returned slice is not safe while recording is active.
 func (r *TipRecordingStateDatabase) CodeHashes() []common.Hash {
-	return r.recordingTrieDB.CodeHashes()
+	codeHashes := make([]common.Hash, 0, len(r.codeHashes))
+	for codeHash := range r.codeHashes {
+		codeHashes = append(codeHashes, codeHash)
+	}
+	return codeHashes
 }
 
 func (r *TipRecordingStateDatabase) TrieDB() *triedb.Database {
@@ -120,6 +136,9 @@ func (r *TipRecordingStateDatabase) TrieDB() *triedb.Database {
 }
 
 func (r *TipRecordingStateDatabase) OpenTrie(root common.Hash) (state.Trie, error) {
+	if r.recordingTrieDB.IsVerkle() {
+		panic("TipRecordingStateDatabase.OpenTrie called with Verkle trie database")
+	}
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), r.recordingTrieDB)
 	if err != nil {
 		return nil, err
@@ -128,6 +147,9 @@ func (r *TipRecordingStateDatabase) OpenTrie(root common.Hash) (state.Trie, erro
 }
 
 func (r *TipRecordingStateDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, parent state.Trie) (state.Trie, error) {
+	if r.recordingTrieDB.IsVerkle() {
+		panic("TipRecordingStateDatabase.OpenStorageTrie called with Verkle trie database")
+	}
 	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), r.recordingTrieDB)
 	if err != nil {
 		return nil, err
@@ -166,7 +188,7 @@ func (r *recordingReader) Code(addr common.Address, codeHash common.Hash) ([]byt
 		return nil, err
 	}
 	if len(code) > 0 {
-		r.db.recordingTrieDB.recordCode(codeHash)
+		r.db.recordCode(codeHash)
 	}
 	return code, nil
 }
@@ -177,7 +199,7 @@ func (r *recordingReader) CodeSize(addr common.Address, codeHash common.Hash) (i
 		return 0, err
 	}
 	if size > 0 {
-		r.db.recordingTrieDB.recordCode(codeHash)
+		r.db.recordCode(codeHash)
 	}
 	return size, nil
 }
