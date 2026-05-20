@@ -141,13 +141,25 @@ type RecordingChainContext struct {
 	bc                     core.ChainContext
 	minBlockNumberAccessed uint64
 	initialBlockNumber     uint64
+	initialBlockHash       common.Hash
 }
 
-func newRecordingChainContext(inner core.ChainContext, blocknumber uint64) *RecordingChainContext {
+// NewRecordingChainContext wraps a chain context and tracks the minimum block
+// number accessed through header lookups.
+func NewRecordingChainContext(inner core.ChainContext, header *types.Header) *RecordingChainContext {
+	var (
+		blockNumber uint64
+		blockHash   common.Hash
+	)
+	if header != nil {
+		blockNumber = header.Number.Uint64()
+		blockHash = header.Hash()
+	}
 	return &RecordingChainContext{
 		bc:                     inner,
-		minBlockNumberAccessed: blocknumber,
-		initialBlockNumber:     blocknumber,
+		minBlockNumberAccessed: blockNumber,
+		initialBlockNumber:     blockNumber,
+		initialBlockHash:       blockHash,
 	}
 }
 
@@ -197,6 +209,56 @@ func (r *RecordingChainContext) GetHeaderByHash(hash common.Hash) *types.Header 
 		}
 	}
 	return header
+}
+
+type RecordedHeaderPreimage struct {
+	ParentHash common.Hash
+	Preimage   []byte
+}
+
+type RecordedHeaderPreimageCache interface {
+	GetRecordedHeaderPreimage(blockNumber uint64, hash common.Hash) (RecordedHeaderPreimage, bool)
+	AddRecordedHeaderPreimage(blockNumber uint64, hash common.Hash, entry RecordedHeaderPreimage)
+}
+
+func AddRecordedHeaderPreimages(entries map[common.Hash][]byte, chainContext core.ChainContext, initialBlockHash common.Hash, initialBlockNumber uint64, minBlockNumber uint64) error {
+	return AddRecordedHeaderPreimagesWithCache(entries, chainContext, initialBlockHash, initialBlockNumber, minBlockNumber, nil)
+}
+
+func AddRecordedHeaderPreimagesWithCache(entries map[common.Hash][]byte, chainContext core.ChainContext, initialBlockHash common.Hash, initialBlockNumber uint64, minBlockNumber uint64, cache RecordedHeaderPreimageCache) error {
+	if minBlockNumber > initialBlockNumber {
+		return nil
+	}
+	headerHash := initialBlockHash
+	for headerNum := initialBlockNumber; ; headerNum-- {
+		var entry RecordedHeaderPreimage
+		var ok bool
+		if cache != nil {
+			entry, ok = cache.GetRecordedHeaderPreimage(headerNum, headerHash)
+		}
+		if !ok {
+			header := chainContext.GetHeader(headerHash, headerNum)
+			if header == nil {
+				return fmt.Errorf("failed to load header %d hash %s for recording", headerNum, headerHash)
+			}
+			encodedHeader, err := rlp.EncodeToBytes(header)
+			if err != nil {
+				return fmt.Errorf("error RLP encoding header %d hash %s: %w", headerNum, headerHash, err)
+			}
+			entry = RecordedHeaderPreimage{
+				ParentHash: header.ParentHash,
+				Preimage:   encodedHeader,
+			}
+			if cache != nil {
+				cache.AddRecordedHeaderPreimage(headerNum, headerHash, entry)
+			}
+		}
+		entries[headerHash] = entry.Preimage
+		if headerNum == minBlockNumber {
+			return nil
+		}
+		headerHash = entry.ParentHash
+	}
 }
 
 type RecordingDatabaseConfig struct {
@@ -315,7 +377,7 @@ func (r *RecordingDatabase) PrepareRecording(ctx context.Context, lastBlockHeade
 		if !lastBlockHeader.Number.IsUint64() {
 			return nil, nil, nil, errors.New("block number not uint64")
 		}
-		recordingChainContext = newRecordingChainContext(r.bc, lastBlockHeader.Number.Uint64())
+		recordingChainContext = NewRecordingChainContext(r.bc, lastBlockHeader)
 	}
 	finalDereference = nil
 	return recordingStateDb, recordingChainContext, recordingKeyValue, nil
@@ -328,14 +390,8 @@ func (r *RecordingDatabase) PreimagesFromRecording(chainContextIf core.ChainCont
 		return nil, errors.New("recordingChainContext invalid")
 	}
 
-	for i := recordingChainContext.GetMinBlockNumberAccessed(); i <= recordingChainContext.initialBlockNumber; i++ {
-		header := r.bc.GetHeaderByNumber(i)
-		hash := header.Hash()
-		bytes, err := rlp.EncodeToBytes(header)
-		if err != nil {
-			return nil, fmt.Errorf("Error RLP encoding header: %v\n", err)
-		}
-		entries[hash] = bytes
+	if err := AddRecordedHeaderPreimages(entries, r.bc, recordingChainContext.initialBlockHash, recordingChainContext.initialBlockNumber, recordingChainContext.GetMinBlockNumberAccessed()); err != nil {
+		return nil, err
 	}
 	return entries, nil
 }
