@@ -217,8 +217,8 @@ type RecordedHeaderPreimage struct {
 }
 
 type RecordedHeaderPreimageCache interface {
-	GetRecordedHeaderPreimage(blockNumber uint64, hash common.Hash) (RecordedHeaderPreimage, bool)
-	AddRecordedHeaderPreimage(blockNumber uint64, hash common.Hash, entry RecordedHeaderPreimage)
+	GetRecordedHeaderPreimage(hash common.Hash) (RecordedHeaderPreimage, bool)
+	AddRecordedHeaderPreimage(hash common.Hash, entry RecordedHeaderPreimage)
 }
 
 func AddRecordedHeaderPreimages(entries map[common.Hash][]byte, chainContext core.ChainContext, initialBlockHash common.Hash, initialBlockNumber uint64, minBlockNumber uint64) error {
@@ -234,7 +234,7 @@ func AddRecordedHeaderPreimagesWithCache(entries map[common.Hash][]byte, chainCo
 		var entry RecordedHeaderPreimage
 		var ok bool
 		if cache != nil {
-			entry, ok = cache.GetRecordedHeaderPreimage(headerNum, headerHash)
+			entry, ok = cache.GetRecordedHeaderPreimage(headerHash)
 		}
 		if !ok {
 			header := chainContext.GetHeader(headerHash, headerNum)
@@ -250,7 +250,7 @@ func AddRecordedHeaderPreimagesWithCache(entries map[common.Hash][]byte, chainCo
 				Preimage:   encodedHeader,
 			}
 			if cache != nil {
-				cache.AddRecordedHeaderPreimage(headerNum, headerHash, entry)
+				cache.AddRecordedHeaderPreimage(headerHash, entry)
 			}
 		}
 		entries[headerHash] = entry.Preimage
