@@ -27,7 +27,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ccoveille/go-safecast"
+	"github.com/ccoveille/go-safecast/v2"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -64,7 +64,7 @@ func (b *Long) UnmarshalGraphQL(input interface{}) error {
 			if err != nil {
 				return err
 			}
-			valueInt64, err := safecast.ToInt64(value)
+			valueInt64, err := safecast.Convert[int64](value)
 			*b = Long(valueInt64)
 			return err
 		} else {
