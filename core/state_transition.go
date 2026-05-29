@@ -346,7 +346,11 @@ func (c *MessageRunContext) IsEthcall() bool {
 }
 
 func (c *MessageRunContext) IsRecording() bool {
-	return c.runMode == messageRecordingMode || c.tipRecording
+	return c.runMode == messageRecordingMode
+}
+
+func (c *MessageRunContext) IsTipRecording() bool {
+	return c.tipRecording
 }
 
 func (c *MessageRunContext) WasmCacheTag() uint32 {
