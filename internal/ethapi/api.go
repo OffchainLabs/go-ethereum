@@ -954,6 +954,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		Backend:          b,
 		ErrorRatio:       gasestimator.EstimateGasErrorRatio,
 		RunScheduledTxes: retryables.RunScheduledTxes,
+		TxFilterer:       b.TxFilter(),
 	}
 	// Set any required transaction default, but make sure the gas cap itself is not messed with
 	// if it was not specified in the original argument list.
