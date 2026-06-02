@@ -42,13 +42,14 @@ const ArbosVersion_50 = uint64(50)
 const ArbosVersion_51 = uint64(51)
 const ArbosVersion_59 = uint64(59)
 const ArbosVersion_60 = uint64(60)
+const ArbosVersion_61 = uint64(61)
 
 const ArbosVersion_FixRedeemGas = ArbosVersion_11
 const ArbosVersion_Stylus = ArbosVersion_30
 const ArbosVersion_StylusFixes = ArbosVersion_31
 const ArbosVersion_StylusChargingFixes = ArbosVersion_32
-const MaxArbosVersionSupported = ArbosVersion_60
-const MaxDebugArbosVersionSupported = ArbosVersion_60
+const MaxArbosVersionSupported = ArbosVersion_61
+const MaxDebugArbosVersionSupported = ArbosVersion_61
 const ArbosVersion_Dia = ArbosVersion_50
 
 const ArbosVersion_SingleGasConstraintsVersion = ArbosVersion_50
@@ -57,6 +58,7 @@ const ArbosVersion_MultiGasConstraintsVersion = ArbosVersion_60
 const ArbosVersion_StylusContractLimit = ArbosVersion_60
 const ArbosVersion_TransactionFiltering = ArbosVersion_60
 const ArbosVersion_StylusActivationGas = ArbosVersion_60
+const ArbosVersion_MultiGasRefundFix = ArbosVersion_61
 
 const DefaultMaxUncompressedBatchSize = 16 * 1024 * 1024 // 16 MB
 
