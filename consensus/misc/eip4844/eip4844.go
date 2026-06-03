@@ -132,6 +132,10 @@ func VerifyEIP4844Header(config *params.ChainConfig, parent, header *types.Heade
 // CalcExcessBlobGas calculates the excess blob gas after applying the set of
 // blobs on top of the excess blob gas.
 func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTimestamp uint64) uint64 {
+	if config.IsArbitrum() {
+		// Arbitrum does not support blob transactions, so we return 0.
+		return 0
+	}
 	// we can use 0 here because arbitrum doesn't support Blob transactions.
 	isOsaka := config.IsOsaka(config.LondonBlock, headTimestamp, 0)
 	bcfg, err := latestBlobConfig(config, headTimestamp)
