@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -223,7 +222,6 @@ func (r *historicalTrieReader) Storage(addr common.Address, key common.Hash) (co
 // access historical state.
 type HistoricDB struct {
 	disk   ethdb.KeyValueStore
-	wasmdb ethdb.KeyValueStore
 	triedb *triedb.Database
 	codedb *CodeDB
 }
@@ -233,10 +231,8 @@ func NewHistoricDatabase(triedb *triedb.Database, codedb *CodeDB) *HistoricDB {
 	if codedb == nil {
 		codedb = NewCodeDB(triedb.Disk())
 	}
-	wasmdb := triedb.Disk().WasmDataBase()
 	return &HistoricDB{
 		disk:   triedb.Disk(),
-		wasmdb: wasmdb,
 		triedb: triedb,
 		codedb: codedb,
 	}
@@ -302,15 +298,6 @@ func (db *HistoricDB) TrieDB() *triedb.Database {
 // Snapshot returns the underlying state snapshot.
 func (db *HistoricDB) Snapshot() *snapshot.Tree {
 	return nil
-}
-
-func (db *HistoricDB) ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) []byte {
-	// not implemented
-	return nil
-}
-
-func (db *HistoricDB) WasmStore() ethdb.KeyValueStore {
-	return db.wasmdb
 }
 
 func (db *HistoricDB) DiskDB() ethdb.KeyValueStore {
