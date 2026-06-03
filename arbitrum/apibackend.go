@@ -21,7 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth"
@@ -570,7 +569,7 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 		return statedb, header, nil
 	}
 
-	stateFor := func(db state.Database, snapshots *snapshot.Tree) func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
+	stateFor := func(db state.Database) func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
 		return func(header *types.Header) (*state.StateDB, StateReleaseFunc, error) {
 			if header.Root != (common.Hash{}) {
 				// Try referencing the root, if it isn't in dirties cache then Reference will have no effect
@@ -587,7 +586,7 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 			return statedb, NoopStateRelease, nil
 		}
 	}
-	liveState, liveStateRelease, err := stateFor(state.NewDatabase(bc.TrieDB(), bc.CodeDB()), bc.Snapshots())(header)
+	liveState, liveStateRelease, err := stateFor(state.NewDatabase(bc.TrieDB(), bc.CodeDB()).WithSnapshot(bc.Snapshots()))(header)
 	if err == nil {
 		liveStatesReferencedCounter.Inc(1)
 		liveState.SetArbFinalizer(func(*state.ArbitrumExtraData) {
@@ -604,7 +603,7 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 	// note: snapshots are not used here
 	ephemeral := state.NewDatabase(triedb.NewDatabase(chainDb, triedb.HashDefaults), nil)
 	ephemeral.CodeDB().SetArbNodeConfig(bc.CodeDB().ArbNodeConfig())
-	lastState, lastHeader, lastStateRelease, err := FindLastAvailableState(ctx, bc, stateFor(ephemeral, nil), header, nil, maxRecreateStateDepth)
+	lastState, lastHeader, lastStateRelease, err := FindLastAvailableState(ctx, bc, stateFor(ephemeral), header, nil, maxRecreateStateDepth)
 	if err != nil {
 		return nil, nil, err
 	}
