@@ -346,7 +346,9 @@ var ErrArbTxFilter error = errors.New("internal error")
 // Implementations manage their own synchronization (sync, WaitGroup, channels, etc).
 type AddressCheckerState interface {
 	// TouchAddress records an address access and checks if it should be filtered.
-	TouchAddress(record *filter.FilteredAddressRecord)
+	// The checker is responsible for attaching the filter set ID to produce the
+	// final FilteredAddressRecord.
+	TouchAddress(*filter.FilteredAddressWithReason)
 
 	// IsFiltered returns whether any touched address was filtered and the
 	// list of filtered address records collected during the transaction.

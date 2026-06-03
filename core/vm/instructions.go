@@ -928,8 +928,7 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		top         = scope.Stack.pop()
 		beneficiary = common.Address(top.Bytes20())
 	)
-
-	evm.StateDB.TouchAddress(&filter.FilteredAddressRecord{
+	evm.StateDB.TouchAddress(&filter.FilteredAddressWithReason{
 		Address:      beneficiary,
 		FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary, EventRuleMatch: nil},
 	})
@@ -975,7 +974,7 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 		return nil, ErrExecutionReverted
 	}
 
-	evm.StateDB.TouchAddress(&filter.FilteredAddressRecord{
+	evm.StateDB.TouchAddress(&filter.FilteredAddressWithReason{
 		Address:      beneficiary,
 		FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary, EventRuleMatch: nil},
 	})

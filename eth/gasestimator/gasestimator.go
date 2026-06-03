@@ -50,6 +50,7 @@ type Options struct {
 	BlockOverrides   *override.BlockOverrides // Block overrides to apply during the estimation
 	Backend          core.NodeInterfaceBackendAPI
 	RunScheduledTxes func(context.Context, core.NodeInterfaceBackendAPI, *state.StateDB, *types.Header, vm.BlockContext, *core.MessageRunContext, *core.ExecutionResult, core.TxFilterer) (*core.ExecutionResult, error)
+	TxFilterer       core.TxFilterer // If non-nil, applies address/event filtering during estimation
 
 	ErrorRatio float64 // Allowed overestimation ratio for faster estimation termination
 }
@@ -281,13 +282,13 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	}
 
 	// Arbitrum: set up address filtering
-	txFilterer := opts.Backend.TxFilter()
+	txFilterer := opts.TxFilterer
 	if txFilterer != nil {
 		txFilterer.Setup(dirtyState)
 
-		dirtyState.TouchAddress(&filter.FilteredAddressRecord{Address: call.From, FilterReason: filter.FilterReason{Reason: filter.ReasonFrom, EventRuleMatch: nil}})
+		dirtyState.TouchAddress(&filter.FilteredAddressWithReason{Address: call.From, FilterReason: filter.FilterReason{Reason: filter.ReasonFrom, EventRuleMatch: nil}})
 		if call.To != nil {
-			dirtyState.TouchAddress(&filter.FilteredAddressRecord{Address: *call.To, FilterReason: filter.FilterReason{Reason: filter.ReasonTo, EventRuleMatch: nil}})
+			dirtyState.TouchAddress(&filter.FilteredAddressWithReason{Address: *call.To, FilterReason: filter.FilterReason{Reason: filter.ReasonTo, EventRuleMatch: nil}})
 		}
 	}
 
@@ -313,7 +314,7 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 
 	// Arbitrum: check address filtering result
 	if txFilterer != nil {
-		if err := txFilterer.CheckFiltered(dirtyState); err != nil {
+		if err := txFilterer.CheckFiltered(dirtyState, call.Tx, opts.Header); err != nil {
 			return nil, err
 		}
 	}
