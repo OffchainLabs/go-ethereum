@@ -220,6 +220,9 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	if extraOptions.MaxConcurrentCompactions == nil {
 		extraOptions.MaxConcurrentCompactions = runtime.NumCPU
 	}
+	if extraOptions.Experimental.ReadSamplingMultiplier <= 0 {
+		extraOptions.Experimental.ReadSamplingMultiplier = -1 // sanitize disabling and default to disabled
+	}
 	var levels []pebble.LevelOptions
 	if len(extraOptions.Levels) == 0 {
 		levels = []pebble.LevelOptions{
@@ -343,11 +346,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	}
 	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
 	// for more details.
-	opt.Experimental.ReadSamplingMultiplier = -1
-
-	if opt.Experimental.ReadSamplingMultiplier != 0 {
-		opt.Experimental.ReadSamplingMultiplier = extraOptions.Experimental.ReadSamplingMultiplier
-	}
+	opt.Experimental.ReadSamplingMultiplier = extraOptions.Experimental.ReadSamplingMultiplier
 	opt.Experimental.L0CompactionConcurrency = extraOptions.Experimental.L0CompactionConcurrency
 	opt.Experimental.CompactionDebtConcurrency = extraOptions.Experimental.CompactionDebtConcurrency
 	opt.Experimental.ReadCompactionRate = extraOptions.Experimental.ReadCompactionRate
