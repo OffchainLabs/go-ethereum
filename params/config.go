@@ -1435,14 +1435,14 @@ func (err *ConfigCompatError) Error() string {
 // Rules is a one time interface meaning that it shouldn't be used in between transition
 // phases.
 type Rules struct {
-	IsArbitrum, IsStylus, IsGreaterEqual41, IsDia, IsGreaterEqual60 bool
-	ArbOSVersion                                                    uint64
-	IsHomestead, IsEIP150, IsEIP155, IsEIP158                       bool
-	IsEIP2929, IsEIP4762                                            bool
-	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul         bool
-	IsBerlin, IsLondon                                              bool
-	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka                bool
-	IsAmsterdam, IsVerkle                                           bool
+	IsArbitrum, IsStylus, IsGreaterEqual41, IsDia, IsElara  bool
+	ArbOSVersion                                            uint64
+	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
+	IsEIP2929, IsEIP4762                                    bool
+	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
+	IsBerlin, IsLondon                                      bool
+	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka        bool
+	IsAmsterdam, IsVerkle                                   bool
 
 	// Arbitrum: per-chain code-size limits, derived from
 	// ArbitrumChainParams.MaxCodeSize/MaxInitCodeSize when set, or from the
@@ -1477,7 +1477,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, curren
 		IsStylus:         c.IsArbitrum() && currentArbosVersion >= ArbosVersion_Stylus,
 		IsGreaterEqual41: c.IsArbitrum() && currentArbosVersion >= ArbosVersion_41,
 		IsDia:            c.IsArbitrum() && currentArbosVersion >= ArbosVersion_Dia,
-		IsGreaterEqual60: c.IsArbitrum() && currentArbosVersion >= ArbosVersion_60,
+		IsElara:          c.IsArbitrum() && currentArbosVersion >= ArbosVersion_Elara,
 		ArbOSVersion:     currentArbosVersion,
 		IsHomestead:      c.IsHomestead(num),
 		IsEIP150:         c.IsEIP150(num),
