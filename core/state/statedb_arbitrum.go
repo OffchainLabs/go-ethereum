@@ -372,8 +372,7 @@ type ArbitrumExtraData struct {
 	recentWasms            RecentWasms
 	arbTxFilter            bool
 
-	addressChecker      AddressChecker      // shared, stateless checker factory
-	addressCheckerState AddressCheckerState // per-tx state, created in SetTxContext
+	addressCheckerState AddressCheckerState
 }
 
 func (s *StateDB) SetArbFinalizer(f func(*ArbitrumExtraData)) {

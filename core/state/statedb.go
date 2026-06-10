@@ -218,8 +218,8 @@ func (s *StateDB) IsTxFiltered() bool {
 	return s.arbExtraData.arbTxFilter
 }
 
-func (s *StateDB) SetAddressChecker(checker AddressChecker) {
-	s.arbExtraData.addressChecker = checker
+func (s *StateDB) SetAddressCheckerState(state AddressCheckerState) {
+	s.arbExtraData.addressCheckerState = state
 }
 
 func (s *StateDB) TouchAddress(touched *filter.FilteredAddressWithReason) {
@@ -754,8 +754,7 @@ func (s *StateDB) Copy() *StateDB {
 			openWasmPages:          s.arbExtraData.openWasmPages,
 			everWasmPages:          s.arbExtraData.everWasmPages,
 			arbTxFilter:            s.arbExtraData.arbTxFilter,
-			addressChecker:         s.arbExtraData.addressChecker, // shared reference, checker is stateless
-			addressCheckerState:    nil,                           // will be set in SetTxContext
+			addressCheckerState:    nil,
 		},
 
 		db:                   s.db,
@@ -1127,13 +1126,6 @@ func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 	// Arbitrum: clear memory charging state for new tx
 	s.arbExtraData.openWasmPages = 0
 	s.arbExtraData.everWasmPages = 0
-
-	// Arbitrum: create fresh address checker state for new tx
-	if s.arbExtraData.addressChecker != nil {
-		s.arbExtraData.addressCheckerState = s.arbExtraData.addressChecker.NewTxState()
-	} else {
-		s.arbExtraData.addressCheckerState = nil
-	}
 }
 
 func (s *StateDB) clearJournalAndRefund() {

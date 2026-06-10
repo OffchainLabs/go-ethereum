@@ -190,3 +190,8 @@ func (n *Backend) AdjustTime(adjustment time.Duration) error {
 func (n *Backend) Client() Client {
 	return n.client
 }
+
+// HTTPEndpoint returns the URL of the backend's HTTP RPC server.
+func (n *Backend) HTTPEndpoint() string {
+	return n.node.HTTPEndpoint()
+}
