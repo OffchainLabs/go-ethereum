@@ -569,7 +569,7 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 		if conf.IsPrague(num, g.Timestamp, arbosVersion) {
 			head.RequestsHash = &types.EmptyRequestsHash
 		}
-		if conf.IsAmsterdam(num, g.Timestamp) {
+		if conf.IsAmsterdam(num, g.Timestamp, arbosVersion) {
 			head.SlotNumber = g.SlotNumber
 			if head.SlotNumber == nil {
 				head.SlotNumber = new(uint64)

@@ -892,7 +892,10 @@ func (c *ChainConfig) IsBPO5(num *big.Int, time uint64) bool {
 }
 
 // IsAmsterdam returns whether time is either equal to the Amsterdam fork time or greater.
-func (c *ChainConfig) IsAmsterdam(num *big.Int, time uint64) bool {
+func (c *ChainConfig) IsAmsterdam(num *big.Int, time uint64, currentArbosVersion uint64) bool {
+	if c.IsArbitrum() {
+		return currentArbosVersion >= ArbosVersion_Amsterdam
+	}
 	return c.IsLondon(num) && isTimestampForked(c.AmsterdamTime, time)
 }
 
@@ -1178,7 +1181,7 @@ func (c *ChainConfig) LatestFork(time uint64, currentArbosVersion uint64) forks.
 	london := c.LondonBlock
 
 	switch {
-	case c.IsAmsterdam(london, time):
+	case c.IsAmsterdam(london, time, currentArbosVersion):
 		return forks.Amsterdam
 	case c.IsBPO5(london, time):
 		return forks.BPO5
@@ -1455,7 +1458,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, curren
 	// disallow setting Merge out of order
 	isMerge = isMerge && c.IsLondon(num)
 	isVerkle := isMerge && c.IsVerkle(num, timestamp)
-	isAmsterdam := isMerge && c.IsAmsterdam(num, timestamp)
+	isAmsterdam := isMerge && c.IsAmsterdam(num, timestamp, currentArbosVersion)
 
 	// Arbitrum chains may override the protocol code-size limits via
 	// ArbitrumChainParams; non-Arbitrum chains follow the Amsterdam-aware

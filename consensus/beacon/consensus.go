@@ -276,7 +276,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		}
 	}
 
-	amsterdam := chain.Config().IsAmsterdam(header.Number, header.Time)
+	amsterdam := chain.Config().IsAmsterdam(header.Number, header.Time, arbosVersion)
 	if amsterdam && header.SlotNumber == nil {
 		return errors.New("header is missing slotNumber")
 	}

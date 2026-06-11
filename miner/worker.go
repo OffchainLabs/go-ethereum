@@ -303,7 +303,7 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 		header.ParentBeaconRoot = genParams.beaconRoot
 	}
 	// Apply EIP-7843.
-	if miner.chainConfig.IsAmsterdam(header.Number, header.Time) {
+	if miner.chainConfig.IsAmsterdam(header.Number, header.Time, prevArbosVersion) {
 		if genParams.slotNum == nil {
 			return nil, errors.New("no slot number set post-amsterdam")
 		}
