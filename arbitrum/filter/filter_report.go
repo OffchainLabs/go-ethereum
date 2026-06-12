@@ -20,6 +20,7 @@ const (
 	ReasonCallTarget                    FilterReasonType = "call_target"
 	ReasonCreate                        FilterReasonType = "create"
 	ReasonSelfdestructBeneficiary       FilterReasonType = "selfdestruct_beneficiary"
+	ReasonToL1                          FilterReasonType = "to_l1"
 )
 
 // lint:require-exhaustive-initialization
