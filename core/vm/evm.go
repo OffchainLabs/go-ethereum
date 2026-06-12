@@ -261,6 +261,11 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 		return nil, gas, multigas.ZeroGas(), ErrDepth
 	}
 	syscall := isSystemCall(caller)
+	// Arbitrum: we want to keep the same behaviour as pre-Amsterdam:
+	// - before Amsterdam fork the transfer was called also for syscall
+	// - zero value transfer internally touches the caller address
+	// - skipping this account read would break validation using previous wasm module root
+	syscall = syscall && (!evm.chainRules.IsArbitrum || evm.chainRules.IsAmsterdam)
 
 	// Fail if we're trying to transfer more than the available balance.
 	if !syscall && !value.IsZero() && !evm.Context.CanTransfer(evm.StateDB, caller, value) {
