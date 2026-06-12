@@ -25,4 +25,6 @@ import (
 var RevertedTxGasUsed = map[common.Hash]uint64{
 	// Arbitrum Sepolia (chain_id=421614). Tx timestamp: Oct-13-2025 03:30:36 AM +UTC
 	common.HexToHash("0x58df300a7f04fe31d41d24672786cbe1c58b4f3d8329d0d74392d814dd9f7e40"): 45174,
+	// Arbitrum Sepolia (chain_id=421614). Tx timestamp: Oct-13-2025 03:31:10 AM +UTC
+	common.HexToHash("0xe22b6570bd5e539adb0363602edfc2ceeb979802d7697dcd3b203d2d734176da"): 45174,
 }
