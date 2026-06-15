@@ -23,6 +23,7 @@ import (
 
 	"github.com/holiman/uint256"
 
+	"github.com/ethereum/go-ethereum/arbitrum/filter"
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -557,6 +558,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, common.Address{}, gas, multigas.ZeroGas(), ErrDepth
 	}
+	evm.StateDB.TouchAddress(&filter.FilteredAddressWithReason{Address: address, FilterReason: filter.FilterReason{Reason: filter.ReasonCreate, EventRuleMatch: nil}})
 	if !evm.Context.CanTransfer(evm.StateDB, caller, value) {
 		return nil, common.Address{}, gas, multigas.ZeroGas(), ErrInsufficientBalance
 	}

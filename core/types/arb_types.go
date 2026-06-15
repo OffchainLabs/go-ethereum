@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -650,6 +651,19 @@ func (info HeaderInfo) UpdateHeaderWithInfo(header *Header) {
 	header.Extra = info.extra()
 }
 
+// legacyZeroBaseFeeUntil restores the pre-v3.7 guard (dropped in upstream
+// geth commit 61ab3402a6) that reported ArbOS<=40 zero-basefee headers as
+// non-arbitrum. Headers with Time strictly below this cutoff trigger that
+// path; 0 leaves the guard inactive (Time is uint64, so Time < 0 never
+// holds). Atomic because DeserializeHeaderExtraInformation is read from
+// goroutines that may start before the setter runs.
+var legacyZeroBaseFeeUntil atomic.Uint64
+
+// SetLegacyZeroBaseFeeUntil sets the cutoff timestamp (exclusive).
+func SetLegacyZeroBaseFeeUntil(ts uint64) {
+	legacyZeroBaseFeeUntil.Store(ts)
+}
+
 func DeserializeHeaderExtraInformation(header *Header) HeaderInfo {
 	if header == nil || header.BaseFee == nil || len(header.Extra) != 32 || header.Difficulty.Cmp(common.Big1) != 0 {
 		// imported blocks have no base fee
@@ -667,6 +681,11 @@ func DeserializeHeaderExtraInformation(header *Header) HeaderInfo {
 		extra.CollectTips = true
 	} else {
 		extra.CollectTips = false
+	}
+	if extra.ArbOSFormatVersion <= params.ArbosVersion_40 &&
+		header.BaseFee.Sign() == 0 &&
+		header.Time < legacyZeroBaseFeeUntil.Load() {
+		return HeaderInfo{}
 	}
 	return extra
 }

@@ -785,9 +785,9 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 	txFilterer := b.TxFilter()
 	if txFilterer != nil {
 		txFilterer.Setup(state)
-		state.TouchAddress(&filter.FilteredAddressRecord{Address: msg.From, FilterReason: filter.FilterReason{Reason: filter.ReasonFrom, EventRuleMatch: nil}})
+		state.TouchAddress(&filter.FilteredAddressWithReason{Address: msg.From, FilterReason: filter.FilterReason{Reason: filter.ReasonFrom, EventRuleMatch: nil}})
 		if msg.To != nil {
-			state.TouchAddress(&filter.FilteredAddressRecord{Address: *msg.To, FilterReason: filter.FilterReason{Reason: filter.ReasonTo, EventRuleMatch: nil}})
+			state.TouchAddress(&filter.FilteredAddressWithReason{Address: *msg.To, FilterReason: filter.FilterReason{Reason: filter.ReasonTo, EventRuleMatch: nil}})
 		}
 	}
 	// Lower the basefee to 0 to avoid breaking EVM
@@ -814,7 +814,7 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 		if _, ferr := retryables.RunScheduledTxes(ctx, b, state, header, *blockContext, msg.TxRunContext, res, txFilterer); ferr != nil {
 			return nil, ferr
 		}
-		if ferr := txFilterer.ApplyEventsAndCheckFiltered(state); ferr != nil {
+		if ferr := txFilterer.CheckFiltered(state, msg.Tx, header); ferr != nil {
 			return nil, ferr
 		}
 	}
@@ -974,6 +974,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		Backend:          b,
 		ErrorRatio:       gasestimator.EstimateGasErrorRatio,
 		RunScheduledTxes: retryables.RunScheduledTxes,
+		TxFilterer:       b.TxFilter(),
 	}
 	// Set any required transaction default, but make sure the gas cap itself is not messed with
 	// if it was not specified in the original argument list.

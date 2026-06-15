@@ -762,6 +762,7 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Pop other call parameters.
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
+	evm.StateDB.TouchAddress(&filter.FilteredAddressWithReason{Address: toAddr, FilterReason: filter.FilterReason{Reason: filter.ReasonCallTarget, EventRuleMatch: nil}})
 	// Get the arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
@@ -802,6 +803,7 @@ func opCallCode(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Pop other call parameters.
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
+	evm.StateDB.TouchAddress(&filter.FilteredAddressWithReason{Address: toAddr, FilterReason: filter.FilterReason{Reason: filter.ReasonCallTarget, EventRuleMatch: nil}})
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
@@ -839,6 +841,7 @@ func opDelegateCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Pop other call parameters.
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
+	evm.StateDB.TouchAddress(&filter.FilteredAddressWithReason{Address: toAddr, FilterReason: filter.FilterReason{Reason: filter.ReasonCallTarget, EventRuleMatch: nil}})
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
@@ -872,6 +875,7 @@ func opStaticCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Pop other call parameters.
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
+	evm.StateDB.TouchAddress(&filter.FilteredAddressWithReason{Address: toAddr, FilterReason: filter.FilterReason{Reason: filter.ReasonCallTarget, EventRuleMatch: nil}})
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
@@ -924,10 +928,7 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		return nil, ErrWriteProtection
 	}
 	beneficiary := scope.Stack.pop()
-	evm.StateDB.TouchAddress(&filter.FilteredAddressRecord{
-		Address:      beneficiary.Bytes20(),
-		FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary, EventRuleMatch: nil},
-	})
+	evm.StateDB.TouchAddress(&filter.FilteredAddressWithReason{Address: beneficiary.Bytes20(), FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary, EventRuleMatch: nil}})
 	balance := evm.StateDB.GetBalance(scope.Contract.Address())
 	evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
 	evm.StateDB.SelfDestruct(scope.Contract.Address())
@@ -958,10 +959,7 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 	}
 
 	beneficiary := scope.Stack.pop()
-	evm.StateDB.TouchAddress(&filter.FilteredAddressRecord{
-		Address:      beneficiary.Bytes20(),
-		FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary, EventRuleMatch: nil},
-	})
+	evm.StateDB.TouchAddress(&filter.FilteredAddressWithReason{Address: beneficiary.Bytes20(), FilterReason: filter.FilterReason{Reason: filter.ReasonSelfdestructBeneficiary, EventRuleMatch: nil}})
 	balance := evm.StateDB.GetBalance(scope.Contract.Address())
 	evm.StateDB.SubBalance(scope.Contract.Address(), balance, tracing.BalanceDecreaseSelfdestruct)
 	evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)

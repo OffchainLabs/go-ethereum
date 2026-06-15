@@ -58,8 +58,9 @@ type TxFilterer interface {
 	// TouchAddresses marks sender, recipient, aliased, and retryable addresses
 	// of a transaction for filtering.
 	TouchAddresses(statedb *state.StateDB, tx *types.Transaction, sender common.Address)
-	// ApplyEventsAndCheckFiltered applies event filtering and returns state.ErrArbTxFilter if any touched address is filtered.
-	ApplyEventsAndCheckFiltered(statedb *state.StateDB) error
+	// CheckFiltered applies event filtering and returns state.ErrArbTxFilter if the
+	// transaction is filtered. rootTx and header identify the tx for reporting.
+	CheckFiltered(statedb *state.StateDB, rootTx *types.Transaction, header *types.Header) error
 }
 
 type NodeInterfaceBackendAPI interface {
