@@ -28,7 +28,8 @@ import (
 
 func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
-		if evm.readOnly {
+		// Arbitrum: gate the early error return on Amsterdam fork
+		if (!evm.chainRules.IsArbitrum || evm.chainRules.IsAmsterdam) && evm.readOnly {
 			return multigas.ZeroGas(), ErrWriteProtection
 		}
 		// If we fail the minimum gas availability invariant, fail (0)
@@ -260,7 +261,8 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 			multiGas = multigas.ZeroGas()
 			address  = common.Address(stack.peek().Bytes20())
 		)
-		if evm.readOnly {
+		// Arbitrum: gate the early error return on Amsterdam fork
+		if (!evm.chainRules.IsArbitrum || evm.chainRules.IsAmsterdam) && evm.readOnly {
 			return multigas.ZeroGas(), ErrWriteProtection
 		}
 		if !evm.StateDB.AddressInAccessList(address) {
@@ -303,7 +305,9 @@ func gasCallEIP7702(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 	// to determine if it is resolving a delegation. This could incorrectly record
 	// the target in the block access list (BAL) if the call later fails.
 	transfersValue := !stack.Back(2).IsZero()
-	if evm.readOnly && transfersValue {
+
+	// Arbitrum: gate the early error return on Amsterdam fork
+	if (!evm.chainRules.IsArbitrum || evm.chainRules.IsAmsterdam) && evm.readOnly && transfersValue {
 		return multigas.ZeroGas(), ErrWriteProtection
 	}
 	return innerGasCallEIP7702(evm, contract, stack, mem, memorySize)

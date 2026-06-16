@@ -111,7 +111,8 @@ var (
 )
 
 func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
-	if evm.readOnly {
+	// Arbitrum: gate the early error return on Amsterdam fork
+	if (!evm.chainRules.IsArbitrum || evm.chainRules.IsAmsterdam) && evm.readOnly {
 		return multigas.ZeroGas(), ErrWriteProtection
 	}
 	var (
@@ -199,7 +200,8 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 //				(2.2.2.1.) If original value is 0, add SSTORE_SET_GAS - SLOAD_GAS to refund counter.
 //				(2.2.2.2.) Otherwise, add SSTORE_RESET_GAS - SLOAD_GAS gas to refund counter.
 func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
-	if evm.readOnly {
+	// Arbitrum: gate the early error return on Amsterdam fork
+	if (!evm.chainRules.IsArbitrum || evm.chainRules.IsAmsterdam) && evm.readOnly {
 		return multigas.ZeroGas(), ErrWriteProtection
 	}
 	// If we fail the minimum gas availability invariant, fail (0)
@@ -429,7 +431,8 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 		address        = common.Address(stack.Back(1).Bytes20())
 	)
 
-	if evm.readOnly && transfersValue {
+	// Arbitrum: gate the early error return on Amsterdam fork
+	if (!evm.chainRules.IsArbitrum || evm.chainRules.IsAmsterdam) && evm.readOnly && transfersValue {
 		return multigas.ZeroGas(), ErrWriteProtection
 	}
 
@@ -545,7 +548,8 @@ func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 }
 
 func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
-	if evm.readOnly {
+	// Arbitrum: gate the early error return on Amsterdam fork
+	if (!evm.chainRules.IsArbitrum || evm.chainRules.IsAmsterdam) && evm.readOnly {
 		return multigas.ZeroGas(), ErrWriteProtection
 	}
 	multiGas := multigas.ZeroGas()
