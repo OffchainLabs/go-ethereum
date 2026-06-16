@@ -216,6 +216,10 @@ type BlockChainConfig struct {
 	MaxNumberOfBlocksToSkipStateSaving uint32
 	MaxAmountOfGasToSkipStateSaving    uint64
 
+	// Arbitrum:
+	// expose pathdb testing configuration
+	NoHistoryIndexDelay bool // Flag whether the history index delay is disabled
+
 	// HistoryPolicy defines the chain history pruning intent.
 	HistoryPolicy history.HistoryPolicy
 
@@ -322,14 +326,11 @@ func (cfg *BlockChainConfig) triedbConfig(isVerkle bool) *triedb.Config {
 			StateHistory:        cfg.StateHistory,
 			TrienodeHistory:     cfg.TrienodeHistory,
 			EnableStateIndexing: cfg.ArchiveMode,
-			// Archive mode's whole purpose is to serve historical state, so
-			// the indexer should start its initial scan immediately rather
-			// than waiting for the "synced within 6h" heuristic that gates
-			// it on chains with non-realtime block timestamps (e.g. tests).
-			NoHistoryIndexDelay: cfg.ArchiveMode,
 			FullValueCheckpoint: cfg.NodeFullValueCheckpoint,
 
 			// Testing configurations
+			NoHistoryIndexDelay: cfg.NoHistoryIndexDelay,
+
 			NoAsyncFlush: cfg.TrieNoAsyncFlush,
 		}
 	}
