@@ -835,6 +835,7 @@ func (c *ChainConfig) IsPostMerge(blockNum uint64, timestamp uint64) bool {
 }
 
 // IsShanghai returns whether time is either equal to the Shanghai fork time or greater.
+// Arbitrum: On Arbitrum chains, Shanghai is gated only on ArbOS version 11
 func (c *ChainConfig) IsShanghai(num *big.Int, time uint64, currentArbosVersion uint64) bool {
 	if c.IsArbitrum() {
 		return currentArbosVersion >= ArbosVersion_11
@@ -843,6 +844,7 @@ func (c *ChainConfig) IsShanghai(num *big.Int, time uint64, currentArbosVersion 
 }
 
 // IsCancun returns whether num is either equal to the Cancun fork time or greater.
+// Arbitrum: On Arbitrum chains, Cancun is gated only on ArbOS version 20
 func (c *ChainConfig) IsCancun(num *big.Int, time uint64, currentArbosVersion uint64) bool {
 	if c.IsArbitrum() {
 		return currentArbosVersion >= ArbosVersion_20
@@ -851,6 +853,7 @@ func (c *ChainConfig) IsCancun(num *big.Int, time uint64, currentArbosVersion ui
 }
 
 // IsPrague returns whether time is either equal to the Prague fork time or greater.
+// Arbitrum: On Arbitrum chains, Prague is gated only on ArbOS version 40
 func (c *ChainConfig) IsPrague(num *big.Int, time uint64, currentArbosVersion uint64) bool {
 	if c.IsArbitrum() {
 		return currentArbosVersion >= ArbosVersion_40
@@ -859,6 +862,7 @@ func (c *ChainConfig) IsPrague(num *big.Int, time uint64, currentArbosVersion ui
 }
 
 // IsOsaka returns whether time is either equal to the Osaka fork time or greater.
+// Arbitrum: On Arbitrum chains, Osaka is gated only on ArbOS version 50
 func (c *ChainConfig) IsOsaka(num *big.Int, time uint64, currentArbosVersion uint64) bool {
 	if c.IsArbitrum() {
 		return currentArbosVersion >= ArbosVersion_50
@@ -892,6 +896,7 @@ func (c *ChainConfig) IsBPO5(num *big.Int, time uint64) bool {
 }
 
 // IsAmsterdam returns whether time is either equal to the Amsterdam fork time or greater.
+// Arbitrum: On Arbitrum chains, Amsterdam is gated only on ArbOS version 70
 func (c *ChainConfig) IsAmsterdam(num *big.Int, time uint64, currentArbosVersion uint64) bool {
 	if c.IsArbitrum() {
 		return currentArbosVersion >= ArbosVersion_Amsterdam
