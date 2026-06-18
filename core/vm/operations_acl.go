@@ -274,7 +274,8 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 
 			// Terminate the gas measurement if the leftover gas is not sufficient,
 			// it can effectively prevent accessing the states in the following steps
-			if contract.Gas < multiGas.SingleGas() {
+			// Arbitrum: gate the early termination on Amsterdam fork
+			if (!evm.chainRules.IsArbitrum || evm.chainRules.IsAmsterdam) && contract.Gas < multiGas.SingleGas() {
 				return multigas.ZeroGas(), ErrOutOfGas
 			}
 		}
