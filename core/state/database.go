@@ -37,7 +37,7 @@ import (
 
 // Database wraps access to tries and contract code.
 type Database interface {
-	// Arbitrum: expose CodeDB ia. for wasm store cached access
+	// Arbitrum: expose CodeDB ia for wasm store cached access
 	CodeDB() *CodeDB
 
 	// Reader returns a state reader associated with the specified state root.
