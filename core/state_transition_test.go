@@ -76,10 +76,12 @@ func TestApplyMessageCalldataReturnsMultiGas(t *testing.T) {
 
 	blockContext := NewEVMBlockContext(header, nil, &common.Address{})
 
-	chainConfig := params.TestChainConfig
+	// shallow copy the struct, ArbitrumChainParams is copied as a value field,
+	// so we can modify it safely without touching the global config instance
+	chainConfig := *params.TestChainConfig
 	chainConfig.ArbitrumChainParams = params.ArbitrumChainParams{EnableArbOS: true, InitialArbOSVersion: params.ArbosVersion_40}
 
-	evm := vm.NewEVM(blockContext, statedb, chainConfig, vm.Config{})
+	evm := vm.NewEVM(blockContext, statedb, &chainConfig, vm.Config{})
 
 	data := bytes.Repeat([]byte{1, 0, 1}, 1000)
 	msg := &Message{
