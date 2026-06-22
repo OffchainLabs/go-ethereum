@@ -19,8 +19,7 @@ func newTestState(t *testing.T) *StateDB {
 	return state
 }
 
-// Copy only carries the block-level cache, so entries promoted by Finalise must
-// survive a copy while the copy stays independent of the original.
+// Insert reports a miss then a hit; Copy carries the cache and stays independent.
 func TestRecentWasmsInsertAndCopy(t *testing.T) {
 	state := newTestState(t)
 
@@ -32,14 +31,11 @@ func TestRecentWasmsInsertAndCopy(t *testing.T) {
 		t.Fatalf("first insert of hash1 should be a miss")
 	}
 	if hit := state.GetRecentWasms().Insert(hash1, recentWasmsRetain); !hit {
-		t.Fatalf("second insert of hash1 should be a hit (txCache)")
+		t.Fatalf("second insert of hash1 should be a hit")
 	}
 	if hit := state.GetRecentWasms().Insert(hash2, recentWasmsRetain); hit {
 		t.Fatalf("first insert of hash2 should be a miss")
 	}
-
-	// Finalise promotes hash1/hash2 into the block cache, without it the above hashes are dropped
-	state.Finalise(true)
 
 	cp := state.Copy()
 	if hit := cp.GetRecentWasms().Insert(hash1, recentWasmsRetain); !hit {
@@ -48,6 +44,7 @@ func TestRecentWasmsInsertAndCopy(t *testing.T) {
 	if hit := cp.GetRecentWasms().Insert(hash2, recentWasmsRetain); !hit {
 		t.Fatalf("copy: expected hit for hash2 present before copy")
 	}
+	// A new insert on the copy must not leak back into the original.
 	if hit := cp.GetRecentWasms().Insert(hash3, recentWasmsRetain); hit {
 		t.Fatalf("copy: first insert of hash3 should be a miss")
 	}
@@ -56,59 +53,107 @@ func TestRecentWasmsInsertAndCopy(t *testing.T) {
 	}
 }
 
-func TestRecentWasmsTransfer(t *testing.T) {
-	hashA := common.HexToHash("0x0a")
-	hashB := common.HexToHash("0x0b")
+// A single LRU: filling past capacity evicts the least-recently-used entry, so
+// re-touching an evicted program is a miss.
+func TestRecentWasmsEviction(t *testing.T) {
+	state := newTestState(t)
+	rw := state.GetRecentWasms()
+	const capacity = uint16(4)
 
-	t.Run("promotes to block cache and survives next tx", func(t *testing.T) {
-		state := newTestState(t)
-		if hit := state.GetRecentWasms().Insert(hashA, recentWasmsRetain); hit {
-			t.Fatalf("first insert should be a miss")
+	for i := 0; i < int(capacity); i++ {
+		h := common.BytesToHash([]byte{byte(i + 1)})
+		if hit := rw.Insert(h, capacity); hit {
+			t.Fatalf("fill insert %d should be a miss", i)
 		}
-		state.Finalise(true) // commit the tx: txCache -> blockCache
+	}
+	oldest := common.BytesToHash([]byte{1})
+	overflow := common.BytesToHash([]byte{byte(capacity + 1)})
+	if hit := rw.Insert(overflow, capacity); hit {
+		t.Fatalf("overflow insert should be a miss")
+	}
+	if hit := rw.Insert(oldest, capacity); hit {
+		t.Fatalf("the evicted oldest entry should be a miss on re-insert")
+	}
+}
 
-		// Even after a new tx clears txCache, the block cache keeps hashA warm.
-		state.SetTxContext(common.HexToHash("0xaa"), 0)
-		if hit := state.GetRecentWasms().Insert(hashA, recentWasmsRetain); !hit {
-			t.Fatalf("expected block-level hit after promote")
-		}
-	})
+// RestoreRecentWasms (used by the block processor to undo a dropped tx) must
+// restore the cache's exact contents AND recency, undoing additions and evictions.
+func TestRecentWasmsRestore(t *testing.T) {
+	state := newTestState(t)
+	rw := state.GetRecentWasms()
+	const capacity = uint16(4)
 
-	t.Run("dropped tx does not leak", func(t *testing.T) {
-		state := newTestState(t)
-		// Simulate a filtered tx: insert, but never Finalise (it's dropped).
-		state.SetTxContext(common.HexToHash("0x01"), 0)
-		if hit := state.GetRecentWasms().Insert(hashB, recentWasmsRetain); hit {
-			t.Fatalf("first insert should be a miss")
-		}
-		// Next tx starts: SetTxContext must drop the dropped tx's txCache.
-		state.SetTxContext(common.HexToHash("0x02"), 0)
-		if hit := state.GetRecentWasms().Insert(hashB, recentWasmsRetain); hit {
-			t.Fatalf("dropped tx leaked a warm-start into the next tx")
-		}
-	})
+	base := make([]common.Hash, capacity)
+	for i := range base {
+		base[i] = common.BytesToHash([]byte{byte(i + 1)})
+		rw.Insert(base[i], capacity) // base[0] oldest ... base[3] newest
+	}
 
-	t.Run("finalise without stylus calls does not panic", func(t *testing.T) {
-		state := newTestState(t)
-		state.SetTxContext(common.HexToHash("0x01"), 0)
-		state.Finalise(true) // must tolerate nil txCache/blockCache
-	})
+	snapshot := state.GetRecentWasms().Copy()
 
-	// A copy taken mid-tx (before Finalise) (as group-rollback checkpoints do)
-	// must not carry the in-flight txCache, or a rolled-back group would leave
-	// programs warm
-	t.Run("uncommitted txCache does not survive Copy", func(t *testing.T) {
-		state := newTestState(t)
-		state.SetTxContext(common.HexToHash("0x01"), 0)
-		if hit := state.GetRecentWasms().Insert(hashA, recentWasmsRetain); hit {
-			t.Fatalf("first insert should be a miss")
-		}
-		// Copy before Finalise: hashA is still only in txCache.
-		cp := state.Copy()
-		if hit := cp.GetRecentWasms().Insert(hashA, recentWasmsRetain); hit {
-			t.Fatalf("copy must not see the original's uncommitted txCache warming")
-		}
-	})
+	// Mutate: bump base[0] to most-recent (a Get hit), then add a new hash, which
+	// evicts the new oldest (base[1]).
+	if hit := rw.Insert(base[0], capacity); !hit {
+		t.Fatalf("base[0] should be present before restore")
+	}
+	newHash := common.BytesToHash([]byte{0xAA})
+	rw.Insert(newHash, capacity)
+
+	state.RestoreRecentWasms(snapshot)
+	rw = state.GetRecentWasms()
+
+	// Contents restored: base[1] (evicted during mutation) is back; newHash is gone.
+	if hit := rw.Insert(base[1], capacity); !hit {
+		t.Fatalf("restore must bring back the entry evicted during the mutation")
+	}
+	// Restore again so the base[1] insert above can't mask newHash's absence.
+	state.RestoreRecentWasms(snapshot)
+	rw = state.GetRecentWasms()
+	if hit := rw.Insert(newHash, capacity); hit {
+		t.Fatalf("restore must drop the entry added during the mutation")
+	}
+
+	// Recency restored: base[0] was the snapshot's oldest, so one eviction drops it
+	// — it would have survived if the pre-restore recency bump had leaked through.
+	state.RestoreRecentWasms(snapshot)
+	rw = state.GetRecentWasms()
+	rw.Insert(common.BytesToHash([]byte{0xBB}), capacity) // evicts snapshot's oldest = base[0]
+	if hit := rw.Insert(base[0], capacity); hit {
+		t.Fatalf("restore must preserve recency: base[0] was oldest and should evict first")
+	}
+}
+
+// The cache is block-level, not per-tx: a program warmed in one tx stays warm for
+// later txs in the same block (there is no per-tx reset).
+func TestRecentWasmsPersistsAcrossTxs(t *testing.T) {
+	state := newTestState(t)
+	h := common.HexToHash("0x0a")
+
+	state.SetTxContext(common.HexToHash("0x01"), 0)
+	if hit := state.GetRecentWasms().Insert(h, recentWasmsRetain); hit {
+		t.Fatalf("first insert should be a miss")
+	}
+	state.SetTxContext(common.HexToHash("0x02"), 1)
+	if hit := state.GetRecentWasms().Insert(h, recentWasmsRetain); !hit {
+		t.Fatalf("cache must persist across txs in the same block")
+	}
+}
+
+// A warm-start must survive an EVM revert: a program touched in a reverted
+// sub-call (or a reverted-but-included tx) stays warm. Guards against a "fix" that
+// drops warmings on revert, which would wrongly charge later calls cold.
+func TestRecentWasmsSurvivesRevert(t *testing.T) {
+	state := newTestState(t)
+	h := common.HexToHash("0x0a")
+
+	snap := state.Snapshot()
+	if hit := state.GetRecentWasms().Insert(h, recentWasmsRetain); hit {
+		t.Fatalf("first insert should be a miss")
+	}
+	state.RevertToSnapshot(snap)
+	if hit := state.GetRecentWasms().Insert(h, recentWasmsRetain); !hit {
+		t.Fatalf("warm-start must survive an EVM revert (cache must not be journaled)")
+	}
 }
 
 func TestActivateWasmRevert(t *testing.T) {
