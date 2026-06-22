@@ -877,7 +877,6 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		// the commit-phase will be a lot faster
 		addressesToPrefetch = append(addressesToPrefetch, addr) // Copy needed for closure
 	}
-
 	if s.prefetcher != nil && len(addressesToPrefetch) > 0 {
 		if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, addressesToPrefetch, nil, false); err != nil {
 			log.Error("Failed to prefetch addresses", "addresses", len(addressesToPrefetch), "err", err)

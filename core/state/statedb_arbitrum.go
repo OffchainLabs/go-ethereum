@@ -494,8 +494,7 @@ func NewRecentWasms() RecentWasms {
 	return RecentWasms{cache: nil}
 }
 
-// Insert records item and reports whether it was already present. The first call
-// fixes the cache capacity to retain.
+// Inserts a new item, returning true if already present.
 func (p *RecentWasms) Insert(item common.Hash, retain uint16) bool {
 	if p.cache == nil {
 		cache := lru.NewBasicLRU[common.Hash, struct{}](int(retain))
