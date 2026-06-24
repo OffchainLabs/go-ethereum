@@ -18,6 +18,7 @@ package state
 
 import (
 	"errors"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -34,11 +35,11 @@ import (
 // historicReader wraps a historical state reader defined in path database,
 // providing historic state serving over the path scheme.
 //
-// TODO(rjl493456442): historicReader is not thread-safe and does not fully
-// comply with the StateReader interface requirements, needs to be fixed.
-// Currently, it is only used in a non-concurrent context, so it is safe for now.
+// TODO(rjl493456442): historicReader does not fully comply with the StateReader
+// interface requirements, needs to be fixed.
 type historicReader struct {
 	reader *pathdb.HistoricalStateReader
+	lock   sync.Mutex // Lock for protecting concurrent read
 }
 
 // newHistoricReader constructs a reader for historic state serving.
@@ -53,6 +54,9 @@ func newHistoricReader(r *pathdb.HistoricalStateReader) *historicReader {
 //
 // The returned account might be nil if it's not existent.
 func (r *historicReader) Account(addr common.Address) (*types.StateAccount, error) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
 	account, err := r.reader.Account(addr)
 	if err != nil {
 		return nil, err
@@ -83,6 +87,9 @@ func (r *historicReader) Account(addr common.Address) (*types.StateAccount, erro
 //
 // The returned storage slot might be empty if it's not existent.
 func (r *historicReader) Storage(addr common.Address, key common.Hash) (common.Hash, error) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
 	blob, err := r.reader.Storage(addr, key)
 	if err != nil {
 		return common.Hash{}, err
