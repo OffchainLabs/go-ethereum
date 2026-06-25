@@ -483,13 +483,13 @@ func (s *StateDB) GetRecentWasms() *RecentWasms {
 	return &s.arbExtraData.recentWasms
 }
 
-// Type for managing recent program access.
-// The cache contained is discarded at the end of each block.
+// RecentWasms tracks Stylus programs initialized earlier in the current block so a
+// repeat call is charged the cheaper cached init cost. It is reset each block
 type RecentWasms struct {
 	cache *lru.BasicLRU[common.Hash, struct{}]
 }
 
-// Creates an un uninitialized cache
+// Creates an uninitialized cache
 func NewRecentWasms() RecentWasms {
 	return RecentWasms{cache: nil}
 }
@@ -517,4 +517,11 @@ func (p RecentWasms) Copy() RecentWasms {
 		cache.Add(item, struct{}{})
 	}
 	return RecentWasms{cache: &cache}
+}
+
+// RestoreRecentWasms replaces the cache with a clone of r, used by the block
+// processor to undo warmings left by a dropped transaction. The clone keeps the
+// caller's snapshot independent so it can be restored more than once.
+func (s *StateDB) RestoreRecentWasms(r RecentWasms) {
+	s.arbExtraData.recentWasms = r.Copy()
 }
