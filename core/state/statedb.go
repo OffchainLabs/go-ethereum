@@ -1308,7 +1308,7 @@ func (s *StateDB) GetTrie() Trie {
 // trie changes, resetting all internal flags with the new state as the base.
 func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNumber uint64) (*stateUpdate, error) {
 	if s.arbExtraData.arbTxFilter {
-		return nil, ErrArbTxFilter
+		return nil, ErrSeqFilter
 	}
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
