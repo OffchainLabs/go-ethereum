@@ -183,3 +183,25 @@ func ReadWasmerSerializeVersion(db ethdb.KeyValueReader) (uint32, error) {
 	version := binary.BigEndian.Uint32(buf)
 	return version, nil
 }
+
+// Stores wavm serialize version
+func WriteWavmSerializeVersion(db ethdb.KeyValueWriter, wavmSerializeVersion uint32) error {
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, wavmSerializeVersion)
+	return db.Put(wavmSerializeVersionKey, buf)
+}
+
+// Retrieves wavm serialize version
+func ReadWavmSerializeVersion(db ethdb.KeyValueReader) (uint32, error) {
+	buf, err := db.Get(wavmSerializeVersionKey)
+	if err != nil {
+		return 0, err
+	}
+	// A truncated/partial write or future single-byte schema would
+	// otherwise panic with index out of range inside BigEndian.Uint32.
+	if len(buf) < 4 {
+		return 0, fmt.Errorf("wavm serialize version blob too short: got %d bytes, want at least 4", len(buf))
+	}
+	version := binary.BigEndian.Uint32(buf)
+	return version, nil
+}
