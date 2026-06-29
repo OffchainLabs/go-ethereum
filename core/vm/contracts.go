@@ -322,7 +322,9 @@ func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address comm
 
 	// Touch the precompile for block-level accessList recording once Amsterdam
 	// fork is activated.
-	if stateDB != nil {
+	// Arbitrum: gate the precompile account read on Amsterdam fork
+	chainRules := advancedInfo.Evm.ChainRules()
+	if (!chainRules.IsArbitrum || chainRules.IsAmsterdam) && stateDB != nil {
 		stateDB.Exist(address)
 	}
 	output, err := p.Run(input)
