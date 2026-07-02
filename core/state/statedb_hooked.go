@@ -366,10 +366,6 @@ func (s *hookedStateDB) IsTxFiltered() bool {
 	return s.inner.IsTxFiltered()
 }
 
-func (s *hookedStateDB) SetAddressChecker(checker AddressChecker) {
-	s.inner.SetAddressChecker(checker)
-}
-
 func (s *hookedStateDB) TouchAddress(touched *filter.FilteredAddressWithReason) {
 	s.inner.TouchAddress(touched)
 }

@@ -76,18 +76,18 @@ func (result *ExecutionResult) Revert() []byte {
 	return common.CopyBytes(result.ReturnData)
 }
 
-// ErrFilteredTx is returned when a transaction was found in the onchain filter
+// ErrFilteredOnChain is returned when a transaction was found in the onchain filter
 // and executed as a no-op (nonce incremented, all gas consumed). It wraps
 // ErrExecutionReverted so receipt status checks work correctly.
-type ErrFilteredTx struct {
+type ErrFilteredOnChain struct {
 	TxHash common.Hash
 }
 
-func (e *ErrFilteredTx) Error() string {
+func (e *ErrFilteredOnChain) Error() string {
 	return fmt.Sprintf("transaction %s in onchain filter", e.TxHash.Hex())
 }
 
-func (e *ErrFilteredTx) Unwrap() error {
+func (e *ErrFilteredOnChain) Unwrap() error {
 	return vm.ErrExecutionReverted
 }
 

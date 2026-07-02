@@ -762,6 +762,7 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Pop other call parameters.
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
+	evm.StateDB.TouchAddress(&filter.FilteredAddressWithReason{Address: toAddr, FilterReason: filter.FilterReason{Reason: filter.ReasonCallTarget, EventRuleMatch: nil}})
 	// Get the arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
@@ -802,6 +803,7 @@ func opCallCode(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Pop other call parameters.
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
+	evm.StateDB.TouchAddress(&filter.FilteredAddressWithReason{Address: toAddr, FilterReason: filter.FilterReason{Reason: filter.ReasonCallTarget, EventRuleMatch: nil}})
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
@@ -839,6 +841,7 @@ func opDelegateCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Pop other call parameters.
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
+	evm.StateDB.TouchAddress(&filter.FilteredAddressWithReason{Address: toAddr, FilterReason: filter.FilterReason{Reason: filter.ReasonCallTarget, EventRuleMatch: nil}})
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
@@ -872,6 +875,7 @@ func opStaticCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Pop other call parameters.
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
+	evm.StateDB.TouchAddress(&filter.FilteredAddressWithReason{Address: toAddr, FilterReason: filter.FilterReason{Reason: filter.ReasonCallTarget, EventRuleMatch: nil}})
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 

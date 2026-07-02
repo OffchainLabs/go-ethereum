@@ -239,6 +239,11 @@ func (t *callTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	if err != nil {
 		return
 	}
+	// Tracing may have been interrupted (e.g. a timeout) before the top-level frame was
+	// captured, leaving nothing to finalize.
+	if len(t.callstack) == 0 {
+		return
+	}
 	if receipt != nil {
 		t.callstack[0].GasUsed = receipt.GasUsed
 	}
@@ -273,6 +278,10 @@ func (t *callTracer) OnLog(log *types.Log) {
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).
 func (t *callTracer) GetResult() (json.RawMessage, error) {
+	// Tracing was interrupted (e.g. a timeout): report the interruption instead of continuing
+	if t.interrupt.Load() {
+		return nil, t.reason
+	}
 	if len(t.callstack) != 1 {
 		return nil, errors.New("incorrect number of top-level calls")
 	}
