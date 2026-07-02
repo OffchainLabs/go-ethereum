@@ -288,6 +288,10 @@ func (t *erc7562Tracer) OnTxEnd(receipt *types.Receipt, err error) {
 	if err != nil {
 		return
 	}
+	// An interrupted trace may leave no top-level frame to finalize.
+	if len(t.callstackWithOpcodes) == 0 {
+		return
+	}
 	t.callstackWithOpcodes[0].GasUsed = receipt.GasUsed
 	if t.config.WithLog {
 		// Logs are not emitted when the call fails

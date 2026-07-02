@@ -232,6 +232,10 @@ func (t *flatCallTracer) OnTxEnd(receipt *types.Receipt, err error) {
 
 // GetResult returns an empty json object.
 func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
+	// Tracing was interrupted (e.g. a timeout): report the interruption instead of continuing
+	if t.interrupt.Load() {
+		return nil, t.tracer.reason
+	}
 	if len(t.tracer.callstack) < 1 {
 		return nil, errors.New("invalid number of calls")
 	}
