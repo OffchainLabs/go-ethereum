@@ -119,16 +119,16 @@ const (
 )
 
 var chainTipBlockRecordsFreezerTableConfigs = map[string]freezerTableConfig{
-	ChainTipBlockRecordsFreezerTable: {noSnappy: false, prunable: false},
+	ChainTipBlockRecordsFreezerTable: {noSnappy: false, prunable: true},
 }
 
 // NewChainTipBlockRecordsFreezer initializes the ancient store for chain-tip
 // block recordings.
-func NewChainTipBlockRecordsFreezer(ancientDir string, readOnly bool) (ethdb.AncientStore, error) {
+func NewChainTipBlockRecordsFreezer(ancientDir string, readOnly bool) (ethdb.ResettableAncientStore, error) {
 	if ancientDir == "" {
 		return NewMemoryFreezer(readOnly, chainTipBlockRecordsFreezerTableConfigs), nil
 	}
-	return NewFreezer(filepath.Join(ancientDir, ChainTipBlockRecordsFreezerName), "eth/db/chaintipblockrecords/", readOnly, freezerTableSize, chainTipBlockRecordsFreezerTableConfigs)
+	return newResettableFreezer(filepath.Join(ancientDir, ChainTipBlockRecordsFreezerName), "eth/db/chaintipblockrecords/", readOnly, freezerTableSize, chainTipBlockRecordsFreezerTableConfigs)
 }
 
 // NewStateFreezer initializes the ancient store for state history.
