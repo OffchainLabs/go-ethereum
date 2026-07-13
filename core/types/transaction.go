@@ -431,6 +431,11 @@ func (tx *Transaction) GasTipCapIntCmp(other *big.Int) int {
 	return tx.inner.gasTipCap().Cmp(other)
 }
 
+// EffectiveGasPrice returns the gas price paid by the transaction for the given base fee.
+func (tx *Transaction) EffectiveGasPrice(baseFee *big.Int) *big.Int {
+	return tx.inner.effectiveGasPrice(new(big.Int), baseFee)
+}
+
 // EffectiveGasTip returns the effective miner gasTipCap for the given base fee.
 // Note: if the effective gasTipCap would be negative, this method
 // returns ErrGasFeeCapTooLow, and value is undefined.
