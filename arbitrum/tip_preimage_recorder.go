@@ -273,7 +273,8 @@ type recordingTrie struct {
 
 func (t *recordingTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 	root, nodes := t.Trie.Commit(collectLeaf)
-	t.db.recordNodeSet(t, nodes)
+	// remove if PR 4 passes tests
+	// t.db.recordNodeSet(t, nodes)
 	return root, nodes
 }
 
