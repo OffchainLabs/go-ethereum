@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -828,6 +829,81 @@ func (t *freezerTable) truncateTail(items uint64) error {
 		}
 	}
 	// Retrieve the new size and update the total size counter
+	newSize, err := t.sizeNolock()
+	if err != nil {
+		return err
+	}
+	t.sizeGauge.Dec(int64(oldSize - newSize))
+	return nil
+}
+
+// advanceEmptyTail moves both boundaries of an empty table forward to the
+// given item number, leaving the same state as a fully tail-pruned table.
+func (t *freezerTable) advanceEmptyTail(items uint64) error {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	if t.itemHidden.Load() != t.items.Load() {
+		return errors.New("cannot advance tail above head: table is not empty")
+	}
+	if t.items.Load() >= items {
+		return nil
+	}
+	if items > math.MaxUint32 {
+		return errors.New("cannot advance tail: item number exceeds uint32 offset limit")
+	}
+	oldSize, err := t.sizeNolock()
+	if err != nil {
+		return err
+	}
+	if err := t.doSync(); err != nil {
+		return err
+	}
+	stat, err := t.index.Stat()
+	if err != nil {
+		return err
+	}
+	if err := t.index.Close(); err != nil {
+		return err
+	}
+	// Rewrite the index to only the tail marker at the new position. A crash
+	// from here on leaves a state that repair reconciles on the next open.
+	err = copyFrom(t.index.Name(), t.index.Name(), uint64(stat.Size()), func(f *os.File) error {
+		tailIndex := indexEntry{
+			filenum: t.headId,
+			offset:  uint32(items),
+		}
+		_, err := f.Write(tailIndex.append(nil))
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	t.index, err = openFreezerFileForAppend(t.index.Name())
+	if err != nil {
+		return err
+	}
+	if err := t.index.Sync(); err != nil {
+		return err
+	}
+	t.releaseFilesBefore(t.headId, true)
+	t.tailId = t.headId
+	if err := truncateFreezerFile(t.head, 0); err != nil {
+		return err
+	}
+	if err := t.head.Sync(); err != nil {
+		return err
+	}
+	t.headBytes = 0
+	t.items.Store(items)
+	t.itemOffset.Store(items)
+	t.itemHidden.Store(items)
+	if err := t.metadata.setVirtualTail(items, true); err != nil {
+		return err
+	}
+	if err := t.metadata.setFlushOffset(indexEntrySize, true); err != nil {
+		return err
+	}
 	newSize, err := t.sizeNolock()
 	if err != nil {
 		return err

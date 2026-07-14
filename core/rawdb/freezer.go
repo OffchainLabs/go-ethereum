@@ -311,6 +311,15 @@ func (f *Freezer) TruncateTail(tail uint64) (uint64, error) {
 	if old >= tail {
 		return old, nil
 	}
+	// whose item numbers don't start at zero.
+	if tail > f.frozen.Load() {
+		if err := f.advanceEmptyTail(tail); err != nil {
+			return 0, err
+		}
+		f.frozen.Store(tail)
+		f.tail.Store(tail)
+		return old, nil
+	}
 	for _, table := range f.tables {
 		if table.config.prunable {
 			if err := table.truncateTail(tail); err != nil {
@@ -320,6 +329,23 @@ func (f *Freezer) TruncateTail(tail uint64) (uint64, error) {
 	}
 	f.tail.Store(tail)
 	return old, nil
+}
+
+func (f *Freezer) advanceEmptyTail(tail uint64) error {
+	for _, table := range f.tables {
+		if !table.config.prunable {
+			return errors.New("cannot advance tail: freezer contains non-prunable table")
+		}
+		if table.itemHidden.Load() != table.items.Load() {
+			return errors.New("cannot advance tail above head: freezer is not empty")
+		}
+	}
+	for _, table := range f.tables {
+		if err := table.advanceEmptyTail(tail); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // SyncAncient flushes all data tables to disk.
