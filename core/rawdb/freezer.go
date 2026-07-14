@@ -311,6 +311,8 @@ func (f *Freezer) TruncateTail(tail uint64) (uint64, error) {
 	if old >= tail {
 		return old, nil
 	}
+	// A target above the head of an empty freezer advances both boundaries,
+	// so that the next append lands at the new tail. This is used by stores
 	// whose item numbers don't start at zero.
 	if tail > f.frozen.Load() {
 		if err := f.advanceEmptyTail(tail); err != nil {
@@ -331,6 +333,9 @@ func (f *Freezer) TruncateTail(tail uint64) (uint64, error) {
 	return old, nil
 }
 
+// advanceEmptyTail moves the boundaries of an empty freezer forward so the
+// next append lands at the given item number. Every table must be prunable
+// and empty.
 func (f *Freezer) advanceEmptyTail(tail uint64) error {
 	for _, table := range f.tables {
 		if !table.config.prunable {
