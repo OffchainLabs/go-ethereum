@@ -14,6 +14,7 @@ const (
 	ReasonRetryableBeneficiary          FilterReasonType = "retryable_beneficiary"
 	ReasonRetryableFeeRefund            FilterReasonType = "retryable_fee_refund"
 	ReasonRetryableTo                   FilterReasonType = "retryable_to"
+	ReasonRetryableRefundTo             FilterReasonType = "retryable_refund_to"
 	ReasonDealiasedRetryableBeneficiary FilterReasonType = "dealiased_retryable_beneficiary"
 	ReasonDealiasedRetryableFeeRefund   FilterReasonType = "dealiased_retryable_fee_refund"
 	ReasonEventRule                     FilterReasonType = "event_rule"
