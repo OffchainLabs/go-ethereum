@@ -112,7 +112,8 @@ var (
 
 func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
 	// Arbitrum: gate the early error return on Amsterdam fork
-	if (!evm.chainRules.IsArbitrum || evm.chainRules.IsAmsterdam) && evm.readOnly {
+	isArbitrumPreAmsterdam := evm.chainRules.IsArbitrum && !evm.chainRules.IsAmsterdam
+	if !isArbitrumPreAmsterdam && evm.readOnly {
 		return multigas.ZeroGas(), ErrWriteProtection
 	}
 	var (
@@ -201,7 +202,8 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 //				(2.2.2.2.) Otherwise, add SSTORE_RESET_GAS - SLOAD_GAS gas to refund counter.
 func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
 	// Arbitrum: gate the early error return on Amsterdam fork
-	if (!evm.chainRules.IsArbitrum || evm.chainRules.IsAmsterdam) && evm.readOnly {
+	isArbitrumPreAmsterdam := evm.chainRules.IsArbitrum && !evm.chainRules.IsAmsterdam
+	if !isArbitrumPreAmsterdam && evm.readOnly {
 		return multigas.ZeroGas(), ErrWriteProtection
 	}
 	// If we fail the minimum gas availability invariant, fail (0)
@@ -424,58 +426,93 @@ func gasExpEIP158(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 	return multigas.ComputationGas(gas), nil
 }
 
-func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
+var (
+	gasCall         = makeCallVariantGasCost(gasCallIntrinsic)
+	gasCallCode     = makeCallVariantGasCost(gasCallCodeIntrinsic)
+	gasDelegateCall = makeCallVariantGasCost(gasDelegateCallIntrinsic)
+	gasStaticCall   = makeCallVariantGasCost(gasStaticCallIntrinsic)
+)
+
+func makeCallVariantGasCost(intrinsicFunc gasFunc) gasFunc {
+	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
+		multiIntrinsic, err := intrinsicFunc(evm, contract, stack, mem, memorySize)
+		if err != nil {
+			return multigas.ZeroGas(), err
+		}
+		intrinsic := multiIntrinsic.SingleGas()
+		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, intrinsic, stack.Back(0))
+		if err != nil {
+			return multigas.ZeroGas(), err
+		}
+		// Call gas forwarding considered as computation.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
+		var overflow bool
+		multiIntrinsic, overflow = multiIntrinsic.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp)
+		if overflow {
+			return multigas.ZeroGas(), ErrGasUintOverflow
+		}
+
+		return multiIntrinsic, nil
+	}
+}
+
+func gasCallIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
 	var (
-		multiGas       = multigas.ZeroGas()
-		transfersValue = !stack.Back(2).IsZero()
-		address        = common.Address(stack.Back(1).Bytes20())
+		multiGas               = multigas.ZeroGas()
+		transfersValue         = !stack.Back(2).IsZero()
+		address                = common.Address(stack.Back(1).Bytes20())
+		isArbitrumPreAmsterdam = evm.chainRules.IsArbitrum && !evm.chainRules.IsAmsterdam
 	)
 
 	// Arbitrum: gate the early error return on Amsterdam fork
-	if (!evm.chainRules.IsArbitrum || evm.chainRules.IsAmsterdam) && evm.readOnly && transfersValue {
+	if !isArbitrumPreAmsterdam && evm.readOnly && transfersValue {
 		return multigas.ZeroGas(), ErrWriteProtection
 	}
 
-	// Storage slot writes (zero → nonzero) considered as storage growth.
-	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-	if evm.chainRules.IsEIP158 {
-		if transfersValue && evm.StateDB.Empty(address) {
-			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageGrowth, params.CallNewAccountGas)
-		}
-	} else if !evm.StateDB.Exist(address) {
-		multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageGrowth, params.CallNewAccountGas)
-	}
-
-	// Value transfer to non-empty account considered as computation.
-	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-	if transfersValue && !evm.chainRules.IsEIP4762 {
-		multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindComputation, params.CallValueTransferGas)
-	}
-
+	// Stateless check
 	memoryMultiGas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
+		// Arbitrum: before Amsterdam memoryGasCost was called after checking account existence/emptiness;
+		// to keep block recording backward compatibility we execute the state reading check before returning
+		if isArbitrumPreAmsterdam {
+			// both StateDB.Empty and StateDB.Exist call StateDB.getStateObject that we care about, from state read perspective it doesn't matter which one we call
+			_ = evm.StateDB.Exist(address)
+		}
 		return multigas.ZeroGas(), err
 	}
-	multiGas, overflow := multiGas.SafeAdd(memoryMultiGas)
-	if overflow {
+	if transfersValue && !evm.chainRules.IsEIP4762 {
+		// Value transfer to non-empty account considered as computation.
+		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
+		multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindComputation, params.CallValueTransferGas)
+	}
+	var overflow bool
+	if multiGas, overflow = multiGas.SafeAdd(memoryMultiGas); overflow {
 		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
-
-	singleGas := multiGas.SingleGas()
-	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, singleGas, stack.Back(0))
-	if err != nil {
-		return multigas.ZeroGas(), err
+	// Terminate the gas measurement if the leftover gas is not sufficient,
+	// it can effectively prevent accessing the states in the following steps.
+	// Arbitrum: gate the early error return on Amsterdam fork
+	if !isArbitrumPreAmsterdam && contract.Gas < multiGas.SingleGas() {
+		return multigas.ZeroGas(), ErrOutOfGas
 	}
-	// Call gas forwarding considered as computation.
+	// Stateful check
+	var stateGas uint64
+	if evm.chainRules.IsEIP158 {
+		if transfersValue && evm.StateDB.Empty(address) {
+			stateGas += params.CallNewAccountGas
+		}
+	} else if !evm.StateDB.Exist(address) {
+		stateGas += params.CallNewAccountGas
+	}
+	// Storage slot writes (zero → nonzero) considered as storage growth.
 	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-	if multiGas, overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp); overflow {
+	if multiGas, overflow = multiGas.SafeIncrement(multigas.ResourceKindStorageGrowth, stateGas); overflow {
 		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
-
 	return multiGas, nil
 }
 
-func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
+func gasCallCodeIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
 	memoryMultiGas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
 		return multigas.ZeroGas(), err
@@ -493,63 +530,21 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 	if overflow {
 		return multigas.ZeroGas(), ErrGasUintOverflow
 	}
-	singleGas := multiGas.SingleGas()
-	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, singleGas, stack.Back(0))
-	if err != nil {
-		return multigas.ZeroGas(), err
-	}
-	// Call gas forwarding considered as computation.
-	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-	if multiGas, overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp); overflow {
-		return multigas.ZeroGas(), ErrGasUintOverflow
-	}
-
 	return multiGas, nil
 }
 
-func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
-	multiGas, err := memoryGasCost(mem, memorySize)
-	if err != nil {
-		return multigas.ZeroGas(), err
-	}
-	gas := multiGas.SingleGas()
-	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
-	if err != nil {
-		return multigas.ZeroGas(), err
-	}
-	// Call gas forwarding considered as computation.
-	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-	var overflow bool
-	if multiGas, overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp); overflow {
-		return multigas.ZeroGas(), ErrGasUintOverflow
-	}
-
-	return multiGas, nil
+func gasDelegateCallIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
+	return memoryGasCost(mem, memorySize)
 }
 
-func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
-	multiGas, err := memoryGasCost(mem, memorySize)
-	if err != nil {
-		return multigas.ZeroGas(), err
-	}
-	gas := multiGas.SingleGas()
-	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
-	if err != nil {
-		return multigas.ZeroGas(), err
-	}
-	// Call gas forwarding considered as computation.
-	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-	var overflow bool
-	if multiGas, overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp); overflow {
-		return multigas.ZeroGas(), ErrGasUintOverflow
-	}
-
-	return multiGas, nil
+func gasStaticCallIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
+	return memoryGasCost(mem, memorySize)
 }
 
 func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
 	// Arbitrum: gate the early error return on Amsterdam fork
-	if (!evm.chainRules.IsArbitrum || evm.chainRules.IsAmsterdam) && evm.readOnly {
+	isArbitrumPreAmsterdam := evm.chainRules.IsArbitrum && !evm.chainRules.IsAmsterdam
+	if !isArbitrumPreAmsterdam && evm.readOnly {
 		return multigas.ZeroGas(), ErrWriteProtection
 	}
 	multiGas := multigas.ZeroGas()
