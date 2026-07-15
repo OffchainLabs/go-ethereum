@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
@@ -96,24 +95,6 @@ func (d *RecordingTrieDB) recordTrieNode(stateRoot common.Hash, owner common.Has
 		}
 		d.record(child, childBlob)
 	})
-}
-
-func (d *RecordingTrieDB) recordNodeSet(tr *recordingTrie, nodes *trienode.NodeSet) {
-	if nodes == nil {
-		return
-	}
-	for path, node := range nodes.Nodes {
-		if node == nil || node.Hash == (common.Hash{}) || len(node.Blob) == 0 {
-			continue
-		}
-		d.recordTrieNode(tr.stateRoot, tr.owner, []byte(path), node.Hash, node.Blob)
-	}
-	for path, origin := range nodes.Origins {
-		if len(origin) == 0 {
-			continue
-		}
-		d.recordTrieNode(tr.stateRoot, tr.owner, []byte(path), crypto.Keccak256Hash(origin), origin)
-	}
 }
 
 // StopRecording freezes the current recording so later trie reads are ignored.
@@ -246,36 +227,14 @@ func (r *TipRecordingStateDatabase) OpenTrie(root common.Hash) (state.Trie, erro
 	if r.recordingTrieDB.IsVerkle() {
 		panic("TipRecordingStateDatabase.OpenTrie called with Verkle trie database")
 	}
-	tr, err := trie.NewStateTrie(trie.StateTrieID(root), r.recordingTrieDB)
-	if err != nil {
-		return nil, err
-	}
-	return &recordingTrie{Trie: tr, db: r.recordingTrieDB, stateRoot: root}, nil
+	return trie.NewStateTrie(trie.StateTrieID(root), r.recordingTrieDB)
 }
 
 func (r *TipRecordingStateDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, parent state.Trie) (state.Trie, error) {
 	if r.recordingTrieDB.IsVerkle() {
 		panic("TipRecordingStateDatabase.OpenStorageTrie called with Verkle trie database")
 	}
-	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), r.recordingTrieDB)
-	if err != nil {
-		return nil, err
-	}
-	return &recordingTrie{Trie: tr, db: r.recordingTrieDB, stateRoot: stateRoot, owner: crypto.Keccak256Hash(address.Bytes())}, nil
-}
-
-type recordingTrie struct {
-	state.Trie
-	db        *RecordingTrieDB
-	stateRoot common.Hash
-	owner     common.Hash
-}
-
-func (t *recordingTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
-	root, nodes := t.Trie.Commit(collectLeaf)
-	// remove if PR 4 passes tests
-	// t.db.recordNodeSet(t, nodes)
-	return root, nodes
+	return trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), r.recordingTrieDB)
 }
 
 func (r *TipRecordingStateDatabase) Reader(root common.Hash) (state.Reader, error) {
