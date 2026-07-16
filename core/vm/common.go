@@ -42,7 +42,7 @@ func CheckMaxInitCodeSize(rules *params.Rules, size uint64) error {
 // limit set on rules. Arbitrum chains may override the upstream EIP-158/
 // Amsterdam default via ArbitrumChainParams.MaxCodeSize.
 func CheckMaxCodeSize(rules *params.Rules, size uint64) error {
-	if !rules.IsArbitrum && !rules.IsEIP158 {
+	if !rules.IsEIP158 {
 		return nil
 	}
 	if size > rules.MaxCodeSize {
