@@ -29,7 +29,7 @@ import (
 // per-chain limit set on rules. Arbitrum chains may override the upstream
 // Amsterdam/Shanghai default via ArbitrumChainParams.MaxInitCodeSize.
 func CheckMaxInitCodeSize(rules *params.Rules, size uint64) error {
-	if !rules.IsArbitrum && !rules.IsAmsterdam && !rules.IsShanghai {
+	if !rules.IsAmsterdam && !rules.IsShanghai {
 		return nil
 	}
 	if size > rules.MaxInitCodeSize {
