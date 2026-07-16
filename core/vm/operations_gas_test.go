@@ -922,7 +922,7 @@ func TestCallVariantGasCallEIP7702(t *testing.T) {
 		},
 	}
 
-	wrapped := makeCallVariantGasCallEIP7702(gasCall)
+	wrapped := makeCallVariantGasCallEIP7702(gasCallIntrinsic)
 	testGasCallFuncFuncWithCases(t, params.TestChainConfig, wrapped, testCases, false)
 }
 
