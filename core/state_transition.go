@@ -84,9 +84,6 @@ type ErrFilteredOnChain struct {
 	TxHash common.Hash
 }
 
-// Error returns the same message as state.ErrSeqFilter so that a filtered tx is
-// reported identically whether it was rejected at RPC submission or included as
-// an onchain-filtered no-op (e.g. in debug_traceTransaction frame errors).
 func (e *ErrFilteredOnChain) Error() string {
 	return state.ChainPolicyRejectionMessage
 }
