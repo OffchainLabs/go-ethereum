@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -84,7 +85,7 @@ type ErrFilteredOnChain struct {
 }
 
 func (e *ErrFilteredOnChain) Error() string {
-	return fmt.Sprintf("transaction %s in onchain filter", e.TxHash.Hex())
+	return state.ChainPolicyRejectionMessage
 }
 
 func (e *ErrFilteredOnChain) Unwrap() error {
