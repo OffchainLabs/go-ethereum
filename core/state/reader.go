@@ -216,6 +216,10 @@ func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 
 // TrieReaderDatabase is the trie database functionality needed by the
 // trie-backed state reader.
+//
+// Arbitrum: this interface widens upstream's concrete *triedb.Database so the
+// chain-tip recorder can wrap trie reads. Keep the interface when merging
+// upstream changes.
 type TrieReaderDatabase interface {
 	database.NodeDatabase
 	IsVerkle() bool
@@ -234,7 +238,7 @@ func NewTrieReader(root common.Hash, db TrieReaderDatabase, pointCache *utils.Po
 // trieReader is safe for concurrent read.
 type trieReader struct {
 	root common.Hash        // State root which uniquely represent a state
-	db   TrieReaderDatabase // Database for loading trie
+	db   TrieReaderDatabase // Database for loading trie (Arbitrum: interface instead of *triedb.Database)
 
 	// Main trie, resolved in constructor. Note either the Merkle-Patricia-tree
 	// or Verkle-tree is not safe for concurrent read.

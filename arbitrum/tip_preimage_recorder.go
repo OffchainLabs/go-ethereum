@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/database"
@@ -85,7 +84,8 @@ func (d *RecordingTrieDB) recordTrieNode(stateRoot common.Hash, owner common.Has
 	if err != nil {
 		return
 	}
-	gatherTrieHashChildren(path, blob, func(childPath []byte, child common.Hash) {
+	// Malformed nodes cannot reference children, ignore decoding errors.
+	_ = trie.ForEachHashChild(path, blob, func(childPath []byte, child common.Hash) {
 		if d.recorded(child) {
 			return
 		}
@@ -105,10 +105,18 @@ func (d *RecordingTrieDB) StopRecording() {
 	d.stopped = true
 }
 
-// Preimages returns the recorded trie preimages. StopRecording must be called
-// first; the returned map is not safe while recording is active.
+// Preimages returns a shallow copy of the recorded trie preimages.
+// StopRecording should be called first for the returned snapshot to be
+// complete.
 func (d *RecordingTrieDB) Preimages() map[common.Hash][]byte {
-	return d.preimages
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
+	preimages := make(map[common.Hash][]byte, len(d.preimages))
+	for hash, preimage := range d.preimages {
+		preimages[hash] = preimage
+	}
+	return preimages
 }
 
 type TipRecordingStateDatabase struct {
@@ -150,68 +158,12 @@ func (r *TipRecordingStateDatabase) recordCode(codeHash common.Hash) {
 	r.codeHashes[codeHash] = struct{}{}
 }
 
-func gatherTrieHashChildren(path []byte, blob []byte, onChild func([]byte, common.Hash)) {
-	content, rest, err := rlp.SplitList(blob)
-	if err != nil || len(rest) != 0 {
-		return
-	}
-	count, err := rlp.CountValues(content)
-	if err != nil {
-		return
-	}
-	switch count {
-	case 2:
-		key, value, err := rlp.SplitString(content)
-		if err != nil {
-			return
-		}
-		kind, childContent, childRest, err := rlp.Split(value)
-		if err != nil || len(childRest) != 0 {
-			return
-		}
-		childPath := append(append([]byte(nil), path...), compactToHex(key)...)
-		if len(childPath) > 0 && childPath[len(childPath)-1] == 16 {
-			return
-		}
-		gatherTrieHashChild(childPath, kind, childContent, value, onChild)
-	case 17:
-		for i := 0; i < 16; i++ {
-			kind, childContent, childRest, err := rlp.Split(content)
-			if err != nil {
-				return
-			}
-			encoded := content[:len(content)-len(childRest)]
-			childPath := append(append([]byte(nil), path...), byte(i))
-			gatherTrieHashChild(childPath, kind, childContent, encoded, onChild)
-			content = childRest
-		}
-	}
-}
-
-func gatherTrieHashChild(path []byte, kind rlp.Kind, content []byte, encoded []byte, onChild func([]byte, common.Hash)) {
-	switch {
-	case kind == rlp.List:
-		gatherTrieHashChildren(path, encoded, onChild)
-	case len(content) == common.HashLength:
-		onChild(path, common.BytesToHash(content))
-	}
-}
-
-func compactToHex(compact []byte) []byte {
-	if len(compact) == 0 {
-		return compact
-	}
-	base := trie.KeybytesToHex(compact)
-	if base[0] < 2 {
-		base = base[:len(base)-1]
-	}
-	chop := 2 - base[0]&1
-	return base[chop:]
-}
-
-// CodeHashes returns the recorded code hashes. StopRecording must be called
-// first; the returned slice is not safe while recording is active.
+// CodeHashes returns the recorded code hashes. StopRecording should be called
+// first for the returned snapshot to be complete.
 func (r *TipRecordingStateDatabase) CodeHashes() []common.Hash {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
 	codeHashes := make([]common.Hash, 0, len(r.codeHashes))
 	for codeHash := range r.codeHashes {
 		codeHashes = append(codeHashes, codeHash)
