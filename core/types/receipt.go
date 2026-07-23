@@ -307,7 +307,7 @@ func (r *Receipt) DeriveFields(signer Signer, context DeriveReceiptContext) {
 		r.GasUsed = context.GasUsed
 	}
 	if context.CollectTips {
-		r.EffectiveGasPrice = context.Tx.inner.effectiveGasPrice(new(big.Int), context.BaseFee)
+		r.EffectiveGasPrice = context.Tx.EffectiveGasPrice(context.BaseFee)
 	} else {
 		r.EffectiveGasPrice = context.BaseFee
 	}
