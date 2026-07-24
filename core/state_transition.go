@@ -644,13 +644,16 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if endTxNow {
 		// Arbitrum endTxNow paths (deposits, retryable submission, internal txs)
 		// bypass the normal SubGas/ReturnGas flow but still report gas used.
-		// Bump gp.cumulativeUsed so receipt.CumulativeGasUsed (and the GasUsed
-		// derived from it via DeriveFields) reflects this tx's contribution.
+		// Consume the gas from the pool without returning it so gp.Used()
+		// (which feeds ProcessResult.GasUsed, validated against header.GasUsed)
+		// includes it, and bump gp.cumulativeUsed so receipt.CumulativeGasUsed
+		// (and the GasUsed derived from it via DeriveFields) reflects this
+		// tx's contribution too.
 		if startHookUsedSingleGas > 0 {
 			if subErr := st.gp.SubGas(startHookUsedSingleGas); subErr != nil {
 				return nil, subErr
 			}
-			if retErr := st.gp.ReturnGas(startHookUsedSingleGas, startHookUsedSingleGas); retErr != nil {
+			if retErr := st.gp.ReturnGas(0, startHookUsedSingleGas); retErr != nil {
 				return nil, retErr
 			}
 		}
