@@ -533,3 +533,58 @@ func TestMessageRunContextPredicates(t *testing.T) {
 		t.Error("NewMessageDelayedSequencingContext must not satisfy IsSequencing")
 	}
 }
+
+// endTxNowHook ends the state transition immediately from StartTxHook while
+// reporting nonzero gas, mimicking Arbitrum's submit-retryable path.
+type endTxNowHook struct {
+	vm.DefaultTxProcessor
+	gas uint64
+}
+
+func (h endTxNowHook) StartTxHook() (bool, multigas.MultiGas, error, []byte) {
+	return true, multigas.SingleDimGas(h.gas), nil, nil
+}
+
+// TestEndTxNowGasPoolAccounting checks that gas reported by an endTxNow
+// transaction (e.g. an Arbitrum retryable submission) is accounted for
+// consistently in the block gas pool: gp.Used() feeds ProcessResult.GasUsed
+// (validated against header.GasUsed in ValidateState) and gp.CumulativeUsed()
+// feeds receipt.CumulativeGasUsed, so both must include the hook's gas.
+func TestEndTxNowGasPoolAccounting(t *testing.T) {
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	header := &types.Header{
+		Difficulty: common.Big0,
+		Number:     common.Big0,
+		BaseFee:    common.Big0,
+	}
+	evm := vm.NewEVM(NewEVMBlockContext(header, nil, &common.Address{}), statedb, params.TestChainConfig, vm.Config{})
+
+	const hookGas = 50_000
+	evm.ProcessingHook = endTxNowHook{gas: hookGas}
+
+	to := common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+	msg := &Message{
+		From:      params.SystemAddress,
+		To:        &to,
+		Value:     common.Big0,
+		GasLimit:  1_000_000,
+		GasPrice:  common.Big0,
+		GasFeeCap: common.Big0,
+		GasTipCap: common.Big0,
+	}
+	gp := NewGasPool(30_000_000)
+
+	res, err := ApplyMessage(evm, msg, gp)
+	if err != nil {
+		t.Fatalf("failed to apply message: %v", err)
+	}
+	if res.UsedGas != hookGas {
+		t.Errorf("result.UsedGas = %v, want %v", res.UsedGas, hookGas)
+	}
+	if gp.CumulativeUsed() != hookGas {
+		t.Errorf("gp.CumulativeUsed() = %v, want %v", gp.CumulativeUsed(), hookGas)
+	}
+	if gp.Used() != hookGas {
+		t.Errorf("gp.Used() = %v, want %v (endTxNow gas missing from pool accounting)", gp.Used(), hookGas)
+	}
+}
