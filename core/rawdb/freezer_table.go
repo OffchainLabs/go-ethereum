@@ -372,6 +372,16 @@ func (t *freezerTable) repair() error {
 	t.headBytes = contentSize
 	t.headId = lastIndex.filenum
 
+	// Left as is, sizeHidden reads past the end of the index and the table cannot open.
+	if items := t.items.Load(); t.itemHidden.Load() > items {
+		if !t.readonly {
+			if err := t.metadata.setVirtualTail(items, true); err != nil {
+				return err
+			}
+		}
+		t.itemHidden.Store(items)
+	}
+
 	// Delete the leftover files because of head deletion
 	t.releaseFilesAfter(t.headId, true)
 

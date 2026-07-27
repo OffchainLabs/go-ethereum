@@ -6,6 +6,7 @@ package rawdb
 import (
 	"bytes"
 	"fmt"
+	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -77,7 +78,6 @@ func TestFreezerAdvanceEmptyTail(t *testing.T) {
 	checkAdvanceTestItem(t, f, 1000)
 	checkAdvanceTestItem(t, f, 1002)
 
-	// Reopen and verify the boundaries and contents survived.
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,6 @@ func TestFreezerAdvanceEmptyTailAfterFullPrune(t *testing.T) {
 
 	f, dir := newFreezerForTesting(t, advanceTestTables)
 	appendAdvanceTestItems(t, f, 0, 4)
-	// Prune everything; hidden items may linger in the data files.
 	if _, err := f.TruncateTail(4); err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +180,6 @@ func TestMemoryFreezerAdvanceEmptyTail(t *testing.T) {
 	checkAdvanceTestBounds(t, f, 1000, 1003)
 	checkAdvanceTestItem(t, f, 1002)
 
-	// Prune to empty and advance again.
 	if _, err := f.TruncateTail(1003); err != nil {
 		t.Fatal(err)
 	}
@@ -192,8 +190,55 @@ func TestMemoryFreezerAdvanceEmptyTail(t *testing.T) {
 	appendAdvanceTestItems(t, f, 2000, 1)
 	checkAdvanceTestItem(t, f, 2000)
 
-	// Advancing a non-empty memory freezer must fail.
 	if _, err := f.TruncateTail(5000); err == nil {
 		t.Fatal("expected error advancing tail of non-empty freezer")
 	}
+}
+
+func TestFreezerAdvanceEmptyTailMetadataAheadOfIndex(t *testing.T) {
+	t.Parallel()
+
+	f, dir := newFreezerForTesting(t, advanceTestTables)
+	if _, err := f.TruncateTail(1000); err != nil {
+		t.Fatal(err)
+	}
+	appendAdvanceTestItems(t, f, 1000, 2)
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	metaFile, err := openFreezerFileForAppend(filepath.Join(dir, "test.meta"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	meta, err := newMetadata(metaFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := meta.setVirtualTail(5000, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := metaFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	f, err = NewFreezer(dir, "", false, 2049, advanceTestTables)
+	if err != nil {
+		t.Fatalf("freezer did not open after an interrupted tail advance: %v", err)
+	}
+	defer f.Close()
+
+	tail, err := f.Tail()
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err := f.Ancients()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tail != head {
+		t.Fatalf("expected an empty window after winding the tail back, got tail %d head %d", tail, head)
+	}
+	appendAdvanceTestItems(t, f, head, 1)
+	checkAdvanceTestItem(t, f, head)
 }
