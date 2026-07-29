@@ -113,6 +113,24 @@ func (t *memoryTable) truncateTail(items uint64) error {
 	return nil
 }
 
+// advanceEmptyTail moves both boundaries of an empty table forward to the
+// given item number, so that the next append lands at that number.
+func (t *memoryTable) advanceEmptyTail(items uint64) error {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	if t.offset != t.items {
+		return errors.New("cannot advance tail above head: table is not empty")
+	}
+	if t.items >= items {
+		return nil
+	}
+	t.data = nil
+	t.items = items
+	t.offset = items
+	return nil
+}
+
 // commit merges the given item batch into table. It's presumed that the
 // batch is ordered and continuous with table.
 func (t *memoryTable) commit(batch [][]byte) error {
@@ -363,6 +381,24 @@ func (f *MemoryFreezer) TruncateTail(tail uint64) (uint64, error) {
 	}
 	old := f.tail
 	if old >= tail {
+		return old, nil
+	}
+	// A target above the head of an empty freezer advances both boundaries,
+	// so that the next append lands at the new tail. This is used by stores
+	// whose item numbers don't start at zero.
+	if tail > f.items {
+		for _, table := range f.tables {
+			if !table.config.prunable {
+				return 0, errors.New("cannot advance tail: freezer contains non-prunable table")
+			}
+		}
+		for _, table := range f.tables {
+			if err := table.advanceEmptyTail(tail); err != nil {
+				return 0, err
+			}
+		}
+		f.items = tail
+		f.tail = tail
 		return old, nil
 	}
 	for _, table := range f.tables {
