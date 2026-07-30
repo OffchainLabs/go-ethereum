@@ -14,7 +14,6 @@ import (
 )
 
 type recordingNodeReader struct {
-	stateRoot       common.Hash
 	inner           database.NodeReader
 	recordingTrieDB *RecordingTrieDB
 }
@@ -25,7 +24,7 @@ func (r *recordingNodeReader) Node(owner common.Hash, path []byte, hash common.H
 		return nil, err
 	}
 	if preimage != nil {
-		r.recordingTrieDB.recordTrieNode(r.stateRoot, owner, path, hash, preimage)
+		r.recordingTrieDB.record(hash, preimage)
 	}
 	return preimage, nil
 }
@@ -50,7 +49,6 @@ func (d *RecordingTrieDB) NodeReader(stateRoot common.Hash) (database.NodeReader
 		return nil, err
 	}
 	return &recordingNodeReader{
-		stateRoot:       stateRoot,
 		inner:           reader,
 		recordingTrieDB: d,
 	}, nil
@@ -68,33 +66,6 @@ func (d *RecordingTrieDB) record(hash common.Hash, blob []byte) {
 	}
 
 	d.preimages[hash] = blob
-}
-
-func (d *RecordingTrieDB) recorded(hash common.Hash) bool {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-
-	_, exists := d.preimages[hash]
-	return exists
-}
-
-func (d *RecordingTrieDB) recordTrieNode(stateRoot common.Hash, owner common.Hash, path []byte, hash common.Hash, blob []byte) {
-	d.record(hash, blob)
-	reader, err := d.Database.NodeReader(stateRoot)
-	if err != nil {
-		return
-	}
-	// Malformed nodes cannot reference children, ignore decoding errors.
-	_ = trie.ForEachHashChild(path, blob, func(childPath []byte, child common.Hash) {
-		if d.recorded(child) {
-			return
-		}
-		childBlob, err := reader.Node(owner, childPath, child)
-		if err != nil || len(childBlob) == 0 {
-			return
-		}
-		d.record(child, childBlob)
-	})
 }
 
 // StopRecording freezes the current recording so later trie reads are ignored.
