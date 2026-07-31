@@ -25,11 +25,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/transitiontrie"
-	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
@@ -148,13 +148,31 @@ func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 	return value, nil
 }
 
+// TrieReaderDatabase is the trie database functionality needed by the
+// trie-backed state reader.
+//
+// Arbitrum: this interface widens upstream's concrete *triedb.Database so the
+// chain-tip recorder can wrap trie reads. Keep the interface when merging
+// upstream changes.
+type TrieReaderDatabase interface {
+	database.NodeDatabase
+	IsVerkle() bool
+	Disk() ethdb.Database
+}
+
+// NewTrieReader returns a trie-backed state reader using the supplied trie
+// database.
+func NewTrieReader(root common.Hash, db TrieReaderDatabase) (StateReader, error) {
+	return newTrieReader(root, db)
+}
+
 // trieReader implements the StateReader interface, providing functions to access
 // state from the referenced trie.
 //
 // trieReader is safe for concurrent read.
 type trieReader struct {
-	root common.Hash      // State root which uniquely represent a state
-	db   *triedb.Database // Database for loading trie
+	root common.Hash        // State root which uniquely represent a state
+	db   TrieReaderDatabase // Database for loading trie (Arbitrum: interface instead of *triedb.Database)
 
 	// Main trie, resolved in constructor. Note either the Merkle-Patricia-tree
 	// or Verkle-tree is not safe for concurrent read.
@@ -167,7 +185,7 @@ type trieReader struct {
 
 // newTrieReader constructs a trie reader of the specific state. An error will be
 // returned if the associated trie specified by root is not existent.
-func newTrieReader(root common.Hash, db *triedb.Database) (*trieReader, error) {
+func newTrieReader(root common.Hash, db TrieReaderDatabase) (*trieReader, error) {
 	var (
 		tr  Trie
 		err error

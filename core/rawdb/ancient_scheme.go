@@ -108,6 +108,29 @@ var freezers = []string{
 	MerkleTrienodeFreezerName, VerkleTrienodeFreezerName,
 }
 
+const (
+	// ChainTipBlockRecordsFreezerName is the folder name of the chain-tip block
+	// records ancient store.
+	ChainTipBlockRecordsFreezerName = "chain-tip-block-records"
+
+	// ChainTipBlockRecordsFreezerTable is the table storing persisted chain-tip
+	// block recordings.
+	ChainTipBlockRecordsFreezerTable = "records"
+)
+
+var chainTipBlockRecordsFreezerTableConfigs = map[string]freezerTableConfig{
+	ChainTipBlockRecordsFreezerTable: {noSnappy: false, prunable: true},
+}
+
+// NewChainTipBlockRecordsFreezer initializes the ancient store for chain-tip
+// block recordings.
+func NewChainTipBlockRecordsFreezer(ancientDir string, readOnly bool) (ethdb.ResettableAncientStore, error) {
+	if ancientDir == "" {
+		return NewMemoryFreezer(readOnly, chainTipBlockRecordsFreezerTableConfigs), nil
+	}
+	return newResettableFreezer(filepath.Join(ancientDir, ChainTipBlockRecordsFreezerName), "eth/db/chaintipblockrecords/", readOnly, freezerTableSize, chainTipBlockRecordsFreezerTableConfigs)
+}
+
 // NewStateFreezer initializes the ancient store for state history.
 //
 //   - if the empty directory is given, initializes the pure in-memory

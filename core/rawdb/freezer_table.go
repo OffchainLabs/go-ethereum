@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -370,6 +371,16 @@ func (t *freezerTable) repair() error {
 	t.items.Store(t.itemOffset.Load() + uint64(offsetsSize/indexEntrySize-1)) // last indexEntry points to the end of the data file
 	t.headBytes = contentSize
 	t.headId = lastIndex.filenum
+
+	// Left as is, sizeHidden reads past the end of the index and the table cannot open.
+	if items := t.items.Load(); t.itemHidden.Load() > items {
+		if !t.readonly {
+			if err := t.metadata.setVirtualTail(items, true); err != nil {
+				return err
+			}
+		}
+		t.itemHidden.Store(items)
+	}
 
 	// Delete the leftover files because of head deletion
 	t.releaseFilesAfter(t.headId, true)
@@ -839,6 +850,9 @@ func (t *freezerTable) truncateTail(items uint64) error {
 // resetTo clears the entire table and sets both the head and tail to the given
 // value. It assumes the caller holds the lock and that tail > t.items.
 func (t *freezerTable) resetTo(tail uint64) error {
+	if tail > math.MaxUint32 {
+		return errors.New("cannot truncate tail above head: item number exceeds uint32 offset limit")
+	}
 	// Sync the entire table before resetting, eliminating the potential
 	// data corruption.
 	err := t.doSync()

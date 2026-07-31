@@ -311,6 +311,15 @@ func (f *Freezer) TruncateTail(tail uint64) (uint64, error) {
 	if old >= tail {
 		return old, nil
 	}
+	// Advancing the tail beyond the head resets each table. This is only
+	// valid when every table can be pruned; otherwise their bounds diverge.
+	if tail > f.head.Load() {
+		for _, table := range f.tables {
+			if !table.config.prunable {
+				return 0, errors.New("cannot truncate tail above head: freezer contains non-prunable table")
+			}
+		}
+	}
 	for _, table := range f.tables {
 		if table.config.prunable {
 			if err := table.truncateTail(tail); err != nil {
