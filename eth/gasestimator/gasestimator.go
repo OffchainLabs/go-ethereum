@@ -290,6 +290,11 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 		if call.To != nil {
 			dirtyState.TouchAddress(&filter.FilteredAddressWithReason{Address: *call.To, FilterReason: filter.FilterReason{Reason: filter.ReasonTo, EventRuleMatch: nil}})
 		}
+		// Short-circuit before the dry-run when the sender or recipient alone is
+		// filtered; execution below still catches mid-execution touches and event rules.
+		if err := txFilterer.CheckFiltered(dirtyState, call.Tx, opts.Header); err != nil {
+			return nil, err
+		}
 	}
 
 	evm := opts.Backend.GetEVM(ctx, dirtyState, opts.Header, &vm.Config{NoBaseFee: true}, &evmContext)
