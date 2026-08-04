@@ -829,6 +829,11 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 		if msg.To != nil {
 			state.TouchAddress(&filter.FilteredAddressWithReason{Address: *msg.To, FilterReason: filter.FilterReason{Reason: filter.ReasonTo, EventRuleMatch: nil}})
 		}
+		// Short-circuit before executing when the sender or recipient alone is
+		// filtered; execution below still catches mid-execution touches and event rules.
+		if ferr := txFilterer.CheckFiltered(state, msg.Tx, header); ferr != nil {
+			return nil, ferr
+		}
 	}
 	// Lower the basefee to 0 to avoid breaking EVM
 	// invariants (basefee < feecap).
