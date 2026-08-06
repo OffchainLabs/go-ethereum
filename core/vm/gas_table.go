@@ -474,7 +474,7 @@ func gasCallIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	if err != nil {
 		// Arbitrum: before Amsterdam memoryGasCost was called after checking account existence/emptiness;
 		// to keep block recording backward compatibility we execute the state reading check before returning
-		if isArbitrumPreAmsterdam {
+		if isArbitrumPreAmsterdam && (!evm.chainRules.IsEIP158 || transfersValue) {
 			// both StateDB.Empty and StateDB.Exist call StateDB.getStateObject that we care about, from state read perspective it doesn't matter which one we call
 			_ = evm.StateDB.Exist(address)
 		}

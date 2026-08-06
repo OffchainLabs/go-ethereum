@@ -54,6 +54,84 @@ func TestMemoryGasCost(t *testing.T) {
 	}
 }
 
+type accountLookupCountingStateDB struct {
+	StateDB
+	existCalls int
+	emptyCalls int
+}
+
+func (s *accountLookupCountingStateDB) Exist(address common.Address) bool {
+	s.existCalls++
+	return s.StateDB.Exist(address)
+}
+
+func (s *accountLookupCountingStateDB) Empty(address common.Address) bool {
+	s.emptyCalls++
+	return s.StateDB.Empty(address)
+}
+
+func TestGasCallIntrinsicAccountLookupOnMemoryError(t *testing.T) {
+	tests := []struct {
+		name            string
+		isAmsterdam     bool
+		isEIP158        bool
+		transfersValue  bool
+		expectedLookups int
+	}{
+		{
+			name:            "pre-Amsterdam EIP-158 without value",
+			isEIP158:        true,
+			expectedLookups: 0,
+		},
+		{
+			name:            "pre-Amsterdam EIP-158 with value",
+			isEIP158:        true,
+			transfersValue:  true,
+			expectedLookups: 1,
+		},
+		{
+			name:            "pre-Amsterdam pre-EIP-158 without value",
+			expectedLookups: 1,
+		},
+		{
+			name:            "Amsterdam EIP-158 with value",
+			isAmsterdam:     true,
+			isEIP158:        true,
+			transfersValue:  true,
+			expectedLookups: 0,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			innerStateDB, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+			stateDB := &accountLookupCountingStateDB{StateDB: innerStateDB}
+			evm := NewEVM(BlockContext{}, stateDB, params.TestChainConfig, Config{})
+			evm.chainRules.IsArbitrum = true
+			evm.chainRules.IsAmsterdam = test.isAmsterdam
+			evm.chainRules.IsEIP158 = test.isEIP158
+
+			stack := newstack()
+			if test.transfersValue {
+				stack.push(uint256.NewInt(1))
+			} else {
+				stack.push(new(uint256.Int))
+			}
+			stack.push(new(uint256.Int).SetBytes(common.Address{1}.Bytes()))
+			stack.push(uint256.NewInt(100_000))
+
+			contract := NewContract(common.Address{}, common.Address{}, new(uint256.Int), 100_000, nil)
+			_, err := gasCallIntrinsic(evm, contract, stack, NewMemory(), 0x1fffffffe1)
+			if !errors.Is(err, ErrGasUintOverflow) {
+				t.Fatalf("unexpected error: got %v, want %v", err, ErrGasUintOverflow)
+			}
+			if lookups := stateDB.existCalls + stateDB.emptyCalls; lookups != test.expectedLookups {
+				t.Fatalf("unexpected account lookup count: got %d (Exist: %d, Empty: %d), want %d", lookups, stateDB.existCalls, stateDB.emptyCalls, test.expectedLookups)
+			}
+		})
+	}
+}
+
 var eip2200Tests = []struct {
 	original byte
 	gaspool  uint64
