@@ -271,7 +271,8 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	// Taken from https://github.com/cockroachdb/pebble/blob/master/internal/constants/constants.go
 	maxMemTableSize := (1<<31)<<(^uint(0)>>63) - 1
 
-	// Four memory tables are configured, each with a default size of 256 MB.
+	// Memory tables share half the configured cache. The default count is four,
+	// but callers may override it via ExtraOptions.
 	// Having multiple smaller memory tables while keeping the total memory
 	// limit unchanged allows writes to be flushed more smoothly. This helps
 	// avoid compaction spikes and mitigates write stalls caused by heavy
@@ -344,8 +345,8 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		WALMinSyncInterval:          extraOptions.WALMinSyncInterval,
 		TargetByteDeletionRate:      extraOptions.TargetByteDeletionRate,
 	}
-	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
-	// for more details.
+	// Seek compaction is disabled by default, but callers may enable it via
+	// ExtraOptions. See https://github.com/ethereum/go-ethereum/pull/20130.
 	opt.Experimental.ReadSamplingMultiplier = extraOptions.Experimental.ReadSamplingMultiplier
 	opt.Experimental.L0CompactionConcurrency = extraOptions.Experimental.L0CompactionConcurrency
 	opt.Experimental.CompactionDebtConcurrency = extraOptions.Experimental.CompactionDebtConcurrency

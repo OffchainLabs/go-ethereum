@@ -136,7 +136,7 @@ func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTim
 		// Arbitrum does not support blob transactions, so we return 0.
 		return 0
 	}
-	// we can use 0 here because arbitrum doesn't support Blob transactions.
+	// The ArbOS version is irrelevant here because Arbitrum returns above.
 	isOsaka := config.IsOsaka(config.LondonBlock, headTimestamp, 0)
 	bcfg, err := latestBlobConfig(config, headTimestamp)
 	if err != nil {
