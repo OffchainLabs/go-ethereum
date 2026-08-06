@@ -601,8 +601,7 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 	// note: triedb cleans cache is disabled in trie.HashDefaults
 	// note: only states committed to diskdb can be found as we're creating new triedb
 	// note: snapshots are not used here
-	ephemeral := state.NewDatabase(triedb.NewDatabase(chainDb, triedb.HashDefaults), nil)
-	ephemeral.CodeDB().SetArbNodeConfig(bc.CodeDB().ArbNodeConfig())
+	ephemeral := state.NewDatabase(triedb.NewDatabase(chainDb, triedb.HashDefaults), bc.CodeDB())
 	lastState, lastHeader, lastStateRelease, err := FindLastAvailableState(ctx, bc, stateFor(ephemeral), header, nil, maxRecreateStateDepth)
 	if err != nil {
 		return nil, nil, err
