@@ -205,7 +205,7 @@ func (b *CodeBatch) Commit() error {
 type CodeDB struct {
 	// Arbitrum
 	activatedAsmCache *lru.SizeConstrainedCache[activatedAsmCacheKey, []byte]
-	arbNodeConfig     any
+	arbNodeConfig     atomic.Pointer[arbNodeConfigHolder]
 
 	wasmdb ethdb.KeyValueStore
 	db     ethdb.KeyValueStore

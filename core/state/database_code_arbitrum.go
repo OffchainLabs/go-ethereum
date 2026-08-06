@@ -11,10 +11,28 @@ const (
 	activatedWasmCacheSize = 64 * 1024 * 1024
 )
 
+type arbNodeConfigHolder struct {
+	config any
+}
+
 // Geth treats the config value as opaque; Nitro asserts it back to its typed config struct
 // at the read site.
-func (db *CodeDB) ArbNodeConfig() any       { return db.arbNodeConfig }
-func (db *CodeDB) SetArbNodeConfig(cfg any) { db.arbNodeConfig = cfg }
+func (db *CodeDB) ArbNodeConfig() any {
+	holder := db.arbNodeConfig.Load()
+	if holder == nil {
+		return nil
+	}
+	return holder.config
+}
+
+// SetArbNodeConfig publishes the node config exactly once. The config is immutable
+// after publication so all users of this shared CodeDB observe the same value.
+func (db *CodeDB) SetArbNodeConfig(cfg any) {
+	holder := &arbNodeConfigHolder{config: cfg}
+	if !db.arbNodeConfig.CompareAndSwap(nil, holder) {
+		panic("ArbNodeConfig already set")
+	}
+}
 
 func (db *CodeDB) ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) []byte {
 	cacheKey := activatedAsmCacheKey{moduleHash, target}
