@@ -54,20 +54,58 @@ func TestMemoryGasCost(t *testing.T) {
 	}
 }
 
-type accountLookupCountingStateDB struct {
-	StateDB
-	existCalls int
-	emptyCalls int
+type stateRead struct {
+	method  string
+	address common.Address
 }
 
-func (s *accountLookupCountingStateDB) Exist(address common.Address) bool {
-	s.existCalls++
+type stateReadRecordingStateDB struct {
+	StateDB
+	reads []stateRead
+}
+
+func (s *stateReadRecordingStateDB) record(method string, address common.Address) {
+	s.reads = append(s.reads, stateRead{method: method, address: address})
+}
+
+func (s *stateReadRecordingStateDB) Exist(address common.Address) bool {
+	s.record("Exist", address)
 	return s.StateDB.Exist(address)
 }
 
-func (s *accountLookupCountingStateDB) Empty(address common.Address) bool {
-	s.emptyCalls++
+func (s *stateReadRecordingStateDB) Empty(address common.Address) bool {
+	s.record("Empty", address)
 	return s.StateDB.Empty(address)
+}
+
+func (s *stateReadRecordingStateDB) GetCode(address common.Address) []byte {
+	s.record("GetCode", address)
+	return s.StateDB.GetCode(address)
+}
+
+func (s *stateReadRecordingStateDB) GetBalance(address common.Address) *uint256.Int {
+	s.record("GetBalance", address)
+	return s.StateDB.GetBalance(address)
+}
+
+func (s *stateReadRecordingStateDB) HasSelfDestructed(address common.Address) bool {
+	s.record("HasSelfDestructed", address)
+	return s.StateDB.HasSelfDestructed(address)
+}
+
+func (s *stateReadRecordingStateDB) GetStateAndCommittedState(address common.Address, slot common.Hash) (common.Hash, common.Hash) {
+	s.record("GetStateAndCommittedState", address)
+	return s.StateDB.GetStateAndCommittedState(address, slot)
+}
+
+func (s *stateReadRecordingStateDB) count(method string) int {
+	var count int
+	for _, read := range s.reads {
+		if read.method == method {
+			count++
+		}
+	}
+	return count
 }
 
 func TestGasCallIntrinsicAccountLookupOnMemoryError(t *testing.T) {
@@ -105,7 +143,7 @@ func TestGasCallIntrinsicAccountLookupOnMemoryError(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			innerStateDB, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-			stateDB := &accountLookupCountingStateDB{StateDB: innerStateDB}
+			stateDB := &stateReadRecordingStateDB{StateDB: innerStateDB}
 			evm := NewEVM(BlockContext{}, stateDB, params.TestChainConfig, Config{})
 			evm.chainRules.IsArbitrum = true
 			evm.chainRules.IsAmsterdam = test.isAmsterdam
@@ -125,8 +163,9 @@ func TestGasCallIntrinsicAccountLookupOnMemoryError(t *testing.T) {
 			if !errors.Is(err, ErrGasUintOverflow) {
 				t.Fatalf("unexpected error: got %v, want %v", err, ErrGasUintOverflow)
 			}
-			if lookups := stateDB.existCalls + stateDB.emptyCalls; lookups != test.expectedLookups {
-				t.Fatalf("unexpected account lookup count: got %d (Exist: %d, Empty: %d), want %d", lookups, stateDB.existCalls, stateDB.emptyCalls, test.expectedLookups)
+			existCalls, emptyCalls := stateDB.count("Exist"), stateDB.count("Empty")
+			if lookups := existCalls + emptyCalls; lookups != test.expectedLookups {
+				t.Fatalf("unexpected account lookup count: got %d (Exist: %d, Empty: %d), want %d", lookups, existCalls, emptyCalls, test.expectedLookups)
 			}
 		})
 	}
