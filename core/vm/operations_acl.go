@@ -358,7 +358,7 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc gasFunc) gasFunc {
 			if isArbitrumPreAmsterdam {
 				_ = evm.StateDB.GetCode(addr)
 			}
-			return multiIntrinsicCost, err
+			return multigas.ZeroGas(), err
 		}
 		// Terminate the gas measurement if the leftover gas is not sufficient,
 		// it can effectively prevent accessing the states in the following steps.
@@ -386,7 +386,7 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc gasFunc) gasFunc {
 		// EIP-2929 and EIP-7702 have already been applied.
 		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, multiIntrinsicCost.SingleGas(), stack.Back(0))
 		if err != nil {
-			return multiIntrinsicCost, err
+			return multigas.ZeroGas(), err
 		}
 		// Temporarily add the gas charge back to the contract and return value. By
 		// adding it to the return, it will be charged outside of this function, as
