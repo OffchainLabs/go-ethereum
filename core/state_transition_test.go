@@ -2,7 +2,8 @@ package core
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
@@ -267,7 +268,6 @@ func TestIntrinsicGas(t *testing.T) {
 
 func TestCallVariantsMultiGas(t *testing.T) {
 	const gasLimit = 100_000
-	const refinedComputationGas = gasLimit - params.ColdSloadCostEIP2929 - params.SstoreSetGasEIP2200
 
 	// PUSH1 0x01, PUSH1 0x00, SSTORE, STOP
 	code := []byte{
@@ -296,10 +296,11 @@ func TestCallVariantsMultiGas(t *testing.T) {
 	evm := vm.NewEVM(NewEVMBlockContext(header, nil, &caller), statedb, params.TestChainConfig, vm.Config{})
 
 	tests := []struct {
-		name             string
-		callFn           func() (ret []byte, leftOver uint64, mg multigas.MultiGas, err error)
-		expectErr        error
-		expectedMultiGas multigas.MultiGas
+		name              string
+		callFn            func() (ret []byte, leftOver uint64, mg multigas.MultiGas, err error)
+		expectErr         error
+		expectErrContains string
+		expectedMultiGas  multigas.MultiGas
 	}{
 		{
 			name: "callcode_success",
@@ -340,8 +341,10 @@ func TestCallVariantsMultiGas(t *testing.T) {
 			callFn: func() ([]byte, uint64, multigas.MultiGas, error) {
 				return evm.StaticCall(caller, contractAddr, nil, gasLimit)
 			},
-			expectErr:        fmt.Errorf("%w: %v", vm.ErrOutOfGas, vm.ErrWriteProtection),
-			expectedMultiGas: multigas.ComputationGas(refinedComputationGas + params.ColdSloadCostEIP2929 + params.SstoreSetGasEIP2200),
+			expectErr:         vm.ErrOutOfGas,
+			expectErrContains: vm.ErrWriteProtection.Error(),
+			// Failed calls consume all remaining gas as computation.
+			expectedMultiGas: multigas.ComputationGas(gasLimit),
 		},
 	}
 
@@ -353,8 +356,11 @@ func TestCallVariantsMultiGas(t *testing.T) {
 				if err == nil {
 					t.Fatalf("unexpected error, got: nil, want: %v", tt.expectErr)
 				}
-				if err.Error() != tt.expectErr.Error() {
+				if !errors.Is(err, tt.expectErr) {
 					t.Fatalf("unexpected error, got: %v, want: %v", err, tt.expectErr)
+				}
+				if tt.expectErrContains != "" && !strings.Contains(err.Error(), tt.expectErrContains) {
+					t.Fatalf("unexpected error, got: %v, want it to contain: %v", err, tt.expectErrContains)
 				}
 			} else if err != nil {
 				t.Fatalf("unexpected error, got: %v, want: nil", err)
