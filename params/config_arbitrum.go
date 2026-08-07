@@ -44,6 +44,9 @@ const ArbosVersion_59 = uint64(59)
 const ArbosVersion_60 = uint64(60)
 const ArbosVersion_61 = uint64(61)
 
+// TODO make sure that this is the version that should gate Amsterdam fork
+const ArbosVersion_Amsterdam = uint64(70)
+
 const ArbosVersion_FixRedeemGas = ArbosVersion_11
 const ArbosVersion_Stylus = ArbosVersion_30
 const ArbosVersion_StylusFixes = ArbosVersion_31
@@ -51,6 +54,7 @@ const ArbosVersion_StylusChargingFixes = ArbosVersion_32
 const MaxArbosVersionSupported = ArbosVersion_61
 const MaxDebugArbosVersionSupported = ArbosVersion_61
 const ArbosVersion_Dia = ArbosVersion_50
+const ArbosVersion_Elara = ArbosVersion_60
 
 const ArbosVersion_SingleGasConstraintsVersion = ArbosVersion_50
 const ArbosVersion_MultiConstraintFix = ArbosVersion_51

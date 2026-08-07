@@ -28,6 +28,11 @@ import (
 
 func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
+		// Arbitrum: gate the early error return on Amsterdam fork
+		isArbitrumPreAmsterdam := evm.chainRules.IsArbitrum && !evm.chainRules.IsAmsterdam
+		if !isArbitrumPreAmsterdam && evm.readOnly {
+			return multigas.ZeroGas(), ErrWriteProtection
+		}
 		// If we fail the minimum gas availability invariant, fail (0)
 		if contract.Gas <= params.SstoreSentryGasEIP2200 {
 			return multigas.ZeroGas(), errors.New("not enough gas for reentrancy sentry")
@@ -254,15 +259,27 @@ var (
 func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 	gasFunc := func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
 		var (
-			multiGas = multigas.ZeroGas()
-			address  = common.Address(stack.peek().Bytes20())
+			multiGas               = multigas.ZeroGas()
+			address                = common.Address(stack.peek().Bytes20())
+			isArbitrumPreAmsterdam = evm.chainRules.IsArbitrum && !evm.chainRules.IsAmsterdam
 		)
+		// Arbitrum: gate the early error return on Amsterdam fork
+		if !isArbitrumPreAmsterdam && evm.readOnly {
+			return multigas.ZeroGas(), ErrWriteProtection
+		}
 		if !evm.StateDB.AddressInAccessList(address) {
 			// If the caller cannot afford the cost, this change will be rolled back
 			evm.StateDB.AddAddressToAccessList(address)
 			// Cold account access considered as storage access read.
 			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessRead, params.ColdAccountAccessCostEIP2929)
+
+			// Terminate the gas measurement if the leftover gas is not sufficient,
+			// it can effectively prevent accessing the states in the following steps
+			// Arbitrum: gate the early termination on Amsterdam fork
+			if !isArbitrumPreAmsterdam && contract.Gas < multiGas.SingleGas() {
+				return multigas.ZeroGas(), ErrOutOfGas
+			}
 		}
 		// if empty and transfers value
 		if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
@@ -279,63 +296,98 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 }
 
 var (
-	gasCallEIP7702         = makeCallVariantGasCallEIP7702(gasCall)
-	gasDelegateCallEIP7702 = makeCallVariantGasCallEIP7702(gasDelegateCall)
-	gasStaticCallEIP7702   = makeCallVariantGasCallEIP7702(gasStaticCall)
-	gasCallCodeEIP7702     = makeCallVariantGasCallEIP7702(gasCallCode)
+	innerGasCallEIP7702    = makeCallVariantGasCallEIP7702(gasCallIntrinsic)
+	gasDelegateCallEIP7702 = makeCallVariantGasCallEIP7702(gasDelegateCallIntrinsic)
+	gasStaticCallEIP7702   = makeCallVariantGasCallEIP7702(gasStaticCallIntrinsic)
+	gasCallCodeEIP7702     = makeCallVariantGasCallEIP7702(gasCallCodeIntrinsic)
 )
 
-func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
+func gasCallEIP7702(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
+	// Return early if this call attempts to transfer value in a static context.
+	// Although it's checked in `gasCall`, EIP-7702 loads the target's code before
+	// to determine if it is resolving a delegation. This could incorrectly record
+	// the target in the block access list (BAL) if the call later fails.
+	transfersValue := !stack.Back(2).IsZero()
+
+	// Arbitrum: gate the early error return on Amsterdam fork
+	isArbitrumPreAmsterdam := evm.chainRules.IsArbitrum && !evm.chainRules.IsAmsterdam
+	if !isArbitrumPreAmsterdam && evm.readOnly && transfersValue {
+		return multigas.ZeroGas(), ErrWriteProtection
+	}
+	return innerGasCallEIP7702(evm, contract, stack, mem, memorySize)
+}
+
+func makeCallVariantGasCallEIP7702(intrinsicFunc gasFunc) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
 		var (
-			multiGas = multigas.ZeroGas() // total dynamic gas used
-			addr     = common.Address(stack.Back(1).Bytes20())
+			eip2929Cost            uint64
+			eip7702Cost            uint64
+			multiGas               = multigas.ZeroGas() // total dynamic gas used
+			addr                   = common.Address(stack.Back(1).Bytes20())
+			isArbitrumPreAmsterdam = evm.chainRules.IsArbitrum && !evm.chainRules.IsAmsterdam
 		)
-
-		// Check slot presence in the access list
+		// Perform EIP-2929 checks (stateless), checking address presence
+		// in the accessList and charge the cold access accordingly.
 		if !evm.StateDB.AddressInAccessList(addr) {
 			evm.StateDB.AddAddressToAccessList(addr)
-			// The WarmStorageReadCostEIP2929 (100) is already deducted in the form of a constant cost, so
-			// the cost to charge for cold access, if any, is Cold - Warm
-			coldCost := params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
-			// Charge the remaining difference here already, to correctly calculate available
+
+			// The WarmStorageReadCostEIP2929 (100) is already deducted in the form
+			// of a constant cost, so the cost to charge for cold access, if any,
+			// is Cold - Warm
+			eip2929Cost = params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
+
+			// Charge the remaining difference here already, to correctly calculate
 			// gas for call as storage access read
-			if !contract.UseMultiGas(multigas.StorageAccessReadGas(coldCost), evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
+			if !contract.UseMultiGas(multigas.StorageAccessReadGas(eip2929Cost), evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
 				return multigas.ZeroGas(), ErrOutOfGas
 			}
 			// Cold slot access considered as storage access read.
 			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessRead, coldCost)
+			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessRead, eip2929Cost)
+		}
+
+		// Perform the intrinsic cost calculation including:
+		//
+		// - transfer value
+		// - memory expansion
+		// - create new account
+		multiIntrinsicCost, err := intrinsicFunc(evm, contract, stack, mem, memorySize)
+		if err != nil {
+			// Arbitrum: before Amsterdam intrinsicFunc was called after checking if code is a delegation;
+			// to keep block recording backward compatibility we trigger the code read before returning
+			if isArbitrumPreAmsterdam {
+				_ = evm.StateDB.GetCode(addr)
+			}
+			return multigas.ZeroGas(), err
+		}
+		// Terminate the gas measurement if the leftover gas is not sufficient,
+		// it can effectively prevent accessing the states in the following steps.
+		// It's an essential safeguard before any stateful check.
+		if !isArbitrumPreAmsterdam && contract.Gas < multiIntrinsicCost.SingleGas() {
+			return multigas.ZeroGas(), ErrOutOfGas
 		}
 
 		// Check if code is a delegation and if so, charge for resolution.
 		if target, ok := types.ParseDelegation(evm.StateDB.GetCode(addr)); ok {
-			var cost uint64
 			if evm.StateDB.AddressInAccessList(target) {
-				cost = params.WarmStorageReadCostEIP2929
+				eip7702Cost = params.WarmStorageReadCostEIP2929
 			} else {
 				evm.StateDB.AddAddressToAccessList(target)
-				cost = params.ColdAccountAccessCostEIP2929
+				eip7702Cost = params.ColdAccountAccessCostEIP2929
 			}
-			if !contract.UseMultiGas(multigas.StorageAccessReadGas(cost), evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
+			if !contract.UseMultiGas(multigas.StorageAccessReadGas(eip7702Cost), evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
 				return multigas.ZeroGas(), ErrOutOfGas
 			}
-
 			// Target address resolution considered as storage access read.
 			// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
-			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessRead, cost)
+			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessRead, eip7702Cost)
 		}
-
-		// Now call the old calculator, which takes into account
-		// - create new account
-		// - transfer value
-		// - memory expansion
-		// - 63/64ths rule
-		multiOld, err := oldCalculator(evm, contract, stack, mem, memorySize)
+		// Calculate the gas budget for the nested call. The costs defined by
+		// EIP-2929 and EIP-7702 have already been applied.
+		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, multiIntrinsicCost.SingleGas(), stack.Back(0))
 		if err != nil {
-			return multiOld, err
+			return multigas.ZeroGas(), err
 		}
-
 		// Temporarily add the gas charge back to the contract and return value. By
 		// adding it to the return, it will be charged outside of this function, as
 		// part of the dynamic gas. This will ensure it is correctly reported to
@@ -343,8 +395,13 @@ func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
 		contract.Gas += multiGas.SingleGas()
 		contract.RetainedMultiGas.SaturatingAddInto(multiGas)
 
+		// Aggregate the gas costs from all components, including EIP-2929, EIP-7702,
+		// the CALL opcode itself, and the cost incurred by nested calls.
 		var overflow bool
-		if multiGas, overflow = multiGas.SafeAdd(multiOld); overflow {
+		if multiGas, overflow = multiGas.SafeAdd(multiIntrinsicCost); overflow {
+			return multigas.ZeroGas(), ErrGasUintOverflow
+		}
+		if multiGas, overflow = multiGas.SafeIncrement(multigas.ResourceKindComputation, evm.callGasTemp); overflow {
 			return multigas.ZeroGas(), ErrGasUintOverflow
 		}
 

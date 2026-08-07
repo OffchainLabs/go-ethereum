@@ -835,6 +835,7 @@ func (c *ChainConfig) IsPostMerge(blockNum uint64, timestamp uint64) bool {
 }
 
 // IsShanghai returns whether time is either equal to the Shanghai fork time or greater.
+// Arbitrum: On Arbitrum chains, Shanghai is gated only on ArbOS version 11
 func (c *ChainConfig) IsShanghai(num *big.Int, time uint64, currentArbosVersion uint64) bool {
 	if c.IsArbitrum() {
 		return currentArbosVersion >= ArbosVersion_11
@@ -843,6 +844,7 @@ func (c *ChainConfig) IsShanghai(num *big.Int, time uint64, currentArbosVersion 
 }
 
 // IsCancun returns whether num is either equal to the Cancun fork time or greater.
+// Arbitrum: On Arbitrum chains, Cancun is gated only on ArbOS version 20
 func (c *ChainConfig) IsCancun(num *big.Int, time uint64, currentArbosVersion uint64) bool {
 	if c.IsArbitrum() {
 		return currentArbosVersion >= ArbosVersion_20
@@ -851,6 +853,7 @@ func (c *ChainConfig) IsCancun(num *big.Int, time uint64, currentArbosVersion ui
 }
 
 // IsPrague returns whether time is either equal to the Prague fork time or greater.
+// Arbitrum: On Arbitrum chains, Prague is gated only on ArbOS version 40
 func (c *ChainConfig) IsPrague(num *big.Int, time uint64, currentArbosVersion uint64) bool {
 	if c.IsArbitrum() {
 		return currentArbosVersion >= ArbosVersion_40
@@ -859,6 +862,7 @@ func (c *ChainConfig) IsPrague(num *big.Int, time uint64, currentArbosVersion ui
 }
 
 // IsOsaka returns whether time is either equal to the Osaka fork time or greater.
+// Arbitrum: On Arbitrum chains, Osaka is gated only on ArbOS version 50
 func (c *ChainConfig) IsOsaka(num *big.Int, time uint64, currentArbosVersion uint64) bool {
 	if c.IsArbitrum() {
 		return currentArbosVersion >= ArbosVersion_50
@@ -892,7 +896,11 @@ func (c *ChainConfig) IsBPO5(num *big.Int, time uint64) bool {
 }
 
 // IsAmsterdam returns whether time is either equal to the Amsterdam fork time or greater.
-func (c *ChainConfig) IsAmsterdam(num *big.Int, time uint64) bool {
+// Arbitrum: On Arbitrum chains, Amsterdam is gated only on ArbOS version 70
+func (c *ChainConfig) IsAmsterdam(num *big.Int, time uint64, currentArbosVersion uint64) bool {
+	if c.IsArbitrum() {
+		return currentArbosVersion >= ArbosVersion_Amsterdam
+	}
 	return c.IsLondon(num) && isTimestampForked(c.AmsterdamTime, time)
 }
 
@@ -1178,7 +1186,7 @@ func (c *ChainConfig) LatestFork(time uint64, currentArbosVersion uint64) forks.
 	london := c.LondonBlock
 
 	switch {
-	case c.IsAmsterdam(london, time):
+	case c.IsAmsterdam(london, time, currentArbosVersion):
 		return forks.Amsterdam
 	case c.IsBPO5(london, time):
 		return forks.BPO5
@@ -1435,33 +1443,49 @@ func (err *ConfigCompatError) Error() string {
 // Rules is a one time interface meaning that it shouldn't be used in between transition
 // phases.
 type Rules struct {
-	IsArbitrum, IsStylus, IsGreaterEqual41, IsDia, IsGreaterEqual60 bool
-	ChainID                                                         *big.Int
-	ArbOSVersion                                                    uint64
-	IsHomestead, IsEIP150, IsEIP155, IsEIP158                       bool
-	IsEIP2929, IsEIP4762                                            bool
-	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul         bool
-	IsBerlin, IsLondon                                              bool
-	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka                bool
-	IsAmsterdam, IsVerkle                                           bool
+	IsArbitrum, IsStylus, IsGreaterEqual41, IsDia, IsElara  bool
+	ArbOSVersion                                            uint64
+	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
+	IsEIP2929, IsEIP4762                                    bool
+	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
+	IsBerlin, IsLondon                                      bool
+	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka        bool
+	IsAmsterdam, IsVerkle                                   bool
+
+	// Arbitrum: per-chain code-size limits, derived from
+	// ArbitrumChainParams.MaxCodeSize/MaxInitCodeSize when set, or from the
+	// upstream Amsterdam/default constants otherwise.
+	MaxCodeSize, MaxInitCodeSize uint64
 }
 
 // Rules ensures c's ChainID is not nil.
 func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, currentArbosVersion uint64) Rules {
-	chainID := c.ChainID
-	if chainID == nil {
-		chainID = new(big.Int)
-	}
 	// disallow setting Merge out of order
 	isMerge = isMerge && c.IsLondon(num)
 	isVerkle := isMerge && c.IsVerkle(num, timestamp)
+	isAmsterdam := isMerge && c.IsAmsterdam(num, timestamp, currentArbosVersion)
+
+	// Arbitrum chains may override the protocol code-size limits via
+	// ArbitrumChainParams; non-Arbitrum chains follow the Amsterdam-aware
+	// upstream defaults.
+	var maxCodeSize, maxInitCodeSize uint64
+	if c.IsArbitrum() {
+		maxCodeSize = c.MaxCodeSize()
+		maxInitCodeSize = c.MaxInitCodeSize()
+	} else if isAmsterdam {
+		maxCodeSize = MaxCodeSizeAmsterdam
+		maxInitCodeSize = MaxInitCodeSizeAmsterdam
+	} else {
+		maxCodeSize = MaxCodeSize
+		maxInitCodeSize = MaxInitCodeSize
+	}
+
 	return Rules{
 		IsArbitrum:       c.IsArbitrum(),
 		IsStylus:         c.IsArbitrum() && currentArbosVersion >= ArbosVersion_Stylus,
 		IsGreaterEqual41: c.IsArbitrum() && currentArbosVersion >= ArbosVersion_41,
 		IsDia:            c.IsArbitrum() && currentArbosVersion >= ArbosVersion_Dia,
-		IsGreaterEqual60: c.IsArbitrum() && currentArbosVersion >= ArbosVersion_60,
-		ChainID:          new(big.Int).Set(chainID),
+		IsElara:          c.IsArbitrum() && currentArbosVersion >= ArbosVersion_Elara,
 		ArbOSVersion:     currentArbosVersion,
 		IsHomestead:      c.IsHomestead(num),
 		IsEIP150:         c.IsEIP150(num),
@@ -1479,8 +1503,10 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, curren
 		IsCancun:         isMerge && c.IsCancun(num, timestamp, currentArbosVersion),
 		IsPrague:         isMerge && c.IsPrague(num, timestamp, currentArbosVersion),
 		IsOsaka:          isMerge && c.IsOsaka(num, timestamp, currentArbosVersion),
-		IsAmsterdam:      isMerge && c.IsAmsterdam(num, timestamp),
+		IsAmsterdam:      isAmsterdam,
 		IsVerkle:         isVerkle,
 		IsEIP4762:        isVerkle,
+		MaxCodeSize:      maxCodeSize,
+		MaxInitCodeSize:  maxInitCodeSize,
 	}
 }

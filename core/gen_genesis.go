@@ -34,6 +34,7 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 		BaseFee               *math.HexOrDecimal256                      `json:"baseFeePerGas"`
 		ExcessBlobGas         *math.HexOrDecimal64                       `json:"excessBlobGas"`
 		BlobGasUsed           *math.HexOrDecimal64                       `json:"blobGasUsed"`
+		SlotNumber            *uint64                                    `json:"slotNumber"`
 		SerializedChainConfig string                                     `json:"serializedChainConfig,omitempty"`
 		ArbOSInit             *params.ArbOSInit                          `json:"arbOSInit,omitempty"`
 	}
@@ -58,6 +59,7 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 	enc.BaseFee = (*math.HexOrDecimal256)(g.BaseFee)
 	enc.ExcessBlobGas = (*math.HexOrDecimal64)(g.ExcessBlobGas)
 	enc.BlobGasUsed = (*math.HexOrDecimal64)(g.BlobGasUsed)
+	enc.SlotNumber = g.SlotNumber
 	enc.SerializedChainConfig = g.SerializedChainConfig
 	enc.ArbOSInit = g.ArbOSInit
 	return json.Marshal(&enc)
@@ -81,6 +83,7 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 		BaseFee               *math.HexOrDecimal256                      `json:"baseFeePerGas"`
 		ExcessBlobGas         *math.HexOrDecimal64                       `json:"excessBlobGas"`
 		BlobGasUsed           *math.HexOrDecimal64                       `json:"blobGasUsed"`
+		SlotNumber            *uint64                                    `json:"slotNumber"`
 		SerializedChainConfig *string                                    `json:"serializedChainConfig,omitempty"`
 		ArbOSInit             *params.ArbOSInit                          `json:"arbOSInit,omitempty"`
 	}
@@ -138,6 +141,9 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 	}
 	if dec.BlobGasUsed != nil {
 		g.BlobGasUsed = (*uint64)(dec.BlobGasUsed)
+	}
+	if dec.SlotNumber != nil {
+		g.SlotNumber = dec.SlotNumber
 	}
 	if dec.SerializedChainConfig != nil {
 		g.SerializedChainConfig = *dec.SerializedChainConfig

@@ -6,11 +6,19 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/database"
+)
+
+var (
+	_ state.TrieReaderDatabase = (*RecordingTrieDB)(nil)
+	_ state.Database           = (*TipRecordingStateDatabase)(nil)
+	_ state.Reader             = (*recordingReader)(nil)
 )
 
 type recordingNodeReader struct {
@@ -148,14 +156,20 @@ func (r *TipRecordingStateDatabase) TrieDB() *triedb.Database {
 
 func (r *TipRecordingStateDatabase) OpenTrie(root common.Hash) (state.Trie, error) {
 	if r.recordingTrieDB.IsVerkle() {
-		panic("TipRecordingStateDatabase.OpenTrie called with Verkle trie database")
+		ts := overlay.LoadTransitionState(r.recordingTrieDB.Disk(), root, true)
+		if ts.InTransition() {
+			panic("state tree transition isn't supported yet")
+		}
+		if ts.Transitioned() {
+			return bintrie.NewBinaryTrie(root, r.recordingTrieDB)
+		}
 	}
 	return trie.NewStateTrie(trie.StateTrieID(root), r.recordingTrieDB)
 }
 
 func (r *TipRecordingStateDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, parent state.Trie) (state.Trie, error) {
 	if r.recordingTrieDB.IsVerkle() {
-		panic("TipRecordingStateDatabase.OpenStorageTrie called with Verkle trie database")
+		return parent, nil
 	}
 	return trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), r.recordingTrieDB)
 }
@@ -166,7 +180,7 @@ func (r *TipRecordingStateDatabase) Reader(root common.Hash) (state.Reader, erro
 		return nil, err
 	}
 
-	stateReader, err := state.NewTrieReader(root, r.recordingTrieDB, r.Database.PointCache())
+	stateReader, err := state.NewTrieReader(root, r.recordingTrieDB)
 	if err != nil {
 		return nil, err
 	}
@@ -185,24 +199,26 @@ type recordingReader struct {
 	codeReader state.ContractCodeReader // for code reads (we intercept and record)
 }
 
-func (r *recordingReader) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
-	code, err := r.codeReader.Code(addr, codeHash)
-	if err != nil {
-		return nil, err
+func (r *recordingReader) Has(addr common.Address, codeHash common.Hash) bool {
+	has := r.codeReader.Has(addr, codeHash)
+	if has {
+		r.db.recordCode(codeHash)
 	}
+	return has
+}
+
+func (r *recordingReader) Code(addr common.Address, codeHash common.Hash) []byte {
+	code := r.codeReader.Code(addr, codeHash)
 	if len(code) > 0 {
 		r.db.recordCode(codeHash)
 	}
-	return code, nil
+	return code
 }
 
-func (r *recordingReader) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
-	size, err := r.codeReader.CodeSize(addr, codeHash)
-	if err != nil {
-		return 0, err
-	}
+func (r *recordingReader) CodeSize(addr common.Address, codeHash common.Hash) int {
+	size := r.codeReader.CodeSize(addr, codeHash)
 	if size > 0 {
 		r.db.recordCode(codeHash)
 	}
-	return size, nil
+	return size
 }

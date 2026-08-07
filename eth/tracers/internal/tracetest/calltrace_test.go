@@ -43,6 +43,7 @@ type callLog struct {
 	Address  common.Address `json:"address"`
 	Topics   []common.Hash  `json:"topics"`
 	Data     hexutil.Bytes  `json:"data"`
+	Index    hexutil.Uint   `json:"index"`
 	Position hexutil.Uint   `json:"position"`
 }
 
@@ -142,7 +143,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			}
 			evm := vm.NewEVM(context, logState, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
-			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+			vmRet, err := core.ApplyMessage(evm, msg, nil)
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
@@ -234,7 +235,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		if tracer.OnTxStart != nil {
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
-		_, err = core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+		_, err = core.ApplyMessage(evm, msg, nil)
 		if err != nil {
 			b.Fatalf("failed to execute transaction: %v", err)
 		}
@@ -311,7 +312,7 @@ func TestInternals(t *testing.T) {
 				byte(vm.LOG0),
 			},
 			tracer: mkTracer("callTracer", json.RawMessage(`{ "withLog": true }`)),
-			want:   fmt.Sprintf(`{"beforeEVMTransfers":[{"purpose":"feePayment","from":"%s","to":null,"value":"0x13880"}],"afterEVMTransfers":[{"purpose":"gasRefund","from":null,"to":"%s","value":"0xdce2"},{"purpose":"tip","from":null,"to":"0x0000000000000000000000000000000000000000","value":"0x5b9e"}],"from":"%s","gas":"0x13880","gasUsed":"0x5b9e","to":"0x00000000000000000000000000000000deadbeef","input":"0x","logs":[{"address":"0x00000000000000000000000000000000deadbeef","topics":[],"data":"0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","position":"0x0"}],"value":"0x0","type":"CALL"}`, origin.Hex(), origin.Hex(), originHex),
+			want:   fmt.Sprintf(`{"beforeEVMTransfers":[{"purpose":"feePayment","from":"%s","to":null,"value":"0x13880"}],"afterEVMTransfers":[{"purpose":"gasRefund","from":null,"to":"%s","value":"0xdce2"},{"purpose":"tip","from":null,"to":"0x0000000000000000000000000000000000000000","value":"0x5b9e"}],"from":"%s","gas":"0x13880","gasUsed":"0x5b9e","to":"0x00000000000000000000000000000000deadbeef","input":"0x","logs":[{"address":"0x00000000000000000000000000000000deadbeef","topics":[],"data":"0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","index":"0x0","position":"0x0"}],"value":"0x0","type":"CALL"}`, origin.Hex(), origin.Hex(), originHex),
 		},
 		{
 			// Leads to OOM on the prestate tracer
@@ -384,7 +385,7 @@ func TestInternals(t *testing.T) {
 				t.Fatalf("test %v: failed to create message: %v", tc.name, err)
 			}
 			tc.tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
-			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+			vmRet, err := core.ApplyMessage(evm, msg, nil)
 			if err != nil {
 				t.Fatalf("test %v: failed to execute transaction: %v", tc.name, err)
 			}

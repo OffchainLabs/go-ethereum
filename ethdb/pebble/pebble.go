@@ -214,11 +214,14 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	if extraOptions == nil {
 		extraOptions = &ExtraOptions{}
 	}
-	if extraOptions.MemTableStopWritesThreshold <= 0 {
-		extraOptions.MemTableStopWritesThreshold = 4
+	if extraOptions.MemTableNumber <= 0 {
+		extraOptions.MemTableNumber = 4
 	}
 	if extraOptions.MaxConcurrentCompactions == nil {
 		extraOptions.MaxConcurrentCompactions = runtime.NumCPU
+	}
+	if extraOptions.Experimental.ReadSamplingMultiplier <= 0 {
+		extraOptions.Experimental.ReadSamplingMultiplier = -1 // sanitize disabling and default to disabled
 	}
 	var levels []pebble.LevelOptions
 	if len(extraOptions.Levels) == 0 {
@@ -229,7 +232,9 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 			{TargetFileSize: 16 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
 			{TargetFileSize: 32 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
 			{TargetFileSize: 64 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 128 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+
+			// Pebble doesn't use the Bloom filter at level6 for read efficiency.
+			{TargetFileSize: 128 * 1024 * 1024},
 		}
 	} else {
 		for _, level := range extraOptions.Levels {
@@ -240,6 +245,8 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 				FilterPolicy:   bloom.FilterPolicy(10),
 			})
 		}
+		// don't use the Bloom filter at last level for read efficiency
+		levels[len(levels)-1].FilterPolicy = nil
 	}
 
 	// Ensure we have some minimal caching and file guarantees
@@ -264,13 +271,14 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	// Taken from https://github.com/cockroachdb/pebble/blob/master/internal/constants/constants.go
 	maxMemTableSize := (1<<31)<<(^uint(0)>>63) - 1
 
-	// Four memory tables are configured, each with a default size of 256 MB.
+	// Memory tables share half the configured cache. The default count is four,
+	// but callers may override it via ExtraOptions.
 	// Having multiple smaller memory tables while keeping the total memory
 	// limit unchanged allows writes to be flushed more smoothly. This helps
 	// avoid compaction spikes and mitigates write stalls caused by heavy
 	// compaction workloads.
-	memTableLimit := extraOptions.MemTableStopWritesThreshold
-	memTableSize := cache * 1024 * 1024 / 2 / memTableLimit
+	memTableNumber := extraOptions.MemTableNumber
+	memTableSize := cache * 1024 * 1024 / 2 / memTableNumber
 
 	// The memory table size is currently capped at maxMemTableSize-1 due to a
 	// known bug in the pebble where maxMemTableSize is not recognized as a
@@ -299,12 +307,16 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		// Note, there may have more than two memory tables in the system.
 		MemTableSize: uint64(memTableSize),
 
-		// MemTableStopWritesThreshold places a hard limit on the size
+		// MemTableStopWritesThreshold places a hard limit on the number
 		// of the existent MemTables(including the frozen one).
+		//
 		// Note, this must be the number of tables not the size of all memtables
 		// according to https://github.com/cockroachdb/pebble/blob/master/options.go#L738-L742
 		// and to https://github.com/cockroachdb/pebble/blob/master/db.go#L1892-L1903.
-		MemTableStopWritesThreshold: memTableLimit,
+		//
+		// MemTableStopWritesThreshold is set to twice the maximum number of
+		// allowed memtables to accommodate temporary spikes.
+		MemTableStopWritesThreshold: memTableNumber * 2,
 
 		// The default compaction concurrency(1 thread),
 		// Here use all available CPUs for faster compaction.
@@ -333,13 +345,9 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		WALMinSyncInterval:          extraOptions.WALMinSyncInterval,
 		TargetByteDeletionRate:      extraOptions.TargetByteDeletionRate,
 	}
-	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
-	// for more details.
-	opt.Experimental.ReadSamplingMultiplier = -1
-
-	if opt.Experimental.ReadSamplingMultiplier != 0 {
-		opt.Experimental.ReadSamplingMultiplier = extraOptions.Experimental.ReadSamplingMultiplier
-	}
+	// Seek compaction is disabled by default, but callers may enable it via
+	// ExtraOptions. See https://github.com/ethereum/go-ethereum/pull/20130.
+	opt.Experimental.ReadSamplingMultiplier = extraOptions.Experimental.ReadSamplingMultiplier
 	opt.Experimental.L0CompactionConcurrency = extraOptions.Experimental.L0CompactionConcurrency
 	opt.Experimental.CompactionDebtConcurrency = extraOptions.Experimental.CompactionDebtConcurrency
 	opt.Experimental.ReadCompactionRate = extraOptions.Experimental.ReadCompactionRate
@@ -850,6 +858,12 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 			return fmt.Errorf("unhandled operation, keytype: %v", kind)
 		}
 	}
+}
+
+// Close closes the batch and releases all associated resources. After it is
+// closed, any subsequent operations on this batch are undefined.
+func (b *batch) Close() {
+	b.b.Close()
 }
 
 // pebbleIterator is a wrapper of underlying iterator in storage engine.

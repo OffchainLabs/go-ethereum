@@ -19,6 +19,7 @@ package vm
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -1077,6 +1078,180 @@ func TestOpSelfdestruct6780NonStylusCodeProceeds(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := runSelfdestruct6780(t, tt.code); err != errStopToken {
 				t.Fatalf("expected errStopToken, got %v", err)
+			}
+		})
+	}
+}
+
+func TestEIP8024_Execution(t *testing.T) {
+	evm := NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+
+	tests := []struct {
+		name       string
+		codeHex    string
+		wantErr    error
+		wantOpcode OpCode
+		wantVals   []uint64
+	}{
+		{
+			name:    "DUPN",
+			codeHex: "60016000808080808080808080808080808080e680",
+			wantVals: []uint64{
+				1,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				1,
+			},
+		},
+		{
+			name:    "SWAPN",
+			codeHex: "600160008080808080808080808080808080806002e780",
+			wantVals: []uint64{
+				1,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				2,
+			},
+		},
+		{
+			name:    "EXCHANGE_MISSING_IMMEDIATE",
+			codeHex: "600260008080808080600160008080808080808080e8",
+			wantVals: []uint64{
+				0, 0, 0, 0, 0, 0, 0, 0, 0,
+				2, // 10th from top
+				0, 0, 0, 0, 0, 0,
+				1, // bottom
+			},
+		},
+		{
+			name:     "EXCHANGE",
+			codeHex:  "600060016002e88e",
+			wantVals: []uint64{2, 0, 1},
+		},
+		{
+			name:    "EXCHANGE",
+			codeHex: "600080808080808080808080808080808080808080808080808080808060016002e88f",
+			wantVals: []uint64{
+				2,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				1,
+			},
+		},
+		{
+			name:       "INVALID_SWAPN_LOW",
+			codeHex:    "e75b",
+			wantErr:    &ErrInvalidOpCode{},
+			wantOpcode: SWAPN,
+		},
+		{
+			name:    "JUMP_OVER_INVALID_DUPN",
+			codeHex: "600456e65b",
+			wantErr: nil,
+		},
+		{
+			name:     "EXCHANGE",
+			codeHex:  "60008080e88e15",
+			wantVals: []uint64{1, 0, 0},
+		},
+		{
+			name:       "INVALID_EXCHANGE",
+			codeHex:    "e852",
+			wantErr:    &ErrInvalidOpCode{},
+			wantOpcode: EXCHANGE,
+		},
+		{
+			name:       "UNDERFLOW_DUPN",
+			codeHex:    "6000808080808080808080808080808080e680",
+			wantErr:    &ErrStackUnderflow{},
+			wantOpcode: DUPN,
+		},
+		// Additional test cases
+		{
+			name:     "PC_INCREMENT",
+			codeHex:  "600060006000e88e15",
+			wantVals: []uint64{1, 0, 0},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			code := common.FromHex(tc.codeHex)
+			stack := newstack()
+			pc := uint64(0)
+			scope := &ScopeContext{Stack: stack, Contract: &Contract{Code: code}}
+			var err error
+			var errOp OpCode
+			for pc < uint64(len(code)) && err == nil {
+				op := code[pc]
+				switch OpCode(op) {
+				case STOP:
+					return
+				case PUSH1:
+					_, err = opPush1(&pc, evm, scope)
+				case DUP1:
+					dup1 := makeDup(1)
+					_, err = dup1(&pc, evm, scope)
+				case JUMP:
+					_, err = opJump(&pc, evm, scope)
+				case JUMPDEST:
+					_, err = opJumpdest(&pc, evm, scope)
+				case ISZERO:
+					_, err = opIszero(&pc, evm, scope)
+				case PUSH0:
+					_, err = opPush0(&pc, evm, scope)
+				case DUPN:
+					_, err = opDupN(&pc, evm, scope)
+				case SWAPN:
+					_, err = opSwapN(&pc, evm, scope)
+				case EXCHANGE:
+					_, err = opExchange(&pc, evm, scope)
+				default:
+					t.Fatalf("unexpected opcode %s at pc=%d", OpCode(op), pc)
+				}
+				if err != nil {
+					errOp = OpCode(op)
+				}
+				pc++
+			}
+			if tc.wantErr != nil {
+				// Fail because we wanted an error, but didn't get one.
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				// Fail if the wrong opcode threw an error.
+				if errOp != tc.wantOpcode {
+					t.Fatalf("expected error from opcode %s, got %s", tc.wantOpcode, errOp)
+				}
+				// Fail if we don't get the error we expect.
+				switch tc.wantErr.(type) {
+				case *ErrInvalidOpCode:
+					var want *ErrInvalidOpCode
+					if !errors.As(err, &want) {
+						t.Fatalf("expected ErrInvalidOpCode, got %v", err)
+					}
+				case *ErrStackUnderflow:
+					var want *ErrStackUnderflow
+					if !errors.As(err, &want) {
+						t.Fatalf("expected ErrStackUnderflow, got %v", err)
+					}
+				default:
+					t.Fatalf("unsupported wantErr type %T", tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			got := make([]uint64, 0, stack.len())
+			for i := stack.len() - 1; i >= 0; i-- {
+				got = append(got, stack.data[i].Uint64())
+			}
+			if len(got) != len(tc.wantVals) {
+				t.Fatalf("stack len=%d; want %d", len(got), len(tc.wantVals))
+			}
+			for i := range got {
+				if got[i] != tc.wantVals[i] {
+					t.Fatalf("[%s] stack[%d]=%d; want %d\nstack=%v",
+						tc.name, i, got[i], tc.wantVals[i], got)
+				}
 			}
 		})
 	}

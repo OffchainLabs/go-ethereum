@@ -64,7 +64,7 @@ func TestCreateStylusComponentPrefixArbosVersion(t *testing.T) {
 
 			blockCtx := BlockContext{
 				CanTransfer:  func(StateDB, common.Address, *uint256.Int) bool { return true },
-				Transfer:     func(StateDB, common.Address, common.Address, *uint256.Int) {},
+				Transfer:     func(StateDB, common.Address, common.Address, *uint256.Int, *params.Rules) {},
 				BlockNumber:  big.NewInt(0),
 				ArbOSVersion: tt.arbosVersion,
 			}

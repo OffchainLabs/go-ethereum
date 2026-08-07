@@ -6,17 +6,18 @@ package rawdb
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-var advanceTestTables = map[string]freezerTableConfig{
+var truncateTailTestTables = map[string]freezerTableConfig{
 	"test": {noSnappy: true, prunable: true},
 }
 
-func appendAdvanceTestItems(t *testing.T, f ethdb.AncientStore, from, count uint64) {
+func appendTruncateTailTestItems(t *testing.T, f ethdb.AncientStore, from, count uint64) {
 	t.Helper()
 	_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for i := from; i < from+count; i++ {
@@ -31,7 +32,7 @@ func appendAdvanceTestItems(t *testing.T, f ethdb.AncientStore, from, count uint
 	}
 }
 
-func checkAdvanceTestBounds(t *testing.T, f ethdb.AncientReader, tail, head uint64) {
+func checkTruncateTailTestBounds(t *testing.T, f ethdb.AncientReader, tail, head uint64) {
 	t.Helper()
 	gotTail, err := f.Tail()
 	if err != nil {
@@ -49,7 +50,7 @@ func checkAdvanceTestBounds(t *testing.T, f ethdb.AncientReader, tail, head uint
 	}
 }
 
-func checkAdvanceTestItem(t *testing.T, f ethdb.AncientReader, item uint64) {
+func checkTruncateTailTestItem(t *testing.T, f ethdb.AncientReader, item uint64) {
 	t.Helper()
 	blob, err := f.Ancient("test", item)
 	if err != nil {
@@ -60,10 +61,10 @@ func checkAdvanceTestItem(t *testing.T, f ethdb.AncientReader, item uint64) {
 	}
 }
 
-func TestFreezerAdvanceEmptyTail(t *testing.T) {
+func TestFreezerTruncateTailAboveHead(t *testing.T) {
 	t.Parallel()
 
-	f, dir := newFreezerForTesting(t, advanceTestTables)
+	f, dir := newFreezerForTesting(t, truncateTailTestTables)
 	old, err := f.TruncateTail(1000)
 	if err != nil {
 		t.Fatal(err)
@@ -71,89 +72,91 @@ func TestFreezerAdvanceEmptyTail(t *testing.T) {
 	if old != 0 {
 		t.Fatalf("unexpected old tail: %d", old)
 	}
-	checkAdvanceTestBounds(t, f, 1000, 1000)
+	checkTruncateTailTestBounds(t, f, 1000, 1000)
 
-	appendAdvanceTestItems(t, f, 1000, 3)
-	checkAdvanceTestBounds(t, f, 1000, 1003)
-	checkAdvanceTestItem(t, f, 1000)
-	checkAdvanceTestItem(t, f, 1002)
+	appendTruncateTailTestItems(t, f, 1000, 3)
+	checkTruncateTailTestBounds(t, f, 1000, 1003)
+	checkTruncateTailTestItem(t, f, 1000)
+	checkTruncateTailTestItem(t, f, 1002)
 
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
-	f, err = NewFreezer(dir, "", false, 2049, advanceTestTables)
+	f, err = NewFreezer(dir, "", false, 2049, truncateTailTestTables)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	checkAdvanceTestBounds(t, f, 1000, 1003)
-	checkAdvanceTestItem(t, f, 1001)
-	appendAdvanceTestItems(t, f, 1003, 1)
-	checkAdvanceTestItem(t, f, 1003)
+	checkTruncateTailTestBounds(t, f, 1000, 1003)
+	checkTruncateTailTestItem(t, f, 1001)
+	appendTruncateTailTestItems(t, f, 1003, 1)
+	checkTruncateTailTestItem(t, f, 1003)
 }
 
-func TestFreezerAdvanceEmptyTailPersistsBeforeAppend(t *testing.T) {
+func TestFreezerTruncateTailAboveHeadPersistsBeforeAppend(t *testing.T) {
 	t.Parallel()
 
-	f, dir := newFreezerForTesting(t, advanceTestTables)
+	f, dir := newFreezerForTesting(t, truncateTailTestTables)
 	if _, err := f.TruncateTail(77); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
-	f, err := NewFreezer(dir, "", false, 2049, advanceTestTables)
+	f, err := NewFreezer(dir, "", false, 2049, truncateTailTestTables)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	checkAdvanceTestBounds(t, f, 77, 77)
-	appendAdvanceTestItems(t, f, 77, 2)
-	checkAdvanceTestItem(t, f, 78)
+	checkTruncateTailTestBounds(t, f, 77, 77)
+	appendTruncateTailTestItems(t, f, 77, 2)
+	checkTruncateTailTestItem(t, f, 78)
 }
 
-func TestFreezerAdvanceEmptyTailNonEmpty(t *testing.T) {
+func TestFreezerTruncateTailAboveHeadResetsNonEmpty(t *testing.T) {
 	t.Parallel()
 
-	f, _ := newFreezerForTesting(t, advanceTestTables)
+	f, _ := newFreezerForTesting(t, truncateTailTestTables)
 	defer f.Close()
 
-	appendAdvanceTestItems(t, f, 0, 2)
-	if _, err := f.TruncateTail(10); err == nil {
-		t.Fatal("expected error advancing tail of non-empty freezer")
+	appendTruncateTailTestItems(t, f, 0, 2)
+	if _, err := f.TruncateTail(10); err != nil {
+		t.Fatal(err)
 	}
-	checkAdvanceTestBounds(t, f, 0, 2)
+	checkTruncateTailTestBounds(t, f, 10, 10)
+	appendTruncateTailTestItems(t, f, 10, 1)
+	checkTruncateTailTestItem(t, f, 10)
 }
 
-func TestFreezerAdvanceEmptyTailAfterFullPrune(t *testing.T) {
+func TestFreezerTruncateTailAboveHeadAfterFullPrune(t *testing.T) {
 	t.Parallel()
 
-	f, dir := newFreezerForTesting(t, advanceTestTables)
-	appendAdvanceTestItems(t, f, 0, 4)
+	f, dir := newFreezerForTesting(t, truncateTailTestTables)
+	appendTruncateTailTestItems(t, f, 0, 4)
 	if _, err := f.TruncateTail(4); err != nil {
 		t.Fatal(err)
 	}
-	checkAdvanceTestBounds(t, f, 4, 4)
+	checkTruncateTailTestBounds(t, f, 4, 4)
 	if _, err := f.TruncateTail(50); err != nil {
 		t.Fatal(err)
 	}
-	checkAdvanceTestBounds(t, f, 50, 50)
-	appendAdvanceTestItems(t, f, 50, 2)
-	checkAdvanceTestItem(t, f, 51)
+	checkTruncateTailTestBounds(t, f, 50, 50)
+	appendTruncateTailTestItems(t, f, 50, 2)
+	checkTruncateTailTestItem(t, f, 51)
 
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
-	f, err := NewFreezer(dir, "", false, 2049, advanceTestTables)
+	f, err := NewFreezer(dir, "", false, 2049, truncateTailTestTables)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	checkAdvanceTestBounds(t, f, 50, 52)
-	checkAdvanceTestItem(t, f, 50)
+	checkTruncateTailTestBounds(t, f, 50, 52)
+	checkTruncateTailTestItem(t, f, 50)
 }
 
-func TestFreezerAdvanceEmptyTailNonPrunable(t *testing.T) {
+func TestFreezerTruncateTailAboveHeadNonPrunable(t *testing.T) {
 	t.Parallel()
 
 	f, _ := newFreezerForTesting(t, map[string]freezerTableConfig{
@@ -162,23 +165,35 @@ func TestFreezerAdvanceEmptyTailNonPrunable(t *testing.T) {
 	defer f.Close()
 
 	if _, err := f.TruncateTail(10); err == nil {
-		t.Fatal("expected error advancing tail of freezer with non-prunable table")
+		t.Fatal("expected error truncating tail above head of freezer with non-prunable table")
 	}
 }
 
-func TestMemoryFreezerAdvanceEmptyTail(t *testing.T) {
+func TestFreezerTruncateTailAboveHeadTooLarge(t *testing.T) {
 	t.Parallel()
 
-	f := NewMemoryFreezer(false, advanceTestTables)
+	f, _ := newFreezerForTesting(t, truncateTailTestTables)
+	defer f.Close()
+
+	if _, err := f.TruncateTail(uint64(math.MaxUint32) + 1); err == nil {
+		t.Fatal("expected error truncating tail above uint32 offset limit")
+	}
+	checkTruncateTailTestBounds(t, f, 0, 0)
+}
+
+func TestMemoryFreezerTruncateTailAboveHead(t *testing.T) {
+	t.Parallel()
+
+	f := NewMemoryFreezer(false, truncateTailTestTables)
 	defer f.Close()
 
 	if _, err := f.TruncateTail(1000); err != nil {
 		t.Fatal(err)
 	}
-	checkAdvanceTestBounds(t, f, 1000, 1000)
-	appendAdvanceTestItems(t, f, 1000, 3)
-	checkAdvanceTestBounds(t, f, 1000, 1003)
-	checkAdvanceTestItem(t, f, 1002)
+	checkTruncateTailTestBounds(t, f, 1000, 1000)
+	appendTruncateTailTestItems(t, f, 1000, 3)
+	checkTruncateTailTestBounds(t, f, 1000, 1003)
+	checkTruncateTailTestItem(t, f, 1002)
 
 	if _, err := f.TruncateTail(1003); err != nil {
 		t.Fatal(err)
@@ -186,23 +201,26 @@ func TestMemoryFreezerAdvanceEmptyTail(t *testing.T) {
 	if _, err := f.TruncateTail(2000); err != nil {
 		t.Fatal(err)
 	}
-	checkAdvanceTestBounds(t, f, 2000, 2000)
-	appendAdvanceTestItems(t, f, 2000, 1)
-	checkAdvanceTestItem(t, f, 2000)
+	checkTruncateTailTestBounds(t, f, 2000, 2000)
+	appendTruncateTailTestItems(t, f, 2000, 1)
+	checkTruncateTailTestItem(t, f, 2000)
 
-	if _, err := f.TruncateTail(5000); err == nil {
-		t.Fatal("expected error advancing tail of non-empty freezer")
+	if _, err := f.TruncateTail(5000); err != nil {
+		t.Fatal(err)
 	}
+	checkTruncateTailTestBounds(t, f, 5000, 5000)
+	appendTruncateTailTestItems(t, f, 5000, 1)
+	checkTruncateTailTestItem(t, f, 5000)
 }
 
-func TestFreezerAdvanceEmptyTailMetadataAheadOfIndex(t *testing.T) {
+func TestFreezerTruncateTailAboveHeadMetadataAheadOfIndex(t *testing.T) {
 	t.Parallel()
 
-	f, dir := newFreezerForTesting(t, advanceTestTables)
+	f, dir := newFreezerForTesting(t, truncateTailTestTables)
 	if _, err := f.TruncateTail(1000); err != nil {
 		t.Fatal(err)
 	}
-	appendAdvanceTestItems(t, f, 1000, 2)
+	appendTruncateTailTestItems(t, f, 1000, 2)
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -222,9 +240,9 @@ func TestFreezerAdvanceEmptyTailMetadataAheadOfIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	f, err = NewFreezer(dir, "", false, 2049, advanceTestTables)
+	f, err = NewFreezer(dir, "", false, 2049, truncateTailTestTables)
 	if err != nil {
-		t.Fatalf("freezer did not open after an interrupted tail advance: %v", err)
+		t.Fatalf("freezer did not open after an interrupted tail reset: %v", err)
 	}
 	defer f.Close()
 
@@ -239,6 +257,6 @@ func TestFreezerAdvanceEmptyTailMetadataAheadOfIndex(t *testing.T) {
 	if tail != head {
 		t.Fatalf("expected an empty window after winding the tail back, got tail %d head %d", tail, head)
 	}
-	appendAdvanceTestItems(t, f, head, 1)
-	checkAdvanceTestItem(t, f, head)
+	appendTruncateTailTestItems(t, f, head, 1)
+	checkTruncateTailTestItem(t, f, head)
 }

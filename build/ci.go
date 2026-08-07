@@ -108,6 +108,22 @@ var (
 			Env:  map[string]string{"GOMIPS": "softfloat", "CGO_ENABLED": "0"},
 		},
 		{
+			Name:   "womir",
+			GOOS:   "wasip1",
+			GOARCH: "wasm",
+			Tags:   "womir",
+		},
+		{
+			Name:   "wasm-js",
+			GOOS:   "js",
+			GOARCH: "wasm",
+		},
+		{
+			Name:   "wasm-wasi",
+			GOOS:   "wasip1",
+			GOARCH: "wasm",
+		},
+		{
 			Name: "example",
 			Tags: "example",
 		},
@@ -151,13 +167,11 @@ var (
 
 	// Distros for which packages are created
 	debDistros = []string{
-		"xenial",   // 16.04, EOL: 04/2026
-		"bionic",   // 18.04, EOL: 04/2028
-		"focal",    // 20.04, EOL: 04/2030
-		"jammy",    // 22.04, EOL: 04/2032
-		"noble",    // 24.04, EOL: 04/2034
-		"oracular", // 24.10, EOL: 07/2025
-		"plucky",   // 25.04, EOL: 01/2026
+		"xenial", // 16.04, EOL: 04/2026
+		"bionic", // 18.04, EOL: 04/2028
+		"focal",  // 20.04, EOL: 04/2030
+		"jammy",  // 22.04, EOL: 04/2032
+		"noble",  // 24.04, EOL: 04/2034
 	}
 
 	// This is where the tests should be unpacked.
@@ -295,7 +309,7 @@ func doInstallKeeper(cmdline []string) {
 		args := slices.Clone(gobuild.Args)
 		args = append(args, "-o", executablePath(outputName))
 		args = append(args, ".")
-		build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env})
+		build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env, Dir: gobuild.Dir})
 	}
 }
 
@@ -330,6 +344,10 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (
 			buildTags = append(buildTags, "osusergo", "netgo")
 		}
 		ld = append(ld, "-extldflags", "'"+strings.Join(extld, " ")+"'")
+	}
+	// TODO(gballet): revisit after the input api has been defined
+	if runtime.GOARCH == "wasm" {
+		ld = append(ld, "-gcflags=all=-d=softfloat")
 	}
 	if len(ld) > 0 {
 		flags = append(flags, "-ldflags", strings.Join(ld, " "))
@@ -446,9 +464,14 @@ func doCheckGenerate() {
 	)
 	pathList := []string{filepath.Join(protocPath, "bin"), protocGenGoPath, os.Getenv("PATH")}
 
+	excludes := []string{"tests/testdata", "build/cache", ".git"}
+	for i := range excludes {
+		excludes[i] = filepath.FromSlash(excludes[i])
+	}
+
 	for _, mod := range goModules {
 		// Compute the origin hashes of all the files
-		hashes, err := build.HashFolder(mod, []string{"tests/testdata", "build/cache", ".git"})
+		hashes, err := build.HashFolder(mod, excludes)
 		if err != nil {
 			log.Fatal("Error computing hashes", "err", err)
 		}
@@ -458,7 +481,7 @@ func doCheckGenerate() {
 		c.Dir = mod
 		build.MustRun(c)
 		// Check if generate file hashes have changed
-		generated, err := build.HashFolder(mod, []string{"tests/testdata", "build/cache", ".git"})
+		generated, err := build.HashFolder(mod, excludes)
 		if err != nil {
 			log.Fatalf("Error re-computing hashes: %v", err)
 		}
@@ -1177,7 +1200,7 @@ func doWindowsInstaller(cmdline []string) {
 	var (
 		arch    = flag.String("arch", runtime.GOARCH, "Architecture for cross build packaging")
 		signer  = flag.String("signer", "", `Environment variable holding the signing key (e.g. WINDOWS_SIGNING_KEY)`)
-		signify = flag.String("signify key", "", `Environment variable holding the signify signing key (e.g. WINDOWS_SIGNIFY_KEY)`)
+		signify = flag.String("signify", "", `Environment variable holding the signify signing key (e.g. WINDOWS_SIGNIFY_KEY)`)
 		upload  = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
 		workdir = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
 	)

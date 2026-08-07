@@ -240,7 +240,7 @@ func (s *StateDB) ActivatedAsm(target rawdb.WasmTarget, moduleHash common.Hash) 
 			return asm
 		}
 	}
-	return s.db.ActivatedAsm(target, moduleHash)
+	return s.db.CodeDB().ActivatedAsm(target, moduleHash)
 }
 
 // ActivatedAsmMap tries to read asm map (map from target to assembly binary) from newly activated wasms (StateDB.activatedWasm) first, then if not found tries to read the asm map from wasmdb.
@@ -266,7 +266,7 @@ func (s *StateDB) ActivatedAsmMap(targets []rawdb.WasmTarget, moduleHash common.
 	asmMap = make(map[rawdb.WasmTarget][]byte, len(targets))
 	var missingTargets []rawdb.WasmTarget
 	for _, target := range targets {
-		if asm := s.db.ActivatedAsm(target, moduleHash); len(asm) > 0 {
+		if asm := s.db.CodeDB().ActivatedAsm(target, moduleHash); len(asm) > 0 {
 			asmMap[target] = asm
 		} else {
 			missingTargets = append(missingTargets, target)

@@ -38,7 +38,7 @@ type (
 	// CanTransferFunc is the signature of a transfer guard function
 	CanTransferFunc func(StateDB, common.Address, *uint256.Int) bool
 	// TransferFunc is the signature of a transfer function
-	TransferFunc func(StateDB, common.Address, common.Address, *uint256.Int)
+	TransferFunc func(StateDB, common.Address, common.Address, *uint256.Int, *params.Rules)
 	// GetHashFunc returns the n'th block hash in the blockchain
 	// and is used by the BLOCKHASH EVM op code.
 	GetHashFunc func(uint64) common.Hash
@@ -69,6 +69,7 @@ type BlockContext struct {
 	BaseFee     *big.Int       // Provides information for BASEFEE (0 if vm runs with NoBaseFee flag and 0 gas price)
 	BlobBaseFee *big.Int       // Provides information for BLOBBASEFEE (0 if vm runs with NoBaseFee flag and 0 blob gas price)
 	Random      *common.Hash   // Provides information for PREVRANDAO
+	SlotNum     uint64         // Provides information for SLOTNUM
 
 	// Arbitrum information
 	ArbOSVersion   uint64
@@ -80,9 +81,8 @@ type BlockContext struct {
 type TxContext struct {
 	// Message information
 	Origin       common.Address      // Provides information for ORIGIN
-	GasPrice     *big.Int            // Provides information for GASPRICE (and is used to zero the basefee if NoBaseFee is set)
+	GasPrice     *uint256.Int        // Provides information for GASPRICE (and is used to zero the basefee if NoBaseFee is set)
 	BlobHashes   []common.Hash       // Provides information for BLOBHASH
-	BlobFeeCap   *big.Int            // Is used to zero the blobbasefee if NoBaseFee is set
 	AccessEvents *state.AccessEvents // Capture all state accesses for this tx
 }
 
@@ -134,9 +134,6 @@ type EVM struct {
 	// jumpDests stores results of JUMPDEST analysis.
 	jumpDests JumpDestCache
 
-	hasher    crypto.KeccakState // Keccak256 hasher instance shared across opcodes
-	hasherBuf common.Hash        // Keccak256 hasher result array shared across opcodes
-
 	readOnly   bool   // Whether to throw on stateful modifications
 	returnData []byte // Last CALL's return data for subsequent reuse
 }
@@ -153,12 +150,13 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time, blockCtx.ArbOSVersion),
 		jumpDests:   newMapJumpDests(),
-		hasher:      crypto.NewKeccakState(),
 	}
 	evm.ProcessingHook = DefaultTxProcessor{evm: evm}
 	evm.precompiles = activePrecompiledContracts(evm.chainRules)
 
 	switch {
+	case evm.chainRules.IsAmsterdam:
+		evm.table = &amsterdamInstructionSet
 	case evm.chainRules.IsOsaka:
 		evm.table = &osakaInstructionSet
 	case evm.chainRules.IsVerkle:
@@ -208,6 +206,8 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 	return evm
 }
 
+func (evm *EVM) ChainRules() *params.Rules { return &evm.chainRules }
+
 // SetPrecompiles sets the precompiled contracts for the EVM.
 // This method is only used through RPC calls.
 // It is not thread-safe.
@@ -224,7 +224,7 @@ func (evm *EVM) SetJumpDestCache(jumpDests JumpDestCache) {
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) SetTxContext(txCtx TxContext) {
 	if evm.chainRules.IsEIP4762 {
-		txCtx.AccessEvents = state.NewAccessEvents(evm.StateDB.PointCache())
+		txCtx.AccessEvents = state.NewAccessEvents()
 	}
 	evm.TxContext = txCtx
 }
@@ -260,8 +260,15 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, multigas.ZeroGas(), ErrDepth
 	}
-	// Fail if we're trying to transfer more than the available balance
-	if !value.IsZero() && !evm.Context.CanTransfer(evm.StateDB, caller, value) {
+	syscall := isSystemCall(caller)
+	// Arbitrum: we want to keep the same behaviour as pre-Amsterdam:
+	// - before Amsterdam fork the transfer was called also for syscall
+	// - zero value transfer internally touches the caller address
+	// - skipping this account read would break validation using previous wasm module root
+	syscall = syscall && (!evm.chainRules.IsArbitrum || evm.chainRules.IsAmsterdam)
+
+	// Fail if we're trying to transfer more than the available balance.
+	if !syscall && !value.IsZero() && !evm.Context.CanTransfer(evm.StateDB, caller, value) {
 		return nil, gas, multigas.ZeroGas(), ErrInsufficientBalance
 	}
 	snapshot := evm.StateDB.Snapshot()
@@ -291,9 +298,18 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
-	evm.Context.Transfer(evm.StateDB, caller, addr, value)
+	// Perform the value transfer only in non-syscall mode.
+	// Calling this is required even for zero-value transfers,
+	// to ensure the state clearing mechanism is applied.
+	if !syscall {
+		evm.Context.Transfer(evm.StateDB, caller, addr, value, &evm.chainRules)
+	}
 
 	if isPrecompile {
+		var stateDB StateDB
+		if evm.chainRules.IsAmsterdam {
+			stateDB = evm.StateDB
+		}
 		info := &AdvancedPrecompileCall{
 			PrecompileAddress: addr,
 			ActingAsAddress:   addr,
@@ -303,7 +319,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			Evm:               evm,
 		}
 		var precompileMultiGas multigas.MultiGas
-		ret, gas, precompileMultiGas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer, info)
+		ret, gas, precompileMultiGas, err = RunPrecompiledContract(stateDB, p, addr, input, gas, evm.Config.Tracer, info)
 		usedMultiGas.SaturatingAddInto(precompileMultiGas)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
@@ -373,6 +389,10 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
+		var stateDB StateDB
+		if evm.chainRules.IsAmsterdam {
+			stateDB = evm.StateDB
+		}
 		info := &AdvancedPrecompileCall{
 			PrecompileAddress: addr,
 			ActingAsAddress:   caller,
@@ -382,7 +402,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 			Evm:               evm,
 		}
 		var precompileMultiGas multigas.MultiGas
-		ret, gas, precompileMultiGas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer, info)
+		ret, gas, precompileMultiGas, err = RunPrecompiledContract(stateDB, p, addr, input, gas, evm.Config.Tracer, info)
 		usedMultiGas.SaturatingAddInto(precompileMultiGas)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
@@ -435,6 +455,10 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
+		var stateDB StateDB
+		if evm.chainRules.IsAmsterdam {
+			stateDB = evm.StateDB
+		}
 		info := &AdvancedPrecompileCall{
 			PrecompileAddress: addr,
 			ActingAsAddress:   caller,
@@ -444,7 +468,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 			Evm:               evm,
 		}
 		var precompileMultiGas multigas.MultiGas
-		ret, gas, precompileMultiGas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer, info)
+		ret, gas, precompileMultiGas, err = RunPrecompiledContract(stateDB, p, addr, input, gas, evm.Config.Tracer, info)
 		usedMultiGas.SaturatingAddInto(precompileMultiGas)
 	} else {
 		// Initialise a new contract and make initialise the delegate values
@@ -505,6 +529,10 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	evm.StateDB.AddBalance(addr, new(uint256.Int), tracing.BalanceChangeTouchAccount)
 
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
+		var stateDB StateDB
+		if evm.chainRules.IsAmsterdam {
+			stateDB = evm.StateDB
+		}
 		info := &AdvancedPrecompileCall{
 			PrecompileAddress: addr,
 			ActingAsAddress:   addr,
@@ -514,7 +542,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 			Evm:               evm,
 		}
 		var precompileMultiGas multigas.MultiGas
-		ret, gas, precompileMultiGas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer, info)
+		ret, gas, precompileMultiGas, err = RunPrecompiledContract(stateDB, p, addr, input, gas, evm.Config.Tracer, info)
 		usedMultiGas.SaturatingAddInto(precompileMultiGas)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
@@ -631,7 +659,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 		// Charge consumed init gas as computation
 		usedMultiGas = usedMultiGas.SaturatingIncrement(multigas.ResourceKindComputation, consumed)
 	}
-	evm.Context.Transfer(evm.StateDB, caller, address, value)
+	evm.Context.Transfer(evm.StateDB, caller, address, value, &evm.chainRules)
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
@@ -663,8 +691,8 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 	}
 
 	// Check whether the max code size has been exceeded, assign err if the case.
-	if evm.chainRules.IsEIP158 && len(ret) > int(evm.chainConfig.MaxCodeSize()) {
-		return ret, ErrMaxCodeSizeExceeded
+	if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
+		return ret, err
 	}
 
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
@@ -705,7 +733,7 @@ func (evm *EVM) Create(caller common.Address, code []byte, gas uint64, value *ui
 // The different between Create2 with Create is Create2 uses keccak256(0xff ++ msg.sender ++ salt ++ keccak256(init_code))[12:]
 // instead of the usual sender-and-nonce-hash as the address where the contract is initialized at.
 func (evm *EVM) Create2(caller common.Address, code []byte, gas uint64, endowment *uint256.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, usedMultiGas multigas.MultiGas, err error) {
-	inithash := crypto.HashData(evm.hasher, code)
+	inithash := crypto.Keccak256Hash(code)
 	contractAddr = crypto.CreateAddress2(caller, salt.Bytes32(), inithash[:])
 	return evm.create(caller, code, gas, endowment, contractAddr, CREATE2)
 }

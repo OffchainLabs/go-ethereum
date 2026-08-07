@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
@@ -46,8 +47,7 @@ func TestApplyMessageReturnsMultiGas(t *testing.T) {
 		To:        &contract,
 	}
 
-	gp := new(GasPool)
-	gp.SetGas(30_000_000)
+	gp := NewGasPool(30_000_000)
 
 	res, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
@@ -77,10 +77,12 @@ func TestApplyMessageCalldataReturnsMultiGas(t *testing.T) {
 
 	blockContext := NewEVMBlockContext(header, nil, &common.Address{})
 
-	chainConfig := params.TestChainConfig
+	// shallow copy the struct, ArbitrumChainParams is copied as a value field,
+	// so we can modify it safely without touching the global config instance
+	chainConfig := *params.TestChainConfig
 	chainConfig.ArbitrumChainParams = params.ArbitrumChainParams{EnableArbOS: true, InitialArbOSVersion: params.ArbosVersion_40}
 
-	evm := vm.NewEVM(blockContext, statedb, chainConfig, vm.Config{})
+	evm := vm.NewEVM(blockContext, statedb, &chainConfig, vm.Config{})
 
 	data := bytes.Repeat([]byte{1, 0, 1}, 1000)
 	msg := &Message{
@@ -94,7 +96,7 @@ func TestApplyMessageCalldataReturnsMultiGas(t *testing.T) {
 		To:        &contract,
 	}
 
-	gp := new(GasPool).AddGas(30_000_000)
+	gp := NewGasPool(30_000_000)
 
 	res, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
@@ -266,7 +268,6 @@ func TestIntrinsicGas(t *testing.T) {
 
 func TestCallVariantsMultiGas(t *testing.T) {
 	const gasLimit = 100_000
-	const refinedComputationGas = gasLimit - params.ColdSloadCostEIP2929 - params.SstoreSetGasEIP2200
 
 	// PUSH1 0x01, PUSH1 0x00, SSTORE, STOP
 	code := []byte{
@@ -295,10 +296,11 @@ func TestCallVariantsMultiGas(t *testing.T) {
 	evm := vm.NewEVM(NewEVMBlockContext(header, nil, &caller), statedb, params.TestChainConfig, vm.Config{})
 
 	tests := []struct {
-		name             string
-		callFn           func() (ret []byte, leftOver uint64, mg multigas.MultiGas, err error)
-		expectErr        error
-		expectedMultiGas multigas.MultiGas
+		name              string
+		callFn            func() (ret []byte, leftOver uint64, mg multigas.MultiGas, err error)
+		expectErr         error
+		expectErrContains string
+		expectedMultiGas  multigas.MultiGas
 	}{
 		{
 			name: "callcode_success",
@@ -339,12 +341,10 @@ func TestCallVariantsMultiGas(t *testing.T) {
 			callFn: func() ([]byte, uint64, multigas.MultiGas, error) {
 				return evm.StaticCall(caller, contractAddr, nil, gasLimit)
 			},
-			expectErr: vm.ErrWriteProtection,
-			expectedMultiGas: multigas.MultiGasFromPairs(
-				multigas.Pair{Kind: multigas.ResourceKindComputation, Amount: refinedComputationGas},
-				multigas.Pair{Kind: multigas.ResourceKindStorageAccessRead, Amount: params.ColdSloadCostEIP2929},
-				multigas.Pair{Kind: multigas.ResourceKindStorageGrowth, Amount: params.SstoreSetGasEIP2200},
-			),
+			expectErr:         vm.ErrOutOfGas,
+			expectErrContains: vm.ErrWriteProtection.Error(),
+			// Failed calls consume all remaining gas as computation.
+			expectedMultiGas: multigas.ComputationGas(gasLimit),
 		},
 	}
 
@@ -352,8 +352,18 @@ func TestCallVariantsMultiGas(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ret, leftover, usedMultiGas, err := tt.callFn()
 
-			if !errors.Is(err, tt.expectErr) {
-				t.Fatalf("unexpected error: got %v, want %v", err, tt.expectErr)
+			if tt.expectErr != nil {
+				if err == nil {
+					t.Fatalf("unexpected error, got: nil, want: %v", tt.expectErr)
+				}
+				if !errors.Is(err, tt.expectErr) {
+					t.Fatalf("unexpected error, got: %v, want: %v", err, tt.expectErr)
+				}
+				if tt.expectErrContains != "" && !strings.Contains(err.Error(), tt.expectErrContains) {
+					t.Fatalf("unexpected error, got: %v, want it to contain: %v", err, tt.expectErrContains)
+				}
+			} else if err != nil {
+				t.Fatalf("unexpected error, got: %v, want: nil", err)
 			}
 
 			if gasLimit-leftover != usedMultiGas.SingleGas() {
@@ -527,5 +537,60 @@ func TestMessageRunContextPredicates(t *testing.T) {
 	}
 	if del.IsSequencing() {
 		t.Error("NewMessageDelayedSequencingContext must not satisfy IsSequencing")
+	}
+}
+
+// endTxNowHook ends the state transition immediately from StartTxHook while
+// reporting nonzero gas, mimicking Arbitrum's submit-retryable path.
+type endTxNowHook struct {
+	vm.DefaultTxProcessor
+	gas uint64
+}
+
+func (h endTxNowHook) StartTxHook() (bool, multigas.MultiGas, error, []byte) {
+	return true, multigas.SingleDimGas(h.gas), nil, nil
+}
+
+// TestEndTxNowGasPoolAccounting checks that gas reported by an endTxNow
+// transaction (e.g. an Arbitrum retryable submission) is accounted for
+// consistently in the block gas pool: gp.Used() feeds ProcessResult.GasUsed
+// (validated against header.GasUsed in ValidateState) and gp.CumulativeUsed()
+// feeds receipt.CumulativeGasUsed, so both must include the hook's gas.
+func TestEndTxNowGasPoolAccounting(t *testing.T) {
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	header := &types.Header{
+		Difficulty: common.Big0,
+		Number:     common.Big0,
+		BaseFee:    common.Big0,
+	}
+	evm := vm.NewEVM(NewEVMBlockContext(header, nil, &common.Address{}), statedb, params.TestChainConfig, vm.Config{})
+
+	const hookGas = 50_000
+	evm.ProcessingHook = endTxNowHook{gas: hookGas}
+
+	to := common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+	msg := &Message{
+		From:      params.SystemAddress,
+		To:        &to,
+		Value:     common.Big0,
+		GasLimit:  1_000_000,
+		GasPrice:  common.Big0,
+		GasFeeCap: common.Big0,
+		GasTipCap: common.Big0,
+	}
+	gp := NewGasPool(30_000_000)
+
+	res, err := ApplyMessage(evm, msg, gp)
+	if err != nil {
+		t.Fatalf("failed to apply message: %v", err)
+	}
+	if res.UsedGas != hookGas {
+		t.Errorf("result.UsedGas = %v, want %v", res.UsedGas, hookGas)
+	}
+	if gp.CumulativeUsed() != hookGas {
+		t.Errorf("gp.CumulativeUsed() = %v, want %v", gp.CumulativeUsed(), hookGas)
+	}
+	if gp.Used() != hookGas {
+		t.Errorf("gp.Used() = %v, want %v (endTxNow gas missing from pool accounting)", gp.Used(), hookGas)
 	}
 }

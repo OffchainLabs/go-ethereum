@@ -43,7 +43,8 @@ type journalEntry interface {
 	revert(*StateDB)
 
 	// dirtied returns the Ethereum address modified by this journal entry.
-	dirtied() *common.Address
+	// indicates false if no address was changed.
+	dirtied() (common.Address, bool)
 
 	// copy returns a deep-copied journal entry.
 	copy() journalEntry
@@ -110,11 +111,11 @@ func (j *journal) revertToSnapshot(revid int, s *StateDB) {
 // append inserts a new modification entry to the end of the change journal.
 func (j *journal) append(entry journalEntry) {
 	j.entries = append(j.entries, entry)
-	if addr := entry.dirtied(); addr != nil {
-		j.dirties[*addr]++
+	if addr, dirty := entry.dirtied(); dirty {
+		j.dirties[addr]++
 		// Arbitrum: also track the number of zombie changes
 		if isZombie(entry) {
-			j.zombieEntries[*addr]++
+			j.zombieEntries[addr]++
 		}
 	}
 }
@@ -127,14 +128,14 @@ func (j *journal) revert(statedb *StateDB, snapshot int) {
 		j.entries[i].revert(statedb)
 
 		// Drop any dirty tracking induced by the change
-		if addr := j.entries[i].dirtied(); addr != nil {
-			if j.dirties[*addr]--; j.dirties[*addr] == 0 {
-				delete(j.dirties, *addr)
+		if addr, dirty := j.entries[i].dirtied(); dirty {
+			if j.dirties[addr]--; j.dirties[addr] == 0 {
+				delete(j.dirties, addr)
 
 				// Revert zombieEntries tracking
 				if isZombie(j.entries[i]) {
-					if j.zombieEntries[*addr]--; j.zombieEntries[*addr] == 0 {
-						delete(j.zombieEntries, *addr)
+					if j.zombieEntries[addr]--; j.zombieEntries[addr] == 0 {
+						delete(j.zombieEntries, addr)
 					}
 				}
 			}
@@ -323,8 +324,8 @@ func (ch createObjectChange) revert(s *StateDB) {
 	delete(s.stateObjects, ch.account)
 }
 
-func (ch createObjectChange) dirtied() *common.Address {
-	return &ch.account
+func (ch createObjectChange) dirtied() (common.Address, bool) {
+	return ch.account, true
 }
 
 func (ch createObjectChange) copy() journalEntry {
@@ -337,8 +338,8 @@ func (ch createContractChange) revert(s *StateDB) {
 	s.getStateObject(ch.account).newContract = false
 }
 
-func (ch createContractChange) dirtied() *common.Address {
-	return nil
+func (ch createContractChange) dirtied() (common.Address, bool) {
+	return common.Address{}, false
 }
 
 func (ch createContractChange) copy() journalEntry {
@@ -354,8 +355,8 @@ func (ch selfDestructChange) revert(s *StateDB) {
 	}
 }
 
-func (ch selfDestructChange) dirtied() *common.Address {
-	return &ch.account
+func (ch selfDestructChange) dirtied() (common.Address, bool) {
+	return ch.account, true
 }
 
 func (ch selfDestructChange) copy() journalEntry {
@@ -369,8 +370,8 @@ var ripemd = common.HexToAddress("0000000000000000000000000000000000000003")
 func (ch touchChange) revert(s *StateDB) {
 }
 
-func (ch touchChange) dirtied() *common.Address {
-	return &ch.account
+func (ch touchChange) dirtied() (common.Address, bool) {
+	return ch.account, true
 }
 
 func (ch touchChange) copy() journalEntry {
@@ -383,8 +384,8 @@ func (ch balanceChange) revert(s *StateDB) {
 	s.getStateObject(ch.account).setBalance(ch.prev)
 }
 
-func (ch balanceChange) dirtied() *common.Address {
-	return &ch.account
+func (ch balanceChange) dirtied() (common.Address, bool) {
+	return ch.account, true
 }
 
 func (ch balanceChange) copy() journalEntry {
@@ -398,8 +399,8 @@ func (ch nonceChange) revert(s *StateDB) {
 	s.getStateObject(ch.account).setNonce(ch.prev)
 }
 
-func (ch nonceChange) dirtied() *common.Address {
-	return &ch.account
+func (ch nonceChange) dirtied() (common.Address, bool) {
+	return ch.account, true
 }
 
 func (ch nonceChange) copy() journalEntry {
@@ -413,8 +414,8 @@ func (ch codeChange) revert(s *StateDB) {
 	s.getStateObject(ch.account).setCode(crypto.Keccak256Hash(ch.prevCode), ch.prevCode)
 }
 
-func (ch codeChange) dirtied() *common.Address {
-	return &ch.account
+func (ch codeChange) dirtied() (common.Address, bool) {
+	return ch.account, true
 }
 
 func (ch codeChange) copy() journalEntry {
@@ -428,8 +429,8 @@ func (ch storageChange) revert(s *StateDB) {
 	s.getStateObject(ch.account).setState(ch.key, ch.prevvalue, ch.origvalue)
 }
 
-func (ch storageChange) dirtied() *common.Address {
-	return &ch.account
+func (ch storageChange) dirtied() (common.Address, bool) {
+	return ch.account, true
 }
 
 func (ch storageChange) copy() journalEntry {
@@ -445,8 +446,8 @@ func (ch transientStorageChange) revert(s *StateDB) {
 	s.setTransientState(ch.account, ch.key, ch.prevalue)
 }
 
-func (ch transientStorageChange) dirtied() *common.Address {
-	return nil
+func (ch transientStorageChange) dirtied() (common.Address, bool) {
+	return common.Address{}, false
 }
 
 func (ch transientStorageChange) copy() journalEntry {
@@ -461,8 +462,8 @@ func (ch refundChange) revert(s *StateDB) {
 	s.refund = ch.prev
 }
 
-func (ch refundChange) dirtied() *common.Address {
-	return nil
+func (ch refundChange) dirtied() (common.Address, bool) {
+	return common.Address{}, false
 }
 
 func (ch refundChange) copy() journalEntry {
@@ -481,8 +482,8 @@ func (ch addLogChange) revert(s *StateDB) {
 	s.logSize--
 }
 
-func (ch addLogChange) dirtied() *common.Address {
-	return nil
+func (ch addLogChange) dirtied() (common.Address, bool) {
+	return common.Address{}, false
 }
 
 func (ch addLogChange) copy() journalEntry {
@@ -504,8 +505,8 @@ func (ch accessListAddAccountChange) revert(s *StateDB) {
 	s.accessList.DeleteAddress(ch.address)
 }
 
-func (ch accessListAddAccountChange) dirtied() *common.Address {
-	return nil
+func (ch accessListAddAccountChange) dirtied() (common.Address, bool) {
+	return common.Address{}, false
 }
 
 func (ch accessListAddAccountChange) copy() journalEntry {
@@ -518,8 +519,8 @@ func (ch accessListAddSlotChange) revert(s *StateDB) {
 	s.accessList.DeleteSlot(ch.address, ch.slot)
 }
 
-func (ch accessListAddSlotChange) dirtied() *common.Address {
-	return nil
+func (ch accessListAddSlotChange) dirtied() (common.Address, bool) {
+	return common.Address{}, false
 }
 
 func (ch accessListAddSlotChange) copy() journalEntry {
