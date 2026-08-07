@@ -39,7 +39,6 @@ func TestRecordingNodeReaderRecordsPreimagesUntilStopped(t *testing.T) {
 	}
 	hash := crypto.Keccak256Hash(blob)
 	reader := &recordingNodeReader{
-		stateRoot:       types.EmptyRootHash,
 		inner:           &staticNodeReader{blob: blob},
 		recordingTrieDB: recordingDB,
 	}
