@@ -44,7 +44,9 @@ const (
 	maxSimulateBlocks = 256
 
 	// timestampIncrement is the default increment between block timestamps.
-	timestampIncrement = 12
+	// Arbitrum produces a block every 250ms; at second granularity this rounds
+	// down to 0, so consecutive simulated blocks share the same timestamp.
+	timestampIncrement = 0
 )
 
 // simBlock is a batch of calls to be simulated sequentially.
