@@ -505,6 +505,7 @@ func (b *Block) WithSeal(header *Header) *Block {
 		transactions: b.transactions,
 		uncles:       b.uncles,
 		withdrawals:  b.withdrawals,
+		accessList:   b.accessList,
 	}
 }
 
@@ -516,6 +517,7 @@ func (b *Block) WithBody(body Body) *Block {
 		transactions: slices.Clone(body.Transactions),
 		uncles:       make([]*Header, len(body.Uncles)),
 		withdrawals:  slices.Clone(body.Withdrawals),
+		accessList:   b.accessList,
 	}
 	for i := range body.Uncles {
 		block.uncles[i] = CopyHeader(body.Uncles[i])
