@@ -231,8 +231,8 @@ func (s *hookedStateDB) AddLog(log *types.Log) {
 	}
 }
 
-func (s *hookedStateDB) EmitLogsForBurnAccounts() {
-	s.inner.EmitLogsForBurnAccounts()
+func (s *hookedStateDB) LogsForBurnAccounts() []*types.Log {
+	return s.inner.LogsForBurnAccounts()
 }
 
 func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {

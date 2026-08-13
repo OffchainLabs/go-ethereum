@@ -332,7 +332,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			contract.IsSystemCall = isSystemCall(caller)
 			contract.SetCallCode(evm.resolveCodeHash(addr), code)
 			ret, err = evm.Run(contract, input, false)
-			gas = contract.Gas
+			gas = contract.Gas.RegularGas
 
 			usedMultiGas.SaturatingAddInto(contract.GetTotalUsedMultiGas())
 		}
@@ -414,7 +414,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 		contract.delegateOrCallcode = true
 
 		ret, err = evm.Run(contract, input, false)
-		gas = contract.Gas
+		gas = contract.Gas.RegularGas
 		usedMultiGas.SaturatingAddInto(contract.GetTotalUsedMultiGas())
 	}
 	if err != nil {
@@ -481,7 +481,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 		contract.delegateOrCallcode = true
 
 		ret, err = evm.Run(contract, input, false)
-		gas = contract.Gas
+		gas = contract.Gas.RegularGas
 		usedMultiGas.SaturatingAddInto(contract.GetTotalUsedMultiGas())
 	}
 	if err != nil {
@@ -554,7 +554,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 		// above we revert to the snapshot and consume any gas remaining. Additionally
 		// when we're in Homestead this also counts for code storage gas errors.
 		ret, err = evm.Run(contract, input, true)
-		gas = contract.Gas
+		gas = contract.Gas.RegularGas
 		usedMultiGas.SaturatingAddInto(contract.GetTotalUsedMultiGas())
 	}
 	if err != nil {
@@ -676,10 +676,10 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
-			contract.UseMultiGas(multigas.ComputationGas(contract.Gas), evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
+			contract.UseMultiGas(multigas.ComputationGas(contract.Gas.RegularGas), evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
 		}
 	}
-	return ret, address, contract.Gas, contract.GetTotalUsedMultiGas(), err
+	return ret, address, contract.Gas.RegularGas, contract.GetTotalUsedMultiGas(), err
 }
 
 // initNewContract runs a new contract's creation code, performs checks on the
@@ -709,7 +709,7 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 			return ret, ErrCodeStoreOutOfGas
 		}
 	} else {
-		consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true, contract.Gas)
+		consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true, contract.Gas.RegularGas)
 		contract.UseMultiGas(multigas.StorageGrowthGas(consumed), evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
 		if len(ret) > 0 && (consumed < wanted) {
 			return ret, ErrCodeStoreOutOfGas

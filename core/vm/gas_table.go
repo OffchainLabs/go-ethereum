@@ -207,7 +207,7 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 		return multigas.ZeroGas(), ErrWriteProtection
 	}
 	// If we fail the minimum gas availability invariant, fail (0)
-	if contract.Gas <= params.SstoreSentryGasEIP2200 {
+	if contract.Gas.RegularGas <= params.SstoreSentryGasEIP2200 {
 		return multigas.ZeroGas(), errors.New("not enough gas for reentrancy sentry")
 	}
 	// Gas sentry honoured, do the actual gas calculation based on the stored value
@@ -227,7 +227,6 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 		if value == (common.Hash{}) { // delete slot (2.1.2b)
 			evm.StateDB.AddRefund(params.SstoreClearsScheduleRefundEIP2200)
 		}
-
 		return multigas.StorageAccessWriteGas(params.SstoreResetGasEIP2200), nil
 	}
 	if original != (common.Hash{}) {
@@ -440,7 +439,7 @@ func makeCallVariantGasCost(intrinsicFunc gasFunc) gasFunc {
 			return multigas.ZeroGas(), err
 		}
 		intrinsic := multiIntrinsic.SingleGas()
-		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, intrinsic, stack.Back(0))
+		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas.RegularGas, intrinsic, stack.Back(0))
 		if err != nil {
 			return multigas.ZeroGas(), err
 		}
@@ -492,7 +491,7 @@ func gasCallIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	// Terminate the gas measurement if the leftover gas is not sufficient,
 	// it can effectively prevent accessing the states in the following steps.
 	// Arbitrum: gate the early error return on Amsterdam fork
-	if !isArbitrumPreAmsterdam && contract.Gas < multiGas.SingleGas() {
+	if !isArbitrumPreAmsterdam && contract.Gas.RegularGas < multiGas.SingleGas() {
 		return multigas.ZeroGas(), ErrOutOfGas
 	}
 	// Stateful check

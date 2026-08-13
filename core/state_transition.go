@@ -895,7 +895,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 
 	if rules.IsAmsterdam {
-		st.evm.StateDB.EmitLogsForBurnAccounts()
+		for _, log := range st.evm.StateDB.LogsForBurnAccounts() {
+			st.evm.StateDB.AddLog(log)
+		}
 	}
 	return &ExecutionResult{
 		UsedGas:          gasUsed,
