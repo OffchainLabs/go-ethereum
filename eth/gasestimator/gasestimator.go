@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -43,16 +42,19 @@ const EstimateGasErrorRatio = 0.015
 // these together, it would be excessively hard to test. Splitting the parts out
 // allows testing without needing a proper live chain.
 type Options struct {
-	Config           *params.ChainConfig      // Chain configuration for hard fork selection
-	Chain            core.ChainContext        // Chain context to access past block hashes
-	Header           *types.Header            // Header defining the block context to execute in
-	State            *state.StateDB           // Pre-state on top of which to estimate the gas
-	BlockOverrides   *override.BlockOverrides // Block overrides to apply during the estimation
+	Config *params.ChainConfig // Chain configuration for hard fork selection
+	Chain  core.ChainContext   // Chain context to access past block hashes
+	Header *types.Header       // Header defining the block context to execute in
+	State  *state.StateDB      // Pre-state on top of which to estimate the gas
+
+	BlobBaseFee *big.Int // BlobBaseFee optionally overrides the blob base fee in the execution context.
+
+	ErrorRatio float64 // Allowed overestimation ratio for faster estimation termination
+
+	// Arbitrum
 	Backend          core.NodeInterfaceBackendAPI
 	RunScheduledTxes func(context.Context, core.NodeInterfaceBackendAPI, *state.StateDB, *types.Header, vm.BlockContext, *core.MessageRunContext, *core.ExecutionResult, core.TxFilterer) (*core.ExecutionResult, error)
 	TxFilterer       core.TxFilterer // If non-nil, applies address/event filtering during estimation
-
-	ErrorRatio float64 // Allowed overestimation ratio for faster estimation termination
 }
 
 // Estimate returns the lowest possible gas limit that allows the transaction to
@@ -72,16 +74,7 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 
 	// Cap the maximum gas allowance according to EIP-7825 if the estimation targets Osaka
 	if hi > params.MaxTxGasRenamedForNitroMerges {
-		blockNumber, blockTime := opts.Header.Number, opts.Header.Time
-		if opts.BlockOverrides != nil {
-			if opts.BlockOverrides.Number != nil {
-				blockNumber = opts.BlockOverrides.Number.ToInt()
-			}
-			if opts.BlockOverrides.Time != nil {
-				blockTime = uint64(*opts.BlockOverrides.Time)
-			}
-		}
-		if !opts.Config.IsArbitrum() && opts.Config.IsOsaka(blockNumber, blockTime, 0) {
+		if !opts.Config.IsArbitrum() && opts.Config.IsOsaka(opts.Header.Number, opts.Header.Time, 0) {
 			hi = params.MaxTxGasRenamedForNitroMerges
 		}
 	}
@@ -254,10 +247,8 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 		evmContext = core.NewEVMBlockContext(opts.Header, opts.Chain, nil)
 		dirtyState = opts.State.Copy()
 	)
-	if opts.BlockOverrides != nil {
-		if err := opts.BlockOverrides.Apply(&evmContext); err != nil {
-			return nil, err
-		}
+	if opts.BlobBaseFee != nil {
+		evmContext.BlobBaseFee = new(big.Int).Set(opts.BlobBaseFee)
 	}
 	// Lower the basefee to 0 to avoid breaking EVM
 	// invariants (basefee < feecap).
