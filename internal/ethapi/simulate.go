@@ -44,9 +44,7 @@ const (
 	maxSimulateBlocks = 256
 
 	// timestampIncrement is the default increment between block timestamps.
-	// Arbitrum produces a block every 250ms; at second granularity this rounds
-	// down to 0, so consecutive simulated blocks share the same timestamp.
-	timestampIncrement = 0
+	timestampIncrement = 12
 )
 
 // simBlock is a batch of calls to be simulated sequentially.
@@ -397,6 +395,15 @@ func (sim *simulator) activePrecompiles(base *types.Header) vm.PrecompiledContra
 	return vm.ActivePrecompiledContracts(rules)
 }
 
+// timestampIncrementForChain returns zero for Arbitrum because its 250ms block
+// time is below the one-second precision of block timestamps.
+func (sim *simulator) timestampIncrementForChain() uint64 {
+	if sim.chainConfig != nil && sim.chainConfig.IsArbitrum() {
+		return 0
+	}
+	return timestampIncrement
+}
+
 // sanitizeChain checks the chain integrity. Specifically it checks that
 // block numbers and timestamp are strictly increasing, setting default values
 // when necessary. Gaps in block numbers are filled with empty blocks.
@@ -432,7 +439,7 @@ func (sim *simulator) sanitizeChain(blocks []simBlock) ([]simBlock, error) {
 			// Assign block number to the empty blocks.
 			for i := uint64(0); i < gap.Uint64(); i++ {
 				n := new(big.Int).Add(prevNumber, big.NewInt(int64(i+1)))
-				t := prevTimestamp + timestampIncrement
+				t := prevTimestamp + sim.timestampIncrementForChain()
 				b := simBlock{
 					BlockOverrides: &override.BlockOverrides{
 						Number:      (*hexutil.Big)(n),
@@ -448,7 +455,7 @@ func (sim *simulator) sanitizeChain(blocks []simBlock) ([]simBlock, error) {
 		prevNumber = block.BlockOverrides.Number.ToInt()
 		var t uint64
 		if block.BlockOverrides.Time == nil {
-			t = prevTimestamp + timestampIncrement
+			t = prevTimestamp + sim.timestampIncrementForChain()
 			block.BlockOverrides.Time = (*hexutil.Uint64)(&t)
 		} else {
 			t = uint64(*block.BlockOverrides.Time)
