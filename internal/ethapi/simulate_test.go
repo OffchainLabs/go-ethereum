@@ -23,9 +23,13 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestSimulateSanitizeBlockOrder(t *testing.T) {
+	arbConfig := *params.TestChainConfig
+	arbConfig.ArbitrumChainParams.EnableArbOS = true
+
 	type result struct {
 		number    uint64
 		timestamp uint64
@@ -33,6 +37,7 @@ func TestSimulateSanitizeBlockOrder(t *testing.T) {
 	for i, tc := range []struct {
 		baseNumber    int
 		baseTimestamp uint64
+		chainConfig   *params.ChainConfig
 		blocks        []simBlock
 		expected      []result
 		err           string
@@ -79,8 +84,28 @@ func TestSimulateSanitizeBlockOrder(t *testing.T) {
 			blocks:        []simBlock{{BlockOverrides: &override.BlockOverrides{Number: newInt(11), Time: newUint64(60)}}, {BlockOverrides: &override.BlockOverrides{Number: newInt(13), Time: newUint64(72)}}},
 			expected:      []result{{number: 11, timestamp: 60}, {number: 12, timestamp: 72}, {number: 13, timestamp: 72}},
 		},
+		{
+			baseNumber:    10,
+			baseTimestamp: 50,
+			chainConfig:   &arbConfig,
+			blocks: []simBlock{
+				{},
+				{BlockOverrides: &override.BlockOverrides{Number: newInt(14), Time: newUint64(75)}},
+				{},
+			},
+			expected: []result{
+				{number: 11, timestamp: 50},
+				{number: 12, timestamp: 50},
+				{number: 13, timestamp: 50},
+				{number: 14, timestamp: 75},
+				{number: 15, timestamp: 75},
+			},
+		},
 	} {
-		sim := &simulator{base: &types.Header{Number: big.NewInt(int64(tc.baseNumber)), Time: tc.baseTimestamp}}
+		sim := &simulator{
+			base:        &types.Header{Number: big.NewInt(int64(tc.baseNumber)), Time: tc.baseTimestamp},
+			chainConfig: tc.chainConfig,
+		}
 		res, err := sim.sanitizeChain(tc.blocks)
 		if err != nil {
 			if err.Error() == tc.err {
