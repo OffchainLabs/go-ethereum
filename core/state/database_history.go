@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -295,11 +294,6 @@ func (db *HistoricDB) TrieDB() *triedb.Database {
 	return db.triedb
 }
 
-// Snapshot returns the underlying state snapshot.
-func (db *HistoricDB) Snapshot() *snapshot.Tree {
-	return nil
-}
-
 func (db *HistoricDB) DiskDB() ethdb.KeyValueStore {
 	return db.disk
 }
@@ -309,4 +303,10 @@ func (db *HistoricDB) DiskDB() ethdb.KeyValueStore {
 // if the commit fails.
 func (db *HistoricDB) Commit(update *stateUpdate) error {
 	return errors.New("not implemented")
+}
+
+// Iteratee returns a state iteratee associated with the specified state root,
+// through which the account iterator and storage iterator can be created.
+func (db *HistoricDB) Iteratee(root common.Hash) (Iteratee, error) {
+	return nil, errors.New("not implemented")
 }
