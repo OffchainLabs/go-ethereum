@@ -307,7 +307,7 @@ func (db *HistoricDB) DiskDB() ethdb.KeyValueStore {
 // Commit flushes all pending writes and finalizes the state transition,
 // committing the changes to the underlying storage. It returns an error
 // if the commit fails.
-func (db *HistoricDB) Commit(update *stateUpdate) error {
+func (db *HistoricDB) Commit(update *StateUpdate) error {
 	return errors.New("not implemented")
 }
 
