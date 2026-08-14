@@ -418,13 +418,13 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 
 	blockBody := &types.Body{
 		Transactions: txes,
-		Withdrawals:  *block.BlockOverrides.Withdrawals,
+		Withdrawals:  *block.BlockOverrides.Withdrawals, // Withdrawal is also sanitized as non-nil
 	}
 	chainHeadReader := &simChainHeadReader{ctx, sim.b}
-	b, err := sim.b.Engine().FinalizeAndAssemble(ctx, chainHeadReader, header, sim.state, blockBody, receipts)
-	if err != nil {
-		return nil, nil, nil, err
-	}
+
+	// Assemble the block
+	b := core.AssembleBlock(sim.b.Engine(), chainHeadReader, header, sim.state, blockBody, receipts)
+
 	repairLogs(callResults, b.Hash())
 	return b, callResults, senders, nil
 }

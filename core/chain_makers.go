@@ -17,7 +17,6 @@
 package core
 
 import (
-	"context"
 	"fmt"
 	"math/big"
 
@@ -414,11 +413,22 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			b.header.RequestsHash = &reqHash
 		}
 
-		body := types.Body{Transactions: b.txs, Uncles: b.uncles, Withdrawals: b.withdrawals}
-		block, err := b.engine.FinalizeAndAssemble(context.Background(), cm, b.header, statedb, &body, b.receipts)
-		if err != nil {
-			panic(err)
+		body := types.Body{
+			Transactions: b.txs,
+			Uncles:       b.uncles,
+			Withdrawals:  b.withdrawals,
 		}
+		if !config.IsShanghai(b.header.Number, b.header.Time) {
+			if body.Withdrawals != nil {
+				panic("unexpected withdrawal before shanghai")
+			}
+		} else {
+			if body.Withdrawals == nil {
+				body.Withdrawals = make([]*types.Withdrawal, 0)
+			}
+		}
+		// Assemble the block for delivery.
+		block := AssembleBlock(b.engine, cm, b.header, statedb, &body, b.receipts)
 
 		// Write state changes to db
 		root, err := statedb.Commit(b.header.Number.Uint64(), config.IsEIP158(b.header.Number), config.IsCancun(b.header.Number, b.header.Time, types.DeserializeHeaderExtraInformation(b.header).ArbOSFormatVersion))
