@@ -302,7 +302,7 @@ type arbosAwarePrecompile interface {
 // - the returned bytes,
 // - the remaining gas budget,
 // - any error that occurred
-func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address common.Address, input []byte, gas GasBudget, logger *tracing.Hooks, advancedInfo *AdvancedPrecompileCall) (ret []byte, remaining GasBudget, usedMultiGas multigas.MultiGas, err error) {
+func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address common.Address, input []byte, gas GasBudget, logger *tracing.Hooks, rules params.Rules, advancedInfo *AdvancedPrecompileCall) (ret []byte, remaining GasBudget, usedMultiGas multigas.MultiGas, err error) {
 	suppliedGas := gas.RegularGas
 	advanced, isAdvanced := p.(AdvancedPrecompile)
 	if isAdvanced {
@@ -323,13 +323,8 @@ func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address comm
 	}
 	// Touch the precompile for block-level accessList recording once Amsterdam
 	// fork is activated.
-	// Arbitrum: gate the precompile account read on Amsterdam fork
-	var chainRules *params.Rules
-	if advancedInfo != nil {
-		chainRules = advancedInfo.Evm.ChainRules()
-	}
-	if (chainRules == nil || !chainRules.IsArbitrum || chainRules.IsAmsterdam) && stateDB != nil {
-		stateDB.Exist(address)
+	if rules.IsAmsterdam {
+		stateDB.Touch(address)
 	}
 	output, err := p.Run(input)
 	return output, gas, multigas.ComputationGas(gasCost), err

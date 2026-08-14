@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -114,6 +115,10 @@ func (s *hookedStateDB) HasSelfDestructed(addr common.Address) bool {
 
 func (s *hookedStateDB) Exist(addr common.Address) bool {
 	return s.inner.Exist(addr)
+}
+
+func (s *hookedStateDB) Touch(addr common.Address) {
+	s.inner.Touch(addr)
 }
 
 func (s *hookedStateDB) Empty(addr common.Address) bool {
@@ -231,11 +236,10 @@ func (s *hookedStateDB) LogsForBurnAccounts() []*types.Log {
 	return s.inner.LogsForBurnAccounts()
 }
 
-func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
+func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.StateAccessList {
 	if s.hooks.OnBalanceChange == nil && s.hooks.OnNonceChangeV2 == nil && s.hooks.OnNonceChange == nil && s.hooks.OnCodeChangeV2 == nil && s.hooks.OnCodeChange == nil {
 		// Short circuit if no relevant hooks are set.
-		s.inner.Finalise(deleteEmptyObjects)
-		return
+		return s.inner.Finalise(deleteEmptyObjects)
 	}
 
 	// Collect all self-destructed addresses first, then sort them to ensure
@@ -284,8 +288,7 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 			s.hooks.OnCodeChange(addr, prevCodeHash, s.inner.GetCode(addr), types.EmptyCodeHash, nil)
 		}
 	}
-
-	s.inner.Finalise(deleteEmptyObjects)
+	return s.inner.Finalise(deleteEmptyObjects)
 }
 
 func (s *hookedStateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarget][]byte) error {
