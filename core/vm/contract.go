@@ -47,7 +47,7 @@ type Contract struct {
 	IsDeployment bool
 	IsSystemCall bool
 
-	Gas   GasCosts
+	Gas   GasBudget
 	value *uint256.Int
 
 	// Arbitrum: total used multi-dimensional gas
@@ -56,7 +56,7 @@ type Contract struct {
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
-func NewContract(caller common.Address, address common.Address, value *uint256.Int, gas uint64, jumpDests JumpDestCache) *Contract {
+func NewContract(caller common.Address, address common.Address, value *uint256.Int, gas GasBudget, jumpDests JumpDestCache) *Contract {
 	// Initialize the jump analysis cache if it's nil, mostly for tests
 	if jumpDests == nil {
 		jumpDests = newMapJumpDests()
@@ -65,7 +65,7 @@ func NewContract(caller common.Address, address common.Address, value *uint256.I
 		caller:           caller,
 		address:          address,
 		jumpDests:        jumpDests,
-		Gas:              GasCosts{RegularGas: gas},
+		Gas:              gas,
 		value:            value,
 		UsedMultiGas:     multigas.ZeroGas(),
 		RetainedMultiGas: multigas.ZeroGas(),
@@ -141,27 +141,27 @@ func (c *Contract) Jumpdest() JumpDestCache {
 	return c.jumpDests
 }
 
-// useGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) useGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
-	if c.Gas.RegularGas < gas {
+// UseGas attempts the use gas and subtracts it and returns true on success
+func (c *Contract) UseGas(cost GasCosts, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
+	prior, ok := c.Gas.Charge(cost)
+	if !ok {
 		return false
 	}
 	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
-		logger.OnGasChange(c.Gas.RegularGas, c.Gas.RegularGas-gas, reason)
+		logger.OnGasChange(prior, c.Gas.RegularGas, reason)
 	}
-	c.Gas.RegularGas -= gas
 	return true
 }
 
-// RefundGas refunds gas to the contract
-func (c *Contract) RefundGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) {
-	if gas == 0 {
+// RefundGas refunds the leftover gas budget back to the contract.
+func (c *Contract) RefundGas(refund GasBudget, logger *tracing.Hooks, reason tracing.GasChangeReason) {
+	prior, changed := c.Gas.Refund(refund)
+	if !changed {
 		return
 	}
 	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
-		logger.OnGasChange(c.Gas.RegularGas, c.Gas.RegularGas+gas, reason)
+		logger.OnGasChange(prior, c.Gas.RegularGas, reason)
 	}
-	c.Gas.RegularGas += gas
 }
 
 // Address returns the contracts address
@@ -182,7 +182,7 @@ func (c *Contract) SetCallCode(hash common.Hash, code []byte) {
 
 // UseMultiGas attempts the use gas, subtracts it, increments usedMultiGas, and returns true on success
 func (c *Contract) UseMultiGas(multiGas multigas.MultiGas, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
-	if !c.useGas(multiGas.SingleGas(), logger, reason) {
+	if !c.UseGas(GasCosts{RegularGas: multiGas.SingleGas()}, logger, reason) {
 		return false
 	}
 	c.UsedMultiGas.SaturatingAddInto(multiGas)

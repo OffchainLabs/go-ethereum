@@ -93,12 +93,12 @@ func (e *ErrFilteredOnChain) Unwrap() error {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool) (vm.GasCosts, error) {
 	multiGas, err := IntrinsicMultiGas(data, accessList, authList, isContractCreation, isHomestead, isEIP2028, isEIP3860)
 	if err != nil {
-		return 0, err
+		return vm.GasCosts{}, err
 	}
-	return multiGas.SingleGas(), nil
+	return vm.GasCosts{RegularGas: multiGas.SingleGas()}, nil
 }
 
 // IntrinsicMultiGas returns the intrinsic gas as a multi-gas.
@@ -453,12 +453,12 @@ func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, err
 //  5. Run Script section
 //  6. Derive new state root
 type stateTransition struct {
-	gp           *GasPool
-	msg          *Message
-	gasRemaining uint64
-	initialGas   uint64
-	state        vm.StateDB
-	evm          *vm.EVM
+	gp            *GasPool
+	msg           *Message
+	initialBudget vm.GasBudget
+	gasRemaining  vm.GasBudget
+	state         vm.StateDB
+	evm           *vm.EVM
 }
 
 // newStateTransition initialises and returns a new state transition object.
@@ -518,8 +518,8 @@ func (st *stateTransition) buyGas() error {
 	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil {
 		st.evm.Config.Tracer.OnGasChange(0, st.msg.GasLimit, tracing.GasChangeTxInitialBalance)
 	}
-	st.gasRemaining = st.msg.GasLimit
-	st.initialGas = st.msg.GasLimit
+	st.gasRemaining = vm.NewGasBudget(st.msg.GasLimit)
+	st.initialBudget = st.gasRemaining.Copy()
 
 	mgvalU256, _ := uint256.FromBig(mgval)
 	st.state.SubBalance(st.msg.From, mgvalU256, tracing.BalanceDecreaseGasBuy)
@@ -705,13 +705,17 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	)
 
 	// Check clauses 4-5, subtract intrinsic iGas if everything is correct
-	iMultiGas, err := IntrinsicMultiGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
+	iMultiGasCost, err := IntrinsicMultiGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
 	if err != nil {
 		return nil, err
 	}
-	iGas := iMultiGas.SingleGas()
-	if st.gasRemaining < iGas {
-		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, iGas)
+	iGasCost := vm.GasCosts{RegularGas: iMultiGasCost.SingleGas()}
+	prior, sufficient := st.gasRemaining.Charge(iGasCost)
+	if !sufficient {
+		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining.RegularGas, iGasCost.RegularGas)
+	}
+	if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
+		t.OnGasChange(prior, st.gasRemaining.RegularGas, tracing.GasChangeTxIntrinsicGas)
 	}
 	// Gas limit suffices for the floor data cost (EIP-7623)
 	if rules.IsPrague && st.evm.ProcessingHook.IsCalldataPricingIncreaseEnabled() {
@@ -723,19 +727,12 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			return nil, fmt.Errorf("%w: have %d, want %d", ErrFloorDataGas, msg.GasLimit, floorDataGas)
 		}
 	}
-	if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
-		t.OnGasChange(st.gasRemaining, st.gasRemaining-iGas, tracing.GasChangeTxIntrinsicGas)
-	}
-	st.gasRemaining -= iGas
-	usedMultiGas = usedMultiGas.SaturatingAdd(iMultiGas)
 
 	tipAmount := big.NewInt(0)
-	tipReceipient, multiGas, err := st.evm.ProcessingHook.GasChargingHook(&st.gasRemaining, iGas)
+	tipReceipient, multiGas, err := st.evm.ProcessingHook.GasChargingHook(&st.gasRemaining.RegularGas, iGasCost.RegularGas)
 	if err != nil {
 		return nil, err
 	}
-
-	usedMultiGas = usedMultiGas.SaturatingAdd(multiGas)
 
 	if rules.IsEIP4762 {
 		st.evm.AccessEvents.AddTxOrigin(msg.From)
@@ -776,7 +773,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// Check against hardcoded transaction hashes that have previously reverted, so instead
 	// of executing the transaction we just update state nonce and remaining gas to avoid
 	// state divergence.
-	usedMultiGas, vmerr = st.evm.ProcessingHook.RevertedTxHook(&st.gasRemaining, usedMultiGas)
+	usedMultiGas, vmerr = st.evm.ProcessingHook.RevertedTxHook(&st.gasRemaining.RegularGas, usedMultiGas)
 
 	// vmerr is only not nil when we find a previous reverted transaction
 	if vmerr == nil {
@@ -812,7 +809,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 
 	// Refund the gas that was held to limit the amount of computation done.
-	st.gasRemaining += st.calcHeldGasRefund()
+	st.gasRemaining.Refund(st.calcHeldGasRefund())
 
 	// Record the gas used excluding gas refunds. This value represents the actual
 	// gas allowance required to complete execution.
@@ -820,17 +817,16 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 	// Compute refund counter, capped to a refund quotient.
 	refund := st.calcRefund()
-	st.gasRemaining += refund
+	st.gasRemaining.Refund(st.calcRefund())
 	// Arbitrum: set the multigas refunds
-	usedMultiGas = usedMultiGas.WithRefund(refund)
+	usedMultiGas = usedMultiGas.WithRefund(refund.RegularGas)
 	if rules.IsPrague && st.evm.ProcessingHook.IsCalldataPricingIncreaseEnabled() {
 		// After EIP-7623: Data-heavy transactions pay the floor gas.
-		if st.gasUsed() < floorDataGas {
+		if used := st.gasUsed(); used < floorDataGas {
 			usedMultiGas = usedMultiGas.SaturatingIncrement(multigas.ResourceKindL2Calldata, floorDataGas-usedMultiGas.SingleGas())
-			prev := st.gasRemaining
-			st.gasRemaining = st.initialGas - floorDataGas
+			prior, _ := st.gasRemaining.Charge(vm.GasCosts{RegularGas: floorDataGas - used})
 			if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
-				t.OnGasChange(prev, st.gasRemaining, tracing.GasChangeTxDataFloor)
+				t.OnGasChange(prior, st.gasRemaining.RegularGas, tracing.GasChangeTxDataFloor)
 			}
 		}
 		if peakGasUsed < floorDataGas {
@@ -843,10 +839,10 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// Return gas to the gas pool
 	if rules.IsAmsterdam {
 		// Refund is excluded for returning
-		err = st.gp.ReturnGas(st.initialGas-peakGasUsed, st.gasUsed())
+		err = st.gp.ReturnGas(st.initialBudget.RegularGas-peakGasUsed, st.gasUsed())
 	} else {
 		// Refund is included for returning
-		err = st.gp.ReturnGas(st.gasRemaining, st.gasUsed())
+		err = st.gp.ReturnGas(st.gasRemaining.RegularGas, st.gasUsed())
 	}
 	if err != nil {
 		return nil, err
@@ -883,7 +879,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		tracer.CaptureArbitrumTransfer(nil, &tipReceipient, tipAmount, false, tracing.BalanceIncreaseRewardTransactionFee)
 	}
 
-	st.evm.ProcessingHook.EndTxHook(st.gasRemaining, usedMultiGas, vmerr == nil)
+	st.evm.ProcessingHook.EndTxHook(st.gasRemaining.RegularGas, usedMultiGas, vmerr == nil)
 
 	// Arbitrum: record self destructs
 	if tracer := st.evm.Config.Tracer; tracer != nil && tracer.CaptureArbitrumTransfer != nil {
@@ -968,12 +964,12 @@ func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization) 
 	return nil
 }
 
-func (st *stateTransition) calcHeldGasRefund() uint64 {
-	return st.evm.ProcessingHook.HeldGas()
+func (st *stateTransition) calcHeldGasRefund() vm.GasBudget {
+	return vm.GasBudget{RegularGas: st.evm.ProcessingHook.HeldGas()}
 }
 
 // calcRefund computes refund counter, capped to a refund quotient.
-func (st *stateTransition) calcRefund() uint64 {
+func (st *stateTransition) calcRefund() vm.GasBudget {
 	nonrefundable := st.evm.ProcessingHook.NonrefundableGas()
 	var refund uint64
 	if nonrefundable < st.gasUsed() {
@@ -989,20 +985,20 @@ func (st *stateTransition) calcRefund() uint64 {
 		}
 	}
 	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && refund > 0 {
-		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, st.gasRemaining+refund, tracing.GasChangeTxRefunds)
+		st.evm.Config.Tracer.OnGasChange(st.gasRemaining.RegularGas, st.gasRemaining.RegularGas+refund, tracing.GasChangeTxRefunds)
 	}
-	return refund
+	return vm.NewGasBudget(refund)
 }
 
 // returnGas returns ETH for remaining gas,
 // exchanged at the original rate.
 func (st *stateTransition) returnGas() {
-	remaining := uint256.NewInt(st.gasRemaining)
+	remaining := uint256.NewInt(st.gasRemaining.RegularGas)
 	remaining.Mul(remaining, uint256.MustFromBig(st.msg.GasPrice))
 	st.state.AddBalance(st.msg.From, remaining, tracing.BalanceIncreaseGasReturn)
 
-	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && st.gasRemaining > 0 {
-		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, 0, tracing.GasChangeTxLeftOverReturned)
+	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && st.gasRemaining.RegularGas > 0 {
+		st.evm.Config.Tracer.OnGasChange(st.gasRemaining.RegularGas, 0, tracing.GasChangeTxLeftOverReturned)
 	}
 
 	// Arbitrum: record the gas refund
@@ -1013,7 +1009,7 @@ func (st *stateTransition) returnGas() {
 
 // gasUsed returns the amount of gas used up by the state transition.
 func (st *stateTransition) gasUsed() uint64 {
-	return st.initialGas - st.gasRemaining
+	return st.gasRemaining.Used(st.initialBudget)
 }
 
 // blobGasUsed returns the amount of blob gas used by the message.

@@ -288,7 +288,7 @@ type AdvancedPrecompileCall struct {
 }
 
 type AdvancedPrecompile interface {
-	RunAdvanced(input []byte, suppliedGas uint64, advancedInfo *AdvancedPrecompileCall) (ret []byte, remainingGas uint64, usedMultiGas multigas.MultiGas, err error)
+	RunAdvanced(input []byte, suppliedGas uint64, advancedInfo *AdvancedPrecompileCall) (ret []byte, remaining GasBudget, usedMultiGas multigas.MultiGas, err error)
 	PrecompiledContract
 }
 
@@ -300,26 +300,27 @@ type arbosAwarePrecompile interface {
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
 // It returns
 // - the returned bytes,
-// - the _remaining_ gas,
+// - the remaining gas budget,
 // - any error that occurred
-func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address common.Address, input []byte, suppliedGas uint64, logger *tracing.Hooks, advancedInfo *AdvancedPrecompileCall) (ret []byte, remainingGas uint64, usedMultiGas multigas.MultiGas, err error) {
+func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address common.Address, input []byte, gas GasBudget, logger *tracing.Hooks, advancedInfo *AdvancedPrecompileCall) (ret []byte, remaining GasBudget, usedMultiGas multigas.MultiGas, err error) {
+	suppliedGas := gas.RegularGas
 	advanced, isAdvanced := p.(AdvancedPrecompile)
 	if isAdvanced {
-		return advanced.RunAdvanced(input, suppliedGas, advancedInfo)
+		return advanced.RunAdvanced(input, gas.RegularGas, advancedInfo)
 	}
 	precompileArbosAware, isPrecompileArbosAware := p.(arbosAwarePrecompile)
 	if isPrecompileArbosAware && advancedInfo != nil {
 		precompileArbosAware.SetArbosVersion(advancedInfo.Evm.Context.ArbOSVersion)
 	}
 	gasCost := p.RequiredGas(input)
-	if suppliedGas < gasCost {
-		return nil, 0, multigas.ComputationGas(suppliedGas), ErrOutOfGas
+	prior, ok := gas.Charge(GasCosts{RegularGas: gasCost})
+	if !ok {
+		gas.Exhaust()
+		return nil, gas, multigas.ComputationGas(suppliedGas), ErrOutOfGas
 	}
 	if logger != nil && logger.OnGasChange != nil {
-		logger.OnGasChange(suppliedGas, suppliedGas-gasCost, tracing.GasChangeCallPrecompiledContract)
+		logger.OnGasChange(prior, gas.RegularGas, tracing.GasChangeCallPrecompiledContract)
 	}
-	suppliedGas -= gasCost
-
 	// Touch the precompile for block-level accessList recording once Amsterdam
 	// fork is activated.
 	// Arbitrum: gate the precompile account read on Amsterdam fork
@@ -331,7 +332,7 @@ func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address comm
 		stateDB.Exist(address)
 	}
 	output, err := p.Run(input)
-	return output, suppliedGas, multigas.ComputationGas(gasCost), err
+	return output, gas, multigas.ComputationGas(gasCost), err
 }
 
 // ecrecover implemented as a native contract.
