@@ -139,16 +139,18 @@ type tester struct {
 
 // testerConfig holds configuration parameters for running a test scenario.
 type testerConfig struct {
-	stateHistory  uint64 // Number of historical states to retain
-	maxDiffLayers int    // Maximum number of diff layers to maintain
-	layers        int    // Number of state transitions to generate for
-	enableIndex   bool   // Enable state history indexing or not
-	journalDir    string // Directory path for persisting journal files
-	isVerkle      bool   // Enables Verkle trie mode if true
+	stateHistory uint64 // Number of historical states to retain
+	layers       int    // Number of state transitions to generate for
+	enableIndex  bool   // Enable state history indexing or not
+	journalDir   string // Directory path for persisting journal files
+	isUBT        bool   // Enables Verkle trie mode if true
 
 	writeBuffer *int // Optional, the size of memory allocated for write buffer
 	trieCache   *int // Optional, the size of memory allocated for trie cache
 	stateCache  *int // Optional, the size of memory allocated for state cache
+
+	// Arbitrum
+	maxDiffLayers int // Maximum number of diff layers to maintain
 }
 
 func (c *testerConfig) trieCacheSize() int {
@@ -185,7 +187,7 @@ func newTester(t *testing.T, config *testerConfig) *tester {
 			NoAsyncFlush:        true,
 			JournalDirectory:    config.journalDir,
 			NoHistoryIndexDelay: true,
-		}, config.isVerkle)
+		}, config.isUBT)
 
 		obj = &tester{
 			db:           db,

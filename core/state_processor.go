@@ -92,7 +92,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	}
 	// We do not need to process the parent block hash if we are on Arbitrum.
 	// This is taken care of in the while we process the arbitrum internal transaction.
-	if !config.IsArbitrum() && (config.IsPrague(block.Number(), block.Time(), context.ArbOSVersion) || config.IsVerkle(block.Number(), block.Time())) {
+	if !config.IsArbitrum() && (config.IsPrague(block.Number(), block.Time(), context.ArbOSVersion) || config.IsUBT(block.Number(), block.Time())) {
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
@@ -192,7 +192,7 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 	}
 	// Merge the tx-local access event into the "block-local" one, in order to collect
 	// all values, so that the witness can be built.
-	if statedb.Database().TrieDB().IsVerkle() {
+	if statedb.Database().Type().Is(state.TypeUBT) {
 		statedb.AccessEvents().Merge(evm.AccessEvents)
 	}
 

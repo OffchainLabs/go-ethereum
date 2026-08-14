@@ -224,7 +224,7 @@ func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 		return PrecompiledContractsStartingFromArbOS30
 	case rules.IsArbitrum:
 		return PrecompiledContractsBeforeArbOS30
-	case rules.IsVerkle:
+	case rules.IsUBT:
 		return PrecompiledContractsVerkle
 	case rules.IsOsaka:
 		return PrecompiledContractsOsaka

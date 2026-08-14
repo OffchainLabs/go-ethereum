@@ -65,7 +65,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 
 		// Try referencing the root, if it isn't in dirties cache then Reference will have no effect
 		eth.blockchain.TrieDB().Reference(block.Root(), common.Hash{})
-		if statedb, err = eth.blockchain.StateAt(block.Root()); err == nil {
+		if statedb, err = eth.blockchain.StateAt(block.Header()); err == nil {
 			return statedb, func() {
 				eth.blockchain.TrieDB().Dereference(block.Root())
 			}, nil
@@ -195,11 +195,12 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 
 func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), error) {
 	// Check if the requested state is available in the live chain.
-	statedb, err := eth.blockchain.StateAt(block.Root())
+	header := block.Header()
+	statedb, err := eth.blockchain.StateAt(header)
 	if err == nil {
 		return statedb, noopReleaser, nil
 	}
-	statedb, err = eth.blockchain.HistoricState(block.Root())
+	statedb, err = eth.blockchain.HistoricState(header)
 	if err == nil {
 		return statedb, noopReleaser, nil
 	}

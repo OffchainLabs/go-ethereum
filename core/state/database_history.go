@@ -225,6 +225,12 @@ type HistoricDB struct {
 	codedb *CodeDB
 }
 
+// Type returns the trie type of the underlying database.
+func (db *HistoricDB) Type() DatabaseType {
+	// TODO(rjl493456442) support UBT in the future
+	return TypeMPT
+}
+
 // NewHistoricDatabase creates a historic state database.
 func NewHistoricDatabase(triedb *triedb.Database, codedb *CodeDB) *HistoricDB {
 	if codedb == nil {

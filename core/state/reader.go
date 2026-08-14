@@ -156,7 +156,7 @@ func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 // upstream changes.
 type TrieReaderDatabase interface {
 	database.NodeDatabase
-	IsVerkle() bool
+	IsUBT() bool
 	Disk() ethdb.Database
 }
 
@@ -190,10 +190,10 @@ func newTrieReader(root common.Hash, db TrieReaderDatabase) (*trieReader, error)
 		tr  Trie
 		err error
 	)
-	if !db.IsVerkle() {
+	if !db.IsUBT() {
 		tr, err = trie.NewStateTrie(trie.StateTrieID(root), db)
 	} else {
-		// When IsVerkle() is true, create a BinaryTrie wrapped in TransitionTrie
+		// When IsUBT() is true, create a BinaryTrie wrapped in TransitionTrie
 		binTrie, binErr := bintrie.NewBinaryTrie(root, db)
 		if binErr != nil {
 			return nil, binErr
@@ -277,7 +277,7 @@ func (r *trieReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 		found bool
 		value common.Hash
 	)
-	if r.db.IsVerkle() {
+	if r.db.IsUBT() {
 		tr = r.mainTrie
 	} else {
 		tr, found = r.subTries[addr]

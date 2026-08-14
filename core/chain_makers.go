@@ -126,7 +126,7 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 
 	// Merge the tx-local access event into the "block-local" one, in order to collect
 	// all values, so that the witness can be built.
-	if b.statedb.Database().TrieDB().IsVerkle() {
+	if b.statedb.Database().Type().Is(state.TypeUBT) {
 		b.statedb.AccessEvents().Merge(evm.AccessEvents)
 	}
 	b.txs = append(b.txs, tx)
@@ -396,7 +396,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 
 		blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
-		if !config.IsArbitrum() && config.IsPrague(b.header.Number, b.header.Time, blockContext.ArbOSVersion) || config.IsVerkle(b.header.Number, b.header.Time) {
+		if !config.IsArbitrum() && config.IsPrague(b.header.Number, b.header.Time, blockContext.ArbOSVersion) || config.IsUBT(b.header.Number, b.header.Time) {
 			// EIP-2935
 			blockContext.Random = &common.Hash{} // enable post-merge instruction set
 			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
@@ -433,8 +433,8 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 
 	// Forcibly use hash-based state scheme for retaining all nodes in disk.
 	var triedbConfig *triedb.Config = triedb.HashDefaults
-	if config.IsVerkle(config.ChainID, 0) {
-		triedbConfig = triedb.VerkleDefaults
+	if config.IsUBT(config.ChainID, 0) {
+		triedbConfig = triedb.UBTDefaults
 	}
 	triedb := triedb.NewDatabase(db, triedbConfig)
 	defer triedb.Close()
@@ -482,8 +482,8 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gen func(int, *BlockGen)) (ethdb.Database, []*types.Block, []types.Receipts) {
 	db := rawdb.NewMemoryDatabase()
 	var triedbConfig *triedb.Config = triedb.HashDefaults
-	if genesis.Config != nil && genesis.Config.IsVerkle(genesis.Config.ChainID, 0) {
-		triedbConfig = triedb.VerkleDefaults
+	if genesis.Config != nil && genesis.Config.IsUBT(genesis.Config.ChainID, 0) {
+		triedbConfig = triedb.UBTDefaults
 	}
 	genesisTriedb := triedb.NewDatabase(db, triedbConfig)
 	block, err := genesis.Commit(db, genesisTriedb, nil)

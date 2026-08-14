@@ -207,7 +207,7 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
 	}
-	if db.TrieDB().IsVerkle() {
+	if db.Type().Is(TypeUBT) {
 		sdb.accessEvents = NewAccessEvents()
 	}
 	return sdb, nil
@@ -962,7 +962,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		start   = time.Now()
 		workers errgroup.Group
 	)
-	if s.db.TrieDB().IsVerkle() {
+	if s.db.Type().Is(TypeUBT) {
 		// Bypass per-account updateTrie() for binary trie. In binary trie mode
 		// there is only one unified trie (OpenStorageTrie returns self), so the
 		// per-account trie setup in updateTrie() (getPrefetchedTrie, getTrie,
@@ -1048,9 +1048,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}
 	}
 	// If witness building is enabled, gather all the read-only accesses.
-	// Skip witness collection in Verkle mode, they will be gathered
-	// together at the end.
-	if s.witness != nil && !s.db.TrieDB().IsVerkle() {
+	// Skip witness collection in Unified-binary-trie mode, they will be
+	// gathered together at the end.
+	if s.witness != nil && s.db.Type().Is(TypeMPT) {
 		// Pull in anything that has been accessed before destruction
 		for _, obj := range s.stateObjectsDestruct {
 			// Skip any objects that haven't touched their storage
@@ -1091,7 +1091,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// only a single trie is used for state hashing. Replacing a non-nil verkle tree
 	// here could result in losing uncommitted changes from storage.
 	start = time.Now()
-	if s.prefetcher != nil && !s.db.TrieDB().IsVerkle() {
+	if s.prefetcher != nil && s.db.Type().Is(TypeMPT) {
 		if trie := s.prefetcher.trie(common.Hash{}, s.originalRoot); trie == nil {
 			log.Error("Failed to retrieve account pre-fetcher trie")
 		} else {
@@ -1274,7 +1274,7 @@ func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*acco
 		deletes[addrHash] = op
 
 		// Short circuit if the origin storage was empty.
-		if prev.Root == types.EmptyRootHash || s.db.TrieDB().IsVerkle() {
+		if prev.Root == types.EmptyRootHash || s.db.Type().Is(TypeUBT) {
 			continue
 		}
 		if noStorageWiping {
@@ -1310,7 +1310,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 		return nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
 	// Finalize any pending changes and merge everything into the tries
-	s.IntermediateRoot(deleteEmptyObjects)
+	root := s.IntermediateRoot(deleteEmptyObjects)
 
 	// Short circuit if any error occurs within the IntermediateRoot.
 	if s.dbErr != nil {
@@ -1372,7 +1372,6 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	// writes to run in parallel with the computations.
 	var (
 		start   = time.Now()
-		root    common.Hash
 		workers errgroup.Group
 	)
 	// Schedule the account trie first since that will be the biggest, so give
@@ -1386,9 +1385,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	// code didn't anticipate for.
 	workers.Go(func() error {
 		// Write the account trie changes, measuring the amount of wasted time
-		newroot, set := s.trie.Commit(true)
-		root = newroot
-
+		_, set := s.trie.Commit(true)
 		if err := merge(set); err != nil {
 			return err
 		}

@@ -297,10 +297,10 @@ func (cfg *BlockChainConfig) TriedbConfig() *triedb.Config {
 }
 
 // triedbConfig derives the configures for trie database.
-func (cfg *BlockChainConfig) triedbConfig(isVerkle bool) *triedb.Config {
+func (cfg *BlockChainConfig) triedbConfig(isUBT bool) *triedb.Config {
 	config := &triedb.Config{
 		Preimages: cfg.Preimages,
-		IsVerkle:  isVerkle,
+		IsUBT:     isUBT,
 	}
 	if cfg.StateScheme == rawdb.HashScheme {
 		config.HashDB = &hashdb.Config{
@@ -434,7 +434,7 @@ func NewBlockChain(db ethdb.Database, chainConfig *params.ChainConfig, genesis *
 	}
 
 	// Open trie database with provided config
-	enableVerkle, err := EnableVerkleAtGenesis(db, genesis)
+	enableVerkle, err := EnableUBTAtGenesis(db, genesis)
 	if err != nil {
 		return nil, err
 	}
@@ -2289,11 +2289,29 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		startTime = time.Now()
 		statedb   *state.StateDB
 		interrupt atomic.Bool
-		sdb       = state.NewDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
+		sdb       state.Database
 	)
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
-	if bc.cfg.NoPrefetch {
+	if bc.chainConfig.IsUBT(block.Number(), block.Time()) {
+		sdb = state.NewUBTDatabase(bc.triedb, bc.codedb)
+	} else {
+		sdb = state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
+	}
+	// If prefetching is enabled, run that against the current state to pre-cache
+	// transactions and probabilistically some of the account/storage trie nodes.
+	//
+	// Note: the main processor and prefetcher share the same reader with a local
+	// cache for mitigating the overhead of state access.
+	type prewarmReader interface {
+		// ReadersWithCacheStats creates a pair of state readers that share the
+		// same underlying state reader and internal state cache, while maintaining
+		// separate statistics respectively.
+		ReadersWithCacheStats(stateRoot common.Hash) (state.Reader, state.Reader, error)
+	}
+	warmer, ok := sdb.(prewarmReader)
+
+	if bc.cfg.NoPrefetch || !ok {
 		statedb, err = state.New(parentRoot, sdb)
 		if err != nil {
 			return nil, err
@@ -2304,7 +2322,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		//
 		// Note: the main processor and prefetcher share the same reader with a local
 		// cache for mitigating the overhead of state access.
-		prefetch, process, err := sdb.ReadersWithCacheStats(parentRoot)
+		prefetch, process, err := warmer.ReadersWithCacheStats(parentRoot)
 		if err != nil {
 			return nil, err
 		}
