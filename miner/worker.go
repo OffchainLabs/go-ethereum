@@ -194,7 +194,7 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 		Transactions: work.txs,
 		Withdrawals:  genParam.withdrawals,
 	}
-	if !miner.chainConfig.IsShanghai(work.header.Number, work.header.Time) {
+	if !miner.chainConfig.IsShanghai(work.header.Number, work.header.Time, 0) {
 		if body.Withdrawals != nil {
 			return &newPayloadResult{err: errors.New("unexpected withdrawals before shanghai")}
 		}
@@ -568,7 +568,7 @@ func (miner *Miner) fillTransactions(ctx context.Context, interrupt *atomic.Int3
 	if env.header.ExcessBlobGas != nil {
 		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(miner.chainConfig, env.header))
 	}
-	if !miner.chainConfig.IsArbitrum() && miner.chainConfig.IsOsaka(env.header.Number, env.header.Time, 0) {
+	if !miner.chainConfig.IsArbitrum() && miner.chainConfig.IsOsaka(env.header.Number, env.header.Time, 0) && !miner.chainConfig.IsAmsterdam(env.header.Number, env.header.Time, 0) {
 		filter.GasLimitCap = params.MaxTxGasRenamedForNitroMerges
 	}
 	filter.BlobTxs = false

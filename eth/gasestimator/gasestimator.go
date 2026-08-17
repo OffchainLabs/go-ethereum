@@ -73,10 +73,10 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	}
 
 	// Cap the maximum gas allowance according to EIP-7825 if the estimation targets Osaka
-	if hi > params.MaxTxGasRenamedForNitroMerges {
-		if !opts.Config.IsArbitrum() && opts.Config.IsOsaka(opts.Header.Number, opts.Header.Time, 0) {
-			hi = params.MaxTxGasRenamedForNitroMerges
-		}
+	isOsaka := opts.Config.IsOsaka(opts.Header.Number, opts.Header.Time, 0)
+	isAmsterdam := opts.Config.IsAmsterdam(opts.Header.Number, opts.Header.Time, 0)
+	if !opts.Config.IsArbitrum() && hi > params.MaxTxGasRenamedForNitroMerges && isOsaka && !isAmsterdam {
+		hi = params.MaxTxGasRenamedForNitroMerges
 	}
 
 	// Normalize the max fee per gas the call is willing to spend.

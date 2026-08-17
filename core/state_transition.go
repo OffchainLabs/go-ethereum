@@ -564,9 +564,10 @@ func (st *stateTransition) preCheck() error {
 		}
 	}
 	isOsaka := st.evm.ChainConfig().IsOsaka(st.evm.Context.BlockNumber, st.evm.Context.Time, st.evm.Context.ArbOSVersion)
+	isAmsterdam := st.evm.ChainConfig().IsAmsterdam(st.evm.Context.BlockNumber, st.evm.Context.Time, st.evm.Context.ArbOSVersion)
 	if !msg.SkipTransactionChecks {
 		// Verify tx gas limit does not exceed EIP-7825 cap.
-		if !st.evm.ChainConfig().IsArbitrum() && isOsaka && msg.GasLimit > params.MaxTxGasRenamedForNitroMerges {
+		if !st.evm.ChainConfig().IsArbitrum() && isOsaka && !isAmsterdam && msg.GasLimit > params.MaxTxGasRenamedForNitroMerges {
 			return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxGasRenamedForNitroMerges, msg.GasLimit)
 		}
 		// Make sure the sender is an EOA

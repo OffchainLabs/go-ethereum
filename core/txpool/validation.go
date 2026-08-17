@@ -93,7 +93,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 			return err
 		}
 	}
-	if !opts.Config.IsArbitrum() && rules.IsOsaka && tx.Gas() > params.MaxTxGasRenamedForNitroMerges {
+	if !opts.Config.IsArbitrum() && rules.IsOsaka && !rules.IsAmsterdam && tx.Gas() > params.MaxTxGasRenamedForNitroMerges {
 		return fmt.Errorf("%w (cap: %d, tx: %d)", core.ErrGasLimitTooHigh, params.MaxTxGasRenamedForNitroMerges, tx.Gas())
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
