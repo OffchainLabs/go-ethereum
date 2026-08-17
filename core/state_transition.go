@@ -798,9 +798,11 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
 
 	// Arbitrum: drop tip when tip collection is not enabled
-	if !st.evm.ProcessingHook.CollectTips() && st.msg.GasPrice.Cmp(st.evm.Context.BaseFee) > 0 {
-		st.msg.GasPrice = st.evm.Context.BaseFee
-		st.msg.GasTipCap = common.Big0
+	if !st.evm.ProcessingHook.CollectTips() {
+		if baseFee := uint256.MustFromBig(st.evm.Context.BaseFee); st.msg.GasPrice.Cmp(baseFee) > 0 {
+			st.msg.GasPrice = baseFee
+			st.msg.GasTipCap = new(uint256.Int)
+		}
 	}
 
 	// Check clauses 1-3, buy gas if everything is correct
