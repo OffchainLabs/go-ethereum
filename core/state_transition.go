@@ -849,6 +849,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		return nil, err
 	}
 
+	usedMultiGas = usedMultiGas.SaturatingAdd(multiGas)
+
 	if rules.IsEIP4762 {
 		st.evm.AccessEvents.AddTxOrigin(msg.From)
 
