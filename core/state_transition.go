@@ -831,6 +831,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
 		t.OnGasChange(prior, st.gasRemaining.RegularGas, tracing.GasChangeTxIntrinsicGas)
 	}
+	usedMultiGas = usedMultiGas.SaturatingAdd(iMultiGasCost)
 	// Gas limit suffices for the floor data cost (EIP-7623)
 	if rules.IsPrague && st.evm.ProcessingHook.IsCalldataPricingIncreaseEnabled() {
 		floorDataGas, err = FloorDataGas(rules, msg.Data, msg.AccessList)
