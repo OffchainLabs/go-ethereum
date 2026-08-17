@@ -733,12 +733,7 @@ func TestDisable(t *testing.T) {
 // leaves a single fresh disk layer with no generator attached, and clears
 // out stale state histories.
 func TestAdoptSyncedState(t *testing.T) {
-	maxDiffLayers = 4
-	defer func() {
-		maxDiffLayers = 128
-	}()
-
-	tester := newTester(t, &testerConfig{layers: 12})
+	tester := newTester(t, &testerConfig{layers: 12, maxDiffLayers: 4})
 	defer tester.release()
 
 	// Push everything down to disk so the trie root is the persistent root.
