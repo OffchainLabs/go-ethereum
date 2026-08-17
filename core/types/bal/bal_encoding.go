@@ -199,8 +199,15 @@ func (e *AccountAccess) validate(rules params.Rules) error {
 	}) {
 		return errors.New("code changes not in ascending order by tx index")
 	}
+	// Rules.MaxCodeSize is Amsterdam-aware and honors ArbitrumChainParams
+	// overrides; fall back to the default limit for zero-value rules, which
+	// never carry a valid code-size limit.
+	sizeLimit := rules.MaxCodeSize
+	if sizeLimit == 0 {
+		sizeLimit = params.DefaultMaxCodeSize
+	}
 	for _, change := range e.CodeChanges {
-		if len(change.Code) > params.DefaultMaxCodeSize {
+		if uint64(len(change.Code)) > sizeLimit {
 			return errors.New("code change contained oversized code")
 		}
 	}
