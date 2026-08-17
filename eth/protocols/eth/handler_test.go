@@ -638,7 +638,7 @@ func testGetBlockPartialReceipts(t *testing.T, protocol int) {
 	// Replace the receipts in the database with larger receipts.
 	targetBlock := backend.chain.GetBlockByNumber(uint64(blockCutoff))
 	receipts := backend.chain.GetReceiptsByHash(targetBlock.Hash())
-	receiptSize := params.MaxTxGas / params.LogDataGas // ~2MiB per receipt
+	receiptSize := params.MaxTxGasRenamedForNitroMerges / params.LogDataGas // ~2MiB per receipt
 	for i := range receipts {
 		payload := make([]byte, receiptSize)
 		for j := range payload {
