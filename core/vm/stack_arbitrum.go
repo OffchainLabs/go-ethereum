@@ -19,5 +19,7 @@ package vm
 import "github.com/holiman/uint256"
 
 func (stack *Stack) SetData(data []uint256.Int) {
-	stack.data = data
+	copy(stack.inner.data[stack.bottom:], data)
+	stack.size = len(data)
+	stack.inner.top = stack.bottom + len(data)
 }
