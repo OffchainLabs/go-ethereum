@@ -237,7 +237,7 @@ func (eth *Ethereum) stateAtBlock(ctx context.Context, block *types.Block, base 
 }
 
 // arbitrum: exposing stateAtBlock function
-func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, baseBlock *types.Block, readOnly bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
+func (eth *Ethereum) StateAtBlock(ctx context.Context, block *types.Block, base *state.StateDB, baseBlock *types.Block, readOnly bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
 	return eth.stateAtBlock(ctx, block, base, baseBlock, readOnly, preferDisk)
 }
 
