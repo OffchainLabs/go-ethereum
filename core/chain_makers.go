@@ -418,7 +418,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			Uncles:       b.uncles,
 			Withdrawals:  b.withdrawals,
 		}
-		if !config.IsShanghai(b.header.Number, b.header.Time) {
+		if !config.IsShanghai(b.header.Number, b.header.Time, types.DeserializeHeaderExtraInformation(b.header).ArbOSFormatVersion) {
 			if body.Withdrawals != nil {
 				panic("unexpected withdrawal before shanghai")
 			}
