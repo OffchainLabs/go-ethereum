@@ -601,6 +601,8 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 			evm.Config.Tracer.OnGasChange(prior, gas.RegularGas, tracing.GasChangeWitnessContractCollisionCheck)
 		}
+		// Collision check statelessGas is charged as computation
+		usedMultiGas = usedMultiGas.SaturatingIncrement(multigas.ResourceKindComputation, statelessGas)
 	}
 
 	// We add this to the access list _before_ taking a snapshot. Even if the
@@ -652,6 +654,8 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 			evm.Config.Tracer.OnGasChange(prior, gas.RegularGas, tracing.GasChangeWitnessContractInit)
 		}
+		// Charge consumed init gas as computation
+		usedMultiGas = usedMultiGas.SaturatingIncrement(multigas.ResourceKindComputation, consumed)
 	}
 	evm.Context.Transfer(evm.StateDB, caller, address, value, &evm.chainRules)
 
