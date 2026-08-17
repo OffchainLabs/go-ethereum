@@ -60,8 +60,8 @@ func TestOpCreatesMultiGas(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			scope := &ScopeContext{
-				Contract: NewContract(caller, common.Address{}, uint256.NewInt(0), initialGas, nil),
-				Stack:    newstack(),
+				Contract: NewContract(caller, common.Address{}, uint256.NewInt(0), NewGasBudget(initialGas), nil),
+				Stack:    newStackForTesting(),
 				Memory:   NewMemory(),
 			}
 			tt.pushStack(scope.Stack)
@@ -74,7 +74,7 @@ func TestOpCreatesMultiGas(t *testing.T) {
 			require.NotNil(t, scope.Stack.peek())
 
 			total := scope.Contract.GetTotalUsedMultiGas()
-			require.Equal(t, total.SingleGas(), initialGas-scope.Contract.Gas)
+			require.Equal(t, total.SingleGas(), initialGas-scope.Contract.Gas.RegularGas)
 		})
 	}
 }
@@ -164,8 +164,8 @@ func TestOpCallsMultiGas(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			scope := &ScopeContext{
-				Contract: NewContract(caller, contractAddr, uint256.NewInt(0), initialGas, nil),
-				Stack:    newstack(),
+				Contract: NewContract(caller, contractAddr, uint256.NewInt(0), NewGasBudget(initialGas), nil),
+				Stack:    newStackForTesting(),
 				Memory:   NewMemory(),
 			}
 			tt.pushStack(scope.Stack)
@@ -186,7 +186,7 @@ func TestOpCallsMultiGas(t *testing.T) {
 
 			// Total multigas should be annihilated
 			totalMultiGas := scope.Contract.GetTotalUsedMultiGas()
-			require.Equal(t, scope.Contract.Gas-callGasTemp, initialGas-totalMultiGas.SingleGas()) // No gas used
+			require.Equal(t, scope.Contract.Gas.RegularGas-callGasTemp, initialGas-totalMultiGas.SingleGas()) // No gas used
 			require.Equal(t, uint64(0), totalMultiGas.SingleGas())
 		})
 	}

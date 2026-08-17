@@ -149,7 +149,7 @@ func TestGasCallIntrinsicAccountLookupOnMemoryError(t *testing.T) {
 			evm.chainRules.IsAmsterdam = test.isAmsterdam
 			evm.chainRules.IsEIP158 = test.isEIP158
 
-			stack := newstack()
+			stack := newStackForTesting()
 			if test.transfersValue {
 				stack.push(uint256.NewInt(1))
 			} else {

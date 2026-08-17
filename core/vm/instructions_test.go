@@ -1041,9 +1041,9 @@ func runSelfdestruct6780(t *testing.T, code []byte) error {
 	statedb.SetBalance(actingAddress, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
 	statedb.SetCode(actingAddress, code, tracing.CodeChangeUnspecified)
 
-	stack := newstack()
+	stack := newStackForTesting()
 	stack.push(new(uint256.Int).SetBytes(beneficiary.Bytes()))
-	contract := NewContract(common.Address{}, actingAddress, uint256.NewInt(0), 0, nil)
+	contract := NewContract(common.Address{}, actingAddress, uint256.NewInt(0), GasBudget{}, nil)
 	pc := uint64(0)
 	_, err := opSelfdestruct6780(&pc, evm, &ScopeContext{Memory: NewMemory(), Stack: stack, Contract: contract})
 	return err
