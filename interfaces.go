@@ -176,6 +176,7 @@ func (prog SyncProgress) ToMap() map[string]interface{} {
 		"txIndexFinishedBlocks":  hexutil.Uint64(prog.TxIndexFinishedBlocks),
 		"txIndexRemainingBlocks": hexutil.Uint64(prog.TxIndexRemainingBlocks),
 		"stateIndexRemaining":    hexutil.Uint64(prog.StateIndexRemaining),
+		"trienodeIndexRemaining": hexutil.Uint64(prog.TrienodeIndexRemaining),
 	}
 }
 
