@@ -84,6 +84,9 @@ func (env *environment) txFitsSize(tx *types.Transaction) bool {
 // discard terminates the background threads before discarding it.
 func (env *environment) discard() {
 	env.state.StopPrefetcher()
+	if env.evm != nil {
+		env.evm.Release()
+	}
 }
 
 const (

@@ -288,6 +288,7 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	}
 
 	evm := opts.Backend.GetEVM(ctx, dirtyState, opts.Header, &vm.Config{NoBaseFee: true}, &evmContext)
+	defer evm.Release()
 	go func() {
 		<-ctx.Done()
 		evm.Cancel()

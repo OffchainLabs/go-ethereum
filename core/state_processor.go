@@ -86,6 +86,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	// Apply pre-execution system calls.
 	context = NewEVMBlockContext(header, p.chain, nil)
 	evm := vm.NewEVM(context, tracingStateDB, config, cfg)
+	defer evm.Release()
 
 	signer := types.MakeSigner(config, header.Number, header.Time, context.ArbOSVersion)
 
