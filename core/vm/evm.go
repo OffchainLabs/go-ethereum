@@ -296,8 +296,9 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			wgas := evm.AccessEvents.CodeHashGas(addr, true, gas.RegularGas, false)
 			if _, ok := gas.Charge(GasCosts{RegularGas: wgas}); !ok {
 				evm.StateDB.RevertToSnapshot(snapshot)
+				burned := gas.RegularGas
 				gas.Exhaust()
-				return nil, gas, multigas.ComputationGas(gas.RegularGas), ErrOutOfGas
+				return nil, gas, multigas.ComputationGas(burned), ErrOutOfGas
 			}
 		}
 
@@ -593,8 +594,9 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		statelessGas := evm.AccessEvents.ContractCreatePreCheckGas(address, gas.RegularGas)
 		prior, ok := gas.Charge(GasCosts{RegularGas: statelessGas})
 		if !ok {
+			burned := gas.RegularGas
 			gas.Exhaust()
-			return nil, common.Address{}, gas, multigas.ComputationGas(gas.RegularGas), ErrOutOfGas
+			return nil, common.Address{}, gas, multigas.ComputationGas(burned), ErrOutOfGas
 		}
 		if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 			evm.Config.Tracer.OnGasChange(prior, gas.RegularGas, tracing.GasChangeWitnessContractCollisionCheck)
@@ -618,8 +620,9 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 			evm.Config.Tracer.OnGasChange(gas.RegularGas, 0, tracing.GasChangeCallFailedExecution)
 		}
+		burned := gas.RegularGas
 		gas.Exhaust()
-		return nil, common.Address{}, gas, multigas.ComputationGas(gas.RegularGas), ErrContractAddressCollision
+		return nil, common.Address{}, gas, multigas.ComputationGas(burned), ErrContractAddressCollision
 	}
 	// Create a new account on the state only if the object was not present.
 	// It might be possible the contract code is deployed to a pre-existent
@@ -641,8 +644,9 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	if evm.chainRules.IsEIP4762 {
 		consumed, wanted := evm.AccessEvents.ContractCreateInitGas(address, gas.RegularGas)
 		if consumed < wanted {
+			burned := gas.RegularGas
 			gas.Exhaust()
-			return nil, common.Address{}, gas, multigas.ComputationGas(gas.RegularGas), ErrOutOfGas
+			return nil, common.Address{}, gas, multigas.ComputationGas(burned), ErrOutOfGas
 		}
 		prior, _ := gas.Charge(GasCosts{RegularGas: consumed})
 		if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
