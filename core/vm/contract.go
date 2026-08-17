@@ -141,8 +141,10 @@ func (c *Contract) Jumpdest() JumpDestCache {
 	return c.jumpDests
 }
 
-// UseGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) UseGas(cost GasCosts, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
+// useGas attempts the use gas and subtracts it and returns true on success.
+// It is deliberately unexported: external callers must charge gas through
+// UseMultiGas so that every charge carries a multigas attribution.
+func (c *Contract) useGas(cost GasCosts, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
 	prior, ok := c.Gas.Charge(cost)
 	if !ok {
 		return false
@@ -182,7 +184,7 @@ func (c *Contract) SetCallCode(hash common.Hash, code []byte) {
 
 // UseMultiGas attempts the use gas, subtracts it, increments usedMultiGas, and returns true on success
 func (c *Contract) UseMultiGas(multiGas multigas.MultiGas, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
-	if !c.UseGas(GasCosts{RegularGas: multiGas.SingleGas()}, logger, reason) {
+	if !c.useGas(GasCosts{RegularGas: multiGas.SingleGas()}, logger, reason) {
 		return false
 	}
 	c.UsedMultiGas.SaturatingAddInto(multiGas)
