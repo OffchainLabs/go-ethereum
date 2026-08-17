@@ -315,11 +315,11 @@ func TestApplyMessageReturnsMultiGas(t *testing.T) {
 
 	msg := &Message{
 		From:      params.SystemAddress,
-		Value:     common.Big0,
+		Value:     common.U2560,
 		GasLimit:  30_000_000,
-		GasPrice:  common.Big0,
-		GasFeeCap: common.Big0,
-		GasTipCap: common.Big0,
+		GasPrice:  common.U2560,
+		GasFeeCap: common.U2560,
+		GasTipCap: common.U2560,
 		To:        &contract,
 	}
 
@@ -364,11 +364,11 @@ func TestApplyMessageCalldataReturnsMultiGas(t *testing.T) {
 	msg := &Message{
 		From:      params.SystemAddress,
 		Data:      data,
-		Value:     common.Big0,
+		Value:     common.U2560,
 		GasLimit:  30_000_000,
-		GasPrice:  common.Big0,
-		GasFeeCap: common.Big0,
-		GasTipCap: common.Big0,
+		GasPrice:  common.U2560,
+		GasFeeCap: common.U2560,
+		GasTipCap: common.U2560,
 		To:        &contract,
 	}
 
@@ -419,7 +419,7 @@ func TestCreateReturnsMultiGas(t *testing.T) {
 	ret, _, leftoverGas, usedMultigas, err := evm.Create(
 		creator,
 		initcode,
-		gasLimit,
+		vm.NewGasBudget(gasLimit),
 		value,
 	)
 	if err != nil {
@@ -442,8 +442,8 @@ func TestCreateReturnsMultiGas(t *testing.T) {
 	if len(ret) != 0 {
 		t.Errorf("expected no return from initcode, got: %x", ret)
 	}
-	if leftoverGas >= gasLimit {
-		t.Errorf("no gas consumed: leftover %d >= limit %d", leftoverGas, gasLimit)
+	if leftoverGas.RegularGas >= gasLimit {
+		t.Errorf("no gas consumed: leftover %d >= limit %d", leftoverGas.RegularGas, gasLimit)
 	}
 }
 
@@ -590,15 +590,15 @@ func TestCallVariantsMultiGas(t *testing.T) {
 
 	tests := []struct {
 		name              string
-		callFn            func() (ret []byte, leftOver uint64, mg multigas.MultiGas, err error)
+		callFn            func() (ret []byte, leftOver vm.GasBudget, mg multigas.MultiGas, err error)
 		expectErr         error
 		expectErrContains string
 		expectedMultiGas  multigas.MultiGas
 	}{
 		{
 			name: "callcode_success",
-			callFn: func() ([]byte, uint64, multigas.MultiGas, error) {
-				return evm.CallCode(caller, contractAddr, nil, gasLimit, uint256.NewInt(0))
+			callFn: func() ([]byte, vm.GasBudget, multigas.MultiGas, error) {
+				return evm.CallCode(caller, contractAddr, nil, vm.NewGasBudget(gasLimit), uint256.NewInt(0))
 			},
 			expectErr: nil,
 			expectedMultiGas: multigas.MultiGasFromPairs(
@@ -609,8 +609,8 @@ func TestCallVariantsMultiGas(t *testing.T) {
 		},
 		{
 			name: "delegatecall_success_same_caller",
-			callFn: func() ([]byte, uint64, multigas.MultiGas, error) {
-				return evm.DelegateCall(caller, caller, contractAddr, nil, gasLimit, uint256.NewInt(0))
+			callFn: func() ([]byte, vm.GasBudget, multigas.MultiGas, error) {
+				return evm.DelegateCall(caller, caller, contractAddr, nil, vm.NewGasBudget(gasLimit), uint256.NewInt(0))
 			},
 			expectErr: nil,
 			expectedMultiGas: multigas.MultiGasFromPairs(
@@ -619,8 +619,8 @@ func TestCallVariantsMultiGas(t *testing.T) {
 		},
 		{
 			name: "delegatecall_success_delegate_caller",
-			callFn: func() ([]byte, uint64, multigas.MultiGas, error) {
-				return evm.DelegateCall(caller, delegate, contractAddr, nil, gasLimit, uint256.NewInt(0))
+			callFn: func() ([]byte, vm.GasBudget, multigas.MultiGas, error) {
+				return evm.DelegateCall(caller, delegate, contractAddr, nil, vm.NewGasBudget(gasLimit), uint256.NewInt(0))
 			},
 			expectErr: nil,
 			expectedMultiGas: multigas.MultiGasFromPairs(
@@ -631,8 +631,8 @@ func TestCallVariantsMultiGas(t *testing.T) {
 		},
 		{
 			name: "staticcall_err_write_protection",
-			callFn: func() ([]byte, uint64, multigas.MultiGas, error) {
-				return evm.StaticCall(caller, contractAddr, nil, gasLimit)
+			callFn: func() ([]byte, vm.GasBudget, multigas.MultiGas, error) {
+				return evm.StaticCall(caller, contractAddr, nil, vm.NewGasBudget(gasLimit))
 			},
 			expectErr:         vm.ErrOutOfGas,
 			expectErrContains: vm.ErrWriteProtection.Error(),
@@ -659,8 +659,8 @@ func TestCallVariantsMultiGas(t *testing.T) {
 				t.Fatalf("unexpected error, got: %v, want: nil", err)
 			}
 
-			if gasLimit-leftover != usedMultiGas.SingleGas() {
-				t.Errorf("mismatch single gas and leftover gas:\n got:  %v\n want: %v", (gasLimit - leftover), usedMultiGas.SingleGas())
+			if gasLimit-leftover.RegularGas != usedMultiGas.SingleGas() {
+				t.Errorf("mismatch single gas and leftover gas:\n got:  %v\n want: %v", (gasLimit - leftover.RegularGas), usedMultiGas.SingleGas())
 			}
 
 			if usedMultiGas != tt.expectedMultiGas {
@@ -865,11 +865,11 @@ func TestEndTxNowGasPoolAccounting(t *testing.T) {
 	msg := &Message{
 		From:      params.SystemAddress,
 		To:        &to,
-		Value:     common.Big0,
+		Value:     common.U2560,
 		GasLimit:  1_000_000,
-		GasPrice:  common.Big0,
-		GasFeeCap: common.Big0,
-		GasTipCap: common.Big0,
+		GasPrice:  common.U2560,
+		GasFeeCap: common.U2560,
+		GasTipCap: common.U2560,
 	}
 	gp := NewGasPool(30_000_000)
 
