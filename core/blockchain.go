@@ -175,10 +175,11 @@ type BlockChainConfig struct {
 	TrieNoAsyncFlush     bool          // Whether the asynchronous buffer flushing is disallowed
 	TrieJournalDirectory string        // Directory path to the journal used for persisting trie data across node restarts
 
-	Preimages     bool   // Whether to store preimage of trie key to the disk
-	StateScheme   string // Scheme used to store ethereum states and merkle tree nodes on top
-	ArchiveMode   bool   // Whether to enable the archive mode
-	MaxDiffLayers int    // MaxDiffLayers is the maximum diff layers allowed in the layer tree. (only for path scheme)
+	Preimages         bool   // Whether to store preimage of trie key to the disk
+	StateScheme       string // Scheme used to store ethereum states and merkle tree nodes on top
+	ArchiveMode       bool   // Whether to enable the archive mode
+	BinTrieGroupDepth int    // Number of levels per serialized group in binary trie (1-8)
+	MaxDiffLayers     int    // MaxDiffLayers is the maximum diff layers allowed in the layer tree. (only for path scheme)
 
 	// Number of blocks from the chain head for which state histories are retained.
 	// If set to 0, all state histories across the entire chain will be retained;
@@ -299,8 +300,9 @@ func (cfg *BlockChainConfig) TriedbConfig() *triedb.Config {
 // triedbConfig derives the configures for trie database.
 func (cfg *BlockChainConfig) triedbConfig(isUBT bool) *triedb.Config {
 	config := &triedb.Config{
-		Preimages: cfg.Preimages,
-		IsUBT:     isUBT,
+		Preimages:         cfg.Preimages,
+		IsUBT:             isUBT,
+		BinTrieGroupDepth: cfg.BinTrieGroupDepth,
 	}
 	if cfg.StateScheme == rawdb.HashScheme {
 		config.HashDB = &hashdb.Config{

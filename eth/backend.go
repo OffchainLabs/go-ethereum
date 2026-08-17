@@ -243,6 +243,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			MaxDiffLayers:           config.MaxDiffLayers,
 			TrienodeHistory:         config.TrienodeHistory,
 			NodeFullValueCheckpoint: config.NodeFullValueCheckpoint,
+			BinTrieGroupDepth:       config.BinTrieGroupDepth,
 			StateScheme:             scheme,
 			HistoryPolicy:           histPolicy,
 			TxIndexer: &core.TxIndexerConfig{

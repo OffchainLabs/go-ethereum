@@ -161,7 +161,7 @@ func (r *TipRecordingStateDatabase) OpenTrie(root common.Hash) (state.Trie, erro
 			panic("state tree transition isn't supported yet")
 		}
 		if ts.Transitioned() {
-			return bintrie.NewBinaryTrie(root, r.recordingTrieDB)
+			return bintrie.NewBinaryTrie(root, r.recordingTrieDB, r.recordingTrieDB.BinTrieGroupDepth())
 		}
 	}
 	return trie.NewStateTrie(trie.StateTrieID(root), r.recordingTrieDB)
