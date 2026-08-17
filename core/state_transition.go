@@ -934,7 +934,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 	// Compute refund counter, capped to a refund quotient.
 	refund := st.calcRefund()
-	st.gasRemaining.Refund(st.calcRefund())
+	st.gasRemaining.Refund(refund)
 	// Arbitrum: set the multigas refunds
 	usedMultiGas = usedMultiGas.WithRefund(refund.RegularGas)
 	if rules.IsPrague && st.evm.ProcessingHook.IsCalldataPricingIncreaseEnabled() {
