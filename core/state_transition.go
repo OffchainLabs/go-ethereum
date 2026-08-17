@@ -645,7 +645,7 @@ func (st *stateTransition) buyGas() error {
 
 	// Arbitrum: record fee payment
 	if tracer := st.evm.Config.Tracer; tracer != nil && tracer.CaptureArbitrumTransfer != nil {
-		tracer.CaptureArbitrumTransfer(&st.msg.From, nil, mgval, true, tracing.BalanceDecreaseGasBuy)
+		tracer.CaptureArbitrumTransfer(&st.msg.From, nil, mgval.ToBig(), true, tracing.BalanceDecreaseGasBuy)
 	}
 
 	return nil
