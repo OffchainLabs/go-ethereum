@@ -65,7 +65,7 @@ func getChainWithBALs(nBlocks int, balSize int) (*core.BlockChain, []common.Hash
 		TrieTimeLimit: 5 * time.Minute,
 		NoPrefetch:    true,
 	}
-	bc, err := core.NewBlockChain(db, gspec, engine, options)
+	bc, err := core.NewBlockChain(db, nil, gspec, engine, options)
 	if err != nil {
 		panic(err)
 	}
