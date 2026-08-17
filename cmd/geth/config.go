@@ -270,7 +270,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	filterSystem := utils.RegisterFilterAPI(stack, backend, &cfg.Eth)
 
 	// Configure GraphQL if requested.
-	if ctx.IsSet(utils.GraphQLEnabledFlag.Name) {
+	if ctx.Bool(utils.GraphQLEnabledFlag.Name) {
 		utils.RegisterGraphQLService(stack, backend, filterSystem, &cfg.Node)
 	}
 	// Add the Ethereum Stats daemon if requested.
@@ -291,7 +291,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	}
 	utils.RegisterSyncOverrideService(stack, eth, syncConfig)
 
-	if ctx.IsSet(utils.DeveloperFlag.Name) {
+	if ctx.Bool(utils.DeveloperFlag.Name) {
 		// Start dev mode.
 		simBeacon, err := catalyst.NewSimulatedBeacon(ctx.Uint64(utils.DeveloperPeriodFlag.Name), cfg.Eth.Miner.PendingFeeRecipient, eth)
 		if err != nil {
