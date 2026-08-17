@@ -183,7 +183,6 @@ func (r *TipRecordingStateDatabase) Reader(root common.Hash) (state.Reader, erro
 	var stateReader state.StateReader
 	if r.recordingTrieDB.IsUBT() {
 		stateReader, err = state.NewUBTTrieReader(root, r.recordingTrieDB)
-
 	} else {
 		stateReader, err = state.NewMPTTrieReader(root, r.recordingTrieDB)
 	}
