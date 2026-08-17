@@ -559,9 +559,9 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 	// - intermediate state recreation and trie node referencing doesn't apply to pathdb
 	// - HistoricState is supported only by pathdb
 	if bc.TrieDB().Scheme() == rawdb.PathScheme {
-		statedb, err := bc.StateAt(header.Root)
+		statedb, err := bc.StateAt(header)
 		if err != nil {
-			statedb, err = bc.HistoricState(header.Root)
+			statedb, err = bc.HistoricState(header)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -586,7 +586,7 @@ func StateAndHeaderFromHeader(ctx context.Context, chainDb ethdb.Database, bc *c
 			return statedb, NoopStateRelease, nil
 		}
 	}
-	liveState, liveStateRelease, err := stateFor(state.NewDatabase(bc.TrieDB(), bc.CodeDB()).WithSnapshot(bc.Snapshots()))(header)
+	liveState, liveStateRelease, err := stateFor(state.NewMPTDatabase(bc.TrieDB(), bc.CodeDB()).WithSnapshot(bc.Snapshots()))(header)
 	if err == nil {
 		liveStatesReferencedCounter.Inc(1)
 		liveState.SetArbFinalizer(func(*state.ArbitrumExtraData) {
@@ -656,20 +656,20 @@ func (a *APIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOr
 	return StateAndHeaderFromHeader(ctx, a.ChainDb(), a.b.arb.BlockChain(), a.b.config.MaxRecreateStateDepth, header, err, a.archiveClientsManager)
 }
 
-func (a *APIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
+func (a *APIBackend) StateAtBlock(ctx context.Context, block *types.Block, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
 	if !a.BlockChain().Config().IsArbitrumNitro(block.Number()) {
 		return nil, nil, types.ErrUseFallback
 	}
 	// DEV: This assumes that `StateAtBlock` only accesses the blockchain and chainDb fields
-	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(ctx, block, reexec, base, nil, checkLive, preferDisk)
+	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtBlock(ctx, block, 0, base, nil, checkLive, preferDisk)
 }
 
-func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*types.Transaction, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
+func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int) (*types.Transaction, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
 	if !a.BlockChain().Config().IsArbitrumNitro(block.Number()) {
 		return nil, vm.BlockContext{}, nil, nil, types.ErrUseFallback
 	}
 	// DEV: This assumes that `StateAtTransaction` only accesses the blockchain and chainDb fields
-	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtTransaction(ctx, block, txIndex, reexec)
+	return eth.NewArbEthereum(a.b.arb.BlockChain(), a.ChainDb()).StateAtTransaction(ctx, block, txIndex, 0)
 }
 
 func (a *APIBackend) HistoryPruningCutoff() uint64 {
