@@ -61,6 +61,16 @@ func initMatcher(st *testMatcher) {
 	st.skipLoad(`InitCollisionParis`)
 	st.skipLoad(`dynamicAccountOverwriteEmpty_Paris`)
 	st.skipLoad(`create2collisionStorageParis`)
+
+	// EIP-7610 rejection of creation over accounts with non-empty storage only
+	// applies to a hardcoded mainnet address list (see core/vm/eip7610.go),
+	// so these legacy collision tests' expected post states don't match.
+	// They are the LegacyTests counterparts of the skips above; upstream
+	// go-ethereum misses them because its CI checkout is not recursive and
+	// leaves the nested LegacyTests submodule empty.
+	st.skipLoad(`stSStoreTest/InitCollision\.json`)
+	st.skipLoad(`stCreate2/create2collisionStorage\.json`)
+	st.skipLoad(`stExtCodeHash/dynamicAccountOverwriteEmpty\.json`)
 }
 
 func TestState(t *testing.T) {
