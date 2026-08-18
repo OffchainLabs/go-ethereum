@@ -286,6 +286,15 @@ func (t *prestateTracer) processDiffState() {
 		if t.pre[addr].CodeHash != nil {
 			prevCodeHash = *t.pre[addr].CodeHash
 		}
+
+		// Arbitrum
+		// GetCodeHash returns the zero hash for non-existent accounts; normalize
+		// it to EmptyCodeHash so accounts that never exist (e.g. ArbOS system
+		// addresses looked up on every tx) aren't reported as modified.
+		if newCodeHash == (common.Hash{}) {
+			newCodeHash = types.EmptyCodeHash
+		}
+
 		if newCodeHash != prevCodeHash {
 			modified = true
 			postAccount.CodeHash = &newCodeHash
