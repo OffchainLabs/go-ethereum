@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -88,7 +89,6 @@ type StateDB interface {
 	GetStateAndCommittedState(common.Address, common.Hash) (common.Hash, common.Hash)
 	GetState(common.Address, common.Hash) common.Hash
 	SetState(common.Address, common.Hash, common.Hash) common.Hash
-	GetStorageRoot(addr common.Address) common.Hash
 
 	GetTransientState(addr common.Address, key common.Hash) common.Hash
 	SetTransientState(addr common.Address, key, value common.Hash)
@@ -100,6 +100,9 @@ type StateDB interface {
 	// Exist reports whether the given account exists in state.
 	// Notably this also returns true for self-destructed accounts within the current transaction.
 	Exist(common.Address) bool
+
+	// Touch accesses the state without returning anything.
+	Touch(common.Address)
 
 	// IsNewContract reports whether the contract at the given address was deployed
 	// during the current transaction.
@@ -126,7 +129,7 @@ type StateDB interface {
 	Snapshot() int
 
 	AddLog(*types.Log)
-	EmitLogsForBurnAccounts()
+	LogsForBurnAccounts() []*types.Log
 	AddPreimage(common.Hash, []byte)
 
 	GetCurrentTxLogs() []*types.Log
@@ -136,7 +139,7 @@ type StateDB interface {
 	AccessEvents() *state.AccessEvents
 
 	// Finalise must be invoked at the end of a transaction
-	Finalise(bool)
+	Finalise(bool) *bal.StateAccessList
 
 	IntermediateRoot(bool) common.Hash
 

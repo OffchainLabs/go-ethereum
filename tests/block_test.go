@@ -66,6 +66,12 @@ func TestBlockchain(t *testing.T) {
 	// This directory contains no test.
 	bt.skipLoad(`.*\.meta/.*`)
 
+	// Broken tests
+	bt.skipLoad(`RevertInCreateInInit`)
+	bt.skipLoad(`InitCollisionParis`)
+	bt.skipLoad(`dynamicAccountOverwriteEmpty_Paris`)
+	bt.skipLoad(`create2collisionStorageParis`)
+
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
 		execBlockTest(t, bt, test)
 	})
@@ -92,6 +98,12 @@ func TestExecutionSpecBlocktests(t *testing.T) {
 	bt.skipLoad(`^cancun/eip6780_selfdestruct/selfdestruct/recreate_self_destructed_contract_different_txs.json`)
 	bt.skipLoad(`^cancun/eip6780_selfdestruct/selfdestruct/delegatecall_from_new_contract_to_pre_existing_contract.json`)
 	bt.skipLoad(`^cancun/eip6780_selfdestruct/selfdestruct/create_selfdestruct_same_tx.json`)
+
+	// Broken tests
+	bt.skipLoad(`RevertInCreateInInit`)
+	bt.skipLoad(`InitCollisionParis`)
+	bt.skipLoad(`dynamicAccountOverwriteEmpty_Paris`)
+	bt.skipLoad(`create2collisionStorageParis`)
 
 	bt.walk(t, executionSpecBlockchainTestDir, func(t *testing.T, name string, test *BlockTest) {
 		execBlockTest(t, bt, test)

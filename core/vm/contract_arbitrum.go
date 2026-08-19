@@ -17,11 +17,10 @@
 package vm
 
 func (c *Contract) BurnGas(amount uint64) error {
-	if c.Gas < amount {
-		c.Gas = 0
+	if _, ok := c.Gas.Charge(GasCosts{RegularGas: amount}); !ok {
+		c.Gas.Exhaust()
 		return ErrOutOfGas
 	}
-	c.Gas -= amount
 	return nil
 }
 

@@ -155,20 +155,20 @@ func (r *TipRecordingStateDatabase) TrieDB() *triedb.Database {
 }
 
 func (r *TipRecordingStateDatabase) OpenTrie(root common.Hash) (state.Trie, error) {
-	if r.recordingTrieDB.IsVerkle() {
+	if r.recordingTrieDB.IsUBT() {
 		ts := overlay.LoadTransitionState(r.recordingTrieDB.Disk(), root, true)
 		if ts.InTransition() {
 			panic("state tree transition isn't supported yet")
 		}
 		if ts.Transitioned() {
-			return bintrie.NewBinaryTrie(root, r.recordingTrieDB)
+			return bintrie.NewBinaryTrie(root, r.recordingTrieDB, r.recordingTrieDB.BinTrieGroupDepth())
 		}
 	}
 	return trie.NewStateTrie(trie.StateTrieID(root), r.recordingTrieDB)
 }
 
 func (r *TipRecordingStateDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, parent state.Trie) (state.Trie, error) {
-	if r.recordingTrieDB.IsVerkle() {
+	if r.recordingTrieDB.IsUBT() {
 		return parent, nil
 	}
 	return trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), r.recordingTrieDB)
@@ -180,7 +180,12 @@ func (r *TipRecordingStateDatabase) Reader(root common.Hash) (state.Reader, erro
 		return nil, err
 	}
 
-	stateReader, err := state.NewTrieReader(root, r.recordingTrieDB)
+	var stateReader state.StateReader
+	if r.recordingTrieDB.IsUBT() {
+		stateReader, err = state.NewUBTTrieReader(root, r.recordingTrieDB)
+	} else {
+		stateReader, err = state.NewMPTTrieReader(root, r.recordingTrieDB)
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -45,9 +45,9 @@ func testGasSStoreFuncFuncWithCases(t *testing.T, config *params.ChainConfig, ga
 
 			caller := common.Address{}
 			contractAddr := common.Address{1}
-			contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+			contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
 
-			stack := newstack()
+			stack := newStackForTesting()
 			mem := NewMemory()
 
 			if tc.slotInAccessList {
@@ -417,9 +417,9 @@ func TestGasSStore4762(t *testing.T) {
 	caller := common.Address{}
 	contractAddr := common.Address{1}
 	contractGas := uint64(100000)
-	contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
 
-	stack := newstack()
+	stack := newStackForTesting()
 	mem := NewMemory()
 
 	// Setup access list and stack
@@ -486,7 +486,7 @@ func testGasSLoad(t *testing.T, gasFunc gasFunc, slotKeyProviders ...func(contra
 	caller := common.Address{}
 	contractAddr := common.Address{1}
 	contractGas := uint64(100000)
-	contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
 
 	mem := NewMemory()
 
@@ -497,7 +497,7 @@ func testGasSLoad(t *testing.T, gasFunc gasFunc, slotKeyProviders ...func(contra
 
 	for _, slotKeyProvider := range slotKeyProviders {
 		slotKey, expectedGas := slotKeyProvider(contract, evm.StateDB)
-		stack := newstack()
+		stack := newStackForTesting()
 		stack.push(new(uint256.Int).SetBytes(slotKey.Bytes()))
 
 		gas, err := gasFunc(evm, contract, stack, mem, 0)
@@ -535,12 +535,12 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			stateDb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-			stack := newstack()
+			stack := newStackForTesting()
 
 			// Configure chain rules
 			if tc.isEIP4762 {
 				verkleTime := uint64(0)
-				config.VerkleTime = &verkleTime
+				config.UBTTime = &verkleTime
 			}
 
 			blockCtx := BlockContext{
@@ -574,7 +574,7 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 			}
 
 			// Setup contract
-			contract := NewContract(caller, caller, new(uint256.Int), initialContractGas, nil)
+			contract := NewContract(caller, caller, new(uint256.Int), NewGasBudget(initialContractGas), nil)
 			contract.IsSystemCall = tc.isSystemCall
 
 			// Setup stack: [value, address, gas] (bottom to top)
@@ -630,7 +630,7 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 
 			// EIP4762 storage access gas for value transfers
 			if tc.isEIP4762 && tc.transfersValue && !tc.isSystemCall {
-				valueTransferGas := evm.AccessEvents.ValueTransferGas(contract.Address(), caller, contract.Gas)
+				valueTransferGas := evm.AccessEvents.ValueTransferGas(contract.Address(), caller, contract.Gas.RegularGas)
 				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessWrite, valueTransferGas)
 			}
 
@@ -651,8 +651,8 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 			}
 
 			usedMultiGasDiff := contract.GetTotalUsedMultiGas()
-			if initialContractGas-contract.Gas != usedMultiGasDiff.SingleGas() {
-				t.Errorf("Expected used gas %d, got %d", initialContractGas-contract.Gas, usedMultiGasDiff.SingleGas())
+			if initialContractGas-contract.Gas.RegularGas != usedMultiGasDiff.SingleGas() {
+				t.Errorf("Expected used gas %d, got %d", initialContractGas-contract.Gas.RegularGas, usedMultiGasDiff.SingleGas())
 			}
 		})
 	}
@@ -843,7 +843,7 @@ func TestArbitrumAmsterdamGasFailureOrdering(t *testing.T) {
 			name:    "gas-starved CALL",
 			gasFunc: gasCall,
 			setup: func(_ *EVM, stateDB *stateReadRecordingStateDB, contract *Contract, stack *Stack) {
-				contract.Gas = params.CallValueTransferGas - 1
+				contract.Gas = NewGasBudget(params.CallValueTransferGas - 1)
 				stateDB.CreateAccount(targetAddress)
 				stateDB.AddBalance(targetAddress, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
 				stack.push(uint256.NewInt(1))
@@ -860,7 +860,7 @@ func TestArbitrumAmsterdamGasFailureOrdering(t *testing.T) {
 			name:    "gas-starved EIP-2929 SELFDESTRUCT",
 			gasFunc: gasSelfdestructEIP2929,
 			setup: func(_ *EVM, _ *stateReadRecordingStateDB, contract *Contract, stack *Stack) {
-				contract.Gas = params.ColdAccountAccessCostEIP2929 - 1
+				contract.Gas = NewGasBudget(params.ColdAccountAccessCostEIP2929 - 1)
 				stack.push(new(uint256.Int).SetBytes(targetAddress.Bytes()))
 			},
 			pre: expectation{
@@ -879,7 +879,7 @@ func TestArbitrumAmsterdamGasFailureOrdering(t *testing.T) {
 				return multigas.ComputationGas(1), nil
 			}),
 			setup: func(_ *EVM, stateDB *stateReadRecordingStateDB, contract *Contract, stack *Stack) {
-				contract.Gas = 0
+				contract.Gas = GasBudget{}
 				stateDB.AddAddressToAccessList(targetAddress)
 				stack.push(new(uint256.Int))
 				stack.push(new(uint256.Int).SetBytes(targetAddress.Bytes()))
@@ -924,8 +924,8 @@ func TestArbitrumAmsterdamGasFailureOrdering(t *testing.T) {
 				t.Run(fork.name, func(t *testing.T) {
 					evm, stateDB := newArbitrumAmsterdamTestEVM(t, fork.arbosVersion)
 					stateDB.CreateAccount(contractAddress)
-					contract := NewContract(caller, contractAddress, new(uint256.Int), 100_000, nil)
-					stack := newstack()
+					contract := NewContract(caller, contractAddress, new(uint256.Int), NewGasBudget(100_000), nil)
+					stack := newStackForTesting()
 					test.setup(evm, stateDB, contract, stack)
 					stateDB.reads = nil
 
@@ -1048,8 +1048,8 @@ func TestArbitrumAmsterdamGasSuccess(t *testing.T) {
 				t.Run(fork.name, func(t *testing.T) {
 					evm, stateDB := newArbitrumAmsterdamTestEVM(t, fork.arbosVersion)
 					stateDB.CreateAccount(contractAddress)
-					contract := NewContract(caller, contractAddress, new(uint256.Int), 100_000, nil)
-					stack := newstack()
+					contract := NewContract(caller, contractAddress, new(uint256.Int), NewGasBudget(100_000), nil)
+					stack := newStackForTesting()
 					test.setup(stateDB, contract, stack)
 					stateDB.reads = nil
 
@@ -1221,14 +1221,14 @@ func TestArbitrumAmsterdamCallFailureOrdering(t *testing.T) {
 					stateDB.reads = nil
 
 					var (
-						leftOverGas  uint64
+						leftOverGas  GasBudget
 						usedMultiGas multigas.MultiGas
 						err          error
 					)
 					if test.static {
-						_, leftOverGas, usedMultiGas, err = evm.StaticCall(caller, contractAddress, nil, test.gasLimit)
+						_, leftOverGas, usedMultiGas, err = evm.StaticCall(caller, contractAddress, nil, NewGasBudget(test.gasLimit))
 					} else {
-						_, leftOverGas, usedMultiGas, err = evm.Call(caller, contractAddress, nil, test.gasLimit, new(uint256.Int))
+						_, leftOverGas, usedMultiGas, err = evm.Call(caller, contractAddress, nil, NewGasBudget(test.gasLimit), new(uint256.Int))
 					}
 					want := test.pre
 					if fork.post {
@@ -1240,8 +1240,8 @@ func TestArbitrumAmsterdamCallFailureOrdering(t *testing.T) {
 					if want.errContains != "" && !strings.Contains(err.Error(), want.errContains) {
 						t.Fatalf("unexpected error text: got %q, want it to contain %q", err, want.errContains)
 					}
-					if leftOverGas != 0 {
-						t.Fatalf("unexpected leftover gas: got %d, want 0", leftOverGas)
+					if leftOverGas.RegularGas != 0 {
+						t.Fatalf("unexpected leftover gas: got %d, want 0", leftOverGas.RegularGas)
 					}
 					if usedMultiGas != test.wantMultiGas {
 						t.Fatalf("unexpected multigas: got %v, want %v", usedMultiGas, test.wantMultiGas)
@@ -1344,7 +1344,7 @@ func TestArbitrumAmsterdamCallSuccess(t *testing.T) {
 					stateDB.AddBalance(contractAddress, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
 					test.prepare(stateDB)
 
-					_, leftOverGas, gotGas, err := evm.Call(caller, contractAddress, nil, gasLimit, new(uint256.Int))
+					_, leftOverGas, gotGas, err := evm.Call(caller, contractAddress, nil, NewGasBudget(gasLimit), new(uint256.Int))
 					if err != nil {
 						t.Fatalf("unexpected error: %v", err)
 					}
@@ -1352,7 +1352,7 @@ func TestArbitrumAmsterdamCallSuccess(t *testing.T) {
 					if gotGas != wantGas {
 						t.Fatalf("unexpected multigas: got %v, want %v", gotGas, wantGas)
 					}
-					if wantLeft := gasLimit - wantGas.SingleGas(); leftOverGas != wantLeft {
+					if wantLeft := gasLimit - wantGas.SingleGas(); leftOverGas.RegularGas != wantLeft {
 						t.Fatalf("unexpected leftover gas: got %d, want %d", leftOverGas, wantLeft)
 					}
 					if test.verify != nil {
@@ -1644,9 +1644,9 @@ func testGasDelegateOrStaticCall(t *testing.T, gasImplFunc gasFunc) {
 	caller := common.Address{}
 	contractAddr := common.Address{1}
 	contractGas := uint64(100000)
-	contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
 
-	stack := newstack()
+	stack := newStackForTesting()
 	mem := NewMemory()
 	memForExpected := NewMemory()
 
@@ -1658,7 +1658,7 @@ func testGasDelegateOrStaticCall(t *testing.T, gasImplFunc gasFunc) {
 		t.Fatalf("Failed memoryGasCost: %v", err)
 	}
 
-	callGas, err := callGas(evm.chainRules.IsEIP150, contractGas, expectedMultiGas.SingleGas(), stack.Back(0))
+	callGas, err := callGas(evm.chainRules.IsEIP150, contractGas, expectedMultiGas.SingleGas(), stack.back(0))
 	if err != nil {
 		t.Fatalf("Failed callGas: %v", err)
 	}
@@ -1707,9 +1707,9 @@ func testGasCreateFunc(t *testing.T, gasImplFunc gasFunc, includeHashCost bool, 
 	caller := common.Address{}
 	contractAddr := common.Address{1}
 	contractGas := uint64(100000)
-	contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
 
-	stack := newstack()
+	stack := newStackForTesting()
 	mem := NewMemory()
 	memForExpected := NewMemory()
 
@@ -1749,7 +1749,7 @@ func testGasCreateFunc(t *testing.T, gasImplFunc gasFunc, includeHashCost bool, 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Setup stack
-			stack = newstack()
+			stack = newStackForTesting()
 			stack.push(new(uint256.Int).SetUint64(tc.initSize)) // size (stack position 2)
 			stack.push(new(uint256.Int).SetUint64(0))           // offset (stack position 1)
 			stack.push(new(uint256.Int).SetUint64(0))           // value (stack position 0)
@@ -1844,9 +1844,9 @@ func testGasSelfdestructFuncWithCases(t *testing.T, config *params.ChainConfig, 
 			caller := common.Address{}
 			contractAddr := common.Address{1}
 			beneficiaryAddr := common.Address{2}
-			contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+			contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
 
-			stack := newstack()
+			stack := newStackForTesting()
 			mem := NewMemory()
 
 			// Set chain rules based on test case
@@ -1973,9 +1973,9 @@ func TestGasSelfdestructEIP4762(t *testing.T) {
 	contractAddr := common.Address{1}
 	beneficiaryAddr := common.Address{2}
 	contractGas := uint64(100000)
-	contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
 
-	stack := newstack()
+	stack := newStackForTesting()
 	mem := NewMemory()
 
 	// Setup access list
@@ -1990,7 +1990,7 @@ func TestGasSelfdestructEIP4762(t *testing.T) {
 
 	stack.push(new(uint256.Int).SetBytes(beneficiaryAddr.Bytes()))
 
-	expectedStorageAccessGas := accessListForExpected.BasicDataGas(contractAddr, false, contract.Gas, false) + accessListForExpected.BasicDataGas(beneficiaryAddr, false, contract.Gas, false)
+	expectedStorageAccessGas := accessListForExpected.BasicDataGas(contractAddr, false, contract.Gas.RegularGas, false) + accessListForExpected.BasicDataGas(beneficiaryAddr, false, contract.Gas.RegularGas, false)
 	expectedMultiGas := multigas.StorageAccessReadGas(expectedStorageAccessGas)
 
 	multiGas, err := gasSelfdestructEIP4762(evm, contract, stack, mem, 0)
@@ -2012,9 +2012,9 @@ func TestMakeGasLog(t *testing.T) {
 		caller := common.Address{}
 		contractAddr := common.Address{1}
 		contractGas := uint64(100000)
-		contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+		contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
 
-		stack := newstack()
+		stack := newStackForTesting()
 		mem := NewMemory()
 		memForExpected := NewMemory()
 
@@ -2072,9 +2072,9 @@ func TestMemoryCopierGas(t *testing.T) {
 		caller := common.Address{}
 		contractAddr := common.Address{1}
 		contractGas := uint64(100000)
-		contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+		contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
 
-		stack := newstack()
+		stack := newStackForTesting()
 		mem := NewMemory()
 		memForExpected := NewMemory()
 
@@ -2155,13 +2155,13 @@ func TestGasCodeCopyEIP4762(t *testing.T) {
 			evm := NewEVM(BlockContext{BlockNumber: big.NewInt(0)}, statedb, params.TestChainConfig, Config{})
 			evm.AccessEvents = state.NewAccessEvents()
 
-			contract := NewContract(common.Address{}, common.HexToAddress("0x1234"), new(uint256.Int), 100000, nil)
+			contract := NewContract(common.Address{}, common.HexToAddress("0x1234"), new(uint256.Int), NewGasBudget(100000), nil)
 			contract.Code = make([]byte, c.codeLen)
 			contract.IsDeployment = c.isDeployment
 			contract.IsSystemCall = c.isSystemCall
 
 			// Setup stack: [memOffset, codeOffset, length] (bottom to top)
-			stack := newstack()
+			stack := newStackForTesting()
 			stack.push(uint256.NewInt(c.length))
 			stack.push(uint256.NewInt(c.codeOffset))
 			stack.push(uint256.NewInt(0))
@@ -2181,7 +2181,7 @@ func TestGasCodeCopyEIP4762(t *testing.T) {
 				_, copyOff, nonPadded := getDataAndAdjustedBounds(contract.Code, c.codeOffset, c.length)
 				single := expectedMultiGas.SingleGas()
 				aeExp := state.NewAccessEvents()
-				_, wanted := aeExp.CodeChunksRangeGas(contract.Address(), copyOff, nonPadded, uint64(len(contract.Code)), false, contract.Gas-single)
+				_, wanted := aeExp.CodeChunksRangeGas(contract.Address(), copyOff, nonPadded, uint64(len(contract.Code)), false, contract.Gas.RegularGas-single)
 				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessRead, wanted)
 			}
 
@@ -2237,10 +2237,10 @@ func TestGasExtCodeCopyEIP4762(t *testing.T) {
 			evm := NewEVM(BlockContext{BlockNumber: big.NewInt(0)}, stateDb, params.TestChainConfig, Config{})
 			evm.AccessEvents = state.NewAccessEvents()
 
-			contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), 100000, nil)
+			contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), NewGasBudget(100000), nil)
 
 			// Setup stack: [address, memOffset, codeOffset, size] (bottom to top)
-			stack := newstack()
+			stack := newStackForTesting()
 			stack.push(uint256.NewInt(c.length))
 			stack.push(uint256.NewInt(32))
 			stack.push(uint256.NewInt(0))
@@ -2262,7 +2262,7 @@ func TestGasExtCodeCopyEIP4762(t *testing.T) {
 			} else {
 				singleGas := expectedMultiGas.SingleGas()
 				accessEventsForExpected := state.NewAccessEvents()
-				wgas := accessEventsForExpected.BasicDataGas(c.addr, false, contract.Gas-singleGas, true)
+				wgas := accessEventsForExpected.BasicDataGas(c.addr, false, contract.Gas.RegularGas-singleGas, true)
 				expectedMultiGas = expectedMultiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessRead, wgas)
 			}
 
@@ -2310,9 +2310,9 @@ func TestGasExtCodeCopyEIP2929(t *testing.T) {
 			caller := common.Address{}
 			contractAddr := common.Address{1}
 			contractGas := uint64(100000)
-			contract := NewContract(caller, contractAddr, new(uint256.Int), contractGas, nil)
+			contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
 
-			stack := newstack()
+			stack := newStackForTesting()
 			stack.push(new(uint256.Int).SetUint64(0))
 			stack.push(new(uint256.Int).SetUint64(0))
 			stack.push(new(uint256.Int).SetUint64(0))
@@ -2363,7 +2363,7 @@ func TestGasEip2929AccountCheck(t *testing.T) {
 			stateDb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 			evm := NewEVM(BlockContext{BlockNumber: big.NewInt(0)}, stateDb, params.TestChainConfig, Config{})
 
-			contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), 100000, nil)
+			contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), NewGasBudget(100000), nil)
 
 			addr := common.HexToAddress(tt.addrHex)
 			if tt.prewarm {
@@ -2371,7 +2371,7 @@ func TestGasEip2929AccountCheck(t *testing.T) {
 			}
 
 			// Set up stack: top = address
-			stack := newstack()
+			stack := newStackForTesting()
 			stack.push(new(uint256.Int).SetBytes(addr.Bytes()))
 
 			mem := NewMemory()
@@ -2442,10 +2442,10 @@ func TestGasBalanceExtCodeSizeExtCodeHash4762(t *testing.T) {
 			evm := NewEVM(BlockContext{BlockNumber: big.NewInt(0)}, stateDb, params.TestChainConfig, Config{})
 			evm.AccessEvents = state.NewAccessEvents()
 
-			contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), 100000, nil)
+			contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), NewGasBudget(100000), nil)
 
 			// Set up stack: top = address
-			stack := newstack()
+			stack := newStackForTesting()
 			stack.push(new(uint256.Int).SetBytes(tt.addr.Bytes()))
 
 			mem := NewMemory()
@@ -2455,7 +2455,7 @@ func TestGasBalanceExtCodeSizeExtCodeHash4762(t *testing.T) {
 			if tt.expectZero {
 				expectedMultiGas = multigas.ZeroGas()
 			} else {
-				basicDataGas := evm.AccessEvents.BasicDataGas(tt.addr, false, contract.Gas, true)
+				basicDataGas := evm.AccessEvents.BasicDataGas(tt.addr, false, contract.Gas.RegularGas, true)
 				expectedMultiGas = multigas.StorageAccessReadGas(basicDataGas)
 			}
 

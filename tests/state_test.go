@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
-	"github.com/holiman/uint256"
 )
 
 func initMatcher(st *testMatcher) {
@@ -57,6 +56,21 @@ func initMatcher(st *testMatcher) {
 	// Broken tests:
 	// EOF is not part of cancun
 	st.skipLoad(`^stEOF/`)
+
+	st.skipLoad(`RevertInCreateInInit`)
+	st.skipLoad(`InitCollisionParis`)
+	st.skipLoad(`dynamicAccountOverwriteEmpty_Paris`)
+	st.skipLoad(`create2collisionStorageParis`)
+
+	// EIP-7610 rejection of creation over accounts with non-empty storage only
+	// applies to a hardcoded mainnet address list (see core/vm/eip7610.go),
+	// so these legacy collision tests' expected post states don't match.
+	// They are the LegacyTests counterparts of the skips above; upstream
+	// go-ethereum misses them because its CI checkout is not recursive and
+	// leaves the nested LegacyTests submodule empty.
+	st.skipLoad(`stSStoreTest/InitCollision\.json`)
+	st.skipLoad(`stCreate2/create2collisionStorage\.json`)
+	st.skipLoad(`stExtCodeHash/dynamicAccountOverwriteEmpty\.json`)
 }
 
 func TestState(t *testing.T) {
@@ -91,6 +105,12 @@ func TestExecutionSpecState(t *testing.T) {
 		t.Skipf("directory %s does not exist", executionSpecStateTestDir)
 	}
 	st := new(testMatcher)
+
+	// Broken tests
+	st.skipLoad(`RevertInCreateInInit`)
+	st.skipLoad(`InitCollisionParis`)
+	st.skipLoad(`dynamicAccountOverwriteEmpty_Paris`)
+	st.skipLoad(`create2collisionStorageParis`)
 
 	st.walk(t, executionSpecStateTestDir, func(t *testing.T, name string, test *StateTest) {
 		execStateTest(t, st, test)
@@ -301,7 +321,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 			evm.SetTxContext(txContext)
 
 			// Create "contract" for sender to cache code analysis.
-			sender := vm.NewContract(msg.From, msg.From, nil, 0, nil)
+			sender := vm.NewContract(msg.From, msg.From, nil, vm.GasBudget{}, nil)
 
 			var (
 				gasUsed uint64
@@ -315,8 +335,10 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				b.StartTimer()
 				start := time.Now()
 
+				initialGas := vm.NewGasBudget(msg.GasLimit)
+
 				// Execute the message.
-				_, leftOverGas, _, err := evm.Call(sender.Address(), *msg.To, msg.Data, msg.GasLimit, uint256.MustFromBig(msg.Value))
+				_, leftOverGas, _, err := evm.Call(sender.Address(), *msg.To, msg.Data, initialGas.Copy(), msg.Value)
 				if err != nil {
 					b.Error(err)
 					return
@@ -325,7 +347,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				b.StopTimer()
 				elapsed += uint64(time.Since(start))
 				refund += state.StateDB.GetRefund()
-				gasUsed += msg.GasLimit - leftOverGas
+				gasUsed += leftOverGas.Used(initialGas)
 
 				state.StateDB.RevertToSnapshot(snapshot)
 			}

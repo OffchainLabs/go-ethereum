@@ -36,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -48,7 +47,6 @@ type Node struct {
 	// Arbitrum: we support stopping the RPC early
 	rpcRunning int32
 
-	eventmux      *event.TypeMux
 	config        *Config
 	accman        *accounts.Manager
 	log           log.Logger
@@ -114,7 +112,6 @@ func New(conf *Config) (*Node, error) {
 	node := &Node{
 		config:        conf,
 		inprocHandler: server,
-		eventmux:      new(event.TypeMux),
 		log:           conf.Logger,
 		stop:          make(chan struct{}),
 		server:        &p2p.Server{Config: conf.P2P},
@@ -734,12 +731,6 @@ func (n *Node) JWTPath() string {
 		return n.ResolvePath(datadirJWTKey)
 	}
 	return n.config.JWTSecret
-}
-
-// EventMux retrieves the event multiplexer used by all the network services in
-// the current protocol stack.
-func (n *Node) EventMux() *event.TypeMux {
-	return n.eventmux
 }
 
 // OpenDatabaseWithOptions opens an existing database with the given name (or creates one if no

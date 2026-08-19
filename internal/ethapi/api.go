@@ -764,6 +764,10 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 		if err := blockOverrides.Apply(&blockCtx); err != nil {
 			return nil, err
 		}
+		// Override the header so callers that compute gas price from 1559 fee
+		// fields see the overridden basefee. Otherwise GASPRICE/effectiveTip
+		// would be derived from the pre-override basefee.
+		header = blockOverrides.MakeHeader(header)
 	}
 	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time, blockCtx.ArbOSVersion)
 	precompiles := vm.ActivePrecompiledContracts(rules)
@@ -845,6 +849,7 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 		blockContext.BlobBaseFee = new(big.Int)
 	}
 	evm := b.GetEVM(ctx, state, header, vmConfig, blockContext)
+	defer evm.Release()
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
@@ -1006,6 +1011,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		if err := blockOverrides.Apply(&blockCtx); err != nil {
 			return 0, err
 		}
+		header = blockOverrides.MakeHeader(header)
 	}
 	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time, blockCtx.ArbOSVersion)
 	precompiles := vm.ActivePrecompiledContracts(rules)
@@ -1015,12 +1021,16 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	header = updateHeaderForPendingBlocks(blockNrOrHash, header)
 
 	// Construct the gas estimator option from the user input
+	var blobBaseFee *big.Int
+	if blockOverrides != nil && blockOverrides.BlobBaseFee != nil {
+		blobBaseFee = blockOverrides.BlobBaseFee.ToInt()
+	}
 	opts := &gasestimator.Options{
 		Config:           b.ChainConfig(),
 		Chain:            NewChainContext(ctx, b),
 		Header:           header,
-		BlockOverrides:   blockOverrides,
 		State:            state,
+		BlobBaseFee:      blobBaseFee,
 		Backend:          b,
 		ErrorRatio:       gasestimator.EstimateGasErrorRatio,
 		RunScheduledTxes: retryables.RunScheduledTxes,
@@ -1622,6 +1632,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 			evm.Context.BlobBaseFee = new(big.Int)
 		}
 		res, err := core.ApplyMessage(evm, msg, nil)
+		evm.Release()
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction(types.LegacyTxType).Hash(), err)
 		}
