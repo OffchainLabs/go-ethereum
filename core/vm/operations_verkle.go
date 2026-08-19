@@ -25,18 +25,18 @@ import (
 )
 
 func gasSStore4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
-	gas := evm.AccessEvents.SlotGas(contract.Address(), stack.peek().Bytes32(), true, contract.Gas, true)
+	gas := evm.AccessEvents.SlotGas(contract.Address(), stack.peek().Bytes32(), true, contract.Gas.RegularGas, true)
 	return multigas.StorageAccessWriteGas(gas), nil
 }
 
 func gasSLoad4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
-	gas := evm.AccessEvents.SlotGas(contract.Address(), stack.peek().Bytes32(), false, contract.Gas, true)
+	gas := evm.AccessEvents.SlotGas(contract.Address(), stack.peek().Bytes32(), false, contract.Gas.RegularGas, true)
 	return multigas.StorageAccessReadGas(gas), nil
 }
 
 func gasBalance4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
 	address := stack.peek().Bytes20()
-	gas := evm.AccessEvents.BasicDataGas(address, false, contract.Gas, true)
+	gas := evm.AccessEvents.BasicDataGas(address, false, contract.Gas.RegularGas, true)
 	// Account lookup -> storage access read gas
 	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	return multigas.StorageAccessReadGas(gas), nil
@@ -47,7 +47,7 @@ func gasExtCodeSize4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
 		return multigas.ZeroGas(), nil
 	}
-	gas := evm.AccessEvents.BasicDataGas(address, false, contract.Gas, true)
+	gas := evm.AccessEvents.BasicDataGas(address, false, contract.Gas.RegularGas, true)
 	// Account lookup -> storage access read gas
 	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	return multigas.StorageAccessReadGas(gas), nil
@@ -58,7 +58,7 @@ func gasExtCodeHash4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
 		return multigas.ZeroGas(), nil
 	}
-	gas := evm.AccessEvents.CodeHashGas(address, false, contract.Gas, true)
+	gas := evm.AccessEvents.CodeHashGas(address, false, contract.Gas.RegularGas, true)
 	// Account lookup -> storage access read gas
 	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	return multigas.StorageAccessReadGas(gas), nil
@@ -67,7 +67,7 @@ func gasExtCodeHash4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 func makeCallVariantGasEIP4762(oldCalculator gasFunc, withTransferCosts bool) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
 		var (
-			target           = common.Address(stack.Back(1).Bytes20())
+			target           = common.Address(stack.back(1).Bytes20())
 			witnessGas       multigas.MultiGas
 			_, isPrecompile  = evm.precompile(target)
 			isSystemContract = target == params.HistoryStorageAddress
@@ -75,9 +75,9 @@ func makeCallVariantGasEIP4762(oldCalculator gasFunc, withTransferCosts bool) ga
 
 		// If value is transferred, it is charged before 1/64th
 		// is subtracted from the available gas pool.
-		if withTransferCosts && !stack.Back(2).IsZero() {
-			wantedValueTransferWitnessGas := evm.AccessEvents.ValueTransferGas(contract.Address(), target, contract.Gas)
-			if wantedValueTransferWitnessGas > contract.Gas {
+		if withTransferCosts && !stack.back(2).IsZero() {
+			wantedValueTransferWitnessGas := evm.AccessEvents.ValueTransferGas(contract.Address(), target, contract.Gas.RegularGas)
+			if wantedValueTransferWitnessGas > contract.Gas.RegularGas {
 				return multigas.StorageAccessWriteGas(wantedValueTransferWitnessGas), nil
 			}
 			witnessGas = multigas.StorageAccessWriteGas(wantedValueTransferWitnessGas)
@@ -89,23 +89,23 @@ func makeCallVariantGasEIP4762(oldCalculator gasFunc, withTransferCosts bool) ga
 			// (so before we get to this point)
 			// But the message call is part of the subcall, for which only 63/64th
 			// of the gas should be available.
-			wantedMessageCallWitnessGas := evm.AccessEvents.MessageCallGas(target, contract.Gas-witnessGas.SingleGas())
+			wantedMessageCallWitnessGas := evm.AccessEvents.MessageCallGas(target, contract.Gas.RegularGas-witnessGas.SingleGas())
 			var overflow bool
 			if witnessGas, overflow = witnessGas.SafeIncrement(multigas.ResourceKindStorageAccessRead, wantedMessageCallWitnessGas); overflow {
 				return multigas.ZeroGas(), ErrGasUintOverflow
 			}
-			if witnessGas.SingleGas() > contract.Gas {
+			if witnessGas.SingleGas() > contract.Gas.RegularGas {
 				return witnessGas, nil
 			}
 		}
 
 		// if the operation fails, adds witness gas to the gas before returning the error
-		contract.Gas -= witnessGas.SingleGas()
+		contract.Gas.RegularGas -= witnessGas.SingleGas()
 		contract.UsedMultiGas.SaturatingAddInto(witnessGas)
 		multiGas, err := oldCalculator(evm, contract, stack, mem, memorySize)
 
 		// restore witness gas so that it can be charged at the callsite
-		contract.Gas += witnessGas.SingleGas()
+		contract.Gas.RegularGas += witnessGas.SingleGas()
 		contract.RetainedMultiGas.SaturatingAddInto(witnessGas)
 		// Witness gas considered as storage access read.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
@@ -135,9 +135,9 @@ func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 	contractAddr := contract.Address()
 	multiGas := multigas.ZeroGas()
 
-	gas := evm.AccessEvents.BasicDataGas(contractAddr, false, contract.Gas, false)
+	gas := evm.AccessEvents.BasicDataGas(contractAddr, false, contract.Gas.RegularGas, false)
 	multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessRead, gas)
-	if multiGas.SingleGas() > contract.Gas {
+	if multiGas.SingleGas() > contract.Gas.RegularGas {
 		return multiGas, nil
 	}
 
@@ -150,28 +150,28 @@ func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 	}
 
 	if contractAddr != beneficiaryAddr {
-		gas := evm.AccessEvents.BasicDataGas(beneficiaryAddr, false, contract.Gas-multiGas.SingleGas(), false)
+		gas := evm.AccessEvents.BasicDataGas(beneficiaryAddr, false, contract.Gas.RegularGas-multiGas.SingleGas(), false)
 		multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessRead, gas)
-		if multiGas.SingleGas() > contract.Gas {
+		if multiGas.SingleGas() > contract.Gas.RegularGas {
 			return multiGas, nil
 		}
 	}
 	// Charge write costs if it transfers value
 	if !balanceIsZero {
-		gas := evm.AccessEvents.BasicDataGas(contractAddr, true, contract.Gas-multiGas.SingleGas(), false)
+		gas := evm.AccessEvents.BasicDataGas(contractAddr, true, contract.Gas.RegularGas-multiGas.SingleGas(), false)
 		multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessWrite, gas)
-		if multiGas.SingleGas() > contract.Gas {
+		if multiGas.SingleGas() > contract.Gas.RegularGas {
 			return multiGas, nil
 		}
 
 		if contractAddr != beneficiaryAddr {
 			if evm.StateDB.Exist(beneficiaryAddr) {
-				gas = evm.AccessEvents.BasicDataGas(beneficiaryAddr, true, contract.Gas-multiGas.SingleGas(), false)
+				gas = evm.AccessEvents.BasicDataGas(beneficiaryAddr, true, contract.Gas.RegularGas-multiGas.SingleGas(), false)
 			} else {
-				gas = evm.AccessEvents.AddAccount(beneficiaryAddr, true, contract.Gas-multiGas.SingleGas())
+				gas = evm.AccessEvents.AddAccount(beneficiaryAddr, true, contract.Gas.RegularGas-multiGas.SingleGas())
 			}
 			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessWrite, gas)
-			if multiGas.SingleGas() > contract.Gas {
+			if multiGas.SingleGas() > contract.Gas.RegularGas {
 				return multiGas, nil
 			}
 		}
@@ -188,8 +188,8 @@ func gasCodeCopyEip4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 	}
 	if !contract.IsDeployment && !contract.IsSystemCall {
 		var (
-			codeOffset = stack.Back(1)
-			length     = stack.Back(2)
+			codeOffset = stack.back(1)
+			length     = stack.back(2)
 		)
 		uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
 		if overflow {
@@ -200,7 +200,7 @@ func gasCodeCopyEip4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 		// CODECOPY in EIP-4762: reading code chunks is an account state access.
 		// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 		singleGas := multiGas.SingleGas()
-		_, wanted := evm.AccessEvents.CodeChunksRangeGas(contract.Address(), copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false, contract.Gas-singleGas)
+		_, wanted := evm.AccessEvents.CodeChunksRangeGas(contract.Address(), copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false, contract.Gas.RegularGas-singleGas)
 		multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessRead, wanted)
 	}
 	return multiGas, nil
@@ -224,7 +224,7 @@ func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 		return multiGas, nil
 	}
 	singleGas := multiGas.SingleGas()
-	wgas := evm.AccessEvents.BasicDataGas(addr, false, contract.Gas-singleGas, true)
+	wgas := evm.AccessEvents.BasicDataGas(addr, false, contract.Gas.RegularGas-singleGas, true)
 	// General EXTCODECOPY case: account lookup → state read.
 	// See rationale in: https://github.com/OffchainLabs/nitro/blob/master/docs/decisions/0002-multi-dimensional-gas-metering.md
 	var overflow bool

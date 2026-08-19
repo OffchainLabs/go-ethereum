@@ -21,6 +21,6 @@ func NewArbEthereum(
 	}
 }
 
-func (eth *Ethereum) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*types.Transaction, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
-	return eth.stateAtTransaction(ctx, block, txIndex, reexec)
+func (eth *Ethereum) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int) (*types.Transaction, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
+	return eth.stateAtTransaction(ctx, block, txIndex)
 }

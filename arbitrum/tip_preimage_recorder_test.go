@@ -117,7 +117,7 @@ func assertRecordedCodeHashes(t *testing.T, got []common.Hash, want ...common.Ha
 func TestTipRecordingStateDatabaseOpensBinaryTrie(t *testing.T) {
 	disk := rawdb.NewMemoryDatabase()
 	t.Cleanup(func() { disk.Close() })
-	triedb := triedb.NewDatabase(disk, triedb.VerkleDefaults)
+	triedb := triedb.NewDatabase(disk, triedb.UBTDefaults)
 	t.Cleanup(func() { triedb.Close() })
 	recordingDB := NewTipRecordingStateDatabase(state.NewDatabase(triedb, nil))
 

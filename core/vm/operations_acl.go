@@ -34,12 +34,12 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 			return multigas.ZeroGas(), ErrWriteProtection
 		}
 		// If we fail the minimum gas availability invariant, fail (0)
-		if contract.Gas <= params.SstoreSentryGasEIP2200 {
+		if contract.Gas.RegularGas <= params.SstoreSentryGasEIP2200 {
 			return multigas.ZeroGas(), errors.New("not enough gas for reentrancy sentry")
 		}
 		// Gas sentry honoured, do the actual gas calculation based on the stored value
 		var (
-			y, x              = stack.Back(1), stack.peek()
+			y, x              = stack.back(1), stack.peek()
 			slot              = common.Hash(x.Bytes32())
 			current, original = evm.StateDB.GetStateAndCommittedState(contract.Address(), slot)
 			multiGas          = multigas.ZeroGas()
@@ -186,7 +186,7 @@ func gasEip2929AccountCheck(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 
 func makeCallVariantGasCallEIP2929(oldCalculator gasFunc, addressPosition int) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
-		addr := common.Address(stack.Back(addressPosition).Bytes20())
+		addr := common.Address(stack.back(addressPosition).Bytes20())
 		// Check slot presence in the access list
 		warmAccess := evm.StateDB.AddressInAccessList(addr)
 		// The WarmStorageReadCostEIP2929 (100) is already deducted in the form of a constant cost, so
@@ -213,7 +213,7 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc, addressPosition int) g
 		// add it to the returned gas. By adding it to the return, it will be charged
 		// outside of this function, as part of the dynamic gas, and that will make it
 		// also become correctly reported to tracers.
-		contract.Gas += coldCost
+		contract.Gas.RegularGas += coldCost
 		contract.RetainedMultiGas.SaturatingIncrementInto(multigas.ResourceKindStorageAccessRead, coldCost)
 
 		// Cold slot access considered as storage access read.
@@ -277,7 +277,7 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 			// Terminate the gas measurement if the leftover gas is not sufficient,
 			// it can effectively prevent accessing the states in the following steps
 			// Arbitrum: gate the early termination on Amsterdam fork
-			if !isArbitrumPreAmsterdam && contract.Gas < multiGas.SingleGas() {
+			if !isArbitrumPreAmsterdam && contract.Gas.RegularGas < multiGas.SingleGas() {
 				return multigas.ZeroGas(), ErrOutOfGas
 			}
 		}
@@ -307,7 +307,7 @@ func gasCallEIP7702(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 	// Although it's checked in `gasCall`, EIP-7702 loads the target's code before
 	// to determine if it is resolving a delegation. This could incorrectly record
 	// the target in the block access list (BAL) if the call later fails.
-	transfersValue := !stack.Back(2).IsZero()
+	transfersValue := !stack.back(2).IsZero()
 
 	// Arbitrum: gate the early error return on Amsterdam fork
 	isArbitrumPreAmsterdam := evm.chainRules.IsArbitrum && !evm.chainRules.IsAmsterdam
@@ -323,7 +323,7 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc gasFunc) gasFunc {
 			eip2929Cost            uint64
 			eip7702Cost            uint64
 			multiGas               = multigas.ZeroGas() // total dynamic gas used
-			addr                   = common.Address(stack.Back(1).Bytes20())
+			addr                   = common.Address(stack.back(1).Bytes20())
 			isArbitrumPreAmsterdam = evm.chainRules.IsArbitrum && !evm.chainRules.IsAmsterdam
 		)
 		// Perform EIP-2929 checks (stateless), checking address presence
@@ -363,7 +363,7 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc gasFunc) gasFunc {
 		// Terminate the gas measurement if the leftover gas is not sufficient,
 		// it can effectively prevent accessing the states in the following steps.
 		// It's an essential safeguard before any stateful check.
-		if !isArbitrumPreAmsterdam && contract.Gas < multiIntrinsicCost.SingleGas() {
+		if !isArbitrumPreAmsterdam && contract.Gas.RegularGas < multiIntrinsicCost.SingleGas() {
 			return multigas.ZeroGas(), ErrOutOfGas
 		}
 
@@ -384,7 +384,7 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc gasFunc) gasFunc {
 		}
 		// Calculate the gas budget for the nested call. The costs defined by
 		// EIP-2929 and EIP-7702 have already been applied.
-		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, multiIntrinsicCost.SingleGas(), stack.Back(0))
+		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas.RegularGas, multiIntrinsicCost.SingleGas(), stack.back(0))
 		if err != nil {
 			return multigas.ZeroGas(), err
 		}
@@ -392,7 +392,7 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc gasFunc) gasFunc {
 		// adding it to the return, it will be charged outside of this function, as
 		// part of the dynamic gas. This will ensure it is correctly reported to
 		// tracers.
-		contract.Gas += multiGas.SingleGas()
+		contract.Gas.RegularGas += multiGas.SingleGas()
 		contract.RetainedMultiGas.SaturatingAddInto(multiGas)
 
 		// Aggregate the gas costs from all components, including EIP-2929, EIP-7702,

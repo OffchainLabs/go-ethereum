@@ -149,7 +149,7 @@ func TestGasCallIntrinsicAccountLookupOnMemoryError(t *testing.T) {
 			evm.chainRules.IsAmsterdam = test.isAmsterdam
 			evm.chainRules.IsEIP158 = test.isEIP158
 
-			stack := newstack()
+			stack := newStackForTesting()
 			if test.transfersValue {
 				stack.push(uint256.NewInt(1))
 			} else {
@@ -158,7 +158,7 @@ func TestGasCallIntrinsicAccountLookupOnMemoryError(t *testing.T) {
 			stack.push(new(uint256.Int).SetBytes(common.Address{1}.Bytes()))
 			stack.push(uint256.NewInt(100_000))
 
-			contract := NewContract(common.Address{}, common.Address{}, new(uint256.Int), 100_000, nil)
+			contract := NewContract(common.Address{}, common.Address{}, new(uint256.Int), GasBudget{RegularGas: 100_000}, nil)
 			_, err := gasCallIntrinsic(evm, contract, stack, NewMemory(), 0x1fffffffe1)
 			if !errors.Is(err, ErrGasUintOverflow) {
 				t.Fatalf("unexpected error: got %v, want %v", err, ErrGasUintOverflow)
@@ -215,12 +215,12 @@ func TestEIP2200(t *testing.T) {
 			Transfer:    func(StateDB, common.Address, common.Address, *uint256.Int, *params.Rules) {},
 		}
 		evm := NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, Config{ExtraEips: []int{2200}})
-
-		_, gas, _, err := evm.Call(common.Address{}, address, nil, tt.gaspool, new(uint256.Int))
+		initialGas := NewGasBudget(tt.gaspool)
+		_, leftOver, _, err := evm.Call(common.Address{}, address, nil, initialGas.Copy(), new(uint256.Int))
 		if !errors.Is(err, tt.failure) {
 			t.Errorf("test %d: failure mismatch: have %v, want %v", i, err, tt.failure)
 		}
-		if used := tt.gaspool - gas; used != tt.used {
+		if used := leftOver.Used(initialGas); used != tt.used {
 			t.Errorf("test %d: gas used mismatch: have %v, want %v", i, used, tt.used)
 		}
 		if refund := evm.StateDB.GetRefund(); refund != tt.refund {
@@ -275,12 +275,12 @@ func TestCreateGas(t *testing.T) {
 			}
 
 			evm := NewEVM(vmctx, statedb, chainConfig, config)
-			var startGas = uint64(testGas)
-			ret, gas, _, err := evm.Call(common.Address{}, address, nil, startGas, new(uint256.Int))
+			initialGas := NewGasBudget(uint64(testGas))
+			ret, leftOver, _, err := evm.Call(common.Address{}, address, nil, initialGas.Copy(), new(uint256.Int))
 			if err != nil {
 				return false
 			}
-			gasUsed = startGas - gas
+			gasUsed = leftOver.Used(initialGas)
 			if len(ret) != 32 {
 				t.Fatalf("test %d: expected 32 bytes returned, have %d", i, len(ret))
 			}
