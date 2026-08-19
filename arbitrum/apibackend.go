@@ -245,6 +245,10 @@ func (a *APIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(0), nil // there's no tips in L2
 }
 
+var errInvalidPercentile = errors.New("invalid reward percentile")
+
+const maxQueryLimit = 100
+
 func (a *APIBackend) FeeHistory(
 	ctx context.Context,
 	blocks uint64,
@@ -252,6 +256,9 @@ func (a *APIBackend) FeeHistory(
 	rewardPercentiles []float64,
 ) (*big.Int, [][]*big.Int, []*big.Int, []float64, []*big.Int, []float64, error) {
 	// TODO: Add info about baseFeePerBlobGas, blobGasUsedRatio, just like in EthAPIBackend FeeHistory
+	if len(rewardPercentiles) > maxQueryLimit {
+		return common.Big0, nil, nil, nil, nil, nil, fmt.Errorf("%w: over the query limit %d", errInvalidPercentile, maxQueryLimit)
+	}
 	if core.GetArbOSSpeedLimitPerSecond == nil {
 		return nil, nil, nil, nil, nil, nil, errors.New("ArbOS not installed")
 	}
