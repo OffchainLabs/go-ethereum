@@ -36,10 +36,10 @@ type embeddingTestService struct {
 
 func (*embeddingTestService) A() {}
 func (s *embeddingTestService) B() {
-	s.B()
+	s.embeddedTestStructBC.B()
 }
 func (s *embeddingTestService) D() {
-	s.D()
+	s.embeddedTestStructDE.D()
 }
 
 func TestPromotedMethodsNotExposed(t *testing.T) {
