@@ -61,5 +61,4 @@ func TestPromotedMethodsNotExposed(t *testing.T) {
 			t.Errorf("%s should not be reachable, but got an unexpected error: %v", method, err)
 		}
 	}
-
 }
