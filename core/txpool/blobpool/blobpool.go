@@ -1109,13 +1109,13 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 					log.Error("Blobs missing for announcable transaction", "from", addr, "nonce", meta.nonce, "id", meta.id, "err", err)
 					continue
 				}
-				var tx types.Transaction
-				if err = rlp.DecodeBytes(data, &tx); err != nil {
+				var ptx blobTxForPool
+				if err = rlp.DecodeBytes(data, &ptx); err != nil {
 					log.Error("Blobs corrupted for announcable transaction", "from", addr, "nonce", meta.nonce, "id", meta.id, "err", err)
 					continue
 				}
-				announcable = append(announcable, tx.WithoutBlobTxSidecar())
-				log.Trace("Blob transaction now announcable", "from", addr, "nonce", meta.nonce, "id", meta.id, "hash", tx.Hash())
+				announcable = append(announcable, ptx.Tx)
+				log.Trace("Blob transaction now announcable", "from", addr, "nonce", meta.nonce, "id", meta.id, "hash", ptx.Tx.Hash())
 			}
 		}
 	}
@@ -1577,12 +1577,15 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 // e.g. type_byte || [..., version, [blobs], [comms], [proofs]]
 func (p *BlobPool) GetRLP(hash common.Hash) []byte {
 	data := p.getRLP(hash)
+	if len(data) == 0 {
+		// Not in this pool, do not log.
+		return nil
+	}
 	rlp, err := encodeForNetwork(data)
 	if err != nil {
 		log.Error("Failed to encode pooled tx into the network type", "hash", hash, "err", err)
 		return nil
 	}
-
 	return rlp
 }
 
