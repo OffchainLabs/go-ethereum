@@ -13,8 +13,8 @@ func (ch wasmActivation) revert(s *StateDB) {
 	delete(s.arbExtraData.activatedWasms, ch.moduleHash)
 }
 
-func (ch wasmActivation) dirtied() (common.Address, bool) {
-	return common.Address{}, false
+func (ch wasmActivation) mutation() (common.Address, journalMutationKind, bool) {
+	return common.Address{}, journalMutationKindNone, false
 }
 
 func (ch wasmActivation) copy() journalEntry {
@@ -38,8 +38,8 @@ func (ch CacheWasm) revert(s *StateDB) {
 	EvictWasmRust(ch.ModuleHash, ch.Version, ch.Tag, ch.Debug)
 }
 
-func (ch CacheWasm) dirtied() (common.Address, bool) {
-	return common.Address{}, false
+func (ch CacheWasm) mutation() (common.Address, journalMutationKind, bool) {
+	return common.Address{}, journalMutationKindNone, false
 }
 
 func (ch CacheWasm) copy() journalEntry {
@@ -67,8 +67,8 @@ func (ch EvictWasm) revert(s *StateDB) {
 	}
 }
 
-func (ch EvictWasm) dirtied() (common.Address, bool) {
-	return common.Address{}, false
+func (ch EvictWasm) mutation() (common.Address, journalMutationKind, bool) {
+	return common.Address{}, journalMutationKindNone, false
 }
 
 func (ch EvictWasm) copy() journalEntry {
@@ -96,11 +96,11 @@ func (ch createZombieChange) revert(s *StateDB) {
 	delete(s.stateObjects, *ch.account)
 }
 
-func (ch createZombieChange) dirtied() (common.Address, bool) {
+func (ch createZombieChange) mutation() (common.Address, journalMutationKind, bool) {
 	if ch.account == nil {
-		return common.Address{}, false
+		return common.Address{}, journalMutationKindNone, false
 	}
-	return *ch.account, true
+	return *ch.account, journalMutationKindCreate, true
 }
 
 func (ch createZombieChange) copy() journalEntry {

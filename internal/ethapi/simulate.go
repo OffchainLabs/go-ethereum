@@ -342,7 +342,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		tracer.reset(txHash, uint(i))
 
 		// EoA check is always skipped, even in validation mode.
-		sim.state.SetTxContext(txHash, i)
+		sim.state.SetTxContext(txHash, i, uint32(i+1))
 		msg := call.ToMessage(header.BaseFee, 0, nil, nil, core.NewMessageCommitContext(nil), !sim.validate)
 		result, err := applyMessageWithEVM(ctx, evm, msg, sim.state, timeout, gp, sim.b, header, blockContext)
 		if err != nil {
@@ -392,8 +392,8 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		header.BlobGasUsed = &blobGasUsed
 	}
 
-	// Run post-execution system calls
-	requests, err := core.PostExecution(ctx, sim.chainConfig, header.Number, header.Time, allLogs, evm)
+	// Process EIP-7685 requests
+	requests, err := core.PostExecution(ctx, sim.chainConfig, header.Number, header.Time, allLogs, evm, uint32(len(block.Calls)+1))
 	if err != nil {
 		return nil, nil, nil, err
 	}
