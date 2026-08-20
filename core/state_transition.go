@@ -635,8 +635,10 @@ func (st *stateTransition) buyGas() error {
 		return err
 	}
 
-	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil {
-		st.evm.Config.Tracer.OnGasChange(0, st.msg.GasLimit, tracing.GasChangeTxInitialBalance)
+	if st.evm.Config.Tracer.HasGasHook() {
+		empty := vm.GasBudget{}
+		initial := vm.NewGasBudget(st.msg.GasLimit)
+		st.evm.Config.Tracer.EmitGasChange(empty.AsTracing(), initial.AsTracing(), tracing.GasChangeTxInitialBalance)
 	}
 	st.gasRemaining = vm.NewGasBudget(st.msg.GasLimit)
 	st.initialBudget = st.gasRemaining.Copy()
@@ -828,8 +830,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if !sufficient {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining.RegularGas, iGasCost.RegularGas)
 	}
-	if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
-		t.OnGasChange(prior, st.gasRemaining.RegularGas, tracing.GasChangeTxIntrinsicGas)
+	if st.evm.Config.Tracer.HasGasHook() {
+		st.evm.Config.Tracer.EmitGasChange(prior.AsTracing(), st.gasRemaining.AsTracing(), tracing.GasChangeTxIntrinsicGas)
 	}
 	usedMultiGas = usedMultiGas.SaturatingAdd(iMultiGasCost)
 	// Gas limit suffices for the floor data cost (EIP-7623)
@@ -942,8 +944,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		if used := st.gasUsed(); used < floorDataGas {
 			usedMultiGas = usedMultiGas.SaturatingIncrement(multigas.ResourceKindL2Calldata, floorDataGas-usedMultiGas.SingleGas())
 			prior, _ := st.gasRemaining.Charge(vm.GasCosts{RegularGas: floorDataGas - used})
-			if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
-				t.OnGasChange(prior, st.gasRemaining.RegularGas, tracing.GasChangeTxDataFloor)
+			if st.evm.Config.Tracer.HasGasHook() {
+				st.evm.Config.Tracer.EmitGasChange(prior.AsTracing(), st.gasRemaining.AsTracing(), tracing.GasChangeTxDataFloor)
 			}
 		}
 		if peakGasUsed < floorDataGas {
@@ -1105,8 +1107,11 @@ func (st *stateTransition) calcRefund() vm.GasBudget {
 			refund = st.state.GetRefund()
 		}
 	}
-	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && refund > 0 {
-		st.evm.Config.Tracer.OnGasChange(st.gasRemaining.RegularGas, st.gasRemaining.RegularGas+refund, tracing.GasChangeTxRefunds)
+	if refund > 0 && st.evm.Config.Tracer.HasGasHook() {
+		after := st.gasRemaining
+		after.RegularGas += refund
+
+		st.evm.Config.Tracer.EmitGasChange(st.gasRemaining.AsTracing(), after.AsTracing(), tracing.GasChangeTxRefunds)
 	}
 	return vm.NewGasBudget(refund)
 }
@@ -1118,8 +1123,10 @@ func (st *stateTransition) returnGas() {
 	remaining.Mul(remaining, st.msg.GasPrice)
 	st.state.AddBalance(st.msg.From, remaining, tracing.BalanceIncreaseGasReturn)
 
-	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && st.gasRemaining.RegularGas > 0 {
-		st.evm.Config.Tracer.OnGasChange(st.gasRemaining.RegularGas, 0, tracing.GasChangeTxLeftOverReturned)
+	if st.gasRemaining.RegularGas > 0 && st.evm.Config.Tracer.HasGasHook() {
+		after := st.gasRemaining
+		after.RegularGas = 0
+		st.evm.Config.Tracer.EmitGasChange(st.gasRemaining.AsTracing(), after.AsTracing(), tracing.GasChangeTxLeftOverReturned)
 	}
 
 	// Arbitrum: record the gas refund
