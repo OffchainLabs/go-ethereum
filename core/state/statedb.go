@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -1499,7 +1500,15 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorag
 		batch := db.NewBatch()
 		// Arbitrum: write Stylus programs to disk
 		for moduleHash, asmMap := range ret.activatedWasms {
-			rawdb.WriteActivation(batch, moduleHash, asmMap)
+			if err := rawdb.WriteActivation(batch, moduleHash, asmMap); err != nil {
+				return nil, fmt.Errorf("writeActivation failed: %w", err)
+			}
+			if batch.ValueSize() >= ethdb.IdealBatchSize {
+				if err := batch.Write(); err != nil {
+					return nil, err
+				}
+				batch.Reset()
+			}
 		}
 		s.arbExtraData.activatedWasms = make(map[common.Hash]ActivatedWasm)
 		if err := batch.Write(); err != nil {
