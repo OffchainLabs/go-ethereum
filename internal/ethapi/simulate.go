@@ -412,7 +412,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	// Withdrawals are a post-Shanghai field. Attaching a non-nil withdrawals
 	// slice would cause types.NewBlock to populate WithdrawalsHash on the
 	// header and emit withdrawals fields for pre-Shanghai blocks.
-	if sim.chainConfig.IsShanghai(header.Number, header.Time) {
+	if sim.chainConfig.IsShanghai(header.Number, header.Time, arbOSVersion) {
 		blockBody.Withdrawals = *block.BlockOverrides.Withdrawals
 	}
 	chainHeadReader := &simChainHeadReader{ctx, sim.b}
