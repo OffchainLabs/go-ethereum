@@ -1169,11 +1169,12 @@ func (st *stateTransition) settleGas(rules params.Rules, floorDataGas uint64, us
 		if st.evm.Config.Tracer.HasGasHook() {
 			st.evm.Config.Tracer.EmitGasChange(tracing.Gas{Regular: gasLeft}, tracing.Gas{}, tracing.GasChangeTxLeftOverReturned)
 		}
+	}
 
-		// Arbitrum: record the gas refund
-		if tracer := st.evm.Config.Tracer; tracer != nil && tracer.CaptureArbitrumTransfer != nil {
-			tracer.CaptureArbitrumTransfer(nil, &st.msg.From, refund.ToBig(), false, tracing.BalanceIncreaseGasReturn)
-		}
+	// Arbitrum: record the gas refund, including zero-value refunds
+	if tracer := st.evm.Config.Tracer; tracer != nil && tracer.CaptureArbitrumTransfer != nil {
+		refund := new(uint256.Int).Mul(uint256.NewInt(gasLeft), st.msg.GasPrice)
+		tracer.CaptureArbitrumTransfer(nil, &st.msg.From, refund.ToBig(), false, tracing.BalanceIncreaseGasReturn)
 	}
 	return gasUsed, peakUsed, gasLeft, usedMultiGas, nil
 }
