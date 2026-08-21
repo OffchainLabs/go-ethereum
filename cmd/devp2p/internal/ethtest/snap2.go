@@ -361,7 +361,9 @@ func (s *Suite) snapGetAccessLists(t *utesting.T, tc *accessListsTest) error {
 		if err := rlp.DecodeBytes(raw, &accessList); err != nil {
 			return fmt.Errorf("entry %d: invalid BAL RLP: %v", idx, err)
 		}
-		if err := accessList.Validate(block.GasLimit(), len(block.Transactions())); err != nil {
+		arbosVersion := types.DeserializeHeaderExtraInformation(block.Header()).ArbOSFormatVersion
+		rules := s.chain.config.Rules(block.Number(), true, block.Time(), arbosVersion)
+		if err := accessList.Validate(rules, block.GasLimit(), len(block.Transactions())); err != nil {
 			return fmt.Errorf("entry %d: BAL failed validation: %v", idx, err)
 		}
 		idx++
