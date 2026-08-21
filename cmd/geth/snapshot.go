@@ -424,7 +424,7 @@ func benchGenerateTrie(ctx *cli.Context) error {
 	// hard-links the pebble SSTs (not the freezer), and GenerateTrie never
 	// writes to ancient, so sharing it is safe.
 	srcAncient := stack.ResolveAncient("chaindata", "")
-	kv, err := pebble.New(ckpt, 4096, 1024, "gentrie-bench", false)
+	kv, err := pebble.New(ckpt, 4096, 1024, "gentrie-bench", false, nil)
 	if err != nil {
 		return fmt.Errorf("open checkpoint: %w", err)
 	}
