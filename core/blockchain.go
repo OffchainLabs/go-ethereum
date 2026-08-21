@@ -2496,7 +2496,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	// block. The validator has already verified the hash matches the header.
 	// BAL is only meaningful from Amsterdam onward; skip pre-Amsterdam blocks
 	// to avoid persisting and serving empty BALs over the network.
-	if res.Bal != nil && block.AccessList() == nil && bc.chainConfig.IsAmsterdam(block.Number(), block.Time()) {
+	if res.Bal != nil && block.AccessList() == nil && bc.chainConfig.IsAmsterdam(block.Number(), block.Time(), types.DeserializeHeaderExtraInformation(block.Header()).ArbOSFormatVersion) {
 		block = block.WithAccessListUnsafe(res.Bal.ToEncodingObj())
 	}
 

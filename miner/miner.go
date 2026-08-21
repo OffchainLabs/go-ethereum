@@ -162,7 +162,7 @@ func (miner *Miner) getPending() *newPayloadResult {
 	// Post-Amsterdam, prepareWork requires a slot number (EIP-7843). The pending
 	// block is synthetic and has no canonical slot, so derive one from the parent
 	// when available and fall back to zero otherwise.
-	if miner.chainConfig.IsAmsterdam(childNumber, timestamp) {
+	if miner.chainConfig.IsAmsterdam(childNumber, timestamp, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {
 		var n uint64
 		if header.SlotNumber != nil {
 			n = *header.SlotNumber + 1
