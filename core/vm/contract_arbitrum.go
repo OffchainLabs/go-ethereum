@@ -18,7 +18,8 @@ package vm
 
 func (c *Contract) BurnGas(amount uint64) error {
 	if _, ok := c.Gas.Charge(GasCosts{RegularGas: amount}); !ok {
-		c.Gas.Exhaust()
+		c.Gas.RegularGas = 0
+		c.Gas.StateGas = 0
 		return ErrOutOfGas
 	}
 	return nil
