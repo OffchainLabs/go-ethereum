@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/arbitrum_types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
@@ -363,6 +364,15 @@ func (a *APIBackend) FeeHistory(
 	return big.NewInt(int64(oldestBlock)), rewards, basefees, gasUsed, nil, nil, nil
 }
 
+func (a *APIBackend) BaseFee(ctx context.Context) *big.Int {
+	header := a.CurrentHeader()
+	next := new(big.Int).Add(header.Number, common.Big1)
+	if a.ChainConfig().IsLondon(next) {
+		return eip1559.CalcBaseFee(a.ChainConfig(), header)
+	}
+	return nil
+}
+
 func (a *APIBackend) BlobBaseFee(ctx context.Context) *big.Int {
 	if excess := a.CurrentHeader().ExcessBlobGas; excess != nil {
 		return eip4844.CalcBlobFee(a.ChainConfig(), a.CurrentHeader())
@@ -407,7 +417,7 @@ func (a *APIBackend) UnprotectedAllowed() bool {
 }
 
 // Blockchain API
-func (a *APIBackend) SetHead(number uint64) {
+func (a *APIBackend) SetHead(number uint64) error {
 	panic("not implemented") // TODO: Implement
 }
 
@@ -674,6 +684,14 @@ func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block,
 func (a *APIBackend) HistoryPruningCutoff() uint64 {
 	bn, _ := a.BlockChain().HistoryPruningCutoff()
 	return bn
+}
+
+func (a *APIBackend) HistoryRetention() ethapi.HistoryRetention {
+	return ethapi.HistoryRetention{
+		LogIndexHistory:  a.b.config.LogHistory,
+		LogIndexDisabled: a.b.config.LogNoHistory,
+		StateScheme:      a.BlockChain().TrieDB().Scheme(),
+	}
 }
 
 func (a *APIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
