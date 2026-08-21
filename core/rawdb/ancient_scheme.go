@@ -144,10 +144,14 @@ const (
 	// ChainTipBlockRecordsFreezerTable is the table storing persisted chain-tip
 	// block recordings.
 	ChainTipBlockRecordsFreezerTable = "records"
+
+	// ChainTipBlockRecordsGroup is the tail group of the chain-tip block
+	// recordings table.
+	ChainTipBlockRecordsGroup = "records"
 )
 
 var chainTipBlockRecordsFreezerTableConfigs = map[string]freezerTableConfig{
-	ChainTipBlockRecordsFreezerTable: {noSnappy: false, prunable: true},
+	ChainTipBlockRecordsFreezerTable: {noSnappy: false, tailGroup: ChainTipBlockRecordsGroup},
 }
 
 // NewChainTipBlockRecordsFreezer initializes the ancient store for chain-tip

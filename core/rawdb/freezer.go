@@ -331,12 +331,14 @@ func (f *Freezer) TruncateTail(group string, tail uint64) (uint64, error) {
 	if prev >= tail {
 		return prev, nil
 	}
-	// Advancing the tail beyond the head resets each table. This is only
-	// valid when every table can be pruned; otherwise their bounds diverge.
+	// Advancing the tail beyond the head resets each table and moves the
+	// shared head. This is only valid when every table belongs to the
+	// truncated group; otherwise the other tables' bounds diverge from the
+	// new head.
 	if tail > f.head.Load() {
 		for _, table := range f.tables {
-			if !table.config.prunable {
-				return 0, errors.New("cannot truncate tail above head: freezer contains non-prunable table")
+			if table.config.tailGroup != group {
+				return 0, fmt.Errorf("cannot truncate tail above head: freezer contains tables outside group %q", group)
 			}
 		}
 	}

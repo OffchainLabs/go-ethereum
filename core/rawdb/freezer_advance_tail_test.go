@@ -13,8 +13,10 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
+const truncateTailTestGroup = "testgroup"
+
 var truncateTailTestTables = map[string]freezerTableConfig{
-	"test": {noSnappy: true, prunable: true},
+	"test": {noSnappy: true, tailGroup: truncateTailTestGroup},
 }
 
 func appendTruncateTailTestItems(t *testing.T, f ethdb.AncientStore, from, count uint64) {
@@ -34,7 +36,7 @@ func appendTruncateTailTestItems(t *testing.T, f ethdb.AncientStore, from, count
 
 func checkTruncateTailTestBounds(t *testing.T, f ethdb.AncientReader, tail, head uint64) {
 	t.Helper()
-	gotTail, err := f.Tail()
+	gotTail, err := f.Tail(truncateTailTestGroup)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +67,7 @@ func TestFreezerTruncateTailAboveHead(t *testing.T) {
 	t.Parallel()
 
 	f, dir := newFreezerForTesting(t, truncateTailTestTables)
-	old, err := f.TruncateTail(1000)
+	old, err := f.TruncateTail(truncateTailTestGroup, 1000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +99,7 @@ func TestFreezerTruncateTailAboveHeadPersistsBeforeAppend(t *testing.T) {
 	t.Parallel()
 
 	f, dir := newFreezerForTesting(t, truncateTailTestTables)
-	if _, err := f.TruncateTail(77); err != nil {
+	if _, err := f.TruncateTail(truncateTailTestGroup, 77); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.Close(); err != nil {
@@ -120,7 +122,7 @@ func TestFreezerTruncateTailAboveHeadResetsNonEmpty(t *testing.T) {
 	defer f.Close()
 
 	appendTruncateTailTestItems(t, f, 0, 2)
-	if _, err := f.TruncateTail(10); err != nil {
+	if _, err := f.TruncateTail(truncateTailTestGroup, 10); err != nil {
 		t.Fatal(err)
 	}
 	checkTruncateTailTestBounds(t, f, 10, 10)
@@ -133,11 +135,11 @@ func TestFreezerTruncateTailAboveHeadAfterFullPrune(t *testing.T) {
 
 	f, dir := newFreezerForTesting(t, truncateTailTestTables)
 	appendTruncateTailTestItems(t, f, 0, 4)
-	if _, err := f.TruncateTail(4); err != nil {
+	if _, err := f.TruncateTail(truncateTailTestGroup, 4); err != nil {
 		t.Fatal(err)
 	}
 	checkTruncateTailTestBounds(t, f, 4, 4)
-	if _, err := f.TruncateTail(50); err != nil {
+	if _, err := f.TruncateTail(truncateTailTestGroup, 50); err != nil {
 		t.Fatal(err)
 	}
 	checkTruncateTailTestBounds(t, f, 50, 50)
@@ -160,12 +162,13 @@ func TestFreezerTruncateTailAboveHeadNonPrunable(t *testing.T) {
 	t.Parallel()
 
 	f, _ := newFreezerForTesting(t, map[string]freezerTableConfig{
-		"test": {noSnappy: true, prunable: false},
+		"test":  {noSnappy: true, tailGroup: truncateTailTestGroup},
+		"fixed": {noSnappy: true},
 	})
 	defer f.Close()
 
-	if _, err := f.TruncateTail(10); err == nil {
-		t.Fatal("expected error truncating tail above head of freezer with non-prunable table")
+	if _, err := f.TruncateTail(truncateTailTestGroup, 10); err == nil {
+		t.Fatal("expected error truncating tail above head of freezer with tables outside the group")
 	}
 }
 
@@ -175,7 +178,7 @@ func TestFreezerTruncateTailAboveHeadTooLarge(t *testing.T) {
 	f, _ := newFreezerForTesting(t, truncateTailTestTables)
 	defer f.Close()
 
-	if _, err := f.TruncateTail(uint64(math.MaxUint32) + 1); err == nil {
+	if _, err := f.TruncateTail(truncateTailTestGroup, uint64(math.MaxUint32)+1); err == nil {
 		t.Fatal("expected error truncating tail above uint32 offset limit")
 	}
 	checkTruncateTailTestBounds(t, f, 0, 0)
@@ -187,7 +190,7 @@ func TestMemoryFreezerTruncateTailAboveHead(t *testing.T) {
 	f := NewMemoryFreezer(false, truncateTailTestTables)
 	defer f.Close()
 
-	if _, err := f.TruncateTail(1000); err != nil {
+	if _, err := f.TruncateTail(truncateTailTestGroup, 1000); err != nil {
 		t.Fatal(err)
 	}
 	checkTruncateTailTestBounds(t, f, 1000, 1000)
@@ -195,17 +198,17 @@ func TestMemoryFreezerTruncateTailAboveHead(t *testing.T) {
 	checkTruncateTailTestBounds(t, f, 1000, 1003)
 	checkTruncateTailTestItem(t, f, 1002)
 
-	if _, err := f.TruncateTail(1003); err != nil {
+	if _, err := f.TruncateTail(truncateTailTestGroup, 1003); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.TruncateTail(2000); err != nil {
+	if _, err := f.TruncateTail(truncateTailTestGroup, 2000); err != nil {
 		t.Fatal(err)
 	}
 	checkTruncateTailTestBounds(t, f, 2000, 2000)
 	appendTruncateTailTestItems(t, f, 2000, 1)
 	checkTruncateTailTestItem(t, f, 2000)
 
-	if _, err := f.TruncateTail(5000); err != nil {
+	if _, err := f.TruncateTail(truncateTailTestGroup, 5000); err != nil {
 		t.Fatal(err)
 	}
 	checkTruncateTailTestBounds(t, f, 5000, 5000)
@@ -217,7 +220,7 @@ func TestFreezerTruncateTailAboveHeadMetadataAheadOfIndex(t *testing.T) {
 	t.Parallel()
 
 	f, dir := newFreezerForTesting(t, truncateTailTestTables)
-	if _, err := f.TruncateTail(1000); err != nil {
+	if _, err := f.TruncateTail(truncateTailTestGroup, 1000); err != nil {
 		t.Fatal(err)
 	}
 	appendTruncateTailTestItems(t, f, 1000, 2)
@@ -246,7 +249,7 @@ func TestFreezerTruncateTailAboveHeadMetadataAheadOfIndex(t *testing.T) {
 	}
 	defer f.Close()
 
-	tail, err := f.Tail()
+	tail, err := f.Tail(truncateTailTestGroup)
 	if err != nil {
 		t.Fatal(err)
 	}
