@@ -144,7 +144,7 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent common.Ha
 	defer spanEnd(nil)
 
 	var blockAccessList *bal.ConstructionBlockAccessList
-	if config.IsAmsterdam(number, time) {
+	if config.IsAmsterdam(number, time, evm.Context.ArbOSVersion) {
 		blockAccessList = bal.NewConstructionBlockAccessList()
 	}
 	// EIP-4788
@@ -166,7 +166,7 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 	_, _, spanEnd := telemetry.StartSpan(ctx, "core.postExecution")
 	defer spanEnd(&err)
 
-	if config.IsAmsterdam(number, time) {
+	if config.IsAmsterdam(number, time, evm.Context.ArbOSVersion) {
 		blockAccessList = bal.NewConstructionBlockAccessList()
 	}
 	// Read requests if Prague is enabled.
@@ -290,6 +290,21 @@ func ApplyTransactionWithResultFilter(evm *vm.EVM, gp *GasPool, statedb *state.S
 	return ApplyTransactionWithEVM(msg, gp, statedb, header.Number, header.Hash(), header.Time, tx, evm, resultFilter)
 }
 
+// systemCallGasBudget returns the gas budget for system calls.
+func systemCallGasBudget(evm *vm.EVM) (gasLimit uint64, gasBudget vm.GasBudget) {
+	if !evm.GetRules().IsAmsterdam {
+		gasLimit = 30_000_000
+		gasBudget = vm.NewGasBudget(gasLimit, 0)
+	} else {
+		// SYSTEM_MAX_SSTORES_PER_CALL = 16 is the upper bound on the number of
+		// new storage slots a single system call is expected to write.
+		stateBudget := params.SystemMaxSStoresPerCall * evm.Context.CostPerStateByte * params.StorageCreationSize
+		gasLimit = 30_000_000
+		gasBudget = vm.NewGasBudget(gasLimit, stateBudget)
+	}
+	return gasLimit, gasBudget
+}
+
 // ProcessBeaconBlockRoot applies the EIP-4788 system call to the beacon block root
 // contract. This method is exported to be used in tests.
 func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM, blockAccessList *bal.ConstructionBlockAccessList) {
@@ -299,9 +314,10 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM, blockAccessList
 			defer tracer.OnSystemCallEnd()
 		}
 	}
+	gasLimit, gasBudget := systemCallGasBudget(evm)
 	msg := &Message{
 		From:      params.SystemAddress,
-		GasLimit:  30_000_000,
+		GasLimit:  gasLimit,
 		GasPrice:  uint256.NewInt(0),
 		GasFeeCap: uint256.NewInt(0),
 		GasTipCap: uint256.NewInt(0),
@@ -312,7 +328,7 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM, blockAccessList
 	evm.StateDB.Prepare(evm.GetRules(), common.Address{}, common.Address{}, nil, nil, nil)
 	evm.StateDB.SetTxContext(common.Hash{}, 0, 0)
 	evm.StateDB.AddAddressToAccessList(params.BeaconRootsAddress)
-	_, _, _, _ = evm.Call(msg.From, *msg.To, msg.Data, vm.NewGasBudget(30_000_000), common.U2560)
+	_, _, _, _ = evm.Call(msg.From, *msg.To, msg.Data, gasBudget, common.U2560)
 	if evm.StateDB.AccessEvents() != nil {
 		evm.StateDB.AccessEvents().Merge(evm.AccessEvents)
 	}
@@ -328,9 +344,10 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM, blockAccessList *
 			defer tracer.OnSystemCallEnd()
 		}
 	}
+	gasLimit, gasBudget := systemCallGasBudget(evm)
 	msg := &Message{
 		From:      params.SystemAddress,
-		GasLimit:  30_000_000,
+		GasLimit:  gasLimit,
 		GasPrice:  uint256.NewInt(0),
 		GasFeeCap: uint256.NewInt(0),
 		GasTipCap: uint256.NewInt(0),
@@ -341,7 +358,7 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM, blockAccessList *
 	evm.StateDB.Prepare(evm.GetRules(), common.Address{}, common.Address{}, nil, nil, nil)
 	evm.StateDB.SetTxContext(common.Hash{}, 0, 0)
 	evm.StateDB.AddAddressToAccessList(params.HistoryStorageAddress)
-	_, _, _, err := evm.Call(msg.From, *msg.To, msg.Data, vm.NewGasBudget(30_000_000), common.U2560)
+	_, _, _, err := evm.Call(msg.From, *msg.To, msg.Data, gasBudget, common.U2560)
 	if err != nil {
 		panic(err)
 	}
@@ -370,9 +387,10 @@ func processRequestsSystemCall(requests *[][]byte, rules params.Rules, evm *vm.E
 			defer tracer.OnSystemCallEnd()
 		}
 	}
+	gasLimit, gasBudget := systemCallGasBudget(evm)
 	msg := &Message{
 		From:      params.SystemAddress,
-		GasLimit:  30_000_000,
+		GasLimit:  gasLimit,
 		GasPrice:  uint256.NewInt(0),
 		GasFeeCap: uint256.NewInt(0),
 		GasTipCap: uint256.NewInt(0),
@@ -382,7 +400,7 @@ func processRequestsSystemCall(requests *[][]byte, rules params.Rules, evm *vm.E
 	evm.StateDB.Prepare(rules, common.Address{}, common.Address{}, nil, nil, nil)
 	evm.StateDB.SetTxContext(common.Hash{}, 0, blockAccessIndex)
 	evm.StateDB.AddAddressToAccessList(addr)
-	ret, _, _, err := evm.Call(msg.From, *msg.To, msg.Data, vm.NewGasBudget(30_000_000), common.U2560)
+	ret, _, _, err := evm.Call(msg.From, *msg.To, msg.Data, gasBudget, common.U2560)
 	if evm.StateDB.AccessEvents() != nil {
 		evm.StateDB.AccessEvents().Merge(evm.AccessEvents)
 	}
@@ -438,7 +456,7 @@ func AssembleBlock(chain consensus.ChainHeaderReader, header *types.Header, stat
 	// Assign the post-transition state root
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
-	if !chain.Config().IsAmsterdam(header.Number, header.Time) {
+	if !chain.Config().IsAmsterdam(header.Number, header.Time, types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion) {
 		return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
 	}
 	// Assign the BlockAccessListHash if Amsterdam has been enabled

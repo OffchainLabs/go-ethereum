@@ -25,9 +25,7 @@ import (
 
 type (
 	executionFunc func(pc *uint64, evm *EVM, callContext *ScopeContext) ([]byte, error)
-	// last parameter is the requested memory size as a uint64
-	// gasFunc returns multi-dimensional gas usage (that can be converted to single-dimensional gas)
-	gasFunc func(*EVM, *Contract, *Stack, *Memory, uint64) (multigas.MultiGas, error)
+	gasFunc       func(*EVM, *Contract, *Stack, *Memory, uint64) (multigas.MultiGas, error) // last parameter is the requested memory size as a uint64
 	// memorySizeFunc returns the required size, and whether the operation overflowed a uint64
 	memorySizeFunc func(*Stack) (size uint64, overflow bool)
 )
@@ -100,6 +98,7 @@ func newAmsterdamInstructionSet() JumpTable {
 	instructionSet := newOsakaInstructionSet()
 	enable7843(&instructionSet) // EIP-7843 (SLOTNUM opcode)
 	enable8024(&instructionSet) // EIP-8024 (Backward compatible SWAPN, DUPN, EXCHANGE)
+	enable8037(&instructionSet) // EIP-8037 (State creation gas cost increase)
 	return validate(instructionSet)
 }
 

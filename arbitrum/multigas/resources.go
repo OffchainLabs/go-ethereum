@@ -42,6 +42,10 @@ type MultiGas struct {
 	gas    [NumResourceKind]uint64
 	total  uint64
 	refund uint64
+	// EIP-8037 state-creation cost, carried as a side channel. Excluded from
+	// the total (and SingleGas) since it is charged from the state-gas
+	// reservoir, and not part of the JSON/RLP encodings.
+	stateGas uint64
 }
 
 // Pair represents a single resource kind and its associated gas amount.
@@ -152,7 +156,17 @@ func (z MultiGas) WithRefund(amount uint64) MultiGas {
 	return res
 }
 
-// SafeAdd returns a copy of z with the per-kind, total, and refund gas
+func (z MultiGas) GetStateGas() uint64 {
+	return z.stateGas
+}
+
+func (z MultiGas) WithStateGas(amount uint64) MultiGas {
+	res := z
+	res.stateGas = amount
+	return res
+}
+
+// SafeAdd returns a copy of z with the per-kind, total, refund, and state gas
 // added to the values from x. It returns the updated value and true if
 // an overflow occurred.
 func (z MultiGas) SafeAdd(x MultiGas) (MultiGas, bool) {
@@ -173,11 +187,15 @@ func (z MultiGas) SafeAdd(x MultiGas) (MultiGas, bool) {
 	if overflow {
 		return z, true
 	}
+	res.stateGas, overflow = saturatingScalarAdd(res.stateGas, x.stateGas)
+	if overflow {
+		return z, true
+	}
 
 	return res, false
 }
 
-// SaturatingAdd returns a copy of z with the per-kind, total, and refund gas
+// SaturatingAdd returns a copy of z with the per-kind, total, refund, and state gas
 // added to the values from x. On overflow, the affected field(s) are clamped
 // to MaxUint64.
 func (z MultiGas) SaturatingAdd(x MultiGas) MultiGas {
@@ -189,10 +207,11 @@ func (z MultiGas) SaturatingAdd(x MultiGas) MultiGas {
 
 	res.total, _ = saturatingScalarAdd(res.total, x.total)
 	res.refund, _ = saturatingScalarAdd(res.refund, x.refund)
+	res.stateGas, _ = saturatingScalarAdd(res.stateGas, x.stateGas)
 	return res
 }
 
-// SaturatingAddInto adds x into z in place (per kind, total, and refund).
+// SaturatingAddInto adds x into z in place (per kind, total, refund, and state gas).
 // On overflow, the affected field(s) are clamped to MaxUint64.
 // This is a hot-path helper; the public immutable API remains preferred elsewhere.
 func (z *MultiGas) SaturatingAddInto(x MultiGas) {
@@ -201,9 +220,10 @@ func (z *MultiGas) SaturatingAddInto(x MultiGas) {
 	}
 	z.total, _ = saturatingScalarAdd(z.total, x.total)
 	z.refund, _ = saturatingScalarAdd(z.refund, x.refund)
+	z.stateGas, _ = saturatingScalarAdd(z.stateGas, x.stateGas)
 }
 
-// SafeSub returns a copy of z with the per-kind, total, and refund gas
+// SafeSub returns a copy of z with the per-kind, total, refund, and state gas
 // subtracted by the values from x. It returns the updated value and true if
 // a underflow occurred.
 func (z MultiGas) SafeSub(x MultiGas) (MultiGas, bool) {
@@ -220,13 +240,17 @@ func (z MultiGas) SafeSub(x MultiGas) (MultiGas, bool) {
 	if underflow {
 		return z, true
 	}
+	res.stateGas, underflow = saturatingScalarSub(res.stateGas, x.stateGas)
+	if underflow {
+		return z, true
+	}
 
 	res.recomputeTotal()
 
 	return res, false
 }
 
-// SaturatingSub returns a copy of z with the per-kind, total, and refund gas
+// SaturatingSub returns a copy of z with the per-kind, total, refund, and state gas
 // subtracted by the values from x. On underflow, the affected field(s) are
 // clamped to zero.
 func (z MultiGas) SaturatingSub(x MultiGas) MultiGas {
@@ -235,6 +259,7 @@ func (z MultiGas) SaturatingSub(x MultiGas) MultiGas {
 		res.gas[i], _ = saturatingScalarSub(res.gas[i], x.gas[i])
 	}
 	res.refund, _ = saturatingScalarSub(res.refund, x.refund)
+	res.stateGas, _ = saturatingScalarSub(res.stateGas, x.stateGas)
 	res.recomputeTotal()
 	return res
 }
@@ -306,7 +331,7 @@ func (z MultiGas) SingleGas() uint64 {
 }
 
 func (z MultiGas) IsZero() bool {
-	return z.total == 0 && z.refund == 0 && z.gas == [NumResourceKind]uint64{}
+	return z.total == 0 && z.refund == 0 && z.stateGas == 0 && z.gas == [NumResourceKind]uint64{}
 }
 
 // multiGasJSON is an auxiliary type for JSON marshaling/unmarshaling of MultiGas.

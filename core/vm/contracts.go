@@ -313,9 +313,8 @@ func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address comm
 		precompileArbosAware.SetArbosVersion(advancedInfo.Evm.Context.ArbOSVersion)
 	}
 	gasCost := p.RequiredGas(input)
-	prior, ok := gas.Charge(GasCosts{RegularGas: gasCost})
+	prior, ok := gas.ChargeRegular(gasCost)
 	if !ok {
-		gas.Exhaust()
 		return nil, gas, multigas.ComputationGas(suppliedGas), ErrOutOfGas
 	}
 	if logger.HasGasHook() {

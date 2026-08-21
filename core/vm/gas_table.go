@@ -331,10 +331,19 @@ var (
 	gasMLoad   = pureMemoryGascost
 	gasMStore8 = pureMemoryGascost
 	gasMStore  = pureMemoryGascost
-	gasCreate  = pureMemoryGascost
 )
 
+func gasCreate(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
+	if evm.readOnly {
+		return multigas.ZeroGas(), ErrWriteProtection
+	}
+	return pureMemoryGascost(evm, contract, stack, mem, memorySize)
+}
+
 func gasCreate2(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
+	if evm.readOnly {
+		return multigas.ZeroGas(), ErrWriteProtection
+	}
 	multiGas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
 		return multigas.ZeroGas(), err
@@ -355,6 +364,9 @@ func gasCreate2(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memoryS
 }
 
 func gasCreateEip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
+	if evm.readOnly {
+		return multigas.ZeroGas(), ErrWriteProtection
+	}
 	multiGas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
 		return multigas.ZeroGas(), err
@@ -376,7 +388,11 @@ func gasCreateEip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	}
 	return multiGas, nil
 }
+
 func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
+	if evm.readOnly {
+		return multigas.ZeroGas(), ErrWriteProtection
+	}
 	multiGas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
 		return multigas.ZeroGas(), err
@@ -572,4 +588,103 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		evm.StateDB.AddRefund(params.SelfdestructRefundGas)
 	}
 	return multiGas, nil
+}
+
+func gasSelfdestruct8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
+	if evm.readOnly {
+		return multigas.ZeroGas(), ErrWriteProtection
+	}
+	var (
+		multiGas = multigas.ZeroGas()
+		address  = common.Address(stack.peek().Bytes20())
+	)
+	if !evm.StateDB.AddressInAccessList(address) {
+		// If the caller cannot afford the cost, this change will be rolled back
+		evm.StateDB.AddAddressToAccessList(address)
+		multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessRead, params.ColdAccountAccessCostEIP2929)
+	}
+	// Check we have enough regular gas before we add the address to the BAL
+	if contract.Gas.RegularGas < multiGas.SingleGas() {
+		return multiGas, ErrOutOfGas
+	}
+	// Important: use StateDB.Empty instead of !StateDB.Exist. An account may exist
+	// in the current state yet still be considered non-existent by EIP-161 if its
+	// nonce, balance, and code are all zero. Such accounts can appear temporarily
+	// during execution (e.g. via SELFDESTRUCT) and are removed at tx end.
+	//
+	// Funding such an account makes it permanent state growth and must be charged.
+	if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
+		multiGas = multiGas.WithStateGas(params.AccountCreationSize * evm.Context.CostPerStateByte)
+	}
+	return multiGas, nil
+}
+
+func gasSStore8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (multigas.MultiGas, error) {
+	if evm.readOnly {
+		return multigas.ZeroGas(), ErrWriteProtection
+	}
+	// If we fail the minimum gas availability invariant, fail (0)
+	if contract.Gas.RegularGas <= params.SstoreSentryGasEIP2200 {
+		return multigas.ZeroGas(), errors.New("not enough gas for reentrancy sentry")
+	}
+	// Gas sentry honoured, do the actual gas calculation based on the stored value
+	var (
+		y, x              = stack.back(1), stack.peek()
+		slot              = common.Hash(x.Bytes32())
+		current, original = evm.StateDB.GetStateAndCommittedState(contract.Address(), slot)
+		multiGas          = multigas.ZeroGas()
+	)
+	// Check slot presence in the access list
+	if _, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
+		multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessRead, params.ColdSloadCostEIP2929)
+		// If the caller cannot afford the cost, this change will be rolled back
+		evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
+	}
+	value := common.Hash(y.Bytes32())
+
+	if current == value { // noop (1)
+		// EIP 2200 original clause:
+		//		return params.SloadGasEIP2200, nil
+		return multiGas.SaturatingIncrement(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929), nil // SLOAD_GAS
+	}
+	if original == current {
+		if original == (common.Hash{}) { // create slot (2.1.1)
+			multiGas = multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessWrite, params.SstoreResetGasEIP2200-params.ColdSloadCostEIP2929)
+			return multiGas.WithStateGas(params.StorageCreationSize * evm.Context.CostPerStateByte), nil
+		}
+		if value == (common.Hash{}) { // delete slot (2.1.2b)
+			evm.StateDB.AddRefund(params.SstoreClearsScheduleRefundEIP3529)
+		}
+		// EIP-2200 original clause:
+		//		return params.SstoreResetGasEIP2200, nil // write existing slot (2.1.2)
+		return multiGas.SaturatingIncrement(multigas.ResourceKindStorageAccessWrite, params.SstoreResetGasEIP2200-params.ColdSloadCostEIP2929), nil // write existing slot (2.1.2)
+	}
+	if original != (common.Hash{}) {
+		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
+			evm.StateDB.SubRefund(params.SstoreClearsScheduleRefundEIP3529)
+		} else if value == (common.Hash{}) { // delete slot (2.2.1.2)
+			evm.StateDB.AddRefund(params.SstoreClearsScheduleRefundEIP3529)
+		}
+	}
+	if original == value {
+		if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
+			// EIP-8037 point (2): refund state gas directly to the reservoir
+			// at the SSTORE restoration point (0→x→0 in same tx); not to the
+			// refund counter, which is capped at gas_used/5.
+			contract.Gas.RefundState(params.StorageCreationSize * evm.Context.CostPerStateByte)
+
+			// Regular portion of the refund still goes through the refund counter.
+			evm.StateDB.AddRefund(params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929)
+		} else { // reset to original existing slot (2.2.2.2)
+			// EIP 2200 Original clause:
+			//	evm.StateDB.AddRefund(params.SstoreResetGasEIP2200 - params.SloadGasEIP2200)
+			// - SSTORE_RESET_GAS redefined as (5000 - COLD_SLOAD_COST)
+			// - SLOAD_GAS redefined as WARM_STORAGE_READ_COST
+			// Final: (5000 - COLD_SLOAD_COST) - WARM_STORAGE_READ_COST
+			evm.StateDB.AddRefund((params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929) - params.WarmStorageReadCostEIP2929)
+		}
+	}
+	// EIP-2200 original clause:
+	//return params.SloadGasEIP2200, nil // dirty update (2.2)
+	return multiGas.SaturatingIncrement(multigas.ResourceKindComputation, params.WarmStorageReadCostEIP2929), nil // dirty update (2.2)
 }

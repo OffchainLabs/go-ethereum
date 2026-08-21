@@ -311,6 +311,60 @@ func TestSaturatingAddInto_AddsKindsTotalRefund(t *testing.T) {
 	}
 }
 
+func TestStateGas(t *testing.T) {
+	gas := ComputationGas(10).WithStateGas(7)
+	if got, want := gas.GetStateGas(), uint64(7); got != want {
+		t.Errorf("unexpected state gas: got %v, want %v", got, want)
+	}
+	// State gas is a side channel and must not affect the single gas.
+	if got, want := gas.SingleGas(), uint64(10); got != want {
+		t.Errorf("unexpected single gas: got %v, want %v", got, want)
+	}
+	if gas.IsZero() {
+		t.Errorf("gas with state gas should not be zero")
+	}
+	if ZeroGas().WithStateGas(1).IsZero() {
+		t.Errorf("zero gas with state gas should not be zero")
+	}
+
+	sum, overflow := gas.SafeAdd(HistoryGrowthGas(3).WithStateGas(5))
+	if overflow {
+		t.Errorf("unexpected overflow: got %v, want %v", overflow, false)
+	}
+	if got, want := sum.GetStateGas(), uint64(12); got != want {
+		t.Errorf("unexpected state gas after SafeAdd: got %v, want %v", got, want)
+	}
+	if got, want := sum.SaturatingAdd(gas).GetStateGas(), uint64(19); got != want {
+		t.Errorf("unexpected state gas after SaturatingAdd: got %v, want %v", got, want)
+	}
+
+	var acc MultiGas
+	acc.SaturatingAddInto(gas)
+	if got, want := acc.GetStateGas(), uint64(7); got != want {
+		t.Errorf("unexpected state gas after SaturatingAddInto: got %v, want %v", got, want)
+	}
+
+	diff, underflow := sum.SafeSub(gas)
+	if underflow {
+		t.Errorf("unexpected underflow: got %v, want %v", underflow, false)
+	}
+	if got, want := diff.GetStateGas(), uint64(5); got != want {
+		t.Errorf("unexpected state gas after SafeSub: got %v, want %v", got, want)
+	}
+	if got, want := sum.SaturatingSub(gas).GetStateGas(), uint64(5); got != want {
+		t.Errorf("unexpected state gas after SaturatingSub: got %v, want %v", got, want)
+	}
+
+	_, overflow = gas.WithStateGas(math.MaxUint64).SafeAdd(gas)
+	if !overflow {
+		t.Errorf("expected overflow on state gas: got %v, want %v", overflow, true)
+	}
+	_, underflow = gas.SafeSub(gas.WithStateGas(8))
+	if !underflow {
+		t.Errorf("expected underflow on state gas: got %v, want %v", underflow, true)
+	}
+}
+
 func TestSafeIncrement(t *testing.T) {
 	gas := ComputationGas(10)
 	gas, overflow := gas.SafeIncrement(ResourceKindComputation, 11)
