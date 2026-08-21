@@ -827,7 +827,7 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 			return nil, err
 		}
 		if gp.Gas() < gomath.MaxUint64-postingGas {
-			_ = gp.ReturnGas(postingGas, 0) // error can be ignored as we are checking for overflow already
+			_ = gp.ChargeGasLegacy(postingGas, 0) // error can be ignored as we are checking for overflow already
 		} else {
 			log.Debug("gas pool overflow", "gpGas", gp.Gas(), "baseFee", header.BaseFee, "postingGas", postingGas, "msgDataLen", len(msg.Data))
 			gp = core.NewGasPool(gomath.MaxUint64)
