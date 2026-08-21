@@ -194,8 +194,8 @@ func TestBuildCapabilities(t *testing.T) {
 					DeleteStrategy: windowStrategy(90_000),
 				},
 				"stateproofs": {
-					OldestBlock:    hexUintPtr(5_000_000 - corestate.TriesInMemory + 1),
-					DeleteStrategy: windowStrategy(corestate.TriesInMemory),
+					OldestBlock:    hexUintPtr(5_000_000 - corestate.DefaultTriesInMemory + 1),
+					DeleteStrategy: windowStrategy(corestate.DefaultTriesInMemory),
 				},
 			},
 		},
@@ -223,12 +223,12 @@ func TestBuildCapabilities(t *testing.T) {
 			},
 			expected: map[string]CapabilityResource{
 				"state": {
-					OldestBlock:    hexUintPtr(5_000_000 - corestate.TriesInMemory + 1),
-					DeleteStrategy: windowStrategy(corestate.TriesInMemory),
+					OldestBlock:    hexUintPtr(5_000_000 - corestate.DefaultTriesInMemory + 1),
+					DeleteStrategy: windowStrategy(corestate.DefaultTriesInMemory),
 				},
 				"stateproofs": {
-					OldestBlock:    hexUintPtr(5_000_000 - corestate.TriesInMemory + 1),
-					DeleteStrategy: windowStrategy(corestate.TriesInMemory),
+					OldestBlock:    hexUintPtr(5_000_000 - corestate.DefaultTriesInMemory + 1),
+					DeleteStrategy: windowStrategy(corestate.DefaultTriesInMemory),
 				},
 			},
 		},
@@ -242,12 +242,12 @@ func TestBuildCapabilities(t *testing.T) {
 			},
 			expected: map[string]CapabilityResource{
 				"state": {
-					OldestBlock:    hexUintPtr(5_000_000 - corestate.TriesInMemory + 1),
-					DeleteStrategy: windowStrategy(corestate.TriesInMemory),
+					OldestBlock:    hexUintPtr(5_000_000 - corestate.DefaultTriesInMemory + 1),
+					DeleteStrategy: windowStrategy(corestate.DefaultTriesInMemory),
 				},
 				"stateproofs": {
-					OldestBlock:    hexUintPtr(5_000_000 - corestate.TriesInMemory + 1),
-					DeleteStrategy: windowStrategy(corestate.TriesInMemory),
+					OldestBlock:    hexUintPtr(5_000_000 - corestate.DefaultTriesInMemory + 1),
+					DeleteStrategy: windowStrategy(corestate.DefaultTriesInMemory),
 				},
 			},
 		},

@@ -182,7 +182,7 @@ func buildCapabilities(headNum uint64, headHash common.Hash, cutoff uint64, ret 
 	var state CapabilityResource
 	switch {
 	case !ret.StateArchive:
-		state = resource(false, corestate.TriesInMemory, 0)
+		state = resource(false, corestate.DefaultTriesInMemory, 0)
 	case ret.StateScheme == rawdb.HashScheme:
 		state = resource(false, 0, 0)
 	default:
@@ -196,7 +196,7 @@ func buildCapabilities(headNum uint64, headHash common.Hash, cutoff uint64, ret 
 	if ret.StateArchive && ret.StateScheme == rawdb.PathScheme {
 		switch {
 		case ret.TrienodeHistory < 0:
-			stateproofs = resource(false, corestate.TriesInMemory, 0)
+			stateproofs = resource(false, corestate.DefaultTriesInMemory, 0)
 		case ret.TrienodeHistory == 0:
 			stateproofs = resource(false, 0, 0)
 		default:
