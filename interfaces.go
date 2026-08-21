@@ -127,13 +127,18 @@ type SyncProgress struct {
 	SyncedStorage       uint64 // Number of storage slots downloaded
 	SyncedStorageBytes  uint64 // Number of storage trie bytes persisted to disk
 
+	// Snap/1 specific fields
 	HealedTrienodes     uint64 // Number of state trie nodes downloaded
 	HealedTrienodeBytes uint64 // Number of state trie bytes persisted to disk
 	HealedBytecodes     uint64 // Number of bytecodes downloaded
 	HealedBytecodeBytes uint64 // Number of bytecodes persisted to disk
+	HealingTrienodes    uint64 // Number of state trie nodes pending
+	HealingBytecode     uint64 // Number of bytecodes pending
 
-	HealingTrienodes uint64 // Number of state trie nodes pending
-	HealingBytecode  uint64 // Number of bytecodes pending
+	// Snap/2 specific fields
+	SyncedAccessLists uint64 // Number of block access lists fetched during catch-up
+	TotalAccessLists  uint64 // Total number of block access lists to fetch for catch-up
+	TrieGenProgress   uint64 // Trie generation completion, in percent (0..100)
 
 	// "transaction indexing" fields
 	TxIndexFinishedBlocks  uint64 // Number of blocks whose transactions are already indexed
@@ -173,6 +178,9 @@ func (prog SyncProgress) ToMap() map[string]interface{} {
 		"healedBytecodeBytes":    hexutil.Uint64(prog.HealedBytecodeBytes),
 		"healingTrienodes":       hexutil.Uint64(prog.HealingTrienodes),
 		"healingBytecode":        hexutil.Uint64(prog.HealingBytecode),
+		"syncedAccessLists":      hexutil.Uint64(prog.SyncedAccessLists),
+		"totalAccessLists":       hexutil.Uint64(prog.TotalAccessLists),
+		"trieGenProgress":        hexutil.Uint64(prog.TrieGenProgress),
 		"txIndexFinishedBlocks":  hexutil.Uint64(prog.TxIndexFinishedBlocks),
 		"txIndexRemainingBlocks": hexutil.Uint64(prog.TxIndexRemainingBlocks),
 		"stateIndexRemaining":    hexutil.Uint64(prog.StateIndexRemaining),
