@@ -362,7 +362,11 @@ func TestGenerateTrieOrphanStorage(t *testing.T) {
 	}
 	for _, o := range orphans {
 		for _, s := range o.slots {
-			if v := rawdb.ReadStorageSnapshot(db, o.account, s.hash); v != nil {
+			v, err := rawdb.ReadStorageSnapshot(db, o.account, s.hash)
+			if err != nil {
+				t.Fatalf("failed to read storage snapshot: %v", err)
+			}
+			if v != nil {
 				t.Errorf("dangling slot %x/%x not cleared, got %x", o.account, s.hash, v)
 			}
 		}

@@ -129,7 +129,11 @@ func (s *syncerV2) applyAccessList(b *bal.BlockAccessList, batch ethdb.Batch) er
 			account types.StateAccount
 			isNew   bool
 		)
-		if data := rawdb.ReadAccountSnapshot(s.db, accountHash); len(data) > 0 {
+		data, err := rawdb.ReadAccountSnapshot(s.db, accountHash)
+		if err != nil {
+			return fmt.Errorf("failed to read account snapshot %v: %w", addr, err)
+		}
+		if len(data) > 0 {
 			existing, err := types.FullAccount(data)
 			if err != nil {
 				return fmt.Errorf("failed to decode account %v: %w", addr, err)

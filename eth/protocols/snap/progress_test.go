@@ -192,10 +192,10 @@ func TestSyncProgressV1Discarded(t *testing.T) {
 	if len(syncer.tasks) != accountConcurrency {
 		t.Fatalf("expected fresh task split of %d, got %d", accountConcurrency, len(syncer.tasks))
 	}
-	if data := rawdb.ReadAccountSnapshot(db, orphanAccountHash); len(data) != 0 {
+	if data := readAccountSnapshot(t, db, orphanAccountHash); len(data) != 0 {
 		t.Errorf("orphan account snapshot should be wiped, got %x", data)
 	}
-	if val := rawdb.ReadStorageSnapshot(db, orphanStorageAccount, orphanStorageSlot); len(val) != 0 {
+	if val := readStorageSnapshot(t, db, orphanStorageAccount, orphanStorageSlot); len(val) != 0 {
 		t.Errorf("orphan storage snapshot should be wiped, got %x", val)
 	}
 }
@@ -264,7 +264,7 @@ func TestSyncProgressCorruptPayload(t *testing.T) {
 	if len(syncer.tasks) != accountConcurrency {
 		t.Fatalf("expected fresh task split of %d, got %d", accountConcurrency, len(syncer.tasks))
 	}
-	if data := rawdb.ReadAccountSnapshot(db, orphanAccountHash); len(data) != 0 {
+	if data := readAccountSnapshot(t, db, orphanAccountHash); len(data) != 0 {
 		t.Errorf("orphan account snapshot should be wiped, got %x", data)
 	}
 }

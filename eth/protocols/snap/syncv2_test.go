@@ -1457,10 +1457,10 @@ func TestSyncDetectsPivotReorged(t *testing.T) {
 	if loader.pivot == nil || loader.pivot.Hash() != newPivot.Hash() {
 		t.Fatalf("expected persisted pivot to match new pivot")
 	}
-	if data := rawdb.ReadAccountSnapshot(db, orphanAccountHash); len(data) != 0 {
+	if data := readAccountSnapshot(t, db, orphanAccountHash); len(data) != 0 {
 		t.Errorf("orphan account snapshot should be wiped, got %x", data)
 	}
-	if val := rawdb.ReadStorageSnapshot(db, orphanStorageAccount, orphanStorageSlot); len(val) != 0 {
+	if val := readStorageSnapshot(t, db, orphanStorageAccount, orphanStorageSlot); len(val) != 0 {
 		t.Errorf("orphan storage snapshot should be wiped, got %x", val)
 	}
 }
@@ -1517,7 +1517,7 @@ func testInterruptedDownloadRecovery(t *testing.T, scheme string) {
 	// with delivery so 0 accounts may be written.
 	firstRunCount := 0
 	for _, entry := range elems {
-		if data := rawdb.ReadAccountSnapshot(db, common.BytesToHash(entry.k)); len(data) > 0 {
+		if data := readAccountSnapshot(t, db, common.BytesToHash(entry.k)); len(data) > 0 {
 			firstRunCount++
 		}
 	}
@@ -1546,7 +1546,7 @@ func testInterruptedDownloadRecovery(t *testing.T, scheme string) {
 
 	// Verify all accounts are now present
 	for _, entry := range elems {
-		if data := rawdb.ReadAccountSnapshot(db, common.BytesToHash(entry.k)); len(data) == 0 {
+		if data := readAccountSnapshot(t, db, common.BytesToHash(entry.k)); len(data) == 0 {
 			t.Errorf("missing account after resumed download: %x", entry.k)
 		}
 	}
@@ -1741,7 +1741,7 @@ func testPivotMovement(t *testing.T, scheme string, pivotMoves int) {
 		}
 
 		// Verify account 50's balance was updated by catch-up
-		data := rawdb.ReadAccountSnapshot(db, targetHash)
+		data := readAccountSnapshot(t, db, targetHash)
 		if len(data) == 0 {
 			t.Fatalf("pivot move %d: account 50 not found after sync", i+1)
 		}
@@ -2009,7 +2009,7 @@ func testCatchUpWindowed(t *testing.T, scheme string) {
 
 	// The account must reflect the final block's balance, proving every window
 	// (including the trailing partial one) was fetched and applied in order.
-	data := rawdb.ReadAccountSnapshot(db, targetHash)
+	data := readAccountSnapshot(t, db, targetHash)
 	if len(data) == 0 {
 		t.Fatal("target account missing after windowed catch-up")
 	}
@@ -2273,9 +2273,9 @@ func TestPruneStaleState(t *testing.T) {
 	} {
 		var have bool
 		if tc.slot == nil {
-			have = len(rawdb.ReadAccountSnapshot(db, tc.account)) > 0
+			have = len(readAccountSnapshot(t, db, tc.account)) > 0
 		} else {
-			have = len(rawdb.ReadStorageSnapshot(db, tc.account, *tc.slot)) > 0
+			have = len(readStorageSnapshot(t, db, tc.account, *tc.slot)) > 0
 		}
 		if have != tc.want {
 			t.Errorf("%s: present = %v, want %v", tc.desc, have, tc.want)
@@ -2355,7 +2355,7 @@ func testResumeWipesUncoveredState(t *testing.T, scheme string) {
 	if err := syncer2.Sync(pivot, cancel2); err != nil {
 		t.Fatalf("resumed sync failed: %v", err)
 	}
-	if len(rawdb.ReadAccountSnapshot(db, bogus)) != 0 {
+	if len(readAccountSnapshot(t, db, bogus)) != 0 {
 		t.Fatal("uncovered account entry should have been pruned on resume")
 	}
 	verifyTrie(scheme, db, root, t)
@@ -3081,7 +3081,7 @@ func testCatchUpAppliesStorageBALs(t *testing.T, scheme string) {
 	// canonical encoding.
 	checkSlot := func(raw common.Hash, want common.Hash, present bool) {
 		t.Helper()
-		got := rawdb.ReadStorageSnapshot(db, contractHash, crypto.Keccak256Hash(raw[:]))
+		got := readStorageSnapshot(t, db, contractHash, crypto.Keccak256Hash(raw[:]))
 		if !present {
 			if len(got) != 0 {
 				t.Errorf("slot %x: expected deletion, got %x", raw, got)

@@ -26,9 +26,28 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
+
+func readAccountSnapshot(t *testing.T, db ethdb.KeyValueReader, hash common.Hash) []byte {
+	t.Helper()
+	data, err := rawdb.ReadAccountSnapshot(db, hash)
+	if err != nil {
+		t.Fatalf("failed to read account snapshot: %v", err)
+	}
+	return data
+}
+
+func readStorageSnapshot(t *testing.T, db ethdb.KeyValueReader, accountHash, storageHash common.Hash) []byte {
+	t.Helper()
+	data, err := rawdb.ReadStorageSnapshot(db, accountHash, storageHash)
+	if err != nil {
+		t.Fatalf("failed to read storage snapshot: %v", err)
+	}
+	return data
+}
 
 // buildTestBAL constructs a BlockAccessList from a ConstructionBlockAccessList
 // by RLP round-tripping (construction types use unexported encoding types).
@@ -131,7 +150,7 @@ func TestAccessListApplication(t *testing.T) {
 	applyBAL(t, syncer, b)
 
 	// Verify account fields updated
-	data := rawdb.ReadAccountSnapshot(db, accountHash)
+	data := readAccountSnapshot(t, db, accountHash)
 	if len(data) == 0 {
 		t.Fatal("account snapshot missing after apply")
 	}
@@ -158,7 +177,7 @@ func TestAccessListApplication(t *testing.T) {
 	// Verify storage updated. Slots are stored in the canonical snapshot
 	// encoding (RLP of the value with leading zeros trimmed), the same form
 	// the download path writes and the trie generation consumes.
-	storageVal := rawdb.ReadStorageSnapshot(db, accountHash, slotHash)
+	storageVal := readStorageSnapshot(t, db, accountHash, slotHash)
 	wantStorage, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(common.HexToHash("0x02").Bytes()))
 	if !bytes.Equal(storageVal, wantStorage) {
 		t.Errorf("storage wrong: got %x, want %x", storageVal, wantStorage)
@@ -199,7 +218,7 @@ func TestAccessListApplicationMultiTx(t *testing.T) {
 	cb.NonceChange(addr, 7, 3)                      // tx 7 (final)
 	b := buildTestBAL(t, cb)
 	applyBAL(t, syncer, b)
-	data := rawdb.ReadAccountSnapshot(db, accountHash)
+	data := readAccountSnapshot(t, db, accountHash)
 	updated, err := types.FullAccount(data)
 	if err != nil {
 		t.Fatalf("failed to decode updated account: %v", err)
@@ -242,7 +261,7 @@ func TestAccessListApplicationZeroStorage(t *testing.T) {
 	b := buildTestBAL(t, cb)
 	applyBAL(t, syncer, b)
 
-	if val := rawdb.ReadStorageSnapshot(db, accountHash, slotHash); len(val) != 0 {
+	if val := readStorageSnapshot(t, db, accountHash, slotHash); len(val) != 0 {
 		t.Errorf("zeroed slot should have been deleted, got %x", val)
 	}
 }
@@ -259,7 +278,7 @@ func TestAccessListApplicationNewAccount(t *testing.T) {
 	accountHash := crypto.Keccak256Hash(addr[:])
 
 	// Verify account doesn't exist
-	if data := rawdb.ReadAccountSnapshot(db, accountHash); len(data) > 0 {
+	if data := readAccountSnapshot(t, db, accountHash); len(data) > 0 {
 		t.Fatal("account should not exist yet")
 	}
 
@@ -273,7 +292,7 @@ func TestAccessListApplicationNewAccount(t *testing.T) {
 	applyBAL(t, syncer, b)
 
 	// Verify account was created
-	data := rawdb.ReadAccountSnapshot(db, accountHash)
+	data := readAccountSnapshot(t, db, accountHash)
 	if len(data) == 0 {
 		t.Fatal("account should exist after apply")
 	}
@@ -294,7 +313,7 @@ func TestAccessListApplicationNewAccount(t *testing.T) {
 	// Verify storage was written under keccak256(rawSlot) in the canonical
 	// snapshot encoding (RLP of the value with leading zeros trimmed).
 	slotHash := crypto.Keccak256Hash(rawSlot[:])
-	storageVal := rawdb.ReadStorageSnapshot(db, accountHash, slotHash)
+	storageVal := readStorageSnapshot(t, db, accountHash, slotHash)
 	wantStorage, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(common.HexToHash("0xff").Bytes()))
 	if !bytes.Equal(storageVal, wantStorage) {
 		t.Errorf("storage wrong: got %x, want %x", storageVal, wantStorage)
@@ -338,11 +357,11 @@ func TestAccessListApplicationSkipsUnfetched(t *testing.T) {
 	applyBAL(t, syncer, b)
 
 	// The fetched account should have been written.
-	if data := rawdb.ReadAccountSnapshot(db, fetchedHash); len(data) == 0 {
+	if data := readAccountSnapshot(t, db, fetchedHash); len(data) == 0 {
 		t.Error("expected fetched account to be written")
 	}
 	// The unfetched account should not have been touched.
-	if data := rawdb.ReadAccountSnapshot(db, unfetchedHash); len(data) != 0 {
+	if data := readAccountSnapshot(t, db, unfetchedHash); len(data) != 0 {
 		t.Errorf("unfetched account should not be written, got %x", data)
 	}
 }
@@ -381,10 +400,10 @@ func TestAccessListApplicationSkipsUnfetchedStorage(t *testing.T) {
 
 	applyBAL(t, syncer, b)
 
-	if data := rawdb.ReadAccountSnapshot(db, unfetchedHash); len(data) != 0 {
+	if data := readAccountSnapshot(t, db, unfetchedHash); len(data) != 0 {
 		t.Errorf("unfetched account should not be written, got %x", data)
 	}
-	if val := rawdb.ReadStorageSnapshot(db, unfetchedHash, slotHash); len(val) != 0 {
+	if val := readStorageSnapshot(t, db, unfetchedHash, slotHash); len(val) != 0 {
 		t.Errorf("storage for unfetched account should not be written, got %x", val)
 	}
 }
@@ -434,16 +453,16 @@ func TestAccessListApplicationPartialStorage(t *testing.T) {
 	applyBAL(t, syncer, b)
 
 	// Account must not be written: it's still being filled.
-	if data := rawdb.ReadAccountSnapshot(db, accountHash); len(data) != 0 {
+	if data := readAccountSnapshot(t, db, accountHash); len(data) != 0 {
 		t.Errorf("account below Next should not be written, got %x", data)
 	}
 	// Slot below the frontier must be rolled forward.
 	wantLo, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(common.HexToHash("0x11").Bytes()))
-	if val := rawdb.ReadStorageSnapshot(db, accountHash, loHash); !bytes.Equal(val, wantLo) {
+	if val := readStorageSnapshot(t, db, accountHash, loHash); !bytes.Equal(val, wantLo) {
 		t.Errorf("fetched slot wrong: got %x, want %x", val, wantLo)
 	}
 	// Slot above the frontier must be skipped.
-	if val := rawdb.ReadStorageSnapshot(db, accountHash, hiHash); len(val) != 0 {
+	if val := readStorageSnapshot(t, db, accountHash, hiHash); len(val) != 0 {
 		t.Errorf("unfetched slot should not be written, got %x", val)
 	}
 }
@@ -527,7 +546,7 @@ func TestAccessListApplicationSameTxCreateDestroy(t *testing.T) {
 	accountHash := crypto.Keccak256Hash(addr[:])
 
 	// Verify account doesn't exist before apply
-	if data := rawdb.ReadAccountSnapshot(db, accountHash); len(data) > 0 {
+	if data := readAccountSnapshot(t, db, accountHash); len(data) > 0 {
 		t.Fatal("account should not exist yet")
 	}
 
@@ -539,7 +558,7 @@ func TestAccessListApplicationSameTxCreateDestroy(t *testing.T) {
 	applyBAL(t, syncer, b)
 
 	// Check if applyAccessList created an account.
-	data := rawdb.ReadAccountSnapshot(db, accountHash)
+	data := readAccountSnapshot(t, db, accountHash)
 	if len(data) > 0 {
 		// Account was created
 		account, err := types.FullAccount(data)
@@ -579,7 +598,7 @@ func TestAccessListApplicationDestroyExisting(t *testing.T) {
 	b := buildTestBAL(t, cb)
 	applyBAL(t, syncer, b)
 
-	if data := rawdb.ReadAccountSnapshot(db, accountHash); len(data) != 0 {
+	if data := readAccountSnapshot(t, db, accountHash); len(data) != 0 {
 		account, _ := types.FullAccount(data)
 		t.Errorf("destroyed account should have been deleted from flat state, "+
 			"got balance=%v, nonce=%d, codeHash=%x",
