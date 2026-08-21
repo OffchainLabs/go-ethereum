@@ -386,7 +386,7 @@ func (c *Cache) selectTopTxs() []common.Hash {
 	if head.ExcessBlobGas != nil {
 		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(config, head))
 	}
-	if config.IsOsaka(head.Number, head.Time) {
+	if config.IsOsaka(head.Number, head.Time, types.DeserializeHeaderExtraInformation(head).ArbOSFormatVersion) {
 		filter.BlobVersion = types.BlobSidecarVersion1
 	} else {
 		filter.BlobVersion = types.BlobSidecarVersion0
