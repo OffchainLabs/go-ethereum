@@ -243,8 +243,8 @@ func TestServerBatchResponseSizeLimit_errorResponses(t *testing.T) {
 			}
 		} else {
 			// Remaining should be the response-too-large error.
-			if re.ErrorCode() != errcodeResponseTooLarge {
-				t.Errorf("batch elem %d wrong error code, have %d want %d", i, re.ErrorCode(), errcodeResponseTooLarge)
+			if re.ErrorCode() != ErrcodeResponseTooLarge {
+				t.Errorf("batch elem %d wrong error code, have %d want %d", i, re.ErrorCode(), ErrcodeResponseTooLarge)
 			}
 		}
 	}
