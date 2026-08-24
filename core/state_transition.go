@@ -98,15 +98,15 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 	if err != nil {
 		return vm.GasCosts{}, err
 	}
-	return intrinsicGasCosts(multiGas, rules.IsEIP8037), nil
+	return intrinsicGasCosts(multiGas, rules.IsAmsterdam), nil
 }
 
 // Arbitrum: intrinsicGasCosts splits an intrinsic multigas into the EIP-8037
-// two-dimensional vector. Under EIP-8037 every state-gas component of the
+// two-dimensional vector. Under Amsterdam every state-gas component of the
 // intrinsic cost is booked to ResourceKindStorageGrowth and nothing else is,
 // so that dimension is exactly the state gas.
-func intrinsicGasCosts(multiGas multigas.MultiGas, isEIP8037 bool) vm.GasCosts {
-	if isEIP8037 {
+func intrinsicGasCosts(multiGas multigas.MultiGas, isAmsterdam bool) vm.GasCosts {
+	if isAmsterdam {
 		stateGas := multiGas.Get(multigas.ResourceKindStorageGrowth)
 		return vm.GasCosts{RegularGas: multiGas.SingleGas() - stateGas, StateGas: stateGas}
 	}
@@ -118,7 +118,7 @@ func IntrinsicMultiGas(data []byte, accessList types.AccessList, authList []type
 	// Set the starting gas for the raw transaction
 	var gas multigas.MultiGas
 	if isContractCreation && rules.IsHomestead {
-		if rules.IsEIP8037 {
+		if rules.IsAmsterdam {
 			gas.SaturatingIncrementInto(multigas.ResourceKindComputation, params.TxGas+params.CreateGasAmsterdam)
 			gas.SaturatingIncrementInto(multigas.ResourceKindStorageGrowth, params.AccountCreationSize*costPerStateByte)
 		} else {
@@ -129,7 +129,7 @@ func IntrinsicMultiGas(data []byte, accessList types.AccessList, authList []type
 	}
 	// Add gas for authorizations
 	if authList != nil {
-		if rules.IsEIP8037 {
+		if rules.IsAmsterdam {
 			gas.SaturatingIncrementInto(multigas.ResourceKindComputation, uint64(len(authList))*params.TxAuthTupleRegularGas)
 			gas.SaturatingIncrementInto(multigas.ResourceKindStorageGrowth, uint64(len(authList))*(params.AuthorizationCreationSize+params.AccountCreationSize)*costPerStateByte)
 		} else {
@@ -673,18 +673,10 @@ func (st *stateTransition) buyGas() error {
 	}
 	isAmsterdam := st.evm.ChainConfig().IsAmsterdam(st.evm.Context.BlockNumber, st.evm.Context.Time, st.evm.Context.ArbOSVersion)
 
-	// After Amsterdam we limit the regular gas to 16M, the data gas to the transaction limit.
-	// Arbitrum: without EIP-8037 the whole allowance stays regular gas and the
-	// state reservoir is empty.
-	limit := st.msg.GasLimit
-	if isAmsterdam && !st.evm.ChainConfig().IsArbitrum() {
-		limit = min(st.msg.GasLimit, params.MaxTxGasRenamedForNitroMerges)
-	}
-
 	// Reserve the gas budget in the block gas pool
 	var err error
 	if isAmsterdam {
-		err = st.gp.CheckGasAmsterdam(limit, st.msg.GasLimit)
+		err = st.gp.CheckGasAmsterdam(min(st.msg.GasLimit, params.MaxTxGasRenamedForNitroMerges), st.msg.GasLimit)
 	} else {
 		err = st.gp.CheckGasLegacy(st.msg.GasLimit)
 	}
@@ -692,6 +684,11 @@ func (st *stateTransition) buyGas() error {
 		return err
 	}
 
+	// After Amsterdam we limit the regular gas to 16M, the data gas to the transaction limit
+	limit := st.msg.GasLimit
+	if isAmsterdam {
+		limit = min(st.msg.GasLimit, params.MaxTxGasRenamedForNitroMerges)
+	}
 	st.gasRemaining = vm.NewGasBudget(limit, st.msg.GasLimit-limit)
 
 	if st.evm.Config.Tracer.HasGasHook() {
@@ -893,7 +890,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	iGasCost := intrinsicGasCosts(iMultiGasCost, rules.IsEIP8037)
+	iGasCost := intrinsicGasCosts(iMultiGasCost, rules.IsAmsterdam)
 	prior, sufficient := st.gasRemaining.Charge(iGasCost)
 	if !sufficient {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining.RegularGas, iGasCost.RegularGas)
@@ -917,7 +914,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 		// In Amsterdam, the transaction gas limit is allowed to exceed
 		// params.MaxTxGas, but the calldata floor cost is capped by it.
-		if rules.IsEIP8037 && max(iGasCost.RegularGas, floorDataGas) > params.MaxTxGasRenamedForNitroMerges {
+		if rules.IsAmsterdam && max(iGasCost.RegularGas, floorDataGas) > params.MaxTxGasRenamedForNitroMerges {
 			return nil, fmt.Errorf("%w: regular intrisic cost %v, floor: %v", ErrFloorDataGas, iGasCost.RegularGas, floorDataGas)
 		}
 	}
@@ -987,7 +984,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 			// If the contract creation failed, refund the account-creation state
 			// gas pre-charged in IntrinsicGas.
-			if rules.IsEIP8037 && vmerr != nil {
+			if rules.IsAmsterdam && vmerr != nil {
 				st.gasRemaining.RefundState(params.AccountCreationSize * st.evm.Context.CostPerStateByte)
 			}
 		} else {
@@ -1226,14 +1223,14 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 func (st *stateTransition) applyAuthorization(rules params.Rules, auth *types.SetCodeAuthorization, delegates map[common.Address]bool) error {
 	authority, err := st.validateAuthorization(auth)
 	if err != nil {
-		if rules.IsEIP8037 {
+		if rules.IsAmsterdam {
 			st.gasRemaining.RefundState((params.AccountCreationSize + params.AuthorizationCreationSize) * st.evm.Context.CostPerStateByte)
 		}
 		return err
 	}
 	prevDelegation, curDelegated := types.ParseDelegation(st.state.GetCode(authority))
 
-	if !rules.IsEIP8037 {
+	if !rules.IsAmsterdam {
 		if st.state.Exist(authority) {
 			st.state.AddRefund(params.CallNewAccountGas - params.TxAuthTupleGas)
 		}

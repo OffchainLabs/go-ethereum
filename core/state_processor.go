@@ -292,7 +292,7 @@ func ApplyTransactionWithResultFilter(evm *vm.EVM, gp *GasPool, statedb *state.S
 
 // systemCallGasBudget returns the gas budget for system calls.
 func systemCallGasBudget(evm *vm.EVM) (gasLimit uint64, gasBudget vm.GasBudget) {
-	if !evm.GetRules().IsEIP8037 {
+	if !evm.GetRules().IsAmsterdam {
 		gasLimit = 30_000_000
 		gasBudget = vm.NewGasBudget(gasLimit, 0)
 	} else {

@@ -336,7 +336,6 @@ func TestIntrinsicGas(t *testing.T) {
 				IsIstanbul:  tt.isEIP2028,
 				IsShanghai:  tt.isEIP3860,
 				IsAmsterdam: tt.isAmsterdam,
-				IsEIP8037:   tt.isAmsterdam,
 			}
 			got, err := IntrinsicGas(tt.data, tt.accessList, tt.authList,
 				tt.creation, rules, params.CostPerStateByte)
@@ -611,7 +610,6 @@ func TestIntrinsicMultiGas(t *testing.T) {
 				IsIstanbul:  tt.isEIP2028,
 				IsShanghai:  tt.isEIP3860,
 				IsAmsterdam: tt.isAmsterdam,
-				IsEIP8037:   tt.isAmsterdam,
 			}
 			got, err := IntrinsicMultiGas(tt.data, tt.accessList, tt.authList, tt.isContractCreation, rules, params.CostPerStateByte)
 			if err != nil {

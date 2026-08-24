@@ -160,10 +160,8 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 	evm.precompiles = activePrecompiledContracts(evm.chainRules)
 
 	switch {
-	case evm.chainRules.IsEIP8037:
-		evm.table = &amsterdamInstructionSet
 	case evm.chainRules.IsAmsterdam:
-		evm.table = &arbitrumAmsterdamInstructionSet
+		evm.table = &amsterdamInstructionSet
 	case evm.chainRules.IsOsaka:
 		evm.table = &osakaInstructionSet
 	case evm.chainRules.IsUBT:
@@ -311,7 +309,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
-	if evm.chainRules.IsEIP8037 && !value.IsZero() && evm.StateDB.Empty(addr) {
+	if evm.chainRules.IsAmsterdam && !value.IsZero() && evm.StateDB.Empty(addr) {
 		prev, ok := gas.ChargeState(params.AccountCreationSize * evm.Context.CostPerStateByte)
 		if !ok {
 			evm.StateDB.RevertToSnapshot(snapshot)
@@ -647,7 +645,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	if !evm.StateDB.Exist(address) {
 		evm.StateDB.CreateAccount(address)
 
-		if evm.chainRules.IsEIP8037 && evm.depth > 0 {
+		if evm.chainRules.IsAmsterdam && evm.depth > 0 {
 			// Only charge state gas if we are not doing a create transaction.
 			// Prevents double charging with IntrinsicGas.
 			prev, ok := gas.ChargeState(params.AccountCreationSize * evm.Context.CostPerStateByte)
@@ -741,7 +739,7 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 		if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
 			return ret, err
 		}
-	} else if evm.chainRules.IsEIP8037 {
+	} else if evm.chainRules.IsAmsterdam {
 		// Check max code size BEFORE charging gas so over-max code
 		// does not consume state gas (which would inflate tx_state).
 		if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
