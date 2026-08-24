@@ -476,7 +476,7 @@ func TestCreateReturnsMultiGas(t *testing.T) {
 	ret, _, leftoverGas, usedMultigas, err := evm.Create(
 		creator,
 		initcode,
-		vm.NewGasBudget(gasLimit),
+		vm.NewGasBudget(gasLimit, 0),
 		value,
 	)
 	if err != nil {
@@ -605,7 +605,13 @@ func TestIntrinsicMultiGas(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := IntrinsicMultiGas(tt.data, tt.accessList, tt.authList, tt.isContractCreation, tt.isHomestead, tt.isEIP2028, tt.isEIP3860, tt.isAmsterdam)
+			rules := params.Rules{
+				IsHomestead: tt.isHomestead,
+				IsIstanbul:  tt.isEIP2028,
+				IsShanghai:  tt.isEIP3860,
+				IsAmsterdam: tt.isAmsterdam,
+			}
+			got, err := IntrinsicMultiGas(tt.data, tt.accessList, tt.authList, tt.isContractCreation, rules, params.CostPerStateByte)
 			if err != nil {
 				t.Fatalf("unexpected IntrinsicMultiGas() error: got %v", err)
 			}
@@ -655,7 +661,7 @@ func TestCallVariantsMultiGas(t *testing.T) {
 		{
 			name: "callcode_success",
 			callFn: func() ([]byte, vm.GasBudget, multigas.MultiGas, error) {
-				return evm.CallCode(caller, contractAddr, nil, vm.NewGasBudget(gasLimit), uint256.NewInt(0))
+				return evm.CallCode(caller, contractAddr, nil, vm.NewGasBudget(gasLimit, 0), uint256.NewInt(0))
 			},
 			expectErr: nil,
 			expectedMultiGas: multigas.MultiGasFromPairs(
@@ -667,7 +673,7 @@ func TestCallVariantsMultiGas(t *testing.T) {
 		{
 			name: "delegatecall_success_same_caller",
 			callFn: func() ([]byte, vm.GasBudget, multigas.MultiGas, error) {
-				return evm.DelegateCall(caller, caller, contractAddr, nil, vm.NewGasBudget(gasLimit), uint256.NewInt(0))
+				return evm.DelegateCall(caller, caller, contractAddr, nil, vm.NewGasBudget(gasLimit, 0), uint256.NewInt(0))
 			},
 			expectErr: nil,
 			expectedMultiGas: multigas.MultiGasFromPairs(
@@ -677,7 +683,7 @@ func TestCallVariantsMultiGas(t *testing.T) {
 		{
 			name: "delegatecall_success_delegate_caller",
 			callFn: func() ([]byte, vm.GasBudget, multigas.MultiGas, error) {
-				return evm.DelegateCall(caller, delegate, contractAddr, nil, vm.NewGasBudget(gasLimit), uint256.NewInt(0))
+				return evm.DelegateCall(caller, delegate, contractAddr, nil, vm.NewGasBudget(gasLimit, 0), uint256.NewInt(0))
 			},
 			expectErr: nil,
 			expectedMultiGas: multigas.MultiGasFromPairs(
@@ -689,7 +695,7 @@ func TestCallVariantsMultiGas(t *testing.T) {
 		{
 			name: "staticcall_err_write_protection",
 			callFn: func() ([]byte, vm.GasBudget, multigas.MultiGas, error) {
-				return evm.StaticCall(caller, contractAddr, nil, vm.NewGasBudget(gasLimit))
+				return evm.StaticCall(caller, contractAddr, nil, vm.NewGasBudget(gasLimit, 0))
 			},
 			expectErr:         vm.ErrOutOfGas,
 			expectErrContains: vm.ErrWriteProtection.Error(),
