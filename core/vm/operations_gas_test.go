@@ -845,7 +845,7 @@ func TestArbitrumAmsterdamGasFailureOrdering(t *testing.T) {
 			name:    "gas-starved CALL",
 			gasFunc: gasCall,
 			setup: func(_ *EVM, stateDB *stateReadRecordingStateDB, contract *Contract, stack *Stack) {
-				contract.Gas = NewGasBudget(params.CallValueTransferGas - 1, 0)
+				contract.Gas = NewGasBudget(params.CallValueTransferGas-1, 0)
 				stateDB.CreateAccount(targetAddress)
 				stateDB.AddBalance(targetAddress, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
 				stack.push(uint256.NewInt(1))
@@ -862,7 +862,7 @@ func TestArbitrumAmsterdamGasFailureOrdering(t *testing.T) {
 			name:    "gas-starved EIP-2929 SELFDESTRUCT",
 			gasFunc: gasSelfdestructEIP2929,
 			setup: func(_ *EVM, _ *stateReadRecordingStateDB, contract *Contract, stack *Stack) {
-				contract.Gas = NewGasBudget(params.ColdAccountAccessCostEIP2929 - 1, 0)
+				contract.Gas = NewGasBudget(params.ColdAccountAccessCostEIP2929-1, 0)
 				stack.push(new(uint256.Int).SetBytes(targetAddress.Bytes()))
 			},
 			pre: expectation{
