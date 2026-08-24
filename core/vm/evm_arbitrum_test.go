@@ -76,7 +76,7 @@ func TestCreateStylusComponentPrefixArbosVersion(t *testing.T) {
 			}
 
 			evm := NewEVM(blockCtx, statedb, &chainConfig, Config{})
-			ret, _, _, _, err := evm.Create(creator, initCodeForReturn(tt.code), NewGasBudget(1_000_000), uint256.NewInt(0))
+			ret, _, _, _, err := evm.Create(creator, initCodeForReturn(tt.code), NewGasBudget(1_000_000, 0), uint256.NewInt(0))
 			if tt.wantErr != nil {
 				if err != tt.wantErr {
 					t.Fatalf("expected %v, got %v", tt.wantErr, err)

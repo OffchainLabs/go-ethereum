@@ -45,7 +45,7 @@ func testGasSStoreFuncFuncWithCases(t *testing.T, config *params.ChainConfig, ga
 
 			caller := common.Address{}
 			contractAddr := common.Address{1}
-			contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
+			contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas, 0), nil)
 
 			stack := newStackForTesting()
 			mem := NewMemory()
@@ -417,7 +417,7 @@ func TestGasSStore4762(t *testing.T) {
 	caller := common.Address{}
 	contractAddr := common.Address{1}
 	contractGas := uint64(100000)
-	contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas, 0), nil)
 
 	stack := newStackForTesting()
 	mem := NewMemory()
@@ -486,7 +486,7 @@ func testGasSLoad(t *testing.T, gasFunc gasFunc, slotKeyProviders ...func(contra
 	caller := common.Address{}
 	contractAddr := common.Address{1}
 	contractGas := uint64(100000)
-	contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas, 0), nil)
 
 	mem := NewMemory()
 
@@ -574,7 +574,7 @@ func testGasCallFuncFuncWithCases(t *testing.T, config *params.ChainConfig, gasC
 			}
 
 			// Setup contract
-			contract := NewContract(caller, caller, new(uint256.Int), NewGasBudget(initialContractGas), nil)
+			contract := NewContract(caller, caller, new(uint256.Int), NewGasBudget(initialContractGas, 0), nil)
 			contract.IsSystemCall = tc.isSystemCall
 
 			// Setup stack: [value, address, gas] (bottom to top)
@@ -843,7 +843,7 @@ func TestArbitrumAmsterdamGasFailureOrdering(t *testing.T) {
 			name:    "gas-starved CALL",
 			gasFunc: gasCall,
 			setup: func(_ *EVM, stateDB *stateReadRecordingStateDB, contract *Contract, stack *Stack) {
-				contract.Gas = NewGasBudget(params.CallValueTransferGas - 1)
+				contract.Gas = NewGasBudget(params.CallValueTransferGas - 1, 0)
 				stateDB.CreateAccount(targetAddress)
 				stateDB.AddBalance(targetAddress, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
 				stack.push(uint256.NewInt(1))
@@ -860,7 +860,7 @@ func TestArbitrumAmsterdamGasFailureOrdering(t *testing.T) {
 			name:    "gas-starved EIP-2929 SELFDESTRUCT",
 			gasFunc: gasSelfdestructEIP2929,
 			setup: func(_ *EVM, _ *stateReadRecordingStateDB, contract *Contract, stack *Stack) {
-				contract.Gas = NewGasBudget(params.ColdAccountAccessCostEIP2929 - 1)
+				contract.Gas = NewGasBudget(params.ColdAccountAccessCostEIP2929 - 1, 0)
 				stack.push(new(uint256.Int).SetBytes(targetAddress.Bytes()))
 			},
 			pre: expectation{
@@ -924,7 +924,7 @@ func TestArbitrumAmsterdamGasFailureOrdering(t *testing.T) {
 				t.Run(fork.name, func(t *testing.T) {
 					evm, stateDB := newArbitrumAmsterdamTestEVM(t, fork.arbosVersion)
 					stateDB.CreateAccount(contractAddress)
-					contract := NewContract(caller, contractAddress, new(uint256.Int), NewGasBudget(100_000), nil)
+					contract := NewContract(caller, contractAddress, new(uint256.Int), NewGasBudget(100_000, 0), nil)
 					stack := newStackForTesting()
 					test.setup(evm, stateDB, contract, stack)
 					stateDB.reads = nil
@@ -1048,7 +1048,7 @@ func TestArbitrumAmsterdamGasSuccess(t *testing.T) {
 				t.Run(fork.name, func(t *testing.T) {
 					evm, stateDB := newArbitrumAmsterdamTestEVM(t, fork.arbosVersion)
 					stateDB.CreateAccount(contractAddress)
-					contract := NewContract(caller, contractAddress, new(uint256.Int), NewGasBudget(100_000), nil)
+					contract := NewContract(caller, contractAddress, new(uint256.Int), NewGasBudget(100_000, 0), nil)
 					stack := newStackForTesting()
 					test.setup(stateDB, contract, stack)
 					stateDB.reads = nil
@@ -1226,9 +1226,9 @@ func TestArbitrumAmsterdamCallFailureOrdering(t *testing.T) {
 						err          error
 					)
 					if test.static {
-						_, leftOverGas, usedMultiGas, err = evm.StaticCall(caller, contractAddress, nil, NewGasBudget(test.gasLimit))
+						_, leftOverGas, usedMultiGas, err = evm.StaticCall(caller, contractAddress, nil, NewGasBudget(test.gasLimit, 0))
 					} else {
-						_, leftOverGas, usedMultiGas, err = evm.Call(caller, contractAddress, nil, NewGasBudget(test.gasLimit), new(uint256.Int))
+						_, leftOverGas, usedMultiGas, err = evm.Call(caller, contractAddress, nil, NewGasBudget(test.gasLimit, 0), new(uint256.Int))
 					}
 					want := test.pre
 					if fork.post {
@@ -1344,7 +1344,7 @@ func TestArbitrumAmsterdamCallSuccess(t *testing.T) {
 					stateDB.AddBalance(contractAddress, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
 					test.prepare(stateDB)
 
-					_, leftOverGas, gotGas, err := evm.Call(caller, contractAddress, nil, NewGasBudget(gasLimit), new(uint256.Int))
+					_, leftOverGas, gotGas, err := evm.Call(caller, contractAddress, nil, NewGasBudget(gasLimit, 0), new(uint256.Int))
 					if err != nil {
 						t.Fatalf("unexpected error: %v", err)
 					}
@@ -1644,7 +1644,7 @@ func testGasDelegateOrStaticCall(t *testing.T, gasImplFunc gasFunc) {
 	caller := common.Address{}
 	contractAddr := common.Address{1}
 	contractGas := uint64(100000)
-	contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas, 0), nil)
 
 	stack := newStackForTesting()
 	mem := NewMemory()
@@ -1707,7 +1707,7 @@ func testGasCreateFunc(t *testing.T, gasImplFunc gasFunc, includeHashCost bool, 
 	caller := common.Address{}
 	contractAddr := common.Address{1}
 	contractGas := uint64(100000)
-	contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas, 0), nil)
 
 	stack := newStackForTesting()
 	mem := NewMemory()
@@ -1844,7 +1844,7 @@ func testGasSelfdestructFuncWithCases(t *testing.T, config *params.ChainConfig, 
 			caller := common.Address{}
 			contractAddr := common.Address{1}
 			beneficiaryAddr := common.Address{2}
-			contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
+			contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas, 0), nil)
 
 			stack := newStackForTesting()
 			mem := NewMemory()
@@ -1973,7 +1973,7 @@ func TestGasSelfdestructEIP4762(t *testing.T) {
 	contractAddr := common.Address{1}
 	beneficiaryAddr := common.Address{2}
 	contractGas := uint64(100000)
-	contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
+	contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas, 0), nil)
 
 	stack := newStackForTesting()
 	mem := NewMemory()
@@ -2012,7 +2012,7 @@ func TestMakeGasLog(t *testing.T) {
 		caller := common.Address{}
 		contractAddr := common.Address{1}
 		contractGas := uint64(100000)
-		contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
+		contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas, 0), nil)
 
 		stack := newStackForTesting()
 		mem := NewMemory()
@@ -2072,7 +2072,7 @@ func TestMemoryCopierGas(t *testing.T) {
 		caller := common.Address{}
 		contractAddr := common.Address{1}
 		contractGas := uint64(100000)
-		contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
+		contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas, 0), nil)
 
 		stack := newStackForTesting()
 		mem := NewMemory()
@@ -2155,7 +2155,7 @@ func TestGasCodeCopyEIP4762(t *testing.T) {
 			evm := NewEVM(BlockContext{BlockNumber: big.NewInt(0)}, statedb, params.TestChainConfig, Config{})
 			evm.AccessEvents = state.NewAccessEvents()
 
-			contract := NewContract(common.Address{}, common.HexToAddress("0x1234"), new(uint256.Int), NewGasBudget(100000), nil)
+			contract := NewContract(common.Address{}, common.HexToAddress("0x1234"), new(uint256.Int), NewGasBudget(100000, 0), nil)
 			contract.Code = make([]byte, c.codeLen)
 			contract.IsDeployment = c.isDeployment
 			contract.IsSystemCall = c.isSystemCall
@@ -2237,7 +2237,7 @@ func TestGasExtCodeCopyEIP4762(t *testing.T) {
 			evm := NewEVM(BlockContext{BlockNumber: big.NewInt(0)}, stateDb, params.TestChainConfig, Config{})
 			evm.AccessEvents = state.NewAccessEvents()
 
-			contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), NewGasBudget(100000), nil)
+			contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), NewGasBudget(100000, 0), nil)
 
 			// Setup stack: [address, memOffset, codeOffset, size] (bottom to top)
 			stack := newStackForTesting()
@@ -2310,7 +2310,7 @@ func TestGasExtCodeCopyEIP2929(t *testing.T) {
 			caller := common.Address{}
 			contractAddr := common.Address{1}
 			contractGas := uint64(100000)
-			contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas), nil)
+			contract := NewContract(caller, contractAddr, new(uint256.Int), NewGasBudget(contractGas, 0), nil)
 
 			stack := newStackForTesting()
 			stack.push(new(uint256.Int).SetUint64(0))
@@ -2363,7 +2363,7 @@ func TestGasEip2929AccountCheck(t *testing.T) {
 			stateDb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 			evm := NewEVM(BlockContext{BlockNumber: big.NewInt(0)}, stateDb, params.TestChainConfig, Config{})
 
-			contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), NewGasBudget(100000), nil)
+			contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), NewGasBudget(100000, 0), nil)
 
 			addr := common.HexToAddress(tt.addrHex)
 			if tt.prewarm {
@@ -2442,7 +2442,7 @@ func TestGasBalanceExtCodeSizeExtCodeHash4762(t *testing.T) {
 			evm := NewEVM(BlockContext{BlockNumber: big.NewInt(0)}, stateDb, params.TestChainConfig, Config{})
 			evm.AccessEvents = state.NewAccessEvents()
 
-			contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), NewGasBudget(100000), nil)
+			contract := NewContract(common.Address{}, common.HexToAddress("0xBEEF"), new(uint256.Int), NewGasBudget(100000, 0), nil)
 
 			// Set up stack: top = address
 			stack := newStackForTesting()
