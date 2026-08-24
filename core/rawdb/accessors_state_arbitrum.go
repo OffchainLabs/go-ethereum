@@ -118,41 +118,46 @@ func IsSupportedWasmTarget(target WasmTarget) bool {
 	return err == nil
 }
 
-func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asmMap map[WasmTarget][]byte) {
+func WriteActivation(db ethdb.KeyValueWriter, moduleHash common.Hash, asmMap map[WasmTarget][]byte) error {
 	for target, asm := range asmMap {
 		if target != TargetWasm {
-			WriteActivatedAsm(db, target, moduleHash, asm)
+			err := WriteActivatedAsm(db, target, moduleHash, asm)
+			if err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 // Stores the activated asm for a given moduleHash and target
-func WriteActivatedAsm(db ethdb.KeyValueWriter, target WasmTarget, moduleHash common.Hash, asm []byte) {
+func WriteActivatedAsm(db ethdb.KeyValueWriter, target WasmTarget, moduleHash common.Hash, asm []byte) error {
 	prefix, err := activatedAsmKeyPrefix(target)
 	if err != nil {
-		log.Crit("Failed to store activated wasm asm", "err", err)
+		return fmt.Errorf("Failed to store activated wasm asm: %w", err)
 	}
 	key := activatedKey(prefix, moduleHash)
 	if err := db.Put(key[:], asm); err != nil {
-		log.Crit("Failed to store activated wasm asm", "err", err)
+		return fmt.Errorf("Failed to store activated wasm key: %w", err)
 	}
+	return nil
 }
 
 // Retrieves the activated asm for a given moduleHash and target
-func ReadActivatedAsm(db ethdb.KeyValueReader, target WasmTarget, moduleHash common.Hash) []byte {
+func ReadActivatedAsm(db ethdb.KeyValueReader, target WasmTarget, moduleHash common.Hash) ([]byte, error) {
 	if target == TargetWasm {
-		return nil // wasm is not stored in the database
+		return nil, nil // wasm is not stored in the database
 	}
 	prefix, err := activatedAsmKeyPrefix(target)
 	if err != nil {
-		log.Crit("Failed to read activated wasm asm", "err", err)
+		return nil, fmt.Errorf("Failed to read activated wasm asm: %w", err)
 	}
 	key := activatedKey(prefix, moduleHash)
 	asm, err := db.Get(key[:])
 	if err != nil {
-		return nil
+		return nil, nil
 	}
-	return asm
+	return asm, nil
 }
 
 // Stores wasm schema version
