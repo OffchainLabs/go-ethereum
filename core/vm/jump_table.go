@@ -65,6 +65,9 @@ var (
 	pragueInstructionSet           = newPragueInstructionSet()
 	osakaInstructionSet            = newOsakaInstructionSet()
 	amsterdamInstructionSet        = newAmsterdamInstructionSet()
+
+	// Arbitrum
+	arbitrumAmsterdamInstructionSet = newArbitrumAmsterdamInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -95,10 +98,17 @@ func newVerkleInstructionSet() JumpTable {
 }
 
 func newAmsterdamInstructionSet() JumpTable {
+	instructionSet := newArbitrumAmsterdamInstructionSet()
+	enable8037(&instructionSet) // EIP-8037 (State creation gas cost increase)
+	return validate(instructionSet)
+}
+
+// newArbitrumAmsterdamInstructionSet is Amsterdam without EIP-8037: Arbitrum
+// chains keep legacy state-creation gas pricing at ArbosVersion_Amsterdam.
+func newArbitrumAmsterdamInstructionSet() JumpTable {
 	instructionSet := newOsakaInstructionSet()
 	enable7843(&instructionSet) // EIP-7843 (SLOTNUM opcode)
 	enable8024(&instructionSet) // EIP-8024 (Backward compatible SWAPN, DUPN, EXCHANGE)
-	enable8037(&instructionSet) // EIP-8037 (State creation gas cost increase)
 	return validate(instructionSet)
 }
 

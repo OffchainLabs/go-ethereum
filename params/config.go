@@ -1452,6 +1452,12 @@ type Rules struct {
 	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka        bool
 	IsAmsterdam, IsUBT                                      bool
 
+	// Arbitrum: EIP-8037 state-gas pricing is keyed on this instead of
+	// IsAmsterdam. Arbitrum chains adopt Amsterdam's behavioral changes at
+	// ArbosVersion_Amsterdam but keep legacy state-creation gas pricing, so
+	// this stays false on them.
+	IsEIP8037 bool
+
 	// Arbitrum: per-chain code-size limits, derived from
 	// ArbitrumChainParams.MaxCodeSize/MaxInitCodeSize when set, or from the
 	// upstream Amsterdam/default constants otherwise.
@@ -1504,6 +1510,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64, curren
 		IsPrague:         isMerge && c.IsPrague(num, timestamp, currentArbosVersion),
 		IsOsaka:          isMerge && c.IsOsaka(num, timestamp, currentArbosVersion),
 		IsAmsterdam:      isAmsterdam,
+		IsEIP8037:        isAmsterdam && !c.IsArbitrum(),
 		IsUBT:            isUBT,
 		IsEIP4762:        isUBT,
 		MaxCodeSize:      maxCodeSize,
