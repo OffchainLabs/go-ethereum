@@ -358,7 +358,7 @@ func TestDebugAPI_ClearTxpool(t *testing.T) {
 	// Initialize backend
 	db := rawdb.NewMemoryDatabase()
 	engine := beacon.New(ethash.NewFaker())
-	chain, _ := core.NewBlockChain(db, testGspec, engine, nil)
+	chain, _ := core.NewBlockChain(db, nil, testGspec, engine, nil)
 
 	txconfig := legacypool.DefaultConfig
 	txconfig.Journal = "" // Don't litter the disk with test journals
