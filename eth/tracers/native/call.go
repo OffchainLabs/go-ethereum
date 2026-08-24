@@ -282,7 +282,10 @@ func (t *callTracer) OnLog(log *types.Log) {
 func (t *callTracer) GetResult() (json.RawMessage, error) {
 	// Tracing was interrupted (e.g. a timeout): report the interruption instead of continuing
 	if t.interrupt.Load() {
-		return nil, t.reason
+		if p := t.reason.Load(); p != nil {
+			return nil, *p
+		}
+		return nil, nil
 	}
 	if len(t.callstack) != 1 {
 		return nil, errors.New("incorrect number of top-level calls")
