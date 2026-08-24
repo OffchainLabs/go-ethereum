@@ -15,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/arbitrum_types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
@@ -365,10 +364,10 @@ func (a *APIBackend) FeeHistory(
 }
 
 func (a *APIBackend) BaseFee(ctx context.Context) *big.Int {
-	header := a.CurrentHeader()
-	next := new(big.Int).Add(header.Number, common.Big1)
-	if a.ChainConfig().IsLondon(next) {
-		return eip1559.CalcBaseFee(a.ChainConfig(), header)
+	// Follow the FeeHistory convention above and report the head base fee
+	// unchanged.
+	if baseFee := a.CurrentHeader().BaseFee; baseFee != nil {
+		return new(big.Int).Set(baseFee)
 	}
 	return nil
 }
