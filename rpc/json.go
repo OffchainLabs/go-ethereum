@@ -128,7 +128,13 @@ func (msg *jsonrpcMessage) response(result interface{}) *jsonrpcMessage {
 	// expensive validation/compaction pass that json.Marshal performs on
 	// encoder output.
 	if m, ok := result.(json.Marshaler); ok {
-		enc, err = m.MarshalJSON()
+		// json.Marshal encodes a nil pointer as null; calling MarshalJSON
+		// directly on one would panic for value-receiver implementations.
+		if rv := reflect.ValueOf(result); rv.Kind() == reflect.Pointer && rv.IsNil() {
+			enc = null
+		} else {
+			enc, err = m.MarshalJSON()
+		}
 	} else {
 		enc, err = json.Marshal(result)
 	}

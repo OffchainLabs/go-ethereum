@@ -76,6 +76,14 @@ func (o *MarshalErrObj) MarshalText() ([]byte, error) {
 	return nil, errors.New("marshal error")
 }
 
+// MarshalObj implements json.Marshaler with a value receiver, so a typed-nil
+// *MarshalObj satisfies the interface but panics if MarshalJSON is invoked on it.
+type MarshalObj struct{}
+
+func (o MarshalObj) MarshalJSON() ([]byte, error) {
+	return []byte(`{}`), nil
+}
+
 func (s *testService) NoArgsRets() {}
 
 func (s *testService) Null() any {
@@ -130,6 +138,10 @@ func (s *testService) ReturnError() error {
 
 func (s *testService) MarshalError() *MarshalErrObj {
 	return &MarshalErrObj{}
+}
+
+func (s *testService) NilMarshaler() *MarshalObj {
+	return nil
 }
 
 func (s *testService) Panic() string {
