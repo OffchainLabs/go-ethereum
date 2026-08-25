@@ -339,7 +339,7 @@ func (api *BlockChainAPI) GetBalance(ctx context.Context, address common.Address
 	if state == nil || err != nil {
 		if client := fallbackClientFor(api.b, err); client != nil {
 			var res hexutil.Big
-			err := client.CallContext(ctx, &res, "eth_getBalance", address, blockNrOrHash)
+			err := client.CallContext(ctx, &res, "eth_getBalance", address, blockNrOrHashOrLatest(blockNrOrHash))
 			return &res, err
 		}
 		return nil, err
@@ -612,7 +612,7 @@ func (api *BlockChainAPI) GetCode(ctx context.Context, address common.Address, b
 	if state == nil || err != nil {
 		if client := fallbackClientFor(api.b, err); client != nil {
 			var res hexutil.Bytes
-			err := client.CallContext(ctx, &res, "eth_getCode", address, blockNrOrHash)
+			err := client.CallContext(ctx, &res, "eth_getCode", address, blockNrOrHashOrLatest(blockNrOrHash))
 			return res, err
 		}
 		return nil, err
@@ -634,7 +634,7 @@ func (api *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Addre
 	if state == nil || err != nil {
 		if client := fallbackClientFor(api.b, err); client != nil {
 			var res hexutil.Bytes
-			err := client.CallContext(ctx, &res, "eth_getStorageAt", address, key, blockNrOrHash)
+			err := client.CallContext(ctx, &res, "eth_getStorageAt", address, key, blockNrOrHashOrLatest(blockNrOrHash))
 			return res, err
 		}
 		return nil, err
@@ -1751,7 +1751,7 @@ func (api *TransactionAPI) GetTransactionCount(ctx context.Context, address comm
 	if state == nil || err != nil {
 		if client := fallbackClientFor(api.b, err); client != nil {
 			var res hexutil.Uint64
-			err := client.CallContext(ctx, &res, "eth_getTransactionCount", address, blockNrOrHash)
+			err := client.CallContext(ctx, &res, "eth_getTransactionCount", address, blockNrOrHashOrLatest(blockNrOrHash))
 			return &res, err
 		}
 		return nil, err
