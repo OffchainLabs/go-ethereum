@@ -146,7 +146,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		}
 		// In Amsterdam, the transaction gas limit is allowed to exceed
 		// params.MaxTxGas, but the calldata floor cost is capped by it.
-		if rules.IsAmsterdam && max(intrGas.RegularGas, floorDataGas) > params.MaxTxGasRenamedForNitroMerges {
+		if !opts.Config.IsArbitrum() && rules.IsAmsterdam && max(intrGas.RegularGas, floorDataGas) > params.MaxTxGasRenamedForNitroMerges {
 			return fmt.Errorf("%w: regular intrisic cost %v, floor: %v", core.ErrFloorDataGas, intrGas.RegularGas, floorDataGas)
 		}
 	}
