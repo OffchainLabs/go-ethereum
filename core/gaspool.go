@@ -27,6 +27,7 @@ type GasPool struct {
 	remaining      uint64
 	initial        uint64
 	cumulativeUsed uint64
+	unreservedUsed uint64
 }
 
 // NewGasPool initializes the gasPool with the given amount.
@@ -68,6 +69,18 @@ func (gp *GasPool) ReturnGas(returned uint64, gasUsed uint64) error {
 	return nil
 }
 
+// ReportUnreservedGas records gas that a transaction reports as used without
+// reserving it from the pool, so that Used() and CumulativeUsed() account for it
+// while remaining stays available to later transactions in the block.
+func (gp *GasPool) ReportUnreservedGas(amount uint64) error {
+	if gp.unreservedUsed > math.MaxUint64-amount || gp.cumulativeUsed > math.MaxUint64-amount {
+		return fmt.Errorf("%w: unreserved used: %d, cumulative used: %d, reported: %d", ErrGasLimitOverflow, gp.unreservedUsed, gp.cumulativeUsed, amount)
+	}
+	gp.unreservedUsed += amount
+	gp.cumulativeUsed += amount
+	return nil
+}
+
 // Gas returns the amount of gas remaining in the pool.
 func (gp *GasPool) Gas() uint64 {
 	return gp.remaining
@@ -83,7 +96,11 @@ func (gp *GasPool) Used() uint64 {
 	if gp.initial < gp.remaining {
 		panic("gas used underflow")
 	}
-	return gp.initial - gp.remaining
+	reserved := gp.initial - gp.remaining
+	if gp.unreservedUsed > math.MaxUint64-reserved {
+		panic("gas used overflow")
+	}
+	return reserved + gp.unreservedUsed
 }
 
 // Snapshot returns the deep-copied object as the snapshot.
@@ -92,6 +109,7 @@ func (gp *GasPool) Snapshot() *GasPool {
 		initial:        gp.initial,
 		remaining:      gp.remaining,
 		cumulativeUsed: gp.cumulativeUsed,
+		unreservedUsed: gp.unreservedUsed,
 	}
 }
 
@@ -100,8 +118,9 @@ func (gp *GasPool) Set(other *GasPool) {
 	gp.initial = other.initial
 	gp.remaining = other.remaining
 	gp.cumulativeUsed = other.cumulativeUsed
+	gp.unreservedUsed = other.unreservedUsed
 }
 
 func (gp *GasPool) String() string {
-	return fmt.Sprintf("initial: %d, remaining: %d, cumulative used: %d", gp.initial, gp.remaining, gp.cumulativeUsed)
+	return fmt.Sprintf("initial: %d, remaining: %d, cumulative used: %d, unreserved used: %d", gp.initial, gp.remaining, gp.cumulativeUsed, gp.unreservedUsed)
 }
