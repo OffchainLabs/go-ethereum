@@ -840,17 +840,15 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if endTxNow {
 		// Arbitrum endTxNow paths (deposits, retryable submission, internal txs)
 		// bypass the normal CheckGasLegacy/ChargeGasLegacy flow but still report
-		// gas used. Consume the gas from the pool without returning it so
+		// gas used. Record it as used without reserving it from the pool, so
 		// gp.Used() (which feeds ProcessResult.GasUsed, validated against
-		// header.GasUsed) includes it, and bump gp.cumulativeUsed so
-		// receipt.CumulativeGasUsed (and the GasUsed derived from it via
-		// DeriveFields) reflects this tx's contribution too.
+		// header.GasUsed) and gp.CumulativeUsed() (which feeds
+		// receipt.CumulativeGasUsed, and the GasUsed derived from it via
+		// DeriveFields) both include this tx's contribution, while the gas
+		// stays available to the rest of the block.
 		if startHookUsedSingleGas > 0 {
-			if subErr := st.gp.CheckGasLegacy(startHookUsedSingleGas); subErr != nil {
-				return nil, subErr
-			}
-			if retErr := st.gp.ChargeGasLegacy(0, startHookUsedSingleGas); retErr != nil {
-				return nil, retErr
+			if reportErr := st.gp.ReportUnreservedGas(startHookUsedSingleGas); reportErr != nil {
+				return nil, reportErr
 			}
 		}
 		return &ExecutionResult{

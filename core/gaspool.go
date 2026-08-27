@@ -31,6 +31,9 @@ type GasPool struct {
 	// After 8037 Block gas used is max(cumulativeRegular, cumulativeState).
 	cumulativeRegular uint64
 	cumulativeState   uint64
+
+	// Arbitrum
+	unreservedUsed uint64
 }
 
 // NewGasPool initializes the gasPool with the given amount.
@@ -99,6 +102,18 @@ func (gp *GasPool) ChargeGasAmsterdam(txRegular, txState, receiptGasUsed uint64)
 	return nil
 }
 
+// ReportUnreservedGas records gas that a transaction reports as used without
+// reserving it from the pool, so that Used() and CumulativeUsed() account for it
+// while remaining stays available to later transactions in the block.
+func (gp *GasPool) ReportUnreservedGas(amount uint64) error {
+	if gp.unreservedUsed > math.MaxUint64-amount || gp.cumulativeUsed > math.MaxUint64-amount {
+		return fmt.Errorf("%w: unreserved used: %d, cumulative used: %d, reported: %d", ErrGasLimitOverflow, gp.unreservedUsed, gp.cumulativeUsed, amount)
+	}
+	gp.unreservedUsed += amount
+	gp.cumulativeUsed += amount
+	return nil
+}
+
 // Gas returns the amount of gas remaining in the pool.
 func (gp *GasPool) Gas() uint64 {
 	return gp.remaining
@@ -119,7 +134,11 @@ func (gp *GasPool) Used() uint64 {
 	if gp.initial < gp.remaining {
 		panic(fmt.Sprintf("gas used underflow: %v %v", gp.initial, gp.remaining))
 	}
-	return gp.initial - gp.remaining
+	reserved := gp.initial - gp.remaining
+	if gp.unreservedUsed > math.MaxUint64-reserved {
+		panic("gas used overflow")
+	}
+	return reserved + gp.unreservedUsed
 }
 
 // Snapshot returns the deep-copied object as the snapshot.
@@ -130,6 +149,8 @@ func (gp *GasPool) Snapshot() *GasPool {
 		cumulativeUsed:    gp.cumulativeUsed,
 		cumulativeRegular: gp.cumulativeRegular,
 		cumulativeState:   gp.cumulativeState,
+
+		unreservedUsed: gp.unreservedUsed,
 	}
 }
 
@@ -138,10 +159,10 @@ func (gp *GasPool) Set(other *GasPool) {
 	gp.initial = other.initial
 	gp.remaining = other.remaining
 	gp.cumulativeUsed = other.cumulativeUsed
-	gp.cumulativeRegular = other.cumulativeRegular
-	gp.cumulativeState = other.cumulativeState
+
+	gp.unreservedUsed = other.unreservedUsed
 }
 
 func (gp *GasPool) String() string {
-	return fmt.Sprintf("initial: %d, remaining: %d, cumulative used: %d", gp.initial, gp.remaining, gp.cumulativeUsed)
+	return fmt.Sprintf("initial: %d, remaining: %d, cumulative used: %d, unreserved used: %d", gp.initial, gp.remaining, gp.cumulativeUsed, gp.unreservedUsed)
 }
