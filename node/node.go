@@ -471,6 +471,7 @@ func (n *Node) startRPC() error {
 			Vhosts:             n.config.AuthVirtualHosts,
 			Modules:            n.config.AuthModules,
 			prefix:             DefaultAuthPrefix,
+			disableGzip:        true,
 			rpcEndpointConfig:  sharedConfig,
 		})
 		if err != nil {
@@ -815,10 +816,13 @@ type closeTrackingDB struct {
 }
 
 func (db *closeTrackingDB) Close() error {
-	db.n.lock.Lock()
-	delete(db.n.databases, db)
-	db.n.lock.Unlock()
-	return db.Database.Close()
+	err := db.Database.Close()
+	if err == nil {
+		db.n.lock.Lock()
+		delete(db.n.databases, db)
+		db.n.lock.Unlock()
+	}
+	return err
 }
 
 // wrapDatabase ensures the database will be auto-closed when Node is closed.

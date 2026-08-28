@@ -121,7 +121,7 @@ func (db *nofreezedb) Ancients() (uint64, error) {
 }
 
 // Tail returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) Tail() (uint64, error) {
+func (db *nofreezedb) Tail(group string) (uint64, error) {
 	return 0, errNotSupported
 }
 
@@ -141,7 +141,7 @@ func (db *nofreezedb) TruncateHead(items uint64) (uint64, error) {
 }
 
 // TruncateTail returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) TruncateTail(items uint64) (uint64, error) {
+func (db *nofreezedb) TruncateTail(group string, items uint64) (uint64, error) {
 	return 0, errNotSupported
 }
 
@@ -696,12 +696,12 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		return err
 	}
 	for _, ancient := range ancients {
-		for _, table := range ancient.sizes {
+		for _, table := range ancient.tables {
 			stats = append(stats, []string{
 				fmt.Sprintf("Ancient store (%s)", strings.Title(ancient.name)),
 				strings.Title(table.name),
 				table.size.String(),
-				fmt.Sprintf("%d", ancient.count),
+				fmt.Sprintf("%d", table.count),
 			})
 		}
 		total.Add(uint64(ancient.size()))
@@ -784,7 +784,7 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 // is periodically called and if it returns an error then SafeDeleteRange
 // stops and also returns that error. The callback is not called if native
 // range delete is used or there are a small number of keys only. The bool
-// argument passed to the callback is true if enrties have actually been
+// argument passed to the callback is true if entries have actually been
 // deleted already.
 func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool, stopCallback func(bool) bool) error {
 	if !hashScheme {

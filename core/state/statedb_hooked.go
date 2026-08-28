@@ -236,7 +236,7 @@ func (s *hookedStateDB) LogsForBurnAccounts() []*types.Log {
 	return s.inner.LogsForBurnAccounts()
 }
 
-func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.StateAccessList {
+func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.ConstructionBlockAccessList {
 	if s.hooks.OnBalanceChange == nil && s.hooks.OnNonceChangeV2 == nil && s.hooks.OnNonceChange == nil && s.hooks.OnCodeChangeV2 == nil && s.hooks.OnCodeChange == nil {
 		// Short circuit if no relevant hooks are set.
 		return s.inner.Finalise(deleteEmptyObjects)
@@ -246,7 +246,7 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.StateAccessList {
 	// that state change hooks will be invoked in deterministic
 	// order when the accounts are deleted below
 	var selfDestructedAddrs []common.Address
-	for addr := range s.inner.journal.dirties {
+	for addr := range s.inner.journal.mutations {
 		obj := s.inner.stateObjects[addr]
 		if obj == nil || !obj.selfDestructed {
 			// Not self-destructed, keep searching.
@@ -289,6 +289,10 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) *bal.StateAccessList {
 		}
 	}
 	return s.inner.Finalise(deleteEmptyObjects)
+}
+
+func (s *hookedStateDB) SetTxContext(thash common.Hash, ti int, blockAccessIndex uint32) {
+	s.inner.SetTxContext(thash, ti, blockAccessIndex)
 }
 
 func (s *hookedStateDB) ActivateWasm(moduleHash common.Hash, asmMap map[rawdb.WasmTarget][]byte) error {

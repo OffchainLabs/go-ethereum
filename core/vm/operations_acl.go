@@ -393,6 +393,9 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc gasFunc) gasFunc {
 		// part of the dynamic gas. This will ensure it is correctly reported to
 		// tracers.
 		contract.Gas.RegularGas += multiGas.SingleGas()
+		// Undo the UsedRegularGas increments from the direct UseMultiGas charges,
+		// since this gas will be re-charged via the returned cost.
+		contract.Gas.UsedRegularGas -= multiGas.SingleGas()
 		contract.RetainedMultiGas.SaturatingAddInto(multiGas)
 
 		// Aggregate the gas costs from all components, including EIP-2929, EIP-7702,

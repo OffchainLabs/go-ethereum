@@ -205,10 +205,8 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
 		// for tracing: this gas consumption event is emitted below in the debug section.
-		if contract.Gas.RegularGas < cost {
+		if !contract.chargeRegular(cost, nil, tracing.GasChangeIgnored) {
 			return nil, ErrOutOfGas
-		} else {
-			contract.Gas.RegularGas -= cost
 		}
 		addConstantMultiGas(&contract.UsedMultiGas, cost, op)
 
@@ -238,19 +236,25 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			if err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
 			}
-			// for tracing: this gas consumption event is emitted below in the debug section.
-			if contract.Gas.RegularGas < dynamicCost {
+			// EIP-8037: charge regular gas before state gas. The state charge
+			// is a no-op when the state cost is 0 (e.g., pre-Amsterdam).
+			if !contract.chargeRegular(dynamicCost, nil, tracing.GasChangeIgnored) {
 				return nil, ErrOutOfGas
-			} else {
-				contract.Gas.RegularGas -= dynamicCost
+			}
+			if !contract.chargeState(multigasDynamicCost.GetStateGas(), nil, tracing.GasChangeIgnored) {
+				return nil, ErrOutOfGas
 			}
 			contract.UsedMultiGas.SaturatingAddInto(multigasDynamicCost)
 		}
 
 		// Do tracing before potential memory expansion
 		if debug {
-			if evm.Config.Tracer.OnGasChange != nil {
-				evm.Config.Tracer.OnGasChange(gasCopy, gasCopy-cost, tracing.GasChangeCallOpCode)
+			if evm.Config.Tracer.HasGasHook() {
+				evm.Config.Tracer.EmitGasChange(
+					tracing.Gas{Regular: gasCopy, State: contract.Gas.StateGas},
+					tracing.Gas{Regular: gasCopy - cost, State: contract.Gas.StateGas},
+					tracing.GasChangeCallOpCode,
+				)
 			}
 			if evm.Config.Tracer.OnOpcode != nil {
 				evm.Config.Tracer.OnOpcode(pc, byte(op), gasCopy, cost, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))

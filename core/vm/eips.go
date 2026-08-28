@@ -45,6 +45,7 @@ var activators = map[int]func(*JumpTable){
 	7939: enable7939,
 	8024: enable8024,
 	7843: enable7843,
+	8037: enable8037,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -213,8 +214,7 @@ func opTstore(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if evm.readOnly {
 		return nil, ErrWriteProtection
 	}
-	loc := scope.Stack.pop()
-	val := scope.Stack.pop()
+	loc, val := scope.Stack.pop2()
 	evm.StateDB.SetTransientState(scope.Contract.Address(), loc.Bytes32(), val.Bytes32())
 	return nil, nil
 }
@@ -264,11 +264,7 @@ func enable5656(jt *JumpTable) {
 
 // opMcopy implements the MCOPY opcode (https://eips.ethereum.org/EIPS/eip-5656)
 func opMcopy(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	var (
-		dst    = scope.Stack.pop()
-		src    = scope.Stack.pop()
-		length = scope.Stack.pop()
-	)
+	dst, src, length := scope.Stack.pop3()
 	// These values are checked for overflow during memory expansion calculation
 	// (the memorySize function on the opcode).
 	scope.Memory.Copy(dst.Uint64(), src.Uint64(), length.Uint64())
@@ -368,11 +364,8 @@ func enable8024(jt *JumpTable) {
 
 func opExtCodeCopyEIP4762(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	var (
-		stack      = scope.Stack
-		a          = stack.pop()
-		memOffset  = stack.pop()
-		codeOffset = stack.pop()
-		length     = stack.pop()
+		stack                            = scope.Stack
+		a, memOffset, codeOffset, length = stack.pop4()
 	)
 	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
 	if overflow {
@@ -594,4 +587,12 @@ func enable7843(jt *JumpTable) {
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
 	}
+}
+
+// enable8037 enables the multidimensional-metering as specified in EIP-8037.
+func enable8037(jt *JumpTable) {
+	jt[CREATE].constantGas = params.CreateGasAmsterdam
+	jt[CREATE2].constantGas = params.CreateGasAmsterdam
+	jt[SELFDESTRUCT].dynamicGas = gasSelfdestruct8037
+	jt[SSTORE].dynamicGas = gasSStore8037
 }

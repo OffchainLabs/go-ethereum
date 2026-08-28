@@ -91,6 +91,7 @@ const (
 	LogTopicComputationGas uint64 = LogTopicGas - LogTopicHistoryGas // Computation gas per topic
 	CreateGas              uint64 = 32000                            // Once per CREATE operation & contract-creation transaction.
 	Create2Gas             uint64 = 32000                            // Once per CREATE2 operation
+	CreateGasAmsterdam     uint64 = 9000                             // Regular gas portion of CREATE in Amsterdam (EIP-8037); state gas is charged separately.
 	CreateNGasEip4762      uint64 = 1000                             // Once per CREATEn operations post-verkle
 	SelfdestructRefundGas  uint64 = 24000                            // Refunded following a selfdestruct operation.
 	MemoryGas              uint64 = 3                                // Times the address of the (highest referenced byte in memory + 1). NOTE: referencing happens on read, write and in instructions such as RETURN and CALL.
@@ -103,6 +104,7 @@ const (
 	TxAccessListAddressGas    uint64 = 2400  // Per address specified in EIP 2930 access list
 	TxAccessListStorageKeyGas uint64 = 1900  // Per storage key specified in EIP 2930 access list
 	TxAuthTupleGas            uint64 = 12500 // Per auth tuple code specified in EIP-7702
+	TxAuthTupleRegularGas     uint64 = 7500  // Per auth tuple regular gas specified in EIP-8037
 
 	// These have been changed during the course of the chain
 	CallGasFrontier              uint64 = 40  // Once per CALL operation & message call transaction.
@@ -193,6 +195,22 @@ const (
 	HistoryServeWindow = 8191 // Number of blocks to serve historical block hashes for, EIP-2935.
 
 	MaxBlockSize = 8_388_608 // maximum size of an RLP-encoded block
+
+	// BALItemCost is the gas-cost divisor for the EIP-7928 block access list
+	// size constraint: bal_items <= block_gas_limit / BALItemCost, where
+	// bal_items counts every distinct address in the BAL plus every storage
+	// key (writes + reads) carried by those accounts.
+	//
+	// The value (2000) is set deliberately below COLD_SLOAD_COST (2100) so
+	// the bound has a small safety margin for system-contract accesses that
+	// don't consume block gas.
+	BALItemCost uint64 = 2000
+
+	AccountCreationSize       = 120
+	StorageCreationSize       = 64
+	AuthorizationCreationSize = 23
+	CostPerStateByte          = 1530
+	SystemMaxSStoresPerCall   = 16
 )
 
 // Bls12381G1MultiExpDiscountTable is the gas discount table for BLS12-381 G1 multi exponentiation operation

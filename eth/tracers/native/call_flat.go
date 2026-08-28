@@ -234,7 +234,10 @@ func (t *flatCallTracer) OnTxEnd(receipt *types.Receipt, err error) {
 func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
 	// Tracing was interrupted (e.g. a timeout): report the interruption instead of continuing
 	if t.interrupt.Load() {
-		return nil, t.tracer.reason
+		if p := t.tracer.reason.Load(); p != nil {
+			return nil, *p
+		}
+		return nil, nil
 	}
 	if len(t.tracer.callstack) < 1 {
 		return nil, errors.New("invalid number of calls")
@@ -254,7 +257,10 @@ func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return res, t.tracer.reason
+	if p := t.tracer.reason.Load(); p != nil {
+		return res, *p
+	}
+	return res, nil
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.

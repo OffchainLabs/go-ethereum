@@ -129,11 +129,11 @@ func TestRecentWasmsPersistsAcrossTxs(t *testing.T) {
 	state := newTestState(t)
 	h := common.HexToHash("0x0a")
 
-	state.SetTxContext(common.HexToHash("0x01"), 0)
+	state.SetTxContext(common.HexToHash("0x01"), 0, 0)
 	if hit := state.GetRecentWasms().Insert(h, recentWasmsRetain); hit {
 		t.Fatalf("first insert should be a miss")
 	}
-	state.SetTxContext(common.HexToHash("0x02"), 1)
+	state.SetTxContext(common.HexToHash("0x02"), 1, 1)
 	if hit := state.GetRecentWasms().Insert(h, recentWasmsRetain); !hit {
 		t.Fatalf("cache must persist across txs in the same block")
 	}

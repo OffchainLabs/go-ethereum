@@ -370,6 +370,15 @@ func (a *APIBackend) FeeHistory(
 	return big.NewInt(int64(oldestBlock)), rewards, basefees, gasUsed, nil, nil, nil
 }
 
+func (a *APIBackend) BaseFee(ctx context.Context) *big.Int {
+	// Follow the FeeHistory convention above and report the head base fee
+	// unchanged.
+	if baseFee := a.CurrentHeader().BaseFee; baseFee != nil {
+		return new(big.Int).Set(baseFee)
+	}
+	return nil
+}
+
 func (a *APIBackend) BlobBaseFee(ctx context.Context) *big.Int {
 	if excess := a.CurrentHeader().ExcessBlobGas; excess != nil {
 		return eip4844.CalcBlobFee(a.ChainConfig(), a.CurrentHeader())
@@ -414,7 +423,7 @@ func (a *APIBackend) UnprotectedAllowed() bool {
 }
 
 // Blockchain API
-func (a *APIBackend) SetHead(number uint64) {
+func (a *APIBackend) SetHead(number uint64) error {
 	panic("not implemented") // TODO: Implement
 }
 
@@ -681,6 +690,14 @@ func (a *APIBackend) StateAtTransaction(ctx context.Context, block *types.Block,
 func (a *APIBackend) HistoryPruningCutoff() uint64 {
 	bn, _ := a.BlockChain().HistoryPruningCutoff()
 	return bn
+}
+
+func (a *APIBackend) HistoryRetention() ethapi.HistoryRetention {
+	return ethapi.HistoryRetention{
+		LogIndexHistory:  a.b.config.LogHistory,
+		LogIndexDisabled: a.b.config.LogNoHistory,
+		StateScheme:      a.BlockChain().TrieDB().Scheme(),
+	}
 }
 
 func (a *APIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {

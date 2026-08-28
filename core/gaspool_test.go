@@ -87,8 +87,8 @@ func TestGasPoolSnapshotRestoresUnreservedUsed(t *testing.T) {
 	if err := gp.ReportUnreservedGas(11_000); err != nil {
 		t.Fatalf("ReportUnreservedGas: %v", err)
 	}
-	if err := gp.SubGas(3_000); err != nil {
-		t.Fatalf("SubGas: %v", err)
+	if err := gp.CheckGasLegacy(3_000); err != nil {
+		t.Fatalf("CheckGasLegacy: %v", err)
 	}
 	gp.Set(snapshot)
 

@@ -47,7 +47,7 @@ func TestPrecompiledMultigas(t *testing.T) {
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			_, remainingGas, usedMultiGas, err := RunPrecompiledContract(nil, p, common.Address{}, []byte(input), NewGasBudget(test.supplied), nil, params.Rules{}, nil)
+			_, remainingGas, usedMultiGas, err := RunPrecompiledContract(nil, p, common.Address{}, []byte(input), NewGasBudget(test.supplied, 0), nil, params.Rules{}, nil)
 			if (err == nil) == test.wantErr {
 				t.Fatalf("wrong run precompile result: wantErr=%v, got %v", test.wantErr, err)
 			}

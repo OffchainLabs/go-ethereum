@@ -313,13 +313,13 @@ func RunPrecompiledContract(stateDB StateDB, p PrecompiledContract, address comm
 		precompileArbosAware.SetArbosVersion(advancedInfo.Evm.Context.ArbOSVersion)
 	}
 	gasCost := p.RequiredGas(input)
-	prior, ok := gas.Charge(GasCosts{RegularGas: gasCost})
+	prior, ok := gas.ChargeRegular(gasCost)
 	if !ok {
-		gas.Exhaust()
+		gas.ChargeRegular(gas.RegularGas)
 		return nil, gas, multigas.ComputationGas(suppliedGas), ErrOutOfGas
 	}
-	if logger != nil && logger.OnGasChange != nil {
-		logger.OnGasChange(prior, gas.RegularGas, tracing.GasChangeCallPrecompiledContract)
+	if logger.HasGasHook() {
+		logger.EmitGasChange(prior.AsTracing(), gas.AsTracing(), tracing.GasChangeCallPrecompiledContract)
 	}
 	// Touch the precompile for block-level accessList recording once Amsterdam
 	// fork is activated.

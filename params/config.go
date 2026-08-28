@@ -896,7 +896,13 @@ func (c *ChainConfig) IsBPO5(num *big.Int, time uint64) bool {
 }
 
 // IsAmsterdam returns whether time is either equal to the Amsterdam fork time or greater.
-// Arbitrum: On Arbitrum chains, Amsterdam is gated only on ArbOS version 70
+// Arbitrum: On Arbitrum chains, Amsterdam is gated only on ArbOS version 70.
+// This includes EIP-8037: state creation (SSTORE new slot, SELFDESTRUCT or
+// CALL funding a new account) is priced through the state-gas side channel
+// (MultiGas.stateGas), which carries no per-resource-kind attribution and is
+// excluded from the multigas total and encodings — so those operations
+// contribute zero StorageGrowth to the multigas Nitro consumes for resource
+// pricing.
 func (c *ChainConfig) IsAmsterdam(num *big.Int, time uint64, currentArbosVersion uint64) bool {
 	if c.IsArbitrum() {
 		return currentArbosVersion >= ArbosVersion_Amsterdam

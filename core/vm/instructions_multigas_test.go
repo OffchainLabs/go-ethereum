@@ -60,7 +60,7 @@ func TestOpCreatesMultiGas(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			scope := &ScopeContext{
-				Contract: NewContract(caller, common.Address{}, uint256.NewInt(0), NewGasBudget(initialGas), nil),
+				Contract: NewContract(caller, common.Address{}, uint256.NewInt(0), NewGasBudget(initialGas, 0), nil),
 				Stack:    newStackForTesting(),
 				Memory:   NewMemory(),
 			}
@@ -164,7 +164,7 @@ func TestOpCallsMultiGas(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			scope := &ScopeContext{
-				Contract: NewContract(caller, contractAddr, uint256.NewInt(0), NewGasBudget(initialGas), nil),
+				Contract: NewContract(caller, contractAddr, uint256.NewInt(0), NewGasBudget(initialGas, 0), nil),
 				Stack:    newStackForTesting(),
 				Memory:   NewMemory(),
 			}

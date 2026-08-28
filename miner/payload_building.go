@@ -217,7 +217,7 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 
 func (miner *Miner) runBuildIteration(ctx context.Context, start time.Time, iteration int, payload *Payload, params *generateParams, witness bool) {
 	ctx, span, spanEnd := telemetry.StartSpan(ctx, "miner.buildIteration",
-		telemetry.Int64Attribute("iteration", int64(iteration)),
+		telemetry.IntAttribute("iteration", iteration),
 	)
 	var err error
 	defer spanEnd(&err)
@@ -271,7 +271,7 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 			telemetry.Int64Attribute("block.number", int64(empty.block.NumberU64())),
 		)
 		defer func() {
-			bSpan.SetAttributes(telemetry.Int64Attribute("iterations.total", int64(iteration)))
+			bSpan.SetAttributes(telemetry.IntAttribute("iterations.total", iteration))
 			bSpanEnd(nil)
 		}()
 
@@ -341,7 +341,7 @@ func (payload *Payload) updateSpanForDelivery(bSpan trace.Span) {
 
 // BuildTestingPayload is for testing_buildBlockV*. It creates a block with the exact content given
 // by the parameters instead of using the locally available transactions.
-func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*types.Transaction, empty bool, extraData []byte) (*engine.ExecutionPayloadEnvelope, error) {
+func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*types.Transaction, empty bool, extraData []byte) (*types.Block, *engine.ExecutionPayloadEnvelope, error) {
 	fullParams := &generateParams{
 		timestamp:         args.Timestamp,
 		forceTime:         true,
@@ -358,7 +358,7 @@ func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*
 	}
 	res := miner.generateWork(context.Background(), fullParams, false)
 	if res.err != nil {
-		return nil, res.err
+		return nil, nil, res.err
 	}
-	return engine.BlockToExecutableData(res.block, res.fees, res.sidecars, res.requests), nil
+	return res.block, engine.BlockToExecutableData(res.block, res.fees, res.sidecars, res.requests), nil
 }

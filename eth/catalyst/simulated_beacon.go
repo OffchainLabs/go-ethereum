@@ -221,7 +221,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 
 	// Create a server span for forkchoiceUpdated with payload attributes,
 	// simulating an incoming engine API request from a real consensus client.
-	fcCtx, fcSpanEnd := telemetry.StartServerSpan(context.Background(), tracer, telemetry.RPCInfo{
+	fcCtx, fcSpanEnd := telemetry.StartCallServerSpan(context.Background(), tracer, telemetry.RPCInfo{
 		System:  "jsonrpc",
 		Service: "engine",
 		Method:  "forkchoiceUpdatedV" + fmt.Sprintf("%d", version),
@@ -243,7 +243,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 
 	// Create a server span for getPayload, simulating the consensus client
 	// coming back to retrieve the built payload.
-	_, gpSpanEnd := telemetry.StartServerSpan(context.Background(), tracer, telemetry.RPCInfo{
+	_, gpSpanEnd := telemetry.StartCallServerSpan(context.Background(), tracer, telemetry.RPCInfo{
 		System:  "jsonrpc",
 		Service: "engine",
 		Method:  "getPayloadV" + fmt.Sprintf("%d", version),
@@ -292,7 +292,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 
 	// Create a server span for newPayload, simulating the consensus client
 	// sending the execution payload for validation.
-	npCtx, npSpanEnd := telemetry.StartServerSpan(context.Background(), tracer, telemetry.RPCInfo{
+	npCtx, npSpanEnd := telemetry.StartCallServerSpan(context.Background(), tracer, telemetry.RPCInfo{
 		System:  "jsonrpc",
 		Service: "engine",
 		Method:  "newPayloadV" + fmt.Sprintf("%d", version),
@@ -308,7 +308,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 
 	// Create a server span for the final forkchoiceUpdated (no payload attributes),
 	// which sets the new block as the canonical chain head.
-	fcuCtx, fcuSpanEnd := telemetry.StartServerSpan(context.Background(), tracer, telemetry.RPCInfo{
+	fcuCtx, fcuSpanEnd := telemetry.StartCallServerSpan(context.Background(), tracer, telemetry.RPCInfo{
 		System:  "jsonrpc",
 		Service: "engine",
 		Method:  "forkchoiceUpdatedV" + fmt.Sprintf("%d", version),
