@@ -29,6 +29,9 @@ type Config struct {
 	// Parameters for the filter system
 	FilterLogCacheSize int           `koanf:"filter-log-cache-size"`
 	FilterTimeout      time.Duration `koanf:"filter-timeout"`
+	// FilterRangeLimit caps the block range a single eth_getLogs or eth_getFilterLogs may cover.
+	// Zero means unlimited, which is the behaviour before this option existed.
+	FilterRangeLimit uint64 `koanf:"filter-range-limit"`
 
 	// FeeHistoryMaxBlockCount limits the number of historical blocks a fee history request may cover
 	FeeHistoryMaxBlockCount uint64 `koanf:"feehistory-max-block-count"`
@@ -85,6 +88,7 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.Duration(prefix+".classic-redirect-timeout", DefaultConfig.ClassicRedirectTimeout, "timeout for forwarded classic requests, where 0 = no timeout")
 	f.Int(prefix+".filter-log-cache-size", DefaultConfig.FilterLogCacheSize, "log filter system maximum number of cached blocks")
 	f.Duration(prefix+".filter-timeout", DefaultConfig.FilterTimeout, "log filter system maximum time filters stay active")
+	f.Uint64(prefix+".filter-range-limit", DefaultConfig.FilterRangeLimit, "maximum distance between fromBlock and toBlock in a single eth_getLogs or eth_getFilterLogs, so N allows N+1 blocks (0 = no limit)")
 	f.Int64(prefix+".max-recreate-state-depth", DefaultConfig.MaxRecreateStateDepth, "maximum depth for recreating state, measured in l2 gas (0=don't recreate state, -1=infinite, -2=use default value for archive or non-archive node (whichever is configured))")
 	f.StringSlice(prefix+".allow-method", DefaultConfig.AllowMethod, "list of whitelisted rpc methods")
 	arbDebug := DefaultConfig.ArbDebug
@@ -110,6 +114,7 @@ var DefaultConfig = Config{
 	LogHistory:              ethconfig.Defaults.LogHistory * 4, // we generally have smaller blocks
 	FilterLogCacheSize:      32,
 	FilterTimeout:           5 * time.Minute,
+	FilterRangeLimit:        0,
 	FeeHistoryMaxBlockCount: 1024,
 	ClassicRedirect:         "",
 	MaxRecreateStateDepth:   UninitializedMaxRecreateStateDepth, // default value should be set for depending on node type (archive / non-archive)
