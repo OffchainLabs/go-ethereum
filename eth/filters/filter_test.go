@@ -19,6 +19,8 @@ package filters
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"math/big"
 	"strings"
 	"testing"
@@ -109,7 +111,7 @@ func benchmarkFilters(b *testing.B, history uint64, noHistory bool) {
 	backend.startFilterMaps(history, noHistory, filtermaps.DefaultParams)
 	defer backend.stopFilterMaps()
 
-	filter := sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{addr1, addr2, addr3, addr4}, nil)
+	filter := sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{addr1, addr2, addr3, addr4}, nil, 0)
 	for b.Loop() {
 		filter.begin = 0
 		logs, _ := filter.Logs(context.Background())
@@ -319,70 +321,70 @@ func testFilters(t *testing.T, history uint64, noHistory bool) {
 			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696332","0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x3","transactionHash":"0xdefe471992a07a02acdfbe33edaae22fbb86d7d3cec3f1b8e4e77702fb3acc1d","transactionIndex":"0x0","blockHash":"0x7a7556792ca7d37882882e2b001fe14833eaf81c2c7f865c9c771ec37a024f6b","blockTimestamp":"0x1e","logIndex":"0x0","removed":false}]`,
 		},
 		{
-			f:    sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{contract}, [][]common.Hash{{hash1, hash2, hash3, hash4}}),
+			f:    sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{contract}, [][]common.Hash{{hash1, hash2, hash3, hash4}}, 0),
 			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x2","transactionHash":"0xa8028c655b6423204c8edfbc339f57b042d6bec2b6a61145d76b7c08b4cccd42","transactionIndex":"0x0","blockHash":"0x24417bb49ce44cfad65da68f33b510bf2a129c0d89ccf06acb6958b8585ccf34","blockTimestamp":"0x14","logIndex":"0x0","removed":false},{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696332","0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x3","transactionHash":"0xdefe471992a07a02acdfbe33edaae22fbb86d7d3cec3f1b8e4e77702fb3acc1d","transactionIndex":"0x0","blockHash":"0x7a7556792ca7d37882882e2b001fe14833eaf81c2c7f865c9c771ec37a024f6b","blockTimestamp":"0x1e","logIndex":"0x0","removed":false},{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696334"],"data":"0x","blockNumber":"0x3e8","transactionHash":"0x9a87842100a638dfa5da8842b4beda691d2fd77b0c84b57f24ecfa9fb208f747","transactionIndex":"0x0","blockHash":"0xb360bad5265261c075ece02d3bf0e39498a6a76310482cdfd90588748e6c5ee0","blockTimestamp":"0x2710","logIndex":"0x0","removed":false}]`,
 		},
 		{
-			f: sys.NewRangeFilter(900, 999, []common.Address{contract}, [][]common.Hash{{hash3}}),
+			f: sys.NewRangeFilter(900, 999, []common.Address{contract}, [][]common.Hash{{hash3}}, 0),
 		},
 		{
-			f:    sys.NewRangeFilter(990, int64(rpc.LatestBlockNumber), []common.Address{contract2}, [][]common.Hash{{hash3}}),
+			f:    sys.NewRangeFilter(990, int64(rpc.LatestBlockNumber), []common.Address{contract2}, [][]common.Hash{{hash3}}, 0),
 			want: `[{"address":"0xff00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696333"],"data":"0x","blockNumber":"0x3e7","transactionHash":"0x53e3675800c6908424b61b35a44e51ca4c73ca603e58a65b32c67968b4f42200","transactionIndex":"0x0","blockHash":"0x2e4620a2b426b0612ec6cad9603f466723edaed87f98c9137405dd4f7a2409ff","blockTimestamp":"0x2706","logIndex":"0x0","removed":false}]`,
 		},
 		{
-			f:    sys.NewRangeFilter(1, 10, []common.Address{contract}, [][]common.Hash{{hash2}, {hash1}}),
+			f:    sys.NewRangeFilter(1, 10, []common.Address{contract}, [][]common.Hash{{hash2}, {hash1}}, 0),
 			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696332","0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x3","transactionHash":"0xdefe471992a07a02acdfbe33edaae22fbb86d7d3cec3f1b8e4e77702fb3acc1d","transactionIndex":"0x0","blockHash":"0x7a7556792ca7d37882882e2b001fe14833eaf81c2c7f865c9c771ec37a024f6b","blockTimestamp":"0x1e","logIndex":"0x0","removed":false}]`,
 		},
 		{
-			f:    sys.NewRangeFilter(1, 10, nil, [][]common.Hash{{hash1, hash2}}),
+			f:    sys.NewRangeFilter(1, 10, nil, [][]common.Hash{{hash1, hash2}}, 0),
 			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x2","transactionHash":"0xa8028c655b6423204c8edfbc339f57b042d6bec2b6a61145d76b7c08b4cccd42","transactionIndex":"0x0","blockHash":"0x24417bb49ce44cfad65da68f33b510bf2a129c0d89ccf06acb6958b8585ccf34","blockTimestamp":"0x14","logIndex":"0x0","removed":false},{"address":"0xff00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x2","transactionHash":"0xdba3e2ea9a7d690b722d70ee605fd67ba4c00d1d3aecd5cf187a7b92ad8eb3df","transactionIndex":"0x1","blockHash":"0x24417bb49ce44cfad65da68f33b510bf2a129c0d89ccf06acb6958b8585ccf34","blockTimestamp":"0x14","logIndex":"0x1","removed":false},{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696332","0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x3","transactionHash":"0xdefe471992a07a02acdfbe33edaae22fbb86d7d3cec3f1b8e4e77702fb3acc1d","transactionIndex":"0x0","blockHash":"0x7a7556792ca7d37882882e2b001fe14833eaf81c2c7f865c9c771ec37a024f6b","blockTimestamp":"0x1e","logIndex":"0x0","removed":false}]`,
 		},
 		{
-			f: sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), nil, [][]common.Hash{{common.BytesToHash([]byte("fail"))}}),
+			f: sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), nil, [][]common.Hash{{common.BytesToHash([]byte("fail"))}}, 0),
 		},
 		{
-			f: sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{common.BytesToAddress([]byte("failmenow"))}, nil),
+			f: sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{common.BytesToAddress([]byte("failmenow"))}, nil, 0),
 		},
 		{
-			f: sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), nil, [][]common.Hash{{common.BytesToHash([]byte("fail"))}, {hash1}}),
+			f: sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), nil, [][]common.Hash{{common.BytesToHash([]byte("fail"))}, {hash1}}, 0),
 		},
 		{
-			f:    sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.LatestBlockNumber), nil, nil),
+			f:    sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.LatestBlockNumber), nil, nil, 0),
 			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696334"],"data":"0x","blockNumber":"0x3e8","transactionHash":"0x9a87842100a638dfa5da8842b4beda691d2fd77b0c84b57f24ecfa9fb208f747","transactionIndex":"0x0","blockHash":"0xb360bad5265261c075ece02d3bf0e39498a6a76310482cdfd90588748e6c5ee0","blockTimestamp":"0x2710","logIndex":"0x0","removed":false}]`,
 		},
 		{
-			f:    sys.NewRangeFilter(int64(rpc.FinalizedBlockNumber), int64(rpc.LatestBlockNumber), nil, nil),
+			f:    sys.NewRangeFilter(int64(rpc.FinalizedBlockNumber), int64(rpc.LatestBlockNumber), nil, nil, 0),
 			want: `[{"address":"0xff00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696333"],"data":"0x","blockNumber":"0x3e7","transactionHash":"0x53e3675800c6908424b61b35a44e51ca4c73ca603e58a65b32c67968b4f42200","transactionIndex":"0x0","blockHash":"0x2e4620a2b426b0612ec6cad9603f466723edaed87f98c9137405dd4f7a2409ff","blockTimestamp":"0x2706","logIndex":"0x0","removed":false},{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696334"],"data":"0x","blockNumber":"0x3e8","transactionHash":"0x9a87842100a638dfa5da8842b4beda691d2fd77b0c84b57f24ecfa9fb208f747","transactionIndex":"0x0","blockHash":"0xb360bad5265261c075ece02d3bf0e39498a6a76310482cdfd90588748e6c5ee0","blockTimestamp":"0x2710","logIndex":"0x0","removed":false}]`,
 		},
 		{
-			f:    sys.NewRangeFilter(int64(rpc.FinalizedBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil),
+			f:    sys.NewRangeFilter(int64(rpc.FinalizedBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil, 0),
 			want: `[{"address":"0xff00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696333"],"data":"0x","blockNumber":"0x3e7","transactionHash":"0x53e3675800c6908424b61b35a44e51ca4c73ca603e58a65b32c67968b4f42200","transactionIndex":"0x0","blockHash":"0x2e4620a2b426b0612ec6cad9603f466723edaed87f98c9137405dd4f7a2409ff","blockTimestamp":"0x2706","logIndex":"0x0","removed":false}]`,
 		},
 		{
-			f: sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil),
+			f: sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil, 0),
 		},
 		{
-			f:   sys.NewRangeFilter(int64(rpc.SafeBlockNumber), int64(rpc.LatestBlockNumber), nil, nil),
+			f:   sys.NewRangeFilter(int64(rpc.SafeBlockNumber), int64(rpc.LatestBlockNumber), nil, nil, 0),
 			err: "safe header not found",
 		},
 		{
-			f:   sys.NewRangeFilter(int64(rpc.SafeBlockNumber), int64(rpc.SafeBlockNumber), nil, nil),
+			f:   sys.NewRangeFilter(int64(rpc.SafeBlockNumber), int64(rpc.SafeBlockNumber), nil, nil, 0),
 			err: "safe header not found",
 		},
 		{
-			f:   sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.SafeBlockNumber), nil, nil),
+			f:   sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.SafeBlockNumber), nil, nil, 0),
 			err: "safe header not found",
 		},
 		{
-			f:   sys.NewRangeFilter(int64(rpc.PendingBlockNumber), int64(rpc.PendingBlockNumber), nil, nil),
+			f:   sys.NewRangeFilter(int64(rpc.PendingBlockNumber), int64(rpc.PendingBlockNumber), nil, nil, 0),
 			err: errPendingLogsUnsupported.Error(),
 		},
 		{
-			f:   sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.PendingBlockNumber), nil, nil),
+			f:   sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.PendingBlockNumber), nil, nil, 0),
 			err: errPendingLogsUnsupported.Error(),
 		},
 		{
-			f:   sys.NewRangeFilter(int64(rpc.PendingBlockNumber), int64(rpc.LatestBlockNumber), nil, nil),
+			f:   sys.NewRangeFilter(int64(rpc.PendingBlockNumber), int64(rpc.LatestBlockNumber), nil, nil, 0),
 			err: errPendingLogsUnsupported.Error(),
 		},
 	} {
@@ -405,7 +407,7 @@ func testFilters(t *testing.T, history uint64, noHistory bool) {
 	}
 
 	t.Run("timeout", func(t *testing.T) {
-		f := sys.NewRangeFilter(0, rpc.LatestBlockNumber.Int64(), nil, nil)
+		f := sys.NewRangeFilter(0, rpc.LatestBlockNumber.Int64(), nil, nil, 0)
 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
 		defer cancel()
 		_, err := f.Logs(ctx)
@@ -468,7 +470,7 @@ func TestRangeLogs(t *testing.T) {
 	newFilter := func(begin, end int64) {
 		testCase++
 		event = 0
-		filter = sys.NewRangeFilter(begin, end, addresses, nil)
+		filter = sys.NewRangeFilter(begin, end, addresses, nil, 0)
 		filter.rangeLogsTestHook = make(chan rangeLogsTestEvent)
 		go func(filter *Filter) {
 			filter.Logs(context.Background())
@@ -604,4 +606,177 @@ func TestRangeLogs(t *testing.T) {
 	expEvent(rangeLogsTestResults, 400, 1001)
 	expEvent(rangeLogsTestReorg, 400, 901)
 	expEvent(rangeLogsTestDone, 0, 0)
+}
+
+// TestRangeLimit covers the boundary of the configurable block range limit, including the cases where the
+// range ends at the chain head. Outside a limit the "latest" tag is carried as the MaxUint64 sentinel, so
+// a check placed before the head is resolved would reject every query ending at the head however short.
+func TestRangeLimit(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	backend, sys := newTestFilterSystem(db, Config{})
+	defer db.Close()
+
+	gspec := &core.Genesis{
+		Config:  params.TestChainConfig,
+		Alloc:   types.GenesisAlloc{},
+		BaseFee: big.NewInt(params.InitialBaseFee),
+	}
+	if _, err := gspec.Commit(db, triedb.NewDatabase(db, nil)); err != nil {
+		t.Fatal(err)
+	}
+	chain, _ := core.GenerateChain(gspec.Config, gspec.ToBlock(), ethash.NewFaker(), db, 10, func(i int, gen *core.BlockGen) {})
+	options := core.DefaultConfig().WithStateScheme(rawdb.HashScheme)
+	options.TxIndexer = &core.TxIndexerConfig{Limit: 0}
+	bc, err := core.NewBlockChain(db, nil, gspec, ethash.NewFaker(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bc.InsertChain(chain); err != nil {
+		t.Fatal(err)
+	}
+	backend.startFilterMaps(0, false, filtermaps.DefaultParams)
+	defer backend.stopFilterMaps()
+
+	latest := rpc.LatestBlockNumber.Int64()
+	for _, tc := range []struct {
+		name       string
+		begin, end int64
+		limit      uint64
+		wantErr    bool
+	}{
+		// Head is block 10 and the limit is 5 throughout.
+		{name: "explicit range over limit", begin: 0, end: 9, limit: 5, wantErr: true},
+		{name: "range well inside the limit", begin: 7, end: 9, limit: 5},
+		{name: "difference exactly at limit is allowed", begin: 4, end: 9, limit: 5},
+		{name: "one block past the limit is refused", begin: 3, end: 9, limit: 5, wantErr: true},
+		// The "latest" tag has to be resolved against the head before the range
+		// is measured, otherwise every query ending at the head is rejected.
+		{name: "latest end within limit", begin: 8, end: latest, limit: 5},
+		{name: "latest end over limit", begin: 0, end: latest, limit: 5, wantErr: true},
+		{name: "latest on both ends", begin: latest, end: latest, limit: 5},
+		{name: "no limit configured", begin: 0, end: latest, limit: 0},
+		// A range given backwards must not underflow into a false refusal.
+		{name: "backwards range with a limit", begin: 9, end: 4, limit: 5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			filter := sys.NewRangeFilter(tc.begin, tc.end, nil, nil, tc.limit)
+			_, err := filter.Logs(context.Background())
+			if !tc.wantErr {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("expected range limit error, got nil")
+			}
+			var re rpc.Error
+			if !errors.As(err, &re) {
+				t.Fatalf("expected rpc error, got %v", err)
+			}
+			if re.ErrorCode() != -32602 {
+				t.Fatalf("expected error code -32602, got %d", re.ErrorCode())
+			}
+			if want := fmt.Sprintf("exceed maximum block range %d", tc.limit); re.Error() != want {
+				t.Fatalf("expected error message %q, got %q", want, re.Error())
+			}
+		})
+	}
+}
+
+// TestRangeLimitPinsLatest checks that a limited query does not grow past the range it was admitted with.
+//
+// The MaxUint64 sentinel exists so that updateChainView can re-read the head on every search iteration,
+// which is right for an unlimited query: its range is meant to follow the chain. For a limited one it
+// would mean the check happens once while the range keeps moving, so "latest" is pinned to the head as it
+// was at the start of the query when a limit is configured.
+//
+// Both halves run the same query against a chain that really grows mid-search, and read back the ranges
+// the search actually covered. The unlimited half is the control: if it did not follow the head to 700,
+// the chain never moved and the limited half would prove nothing.
+func TestRangeLimitPinsLatest(t *testing.T) {
+	// covered returns the last block the search reached, having grown the chain from 600 to 700 blocks
+	// once the search was already under way.
+	covered := func(t *testing.T, limit uint64) uint64 {
+		t.Helper()
+		db := rawdb.NewMemoryDatabase()
+		backend, sys := newTestFilterSystem(db, Config{})
+		defer db.Close()
+
+		gspec := &core.Genesis{
+			Config:  params.TestChainConfig,
+			Alloc:   types.GenesisAlloc{},
+			BaseFee: big.NewInt(params.InitialBaseFee),
+		}
+		if _, err := gspec.Commit(db, triedb.NewDatabase(db, nil)); err != nil {
+			t.Fatal(err)
+		}
+		chain, _ := core.GenerateChain(gspec.Config, gspec.ToBlock(), ethash.NewFaker(), db, 700, func(i int, gen *core.BlockGen) {})
+		options := core.DefaultConfig().WithStateScheme(rawdb.HashScheme)
+		options.TxIndexer = &core.TxIndexerConfig{Limit: 0}
+		bc, err := core.NewBlockChain(db, nil, gspec, ethash.NewFaker(), options)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := bc.InsertChain(chain[:600]); err != nil {
+			t.Fatal(err)
+		}
+		backend.startFilterMaps(200, false, filtermaps.RangeTestParams)
+		defer backend.stopFilterMaps()
+
+		// Head is 600. Ending at "latest", the range is 300 blocks wide, which the limit allows exactly.
+		filter := sys.NewRangeFilter(300, int64(rpc.LatestBlockNumber), []common.Address{{}}, nil, limit)
+		filter.rangeLogsTestHook = make(chan rangeLogsTestEvent)
+		done := make(chan struct{})
+		go func() {
+			if _, err := filter.Logs(context.Background()); err != nil {
+				t.Errorf("query with limit %d failed: %v", limit, err)
+			}
+			close(done)
+		}()
+
+		var (
+			last  uint64
+			grown bool
+		)
+	events:
+		for {
+			// done is watched as well: a query refused before the search starts never opens the hook,
+			// and waiting on it alone would hang instead of reporting.
+			var ev rangeLogsTestEvent
+			select {
+			case e, ok := <-filter.rangeLogsTestHook:
+				if !ok {
+					break events
+				}
+				ev = e
+			case <-done:
+				break events
+			}
+			if ev.event == rangeLogsTestUnindexed && !grown {
+				// Grown from here, the same point TestRangeLogs uses: the unindexed pass is still
+				// running and the loop has not yet re-read the head.
+				if _, err := bc.InsertChain(chain[600:700]); err != nil {
+					t.Error(err)
+				}
+				head := bc.CurrentBlock()
+				backend.fm.SetTarget(filtermaps.NewChainView(backend, head.Number.Uint64(), head.Hash()), 0, 0)
+				backend.fm.WaitIdle()
+				grown = true
+			}
+			if ev.event == rangeLogsTestResults && !ev.blocks.IsEmpty() && ev.blocks.Last() > last {
+				last = ev.blocks.Last()
+			}
+		}
+		<-done
+		return last
+	}
+
+	if last := covered(t, 0); last != 700 {
+		t.Fatalf("an unlimited query must follow the head to 700, reached %d; the rest of this test is "+
+			"meaningless if the chain did not grow", last)
+	}
+	if last := covered(t, 300); last != 600 {
+		t.Fatalf("a limited query must stay at the head it was admitted with (600), reached %d", last)
+	}
 }

@@ -65,6 +65,7 @@ var Defaults = Config{
 	SnapshotCache:        102,
 	FilterLogCacheSize:   32,
 	LogQueryLimit:        1000,
+	RangeLimit:           0,
 	Miner:                miner.DefaultConfig,
 	TxPool:               legacypool.DefaultConfig,
 	BlobPool:             blobpool.DefaultConfig,
@@ -140,6 +141,9 @@ type Config struct {
 	// This is the maximum number of addresses or topics allowed in filter criteria
 	// for eth_getLogs.
 	LogQueryLimit int
+
+	// RangeLimit restricts the maximum range (end - start) for range queries.
+	RangeLimit uint64 `toml:",omitempty"`
 
 	// Mining options
 	Miner miner.Config

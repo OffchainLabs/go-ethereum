@@ -44,6 +44,7 @@ type Config struct {
 	LogCacheSize  int           // maximum number of cached blocks (default: 32)
 	Timeout       time.Duration // how long filters stay active (default: 5min)
 	LogQueryLimit int           // maximum number of addresses allowed in filter criteria (default: 1000)
+	RangeLimit    uint64        // maximum block range allowed in filter criteria (default: 0)
 }
 
 func (cfg Config) withDefaults() Config {
@@ -83,6 +84,13 @@ type FilterSystem struct {
 	backend   Backend
 	logsCache *lru.Cache[common.Hash, *logCacheElem]
 	cfg       *Config
+}
+
+// RangeLimit returns the configured maximum block range for log queries, zero meaning unlimited.
+// Exposed so that other RPC surfaces backed by the same filter system, such as GraphQL, apply the same
+// cap rather than offering a way around it.
+func (fs *FilterSystem) RangeLimit() uint64 {
+	return fs.cfg.RangeLimit
 }
 
 // NewFilterSystem creates a filter system.

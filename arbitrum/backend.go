@@ -84,6 +84,11 @@ func NewBackend(stack *node.Node, config *Config, chainDb ethdb.Database, publis
 		backend.stack.ApplyAPIFilter(rpcFilter)
 	}
 
+	// The node's own setting decides, rather than filling in only when the caller left it at zero: zero
+	// is a meaningful value here, "no limit", and cannot be told apart from "not set". Callers build
+	// filters.Config by hand and none of them set this today, so nothing is being overridden in practice,
+	// and an operator who sets the flag gets what they asked for.
+	filterConfig.RangeLimit = config.FilterRangeLimit
 	filterSystem, err := createRegisterAPIBackend(backend, filterConfig, config.ClassicRedirect, config.ClassicRedirectTimeout, config.BlockRedirects, txFilterer)
 	if err != nil {
 		return nil, nil, err

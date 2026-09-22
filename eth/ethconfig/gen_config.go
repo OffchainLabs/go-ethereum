@@ -45,6 +45,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		Preimages               bool
 		FilterLogCacheSize      int
 		LogQueryLimit           int
+		RangeLimit              uint64 `toml:",omitempty"`
 		Miner                   miner.Config
 		TxPool                  legacypool.Config
 		BlobPool                blobpool.Config
@@ -94,6 +95,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.Preimages = c.Preimages
 	enc.FilterLogCacheSize = c.FilterLogCacheSize
 	enc.LogQueryLimit = c.LogQueryLimit
+	enc.RangeLimit = c.RangeLimit
 	enc.Miner = c.Miner
 	enc.TxPool = c.TxPool
 	enc.BlobPool = c.BlobPool
@@ -147,6 +149,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		Preimages               *bool
 		FilterLogCacheSize      *int
 		LogQueryLimit           *int
+		RangeLimit              *uint64 `toml:",omitempty"`
 		Miner                   *miner.Config
 		TxPool                  *legacypool.Config
 		BlobPool                *blobpool.Config
@@ -254,6 +257,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.LogQueryLimit != nil {
 		c.LogQueryLimit = *dec.LogQueryLimit
+	}
+	if dec.RangeLimit != nil {
+		c.RangeLimit = *dec.RangeLimit
 	}
 	if dec.Miner != nil {
 		c.Miner = *dec.Miner
