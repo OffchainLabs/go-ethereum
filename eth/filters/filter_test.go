@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"strings"
 	"testing"
@@ -607,6 +608,9 @@ func TestRangeLogs(t *testing.T) {
 	expEvent(rangeLogsTestDone, 0, 0)
 }
 
+// TestRangeLimit covers the boundary of the configurable block range limit, including the cases where the
+// range ends at the chain head. Outside a limit the "latest" tag is carried as the MaxUint64 sentinel, so
+// a check placed before the head is resolved would reject every query ending at the head however short.
 func TestRangeLimit(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	backend, sys := newTestFilterSystem(db, Config{})
@@ -617,8 +621,7 @@ func TestRangeLimit(t *testing.T) {
 		Alloc:   types.GenesisAlloc{},
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
-	_, err := gspec.Commit(db, triedb.NewDatabase(db, nil))
-	if err != nil {
+	if _, err := gspec.Commit(db, triedb.NewDatabase(db, nil)); err != nil {
 		t.Fatal(err)
 	}
 	chain, _ := core.GenerateChain(gspec.Config, gspec.ToBlock(), ethash.NewFaker(), db, 10, func(i int, gen *core.BlockGen) {})
@@ -628,29 +631,152 @@ func TestRangeLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = bc.InsertChain(chain)
-	if err != nil {
+	if _, err := bc.InsertChain(chain); err != nil {
 		t.Fatal(err)
 	}
 	backend.startFilterMaps(0, false, filtermaps.DefaultParams)
 	defer backend.stopFilterMaps()
 
-	// Set rangeLimit to 5, but request a range of 9 (end - begin = 9, from 0 to 9)
-	filter := sys.NewRangeFilter(0, 9, nil, nil, 5)
-	_, err = filter.Logs(context.Background())
-	if err == nil {
-		t.Fatal("expected range limit error, got nil")
+	latest := rpc.LatestBlockNumber.Int64()
+	for _, tc := range []struct {
+		name       string
+		begin, end int64
+		limit      uint64
+		wantErr    bool
+	}{
+		// Head is block 10 and the limit is 5 throughout.
+		{name: "explicit range over limit", begin: 0, end: 9, limit: 5, wantErr: true},
+		{name: "range well inside the limit", begin: 7, end: 9, limit: 5},
+		{name: "difference exactly at limit is allowed", begin: 4, end: 9, limit: 5},
+		{name: "one block past the limit is refused", begin: 3, end: 9, limit: 5, wantErr: true},
+		// The "latest" tag has to be resolved against the head before the range
+		// is measured, otherwise every query ending at the head is rejected.
+		{name: "latest end within limit", begin: 8, end: latest, limit: 5},
+		{name: "latest end over limit", begin: 0, end: latest, limit: 5, wantErr: true},
+		{name: "latest on both ends", begin: latest, end: latest, limit: 5},
+		{name: "no limit configured", begin: 0, end: latest, limit: 0},
+		// A range given backwards must not underflow into a false refusal.
+		{name: "backwards range with a limit", begin: 9, end: 4, limit: 5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			filter := sys.NewRangeFilter(tc.begin, tc.end, nil, nil, tc.limit)
+			_, err := filter.Logs(context.Background())
+			if !tc.wantErr {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("expected range limit error, got nil")
+			}
+			var re rpc.Error
+			if !errors.As(err, &re) {
+				t.Fatalf("expected rpc error, got %v", err)
+			}
+			if re.ErrorCode() != -32602 {
+				t.Fatalf("expected error code -32602, got %d", re.ErrorCode())
+			}
+			if want := fmt.Sprintf("exceed maximum block range %d", tc.limit); re.Error() != want {
+				t.Fatalf("expected error message %q, got %q", want, re.Error())
+			}
+		})
+	}
+}
+
+// TestRangeLimitPinsLatest checks that a limited query does not grow past the range it was admitted with.
+//
+// The MaxUint64 sentinel exists so that updateChainView can re-read the head on every search iteration,
+// which is right for an unlimited query: its range is meant to follow the chain. For a limited one it
+// would mean the check happens once while the range keeps moving, so "latest" is pinned to the head as it
+// was at the start of the query when a limit is configured.
+//
+// Both halves run the same query against a chain that really grows mid-search, and read back the ranges
+// the search actually covered. The unlimited half is the control: if it did not follow the head to 700,
+// the chain never moved and the limited half would prove nothing.
+func TestRangeLimitPinsLatest(t *testing.T) {
+	// covered returns the last block the search reached, having grown the chain from 600 to 700 blocks
+	// once the search was already under way.
+	covered := func(t *testing.T, limit uint64) uint64 {
+		t.Helper()
+		db := rawdb.NewMemoryDatabase()
+		backend, sys := newTestFilterSystem(db, Config{})
+		defer db.Close()
+
+		gspec := &core.Genesis{
+			Config:  params.TestChainConfig,
+			Alloc:   types.GenesisAlloc{},
+			BaseFee: big.NewInt(params.InitialBaseFee),
+		}
+		if _, err := gspec.Commit(db, triedb.NewDatabase(db, nil)); err != nil {
+			t.Fatal(err)
+		}
+		chain, _ := core.GenerateChain(gspec.Config, gspec.ToBlock(), ethash.NewFaker(), db, 700, func(i int, gen *core.BlockGen) {})
+		options := core.DefaultConfig().WithStateScheme(rawdb.HashScheme)
+		options.TxIndexer = &core.TxIndexerConfig{Limit: 0}
+		bc, err := core.NewBlockChain(db, nil, gspec, ethash.NewFaker(), options)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := bc.InsertChain(chain[:600]); err != nil {
+			t.Fatal(err)
+		}
+		backend.startFilterMaps(200, false, filtermaps.RangeTestParams)
+		defer backend.stopFilterMaps()
+
+		// Head is 600. Ending at "latest", the range is 300 blocks wide, which the limit allows exactly.
+		filter := sys.NewRangeFilter(300, int64(rpc.LatestBlockNumber), []common.Address{{}}, nil, limit)
+		filter.rangeLogsTestHook = make(chan rangeLogsTestEvent)
+		done := make(chan struct{})
+		go func() {
+			if _, err := filter.Logs(context.Background()); err != nil {
+				t.Errorf("query with limit %d failed: %v", limit, err)
+			}
+			close(done)
+		}()
+
+		var (
+			last  uint64
+			grown bool
+		)
+	events:
+		for {
+			// done is watched as well: a query refused before the search starts never opens the hook,
+			// and waiting on it alone would hang instead of reporting.
+			var ev rangeLogsTestEvent
+			select {
+			case e, ok := <-filter.rangeLogsTestHook:
+				if !ok {
+					break events
+				}
+				ev = e
+			case <-done:
+				break events
+			}
+			if ev.event == rangeLogsTestUnindexed && !grown {
+				// Grown from here, the same point TestRangeLogs uses: the unindexed pass is still
+				// running and the loop has not yet re-read the head.
+				if _, err := bc.InsertChain(chain[600:700]); err != nil {
+					t.Error(err)
+				}
+				head := bc.CurrentBlock()
+				backend.fm.SetTarget(filtermaps.NewChainView(backend, head.Number.Uint64(), head.Hash()), 0, 0)
+				backend.fm.WaitIdle()
+				grown = true
+			}
+			if ev.event == rangeLogsTestResults && !ev.blocks.IsEmpty() && ev.blocks.Last() > last {
+				last = ev.blocks.Last()
+			}
+		}
+		<-done
+		return last
 	}
 
-	var re rpc.Error
-	if errors.As(err, &re) {
-		if re.ErrorCode() != -32602 {
-			t.Fatalf("expected error code -32602, got %d", re.ErrorCode())
-		}
-		if re.Error() != "exceed maximum block range 5" {
-			t.Fatalf("expected error message 'exceed maximum block range 5', got %q", re.Error())
-		}
-	} else {
-		t.Fatalf("expected rpc error, got %v", err)
+	if last := covered(t, 0); last != 700 {
+		t.Fatalf("an unlimited query must follow the head to 700, reached %d; the rest of this test is "+
+			"meaningless if the chain did not grow", last)
+	}
+	if last := covered(t, 300); last != 600 {
+		t.Fatalf("a limited query must stay at the head it was admitted with (600), reached %d", last)
 	}
 }

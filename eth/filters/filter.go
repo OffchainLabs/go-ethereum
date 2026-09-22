@@ -99,9 +99,29 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		return nil, errPendingLogsUnsupported
 	}
 
+	// When a range limit is configured, "latest" is pinned to the head as it is at the start of the
+	// query. The sentinel MaxUint64 exists so that updateChainView can re-read the head on every search
+	// iteration, which is right for an unlimited query but would let a limited one grow past the range
+	// it was admitted with: the check happens once, the range keeps moving. Pinning costs the caller the
+	// blocks mined during their own query, which is the trade a limit is asking for anyway.
+	var (
+		pinnedHead   uint64
+		headIsPinned bool
+	)
 	resolveSpecial := func(number int64) (uint64, error) {
 		switch number {
 		case rpc.LatestBlockNumber.Int64():
+			if f.rangeLimit != 0 {
+				if !headIsPinned {
+					view := f.sys.backend.CurrentView()
+					if view == nil {
+						return 0, errors.New("head block not available")
+					}
+					pinnedHead = view.HeadNumber()
+					headIsPinned = true
+				}
+				return pinnedHead, nil
+			}
 			// when searching from and/or until the current head, we resolve it
 			// to MaxUint64 which is translated by rangeLogs to the actual head
 			// in each iteration, ensuring that the head block will be searched
@@ -143,7 +163,9 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	if err != nil {
 		return nil, err
 	}
-	if f.rangeLimit != 0 && (end-begin) > f.rangeLimit {
+	// Both ends are concrete here when a limit is set, so the comparison cannot see the MaxUint64
+	// sentinel and cannot underflow on a range given backwards.
+	if f.rangeLimit != 0 && end >= begin && end-begin > f.rangeLimit {
 		return nil, invalidParamsErr("exceed maximum block range %d", f.rangeLimit)
 	}
 	return f.rangeLogs(ctx, begin, end)
