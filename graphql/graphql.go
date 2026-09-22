@@ -1440,8 +1440,9 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 	if args.Filter.Topics != nil {
 		topics = *args.Filter.Topics
 	}
-	// Construct the range filter
-	filter := r.filterSystem.NewRangeFilter(begin, end, addresses, topics, 0)
+	// Construct the range filter. The same cap as the JSON-RPC surface applies: GraphQL reaches the same
+	// historical scan, so passing zero here would leave a way around a limit the operator has set.
+	filter := r.filterSystem.NewRangeFilter(begin, end, addresses, topics, r.filterSystem.RangeLimit())
 	return runFilter(ctx, r, filter)
 }
 

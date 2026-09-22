@@ -86,6 +86,13 @@ type FilterSystem struct {
 	cfg       *Config
 }
 
+// RangeLimit returns the configured maximum block range for log queries, zero meaning unlimited.
+// Exposed so that other RPC surfaces backed by the same filter system, such as GraphQL, apply the same
+// cap rather than offering a way around it.
+func (fs *FilterSystem) RangeLimit() uint64 {
+	return fs.cfg.RangeLimit
+}
+
 // NewFilterSystem creates a filter system.
 func NewFilterSystem(backend Backend, config Config) *FilterSystem {
 	config = config.withDefaults()
