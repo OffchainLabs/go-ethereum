@@ -76,6 +76,10 @@ type freezerTableConfig struct {
 	// on their tail. An empty value means the table is not prunable; its
 	// tail is always 0.
 	tailGroup string
+
+	// optional marks a table whose entries the node can lose, so repair resets
+	// it when it lags instead of truncating the other tables to it.
+	optional bool
 }
 
 const (
