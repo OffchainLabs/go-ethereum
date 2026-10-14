@@ -865,9 +865,13 @@ func (t *freezerTable) resetTo(tail uint64) error {
 	if tail > math.MaxUint32 {
 		return errors.New("cannot truncate tail above head: item number exceeds uint32 offset limit")
 	}
+	oldSize, err := t.sizeNolock()
+	if err != nil {
+		return err
+	}
 	// Sync the entire table before resetting, eliminating the potential
 	// data corruption.
-	err := t.doSync()
+	err = t.doSync()
 	if err != nil {
 		return err
 	}
@@ -910,8 +914,12 @@ func (t *freezerTable) resetTo(tail uint64) error {
 	t.items.Store(tail)
 	t.itemOffset.Store(tail)
 	t.itemHidden.Store(tail)
-	t.sizeGauge.Update(0)
 
+	newSize, err := t.sizeNolock()
+	if err != nil {
+		return err
+	}
+	t.sizeGauge.Dec(int64(oldSize - newSize))
 	return nil
 }
 
