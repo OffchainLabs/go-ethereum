@@ -693,10 +693,45 @@ func (a *APIBackend) HistoryPruningCutoff() uint64 {
 }
 
 func (a *APIBackend) HistoryRetention() ethapi.HistoryRetention {
+	var (
+		stateArchive    bool
+		stateHistory    uint64
+		trienodeHistory int64
+		txIndexHistory  uint64
+		stateScheme     string
+		logHistory      uint64
+		logNoHistory    bool
+	)
+	if a.b != nil {
+		if a.b.config != nil {
+			logHistory = a.b.config.LogHistory
+			logNoHistory = a.b.config.LogNoHistory
+		}
+		if bc := a.b.BlockChain(); bc != nil {
+			if triedb := bc.TrieDB(); triedb != nil {
+				stateScheme = triedb.Scheme()
+			}
+			if cfg := bc.BlockchainConfig(); cfg != nil {
+				stateArchive = cfg.ArchiveMode
+				stateHistory = cfg.StateHistory
+				trienodeHistory = cfg.TrienodeHistory
+				// Note: if TxIndexer is disabled (nil), TxIndexHistory defaults to 0,
+				// which eth_capabilities interprets as covering the entire available chain.
+				// On standard Nitro nodes, the indexer is enabled with a non-zero lookup limit.
+				if cfg.TxIndexer != nil {
+					txIndexHistory = cfg.TxIndexer.Limit
+				}
+			}
+		}
+	}
 	return ethapi.HistoryRetention{
-		LogIndexHistory:  a.b.config.LogHistory,
-		LogIndexDisabled: a.b.config.LogNoHistory,
-		StateScheme:      a.BlockChain().TrieDB().Scheme(),
+		TxIndexHistory:   txIndexHistory,
+		LogIndexHistory:  logHistory,
+		LogIndexDisabled: logNoHistory,
+		StateHistory:     stateHistory,
+		TrienodeHistory:  trienodeHistory,
+		StateArchive:     stateArchive,
+		StateScheme:      stateScheme,
 	}
 }
 
