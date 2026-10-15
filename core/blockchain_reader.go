@@ -467,6 +467,9 @@ func (bc *BlockChain) HistoricState(header *types.Header) (*state.StateDB, error
 // Config retrieves the chain's fork configuration.
 func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
 
+// Arbitrum: BlockchainConfig retrieves the blockchain configuration for read-only inspection.
+func (bc *BlockChain) BlockchainConfig() *BlockChainConfig { return bc.cfg }
+
 // Engine retrieves the blockchain's consensus engine.
 func (bc *BlockChain) Engine() consensus.Engine { return bc.engine }
 
