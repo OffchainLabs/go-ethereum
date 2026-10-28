@@ -22,6 +22,9 @@ func NewArbTransactionAPI(b *APIBackend) *ArbTransactionAPI {
 	return &ArbTransactionAPI{b}
 }
 
+// SendRawTransactionConditional submits a signed raw transaction that the sequencer
+// includes only if the given options hold: the parent chain block number and the block
+// timestamp ranges, and the storage of the known accounts. It returns the transaction hash.
 func (s *ArbTransactionAPI) SendRawTransactionConditional(ctx context.Context, input hexutil.Bytes, options *arbitrum_types.ConditionalOptions) (common.Hash, error) {
 	tx := new(types.Transaction)
 	if err := tx.UnmarshalBinary(input); err != nil {
